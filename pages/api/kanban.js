@@ -1,15 +1,5 @@
 import { getSheet, updateRow } from '../../lib/googleSheets';
 
-function columnToLetter(index) {
-  let letter = '';
-  let temp = index;
-  while (temp >= 0) {
-    letter = String.fromCharCode((temp % 26) + 65) + letter;
-    temp = Math.floor(temp / 26) - 1;
-  }
-  return letter;
-}
-
 function groupRows(rows) {
   const [header, ...data] = rows;
   const idx = {
@@ -26,6 +16,7 @@ function groupRows(rows) {
     cidade: header.indexOf('cidade_estimada'),
     status: header.indexOf('Status_Kanban'),
     data: header.indexOf('Data_Ultima_Movimentacao'),
+    linkedin: header.indexOf('Pessoa - End. Linkedin'),
   };
 
   const map = new Map();
@@ -61,6 +52,7 @@ function groupRows(rows) {
         email: row[idx.email] || '',
         telefone: row[idx.tel] || '',
         celular: row[idx.cel] || '',
+        linkedin_contato: row[idx.linkedin] || '',
       });
     }
   });
@@ -108,20 +100,17 @@ export default async function handler(req, res) {
     const sheet = await getSheet();
     const rows = sheet.data.values || [];
     const [header, ...data] = rows;
-    const companyIdx = header.indexOf('Organização - Nome');
-    const statusIdx = header.indexOf('Status_Kanban');
-    const dateIdx = header.indexOf('Data_Ultima_Movimentacao');
-    const statusLetter = columnToLetter(statusIdx);
-    const dateLetter = columnToLetter(dateIdx);
+    let companyIdx = header.indexOf('Negócio - Organização');
+    if (companyIdx === -1) companyIdx = header.indexOf('Organização - Nome');
     const promises = [];
     data.forEach((row, i) => {
       if (row[companyIdx] === id) {
         const rowNum = i + 2;
         promises.push(
-          updateRow(`Clientes!${statusLetter}${rowNum}:${dateLetter}${rowNum}`, [
-            destination.droppableId,
-            new Date().toISOString().split('T')[0],
-          ])
+          updateRow(rowNum, {
+            status_kanban: destination.droppableId,
+            data_ultima_movimentacao: new Date().toISOString().split('T')[0],
+          })
         );
       }
     });
@@ -131,3 +120,4 @@ export default async function handler(req, res) {
 
   return res.status(405).end();
 }
+

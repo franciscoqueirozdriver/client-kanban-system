@@ -16,6 +16,7 @@ function groupRows(rows) {
     cidade: header.indexOf('cidade_estimada'),
     status: header.indexOf('Status_Kanban'),
     data: header.indexOf('Data_Ultima_Movimentacao'),
+    linkedin: header.indexOf('Pessoa - End. Linkedin'),
   };
 
   const filters = {
@@ -55,6 +56,7 @@ function groupRows(rows) {
         email: row[idx.email] || '',
         telefone: row[idx.tel] || '',
         celular: row[idx.cel] || '',
+        linkedin_contato: row[idx.linkedin] || '',
       });
     }
 
