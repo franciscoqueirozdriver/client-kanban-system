@@ -4,5 +4,3 @@ echo "node_modules/
 .env.local
 .env.*.local
 .DS_Store" > .gitignore
-git add .gitignore
-git commit -m "Adiciona .gitignore"
