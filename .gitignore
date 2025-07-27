@@ -1,6 +1,28 @@
-echo "node_modules/
+# Node modules e cache
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build e arquivos temporários
 .next/
+dist/
+out/
+*.log
+
+# Variáveis de ambiente
 .env
 .env.local
-.env.*.local
-.DS_Store" > .gitignore
+.env.production
+.env.development
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos de lock gerados
+package-lock.json
+
+# Backup ou arquivos temporários
+*.bak
+*.tmp

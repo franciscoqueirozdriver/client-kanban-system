@@ -1,6 +1,11 @@
 'use client';
 import { useState } from 'react';
 
+function getWhatsAppLink(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits ? `https://wa.me/${digits}` : '';
+}
+
 export default function ClientCard({ client }) {
   const [selected, setSelected] = useState(false);
 
@@ -30,29 +35,30 @@ export default function ClientCard({ client }) {
              
               </a>
             </p>
-            <p className="text-xs">
-              <a
-                href={`https://wa.me/55${c.telefone}`}
-                className="text-green-600 underline"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {c.telefone}
-              </a>
-              {c.celular && (
-                <span>
-                  {' '}/{' '}
+            {[
+              ['phone_work', 'Phone (Work)'],
+              ['phone_home', 'Phone (Home)'],
+              ['phone_mobile', 'Phone (Mobile)'],
+              ['phone_other', 'Phone (Other)'],
+              ['telefone', 'Telefone'],
+              ['celular', 'Celular'],
+            ].map(([key, label]) => {
+              const num = c[key];
+              if (!num) return null;
+              return (
+                <p key={key} className="text-xs">
+                  {label}:{' '}
                   <a
-                    href={`https://wa.me/55${c.celular}`}
+                    href={getWhatsAppLink(num)}
                     className="text-green-600 underline"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    {c.celular}
+                    {num}
                   </a>
-                </span>
-              )}
-            </p>
+                </p>
+              );
+            })}
             {c.linkedin_contato && (
               <p className="text-xs">
                 <a
