@@ -27,6 +27,7 @@ export default function ClientCard({ client }) {
             <p className="text-xs">
               <a href={`mailto:${c.email}`} className="text-blue-600 underline">
                 {c.email}
+             
               </a>
             </p>
             <p className="text-xs">
@@ -52,6 +53,18 @@ export default function ClientCard({ client }) {
                 </span>
               )}
             </p>
+            {c.linkedin_contato && (
+              <p className="text-xs">
+                <a
+                  href={c.linkedin_contato}
+                  className="text-blue-600 underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  LinkedIn
+                </a>
+              </p>
+            )}
           </div>
         ))}
       </div>

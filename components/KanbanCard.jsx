@@ -17,6 +17,18 @@ export default function KanbanCard({ card, index }) {
             <div key={i} className="text-xs border-t pt-1">
               <p className="font-medium">{c.nome}</p>
               <p>{c.cargo}</p>
+              {c.linkedin_contato && (
+                <p>
+                  <a
+                    href={c.linkedin_contato}
+                    className="text-blue-600 underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    LinkedIn
+                  </a>
+                </p>
+              )}
             </div>
           ))}
         </div>
