@@ -17,7 +17,7 @@ function groupRows(rows) {
     status: header.indexOf('Status_Kanban'),
     data: header.indexOf('Data_Ultima_Movimentacao'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
-        cor: header.indexOf('Cor_Card'),
+    cor: header.indexOf('Cor_Card'),
   };
 
   const map = new Map();
@@ -25,6 +25,7 @@ function groupRows(rows) {
   data.forEach((row, i) => {
     const company = row[idx.org];
     if (!company) return;
+
     if (!map.has(company)) {
       map.set(company, {
         id: company,
@@ -37,7 +38,11 @@ function groupRows(rows) {
         city: row[idx.cidade] || '',
         status: row[idx.status] || '',
         dataMov: row[idx.data] || '',
-          color: row[idx.cor] || '',      
+        color: ((c) => {
+          if (c === '#fecaca') return 'red';
+          if (c === '#d1fae5') return 'green';
+          return c || '';
+        })(row[idx.cor]),
         rows: [],
         header,
       });
@@ -46,6 +51,7 @@ function groupRows(rows) {
     const item = map.get(company);
     item.rows.push(i + 2);
     if (row[idx.titulo]) item.opportunities.push(row[idx.titulo]);
+
     const key = `${row[idx.contato] || ''}|${row[idx.email] || ''}`;
     if (!item.contactsMap.has(key)) {
       item.contactsMap.set(key, {
@@ -59,20 +65,23 @@ function groupRows(rows) {
     }
   });
 
-  return { header, clients: Array.from(map.values()).map((c) => ({
-    id: c.id,
-    company: c.company,
-    opportunities: Array.from(new Set(c.opportunities)),
-    contacts: Array.from(c.contactsMap.values()),
-    segment: c.segment,
-    size: c.size,
-    uf: c.uf,
-    city: c.city,
-    status: c.status,
-    dataMov: c.dataMov,
-      color: c.color,  
-    rows: c.rows,
-  })) };
+  return {
+    header,
+    clients: Array.from(map.values()).map((c) => ({
+      id: c.id,
+      company: c.company,
+      opportunities: Array.from(new Set(c.opportunities)),
+      contacts: Array.from(c.contactsMap.values()),
+      segment: c.segment,
+      size: c.size,
+      uf: c.uf,
+      city: c.city,
+      status: c.status,
+      dataMov: c.dataMov,
+      color: c.color,
+      rows: c.rows,
+    })),
+  };
 }
 
 export default async function handler(req, res) {
@@ -80,6 +89,7 @@ export default async function handler(req, res) {
     const sheet = await getSheet();
     const rows = sheet.data.values || [];
     const { clients } = groupRows(rows);
+
     const columns = [
       'Lead Selecionado',
       'Tentativa de Contato',
@@ -88,6 +98,7 @@ export default async function handler(req, res) {
       'Reunião Agendada',
       'Perdido',
     ];
+
     const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
     clients.forEach((client) => {
       const col = board.find((c) => c.id === client.status);
@@ -95,38 +106,46 @@ export default async function handler(req, res) {
         col.cards.push({ id: client.id, client });
       }
     });
+
     return res.status(200).json(board);
   }
 
   if (req.method === 'POST') {
-
     const { id, destination, status, color } = req.body;
     const newStatus = status || (destination && destination.droppableId);
+
+    // ✅ Determinar a cor a salvar
     const newColor =
       color !== undefined
         ? color
         : newStatus === 'Perdido'
-          ? '#fecaca'
-          : undefined;
+        ? '#fecaca'
+        : undefined;
+
     const sheet = await getSheet();
     const rows = sheet.data.values || [];
     const [header, ...data] = rows;
+
     let companyIdx = header.indexOf('Negócio - Organização');
     if (companyIdx === -1) companyIdx = header.indexOf('Organização - Nome');
+    const statusIdx = header.indexOf('Status_Kanban');
+    const dateIdx = header.indexOf('Data_Ultima_Movimentacao');
+    const colorIdx = header.indexOf('Cor_Card');
+
     const promises = [];
     data.forEach((row, i) => {
       if (row[companyIdx] === id) {
         const rowNum = i + 2;
 
-        const values = {
-          status_kanban: newStatus,
-          data_ultima_movimentacao: new Date().toISOString().split('T')[0],
-        };
-        if (newColor !== undefined) values.cor_card = newColor;
-        promises.push(updateRow(rowNum, values));
+        const values = [...row];
+        if (statusIdx !== -1) values[statusIdx] = newStatus;
+        if (dateIdx !== -1) values[dateIdx] = new Date().toISOString().split('T')[0];
+        if (colorIdx !== -1 && newColor !== undefined) values[colorIdx] = newColor;
 
+        promises.push(updateRow(`Clientes!A${rowNum}:Z${rowNum}`, values));
       }
     });
+
     await Promise.all(promises);
     return res.status(200).json({ status: newStatus, color: newColor });
   }

@@ -21,17 +21,17 @@ export default function KanbanPage() {
     const [moved] = sourceCol.cards.splice(source.index, 1);
     destCol.cards.splice(destination.index, 0, moved);
     moved.client.status = destCol.id;
-      if (destCol.id === 'Perdido') {
-      moved.client.color = '#fecaca';
-    } else if (moved.client.color === '#fecaca') {
+    if (destCol.id === 'Perdido') {
+      moved.client.color = 'red';
+    } else if (moved.client.color === 'red') {
       moved.client.color = '';
     }
     setColumns(newColumns);
 
     const payload = { id: draggableId, destination };
     if (destCol.id === 'Perdido') {
-      payload.color = '#fecaca';
-    } else if (moved.client.color === '#fecaca') {
+      payload.color = 'red';
+    } else if (moved.client.color === 'red') {
       payload.color = '';
     }
     await fetch('/api/kanban', {

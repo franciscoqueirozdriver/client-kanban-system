@@ -7,21 +7,29 @@ function getWhatsAppLink(phone) {
 }
 
 export default function ClientCard({ client }) {
-  const [selected, setSelected] = useState(false);
+  const [color, setColor] = useState(client.color || '');
 
   const handleDoubleClick = async () => {
-    setSelected(true);
+    setColor('green');
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, status: 'Novo' }),
+      body: JSON.stringify({ id: client.id, status: 'Lead Selecionado', color: 'green' }),
     });
   };
 
   return (
     <div
       onDoubleClick={handleDoubleClick}
-      className={`p-4 border rounded shadow hover:shadow-lg cursor-pointer ${selected ? 'bg-green-200' : 'bg-white'}`}
+      className="p-4 border rounded shadow hover:shadow-lg cursor-pointer"
+      style={{
+        backgroundColor:
+          color === 'green'
+            ? '#22c55e'
+            : color === 'red'
+              ? '#ef4444'
+              : undefined,
+      }}
     >
       <h3 className="text-lg font-semibold mb-1">{client.company}</h3>
       {(client.city || client.uf) && (

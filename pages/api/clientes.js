@@ -44,7 +44,11 @@ function groupRows(rows) {
         city: row[idx.cidade] || '',
         status: row[idx.status] || '',
         dataMov: row[idx.data] || '',
-       color: row[idx.cor] || '',        
+        color: ((c) => {
+          if (c === '#fecaca') return 'red';
+          if (c === '#d1fae5') return 'green';
+          return c || '';
+        })(row[idx.cor]),       
       });
     }
 
