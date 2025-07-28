@@ -91,14 +91,13 @@ export default async function handler(req, res) {
     const { clients } = groupRows(rows);
 
     const columns = [
-      'Lead Selecionado',
+ 'Lead Selecionado',
       'Tentativa de Contato',
       'Contato Efetuado',
       'Conversa Iniciada',
       'Reunião Agendada',
       'Perdido',
     ];
-
     const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
     clients.forEach((client) => {
       const col = board.find((c) => c.id === client.status);
@@ -106,50 +105,41 @@ export default async function handler(req, res) {
         col.cards.push({ id: client.id, client });
       }
     });
-
     return res.status(200).json(board);
   }
 
   if (req.method === 'POST') {
+
     const { id, destination, status, color } = req.body;
     const newStatus = status || (destination && destination.droppableId);
-
-    // ✅ Determinar a cor a salvar
     const newColor =
       color !== undefined
         ? color
         : newStatus === 'Perdido'
-        ? '#fecaca'
-        : undefined;
-
+          ? 'red'
+          : undefined;
     const sheet = await getSheet();
     const rows = sheet.data.values || [];
     const [header, ...data] = rows;
-
     let companyIdx = header.indexOf('Negócio - Organização');
     if (companyIdx === -1) companyIdx = header.indexOf('Organização - Nome');
-    const statusIdx = header.indexOf('Status_Kanban');
-    const dateIdx = header.indexOf('Data_Ultima_Movimentacao');
-    const colorIdx = header.indexOf('Cor_Card');
-
     const promises = [];
     data.forEach((row, i) => {
       if (row[companyIdx] === id) {
         const rowNum = i + 2;
 
-        const values = [...row];
-        if (statusIdx !== -1) values[statusIdx] = newStatus;
-        if (dateIdx !== -1) values[dateIdx] = new Date().toISOString().split('T')[0];
-        if (colorIdx !== -1 && newColor !== undefined) values[colorIdx] = newColor;
+        const values = {
+          data_ultima_movimentacao: new Date().toISOString().split('T')[0],
+        };
+        if (newStatus !== undefined) values.status_kanban = newStatus;
+        if (newColor !== undefined) values.cor_card = newColor;
+        promises.push(updateRow(rowNum, values));
 
-        promises.push(updateRow(`Clientes!A${rowNum}:Z${rowNum}`, values));
       }
     });
-
     await Promise.all(promises);
     return res.status(200).json({ status: newStatus, color: newColor });
   }
 
   return res.status(405).end();
 }
-

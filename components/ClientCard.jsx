@@ -10,26 +10,27 @@ export default function ClientCard({ client }) {
   const [color, setColor] = useState(client.color || '');
 
   const handleDoubleClick = async () => {
-    setColor('green');
+    const newColor = 'green';
+    setColor(newColor);
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, status: 'Lead Selecionado', color: 'green' }),
+      body: JSON.stringify({
+        id: client.id,
+        status: 'Lead Selecionado',
+        color: newColor,
+      }),
     });
   };
 
   return (
     <div
       onDoubleClick={handleDoubleClick}
-      className="p-4 border rounded shadow hover:shadow-lg cursor-pointer"
       style={{
         backgroundColor:
-          color === 'green'
-            ? '#22c55e'
-            : color === 'red'
-              ? '#ef4444'
-              : undefined,
+          color === 'green' ? '#22c55e' : color === 'red' ? '#ef4444' : 'white',
       }}
+      className="p-4 border rounded shadow hover:shadow-lg cursor-pointer"
     >
       <h3 className="text-lg font-semibold mb-1">{client.company}</h3>
       {(client.city || client.uf) && (

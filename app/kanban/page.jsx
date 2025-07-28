@@ -23,16 +23,12 @@ export default function KanbanPage() {
     moved.client.status = destCol.id;
     if (destCol.id === 'Perdido') {
       moved.client.color = 'red';
-    } else if (moved.client.color === 'red') {
-      moved.client.color = '';
     }
     setColumns(newColumns);
 
     const payload = { id: draggableId, destination };
     if (destCol.id === 'Perdido') {
       payload.color = 'red';
-    } else if (moved.client.color === 'red') {
-      payload.color = '';
     }
     await fetch('/api/kanban', {
       method: 'POST',
