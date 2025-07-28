@@ -1,4 +1,5 @@
 import './globals.css';
+import Sidebar from '../components/Sidebar';
 
 export const metadata = {
   title: 'Client Kanban System',
@@ -7,7 +8,11 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen md:pl-60">
+        <Sidebar />
+        <main className="p-4">{children}</main>
+      </body>
     </html>
   );
+}
 }

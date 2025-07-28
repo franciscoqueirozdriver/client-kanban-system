@@ -91,7 +91,7 @@ export default async function handler(req, res) {
     const { clients } = groupRows(rows);
 
     const columns = [
- 'Lead Selecionado',
+       'Lead Selecionado',
       'Tentativa de Contato',
       'Contato Efetuado',
       'Conversa Iniciada',
@@ -118,15 +118,19 @@ export default async function handler(req, res) {
         : newStatus === 'Perdido'
           ? 'red'
           : undefined;
+
+    let existingColor = '';
     const sheet = await getSheet();
     const rows = sheet.data.values || [];
     const [header, ...data] = rows;
+    const colorIdx = header.indexOf('Cor_Card');
     let companyIdx = header.indexOf('Negócio - Organização');
     if (companyIdx === -1) companyIdx = header.indexOf('Organização - Nome');
     const promises = [];
     data.forEach((row, i) => {
       if (row[companyIdx] === id) {
         const rowNum = i + 2;
+        if (existingColor === '') existingColor = row[colorIdx] || '';
 
         const values = {
           data_ultima_movimentacao: new Date().toISOString().split('T')[0],
@@ -138,8 +142,9 @@ export default async function handler(req, res) {
       }
     });
     await Promise.all(promises);
-    return res.status(200).json({ status: newStatus, color: newColor });
+    return res.status(200).json({ status: newStatus, color: newColor ?? existingColor });
   }
 
   return res.status(405).end();
 }
+

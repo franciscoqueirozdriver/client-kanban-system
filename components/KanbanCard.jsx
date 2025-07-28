@@ -4,7 +4,7 @@ import { Draggable } from '@hello-pangea/dnd';
 export default function KanbanCard({ card, index }) {
   const { client } = card;
 
-  const style = {
+  const colorStyle = {
     backgroundColor:
       client.color === 'green'
         ? '#22c55e'
@@ -20,7 +20,7 @@ export default function KanbanCard({ card, index }) {
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          style={style}
+          style={{ ...provided.draggableProps.style, ...colorStyle }}
           className="p-2 mb-2 rounded shadow"
         >
           <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
