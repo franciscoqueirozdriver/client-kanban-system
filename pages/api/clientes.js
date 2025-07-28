@@ -17,6 +17,7 @@ function groupRows(rows) {
     status: header.indexOf('Status_Kanban'),
     data: header.indexOf('Data_Ultima_Movimentacao'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
+        cor: header.indexOf('Cor_Card'),
   };
 
   const filters = {
@@ -43,6 +44,7 @@ function groupRows(rows) {
         city: row[idx.cidade] || '',
         status: row[idx.status] || '',
         dataMov: row[idx.data] || '',
+       color: row[idx.cor] || '',        
       });
     }
 
@@ -57,7 +59,7 @@ function groupRows(rows) {
         telefone: row[idx.tel] || '',
         celular: row[idx.cel] || '',
         linkedin_contato: row[idx.linkedin] || '',
-      });
+       });
     }
 
     if (row[idx.segmento]) filters.segmento.add(row[idx.segmento]);
@@ -77,15 +79,16 @@ function groupRows(rows) {
     city: c.city,
     status: c.status,
     dataMov: c.dataMov,
+    color: c.color,    
   }));
 
   return {
     clients,
     filters: {
-      segmento: Array.from(filters.segmento),
-      porte: Array.from(filters.porte),
-      uf: Array.from(filters.uf),
-      cidade: Array.from(filters.cidade),
+      segmento: Array.from(filters.segmento).sort(),
+      porte: Array.from(filters.porte).sort(),
+      uf: Array.from(filters.uf).sort(),
+      cidade: Array.from(filters.cidade).sort(),
     },
   };
 }
@@ -110,3 +113,4 @@ export default async function handler(req, res) {
 
   return res.status(405).end();
 }
+

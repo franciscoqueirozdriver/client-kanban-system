@@ -17,6 +17,7 @@ function groupRows(rows) {
     status: header.indexOf('Status_Kanban'),
     data: header.indexOf('Data_Ultima_Movimentacao'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
+        cor: header.indexOf('Cor_Card'),
   };
 
   const map = new Map();
@@ -36,6 +37,7 @@ function groupRows(rows) {
         city: row[idx.cidade] || '',
         status: row[idx.status] || '',
         dataMov: row[idx.data] || '',
+          color: row[idx.cor] || '',      
         rows: [],
         header,
       });
@@ -68,6 +70,7 @@ function groupRows(rows) {
     city: c.city,
     status: c.status,
     dataMov: c.dataMov,
+      color: c.color,  
     rows: c.rows,
   })) };
 }
@@ -96,7 +99,15 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { id, destination } = req.body;
+
+    const { id, destination, status, color } = req.body;
+    const newStatus = status || (destination && destination.droppableId);
+    const newColor =
+      color !== undefined
+        ? color
+        : newStatus === 'Perdido'
+          ? '#fecaca'
+          : undefined;
     const sheet = await getSheet();
     const rows = sheet.data.values || [];
     const [header, ...data] = rows;
@@ -106,16 +117,18 @@ export default async function handler(req, res) {
     data.forEach((row, i) => {
       if (row[companyIdx] === id) {
         const rowNum = i + 2;
-        promises.push(
-          updateRow(rowNum, {
-            status_kanban: destination.droppableId,
-            data_ultima_movimentacao: new Date().toISOString().split('T')[0],
-          })
-        );
+
+        const values = {
+          status_kanban: newStatus,
+          data_ultima_movimentacao: new Date().toISOString().split('T')[0],
+        };
+        if (newColor !== undefined) values.cor_card = newColor;
+        promises.push(updateRow(rowNum, values));
+
       }
     });
     await Promise.all(promises);
-    return res.status(200).json({ ok: true });
+    return res.status(200).json({ status: newStatus, color: newColor });
   }
 
   return res.status(405).end();

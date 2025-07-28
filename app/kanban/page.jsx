@@ -21,12 +21,23 @@ export default function KanbanPage() {
     const [moved] = sourceCol.cards.splice(source.index, 1);
     destCol.cards.splice(destination.index, 0, moved);
     moved.client.status = destCol.id;
+      if (destCol.id === 'Perdido') {
+      moved.client.color = '#fecaca';
+    } else if (moved.client.color === '#fecaca') {
+      moved.client.color = '';
+    }
     setColumns(newColumns);
 
+    const payload = { id: draggableId, destination };
+    if (destCol.id === 'Perdido') {
+      payload.color = '#fecaca';
+    } else if (moved.client.color === '#fecaca') {
+      payload.color = '';
+    }
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: draggableId, destination }),
+      body: JSON.stringify(payload),
     });
   };
 
@@ -42,3 +53,4 @@ export default function KanbanPage() {
     </div>
   );
 }
+
