@@ -1,8 +1,8 @@
-import { getSheet } from '../../lib/googleSheets';
+import { getSheetCached } from '../../lib/googleSheets';
 
 export default async function handler(req, res) {
   try {
-    const response = await getSheet();
+    const response = await getSheetCached();
     const rows = response.data.values || [];
     const [header, ...data] = rows;
 

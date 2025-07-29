@@ -1,4 +1,4 @@
-import { getSheet, appendRow, updateRow } from '../../lib/googleSheets';
+import { getSheetCached, appendRow, updateRow } from '../../lib/googleSheets';
 
 function groupRows(rows) {
   const [header, ...data] = rows;
@@ -17,7 +17,7 @@ function groupRows(rows) {
     status: header.indexOf('Status_Kanban'),
     data: header.indexOf('Data_Ultima_Movimentacao'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
-        cor: header.indexOf('Cor_Card'),
+    cor: header.indexOf('Cor_Card'),
   };
 
   const filters = {
@@ -27,64 +27,43 @@ function groupRows(rows) {
     cidade: new Set(),
   };
 
-  const map = new Map();
+  const clients = data.map(row => {
+    const company = row[idx.org] || '';
+    const segment = row[idx.segmento] || '';
+    const size = row[idx.tamanho] || '';
+    const uf = row[idx.uf] || '';
+    const city = row[idx.cidade] || '';
+    const status = row[idx.status] || '';
+    const dataMov = row[idx.data] || '';
+    const color = row[idx.cor] || '';
 
-  data.forEach((row, i) => {
-    const company = row[idx.org];
-    if (!company) return;
-    if (!map.has(company)) {
-      map.set(company, {
-        id: company,
-        company,
-        opportunities: [],
-        contactsMap: new Map(),
-        segment: row[idx.segmento] || '',
-        size: row[idx.tamanho] || '',
-        uf: row[idx.uf] || '',
-        city: row[idx.cidade] || '',
-        status: row[idx.status] || '',
-        dataMov: row[idx.data] || '',
-        color: ((c) => {
-          if (c === '#fecaca') return 'red';
-          if (c === '#d1fae5') return 'green';
-          return c || '';
-        })(row[idx.cor]),       
-      });
-    }
+    filters.segmento.add(segment);
+    filters.porte.add(size);
+    filters.uf.add(uf);
+    filters.cidade.add(city);
 
-    const item = map.get(company);
-    if (row[idx.titulo]) item.opportunities.push(row[idx.titulo]);
-    const key = `${row[idx.contato] || ''}|${row[idx.email] || ''}`;
-    if (!item.contactsMap.has(key)) {
-      item.contactsMap.set(key, {
-        nome: row[idx.contato] || '',
-        cargo: row[idx.cargo] || '',
-        email: row[idx.email] || '',
-        telefone: row[idx.tel] || '',
-        celular: row[idx.cel] || '',
-        linkedin_contato: row[idx.linkedin] || '',
-       });
-    }
+    const contact = {
+      name: row[idx.contato] || '',
+      role: row[idx.cargo] || '',
+      email: row[idx.email] || '',
+      phone: row[idx.tel] || '',
+      mobile: row[idx.cel] || '',
+      linkedin: row[idx.linkedin] || '',
+    };
 
-    if (row[idx.segmento]) filters.segmento.add(row[idx.segmento]);
-    if (row[idx.tamanho]) filters.porte.add(row[idx.tamanho]);
-    if (row[idx.uf]) filters.uf.add(row[idx.uf]);
-    if (row[idx.cidade]) filters.cidade.add(row[idx.cidade]);
+    return {
+      company,
+      opportunities: [row[idx.titulo] || ''],
+      contacts: [contact],
+      segment,
+      size,
+      uf,
+      city,
+      status,
+      dataMov,
+      color,
+    };
   });
-
-  const clients = Array.from(map.values()).map((c) => ({
-    id: c.id,
-    company: c.company,
-    opportunities: Array.from(new Set(c.opportunities)),
-    contacts: Array.from(c.contactsMap.values()),
-    segment: c.segment,
-    size: c.size,
-    uf: c.uf,
-    city: c.city,
-    status: c.status,
-    dataMov: c.dataMov,
-    color: c.color,    
-  }));
 
   return {
     clients,
@@ -99,7 +78,7 @@ function groupRows(rows) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    const sheet = await getSheet();
+    const sheet = await getSheetCached();
     const rows = sheet.data.values || [];
     const { clients, filters } = groupRows(rows);
     return res.status(200).json({ clients, filters });

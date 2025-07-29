@@ -1,4 +1,4 @@
-import { getSheet, updateRow } from '../../lib/googleSheets';
+import { getSheetCached, updateRow } from '../../lib/googleSheets';
 
 function groupRows(rows) {
   const [header, ...data] = rows;
@@ -24,43 +24,7 @@ function groupRows(rows) {
 
   data.forEach((row, i) => {
     const company = row[idx.org];
-    if (!company) return;
-
-    if (!map.has(company)) {
-      map.set(company, {
-        id: company,
-        company,
-        opportunities: [],
-        contactsMap: new Map(),
-        segment: row[idx.segmento] || '',
-        size: row[idx.tamanho] || '',
-        uf: row[idx.uf] || '',
-        city: row[idx.cidade] || '',
-        status: row[idx.status] || '',
-        dataMov: row[idx.data] || '',
-        color: ((c) => {
-          if (c === '#fecaca') return 'red';
-          if (c === '#d1fae5') return 'green';
-          return c || '';
-        })(row[idx.cor]),
-        rows: [],
-        header,
-      });
-    }
-
-    const item = map.get(company);
-    item.rows.push(i + 2);
-    if (row[idx.titulo]) item.opportunities.push(row[idx.titulo]);
-
-    const key = `${row[idx.contato] || ''}|${row[idx.email] || ''}`;
-    if (!item.contactsMap.has(key)) {
-      item.contactsMap.set(key, {
-        nome: row[idx.contato] || '',
-        cargo: row[idx.cargo] || '',
-        email: row[idx.email] || '',
-        telefone: row[idx.tel] || '',
-        celular: row[idx.cel] || '',
-        linkedin_contato: row[idx.linkedin] || '',
+@@ -64,85 +64,85 @@ function groupRows(rows) {
       });
     }
   });
@@ -86,7 +50,7 @@ function groupRows(rows) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    const sheet = await getSheet();
+    const sheet = await getSheetCached();
     const rows = sheet.data.values || [];
     const { clients } = groupRows(rows);
 
@@ -120,7 +84,7 @@ export default async function handler(req, res) {
           : undefined;
 
     let existingColor = '';
-    const sheet = await getSheet();
+    const sheet = await getSheetCached();
     const rows = sheet.data.values || [];
     const [header, ...data] = rows;
     const colorIdx = header.indexOf('Cor_Card');
