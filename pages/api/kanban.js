@@ -24,7 +24,38 @@ function groupRows(rows) {
 
   data.forEach((row, i) => {
     const company = row[idx.org];
-@@ -64,85 +64,85 @@ function groupRows(rows) {
+    if (!company) return;
+
+    if (!map.has(company)) {
+      map.set(company, {
+        id: company,
+        company,
+        opportunities: [],
+        contactsMap: new Map(),
+        segment: row[idx.segmento],
+        size: row[idx.tamanho],
+        uf: row[idx.uf],
+        city: row[idx.cidade],
+        status: row[idx.status],
+        dataMov: row[idx.data],
+        color: row[idx.cor],
+        rows: [],
+      });
+    }
+
+    const client = map.get(company);
+    client.opportunities.push(row[idx.titulo]);
+    client.rows.push(i + 2);
+
+    const contactName = row[idx.contato];
+    if (contactName && !client.contactsMap.has(contactName)) {
+      client.contactsMap.set(contactName, {
+        name: contactName,
+        role: row[idx.cargo],
+        email: row[idx.email],
+        phone: row[idx.tel],
+        mobile: row[idx.cel],
+        linkedin: row[idx.linkedin],
       });
     }
   });
@@ -55,7 +86,7 @@ export default async function handler(req, res) {
     const { clients } = groupRows(rows);
 
     const columns = [
-       'Lead Selecionado',
+      'Lead Selecionado',
       'Tentativa de Contato',
       'Contato Efetuado',
       'Conversa Iniciada',
@@ -73,15 +104,14 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-
     const { id, destination, status, color } = req.body;
     const newStatus = status || (destination && destination.droppableId);
     const newColor =
       color !== undefined
         ? color
         : newStatus === 'Perdido'
-          ? 'red'
-          : undefined;
+        ? 'red'
+        : undefined;
 
     let existingColor = '';
     const sheet = await getSheetCached();
@@ -90,6 +120,7 @@ export default async function handler(req, res) {
     const colorIdx = header.indexOf('Cor_Card');
     let companyIdx = header.indexOf('Negócio - Organização');
     if (companyIdx === -1) companyIdx = header.indexOf('Organização - Nome');
+
     const promises = [];
     data.forEach((row, i) => {
       if (row[companyIdx] === id) {
@@ -102,11 +133,13 @@ export default async function handler(req, res) {
         if (newStatus !== undefined) values.status_kanban = newStatus;
         if (newColor !== undefined) values.cor_card = newColor;
         promises.push(updateRow(rowNum, values));
-
       }
     });
+
     await Promise.all(promises);
-    return res.status(200).json({ status: newStatus, color: newColor ?? existingColor });
+    return res
+      .status(200)
+      .json({ status: newStatus, color: newColor ?? existingColor });
   }
 
   return res.status(405).end();

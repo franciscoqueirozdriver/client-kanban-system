@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 
 export default function Filters({ onFilter }) {
   const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState({ segmento: '', porte: '', uf: '', cidade: '' });
+  const [filters, setFilters] = useState({ segmento: '', porte: [], uf: '', cidade: '' });
   const [options, setOptions] = useState({ segmento: [], porte: [], uf: [], cidade: [] });
 
   useEffect(() => {
@@ -20,6 +20,11 @@ export default function Filters({ onFilter }) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleMultiSelect = (e) => {
+    const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
+    setFilters((prev) => ({ ...prev, porte: selected }));
+  };
+
   return (
     <div className="flex flex-col gap-2">
       <input
@@ -29,23 +34,65 @@ export default function Filters({ onFilter }) {
         placeholder="Buscar..."
         className="border p-2 rounded"
       />
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        {Object.entries(options).map(([key, values]) => (
-          <select
-            key={key}
-            value={filters[key]}
-            onChange={(e) => handleChange(key, e.target.value)}
-            className="border p-2 rounded"
-          >
-            <option value="">{key}</option>
-            {values.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
-        ))}
+        {/* Segmento */}
+        <select
+          value={filters.segmento}
+          onChange={(e) => handleChange('segmento', e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option value="">segmento</option>
+          {options.segmento.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+
+        {/* ✅ Porte com múltipla escolha */}
+        <select
+          multiple
+          value={filters.porte}
+          onChange={handleMultiSelect}
+          className="border p-2 rounded h-24"
+        >
+          {options.porte.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+
+        {/* UF */}
+        <select
+          value={filters.uf}
+          onChange={(e) => handleChange('uf', e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option value="">uf</option>
+          {options.uf.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+
+        {/* Cidade */}
+        <select
+          value={filters.cidade}
+          onChange={(e) => handleChange('cidade', e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option value="">cidade</option>
+          {options.cidade.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );
 }
+
