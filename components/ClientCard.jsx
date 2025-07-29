@@ -49,6 +49,7 @@ async function fetchMessages(app) {
 }
 
 export default function ClientCard({ client }) {
+  console.log(client.contacts);
   const [color, setColor] = useState(client.color || '');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
@@ -133,14 +134,14 @@ export default function ClientCard({ client }) {
             <p className="font-medium">{c.nome}</p>
             <p className="text-xs">{c.cargo}</p>
             <p className="text-xs">
-              <a
-                href={`mailto:${c.email}`}
+              <button
+                type="button"
                 className="text-blue-600 underline"
                 onClick={(e) => handleEmailClick(e, c.email, c)}
               >
                 {c.email}
 
-              </a>
+              </button>
             </p>
             {c.telefone && (
               <p className="text-xs">

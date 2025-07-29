@@ -20,7 +20,13 @@ export default function ClientesPage() {
   const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
     let result = clients.filter((client) => {
       if (segmento && client.segment !== segmento) return false;
-      if (porte && client.size !== porte) return false;
+      if (porte) {
+        if (Array.isArray(porte)) {
+          if (!porte.includes(client.size)) return false;
+        } else if (client.size !== porte) {
+          return false;
+        }
+      }
       if (uf && client.uf !== uf) return false;
       if (cidade && client.city !== cidade) return false;
       if (query) {
@@ -46,8 +52,10 @@ export default function ClientesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map((client) => (
           <ClientCard key={client.id} client={client} />
-        ))}
+          
+         ))}
       </div>
     </div>
   );
 }
+

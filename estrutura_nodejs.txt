@@ -1,4 +1,4 @@
-📂 Estrutura do projeto Node.js – ter 29 jul 2025 15:45:51 -03
+📂 Estrutura do projeto Node.js – ter 29 jul 2025 17:08:08 -03
 Pasta base: /home/Alessandra/client-kanban-system
 ──────────────────────────────
 📁 client-kanban-system
@@ -28,7 +28,13 @@ Pasta base: /home/Alessandra/client-kanban-system
               const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
                 let result = clients.filter((client) => {
                   if (segmento && client.segment !== segmento) return false;
-                  if (porte && client.size !== porte) return false;
+                  if (porte) {
+                    if (Array.isArray(porte)) {
+                      if (!porte.includes(client.size)) return false;
+                    } else if (client.size !== porte) {
+                      return false;
+                    }
+                  }
                   if (uf && client.uf !== uf) return false;
                   if (cidade && client.city !== cidade) return false;
                   if (query) {
@@ -54,11 +60,13 @@ Pasta base: /home/Alessandra/client-kanban-system
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filtered.map((client) => (
                       <ClientCard key={client.id} client={client} />
-                    ))}
+                      
+                     ))}
                   </div>
                 </div>
               );
             }
+            
         ──────────────────────────────
         📁 kanban
         📄 page.jsx
@@ -608,6 +616,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         }
         
         export default function ClientCard({ client }) {
+          console.log(client.contacts);
           const [color, setColor] = useState(client.color || '');
           const [modalOpen, setModalOpen] = useState(false);
           const [modalMessages, setModalMessages] = useState([]);
@@ -692,14 +701,14 @@ Pasta base: /home/Alessandra/client-kanban-system
                     <p className="font-medium">{c.nome}</p>
                     <p className="text-xs">{c.cargo}</p>
                     <p className="text-xs">
-                      <a
-                        href={`mailto:${c.email}`}
+                      <button
+                        type="button"
                         className="text-blue-600 underline"
                         onClick={(e) => handleEmailClick(e, c.email, c)}
                       >
                         {c.email}
         
-                      </a>
+                      </button>
                     </p>
                     {c.telefone && (
                       <p className="text-xs">
