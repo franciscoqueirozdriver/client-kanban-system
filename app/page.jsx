@@ -1,15 +1,30 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import SummaryCard from '../components/SummaryCard';
+import Charts from '../components/Charts';
 
 export default function Dashboard() {
+  const [allClients, setAllClients] = useState([]);
   const [clients, setClients] = useState([]);
-  const chartRef = useRef(null);
+  const [options, setOptions] = useState({ segmento: [], uf: [] });
+  const [filters, setFilters] = useState({ segmento: '', uf: '' });
 
   useEffect(() => {
     fetch('/api/clientes')
       .then((res) => res.json())
-      .then((data) => setClients(data.clients || []));
+      .then((data) => {
+        setAllClients(data.clients || []);
+        setClients(data.clients || []);
+        setOptions({ segmento: data.filters.segmento, uf: data.filters.uf });
+      });
   }, []);
+
+  useEffect(() => {
+    let filtered = allClients;
+    if (filters.segmento) filtered = filtered.filter((c) => c.segment === filters.segmento);
+    if (filters.uf) filtered = filtered.filter((c) => c.uf === filters.uf);
+    setClients(filtered);
+  }, [filters, allClients]);
 
   const phaseLabels = [
     'Lead Selecionado',
@@ -44,86 +59,52 @@ export default function Dashboard() {
   const meetings = phaseCounts['Reunião Agendada'] || 0;
   const losses = phaseCounts['Perdido'] || 0;
   const meetingRate = funnelTotal ? ((meetings / funnelTotal) * 100).toFixed(1) : '0';
-  const lossRate = companies ? ((losses / companies) * 100).toFixed(1) : '0';
+  const lossRate = funnelTotal ? ((losses / funnelTotal) * 100).toFixed(1) : '0';
 
-  useEffect(() => {
-    const labels = phaseLabels;
-    const data = labels.map((l) => phaseCounts[l] || 0);
-    const colors = [
-      '#fbbf24',
-      '#34d399',
-      '#60a5fa',
-      '#c084fc',
-      '#f87171',
-      '#9ca3af',
-    ];
-
-    const createChart = () => {
-      const canvas = document.getElementById('phaseChart');
-      if (!canvas || !window.Chart) return;
-      const ctx = canvas.getContext('2d');
-
-      if (chartRef.current) {
-        chartRef.current.destroy();
-      }
-
-      chartRef.current = new window.Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [{ data, backgroundColor: colors }],
-        },
-        options: { plugins: { legend: { display: false } } },
-      });
-    };
-
-    if (!window.Chart) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-      script.onload = createChart;
-      document.body.appendChild(script);
-    } else {
-      createChart();
-    }
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [clients]);
+  const handleChange = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Dashboard</h1>
+      <div className="flex gap-2 flex-wrap">
+        <select
+          value={filters.segmento}
+          onChange={(e) => handleChange('segmento', e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option value="">Segmento</option>
+          {options.segmento.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filters.uf}
+          onChange={(e) => handleChange('uf', e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option value="">UF</option>
+          {options.uf.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        <input type="text" placeholder="Data Range" className="border p-2 rounded" disabled />
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded shadow">
-          <p className="text-sm text-gray-500">Empresas</p>
-          <p className="text-2xl font-bold">{companies}</p>
-        </div>
-        <div className="bg-white p-4 rounded shadow">
-          <p className="text-sm text-gray-500">Contatos Únicos</p>
-          <p className="text-2xl font-bold">{contacts}</p>
-        </div>
+        <SummaryCard title="Empresas" value={companies} />
+        <SummaryCard title="Contatos Únicos" value={contacts} />
         {phaseLabels.map((label) => (
-          <div key={label} className="bg-white p-4 rounded shadow">
-            <p className="text-sm text-gray-500">{label}</p>
-            <p className="text-2xl font-bold">{phaseCounts[label] || 0}</p>
-          </div>
+          <SummaryCard key={label} title={label} value={phaseCounts[label] || 0} />
         ))}
-        <div className="bg-white p-4 rounded shadow">
-          <p className="text-sm text-gray-500">Taxa de Reuniões</p>
-          <p className="text-2xl font-bold">{meetingRate}%</p>
-        </div>
-        <div className="bg-white p-4 rounded shadow">
-          <p className="text-sm text-gray-500">Taxa de Perda</p>
-          <p className="text-2xl font-bold">{lossRate}%</p>
-        </div>
+        <SummaryCard title="Taxa de Reuniões" value={`${meetingRate}%`} />
+        <SummaryCard title="Taxa de Perda" value={`${lossRate}%`} />
       </div>
-      <div className="bg-white p-4 rounded shadow">
-        <canvas id="phaseChart" height="200"></canvas>
-      </div>
+      <Charts clients={clients} />
     </div>
   );
 }

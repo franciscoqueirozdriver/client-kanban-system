@@ -1,16 +1,18 @@
-
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { FaChartBar, FaUsers, FaColumns, FaFileAlt, FaCog, FaHome } from 'react-icons/fa';
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const links = [
-    { href: '/', label: 'Dashboard' },
-    { href: '/clientes', label: 'Clientes' },
-    { href: '/kanban', label: 'Kanban' },
+    { href: '/', label: 'Dashboard', icon: <FaHome /> },
+    { href: '/clientes', label: 'Clients', icon: <FaUsers /> },
+    { href: '/kanban', label: 'Kanban', icon: <FaColumns /> },
+    { href: '#', label: 'Reports', icon: <FaChartBar /> },
+    { href: '#', label: 'Settings', icon: <FaCog /> },
   ];
 
   return (
@@ -30,10 +32,11 @@ export default function Sidebar() {
           <Link
             key={link.href}
             href={link.href}
-            className={`block px-2 py-1 rounded hover:bg-gray-700 ${pathname === link.href ? 'bg-gray-700' : ''}`}
+            className={`flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-700 ${pathname === link.href ? 'bg-gray-700' : ''}`}
             onClick={() => setOpen(false)}
           >
-            {link.label}
+            {link.icon}
+            <span>{link.label}</span>
           </Link>
         ))}
       </nav>
