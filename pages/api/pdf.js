@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   try {
     if (req.method !== 'GET') return res.status(405).end();
 
-    const sheet = await getSheet();
+     const sheet = await getSheet();
     const rows = sheet.data.values || [];
     const { map } = buildReport(rows);
 
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
         r.size,
         r.nome,
         r.cargo,
-        [r.telefone, r.celular].filter(Boolean).join(' / '),
+        (r.normalizedPhones || []).join(' / '),
         r.email,
         r.linkedin,
       ]),

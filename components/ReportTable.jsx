@@ -1,5 +1,4 @@
 'use client';
-
 export default function ReportTable({ rows }) {
   return (
     <div className="overflow-auto">
@@ -24,7 +23,9 @@ export default function ReportTable({ rows }) {
               <td className="px-2 py-1 border-r">{r.size}</td>
               <td className="px-2 py-1 border-r">{r.nome}</td>
               <td className="px-2 py-1 border-r">{r.cargo}</td>
-              <td className="px-2 py-1 border-r">{[r.telefone, r.celular].filter(Boolean).join(' / ')}</td>
+              <td className="px-2 py-1 border-r">
+                {(r.normalizedPhones || []).join(' / ')}
+              </td>
               <td className="px-2 py-1 border-r">{r.email}</td>
               <td className="px-2 py-1">{r.linkedin}</td>
             </tr>
@@ -34,3 +35,4 @@ export default function ReportTable({ rows }) {
     </div>
   );
 }
+

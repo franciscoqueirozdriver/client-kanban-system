@@ -1,4 +1,5 @@
 import { getSheetCached, updateRow } from '../../lib/googleSheets';
+import { normalizePhones } from '../../lib/report';
 
 function groupRows(rows) {
   const [header, ...data] = rows;
@@ -8,8 +9,13 @@ function groupRows(rows) {
     contato: header.indexOf('Negócio - Pessoa de contato'),
     cargo: header.indexOf('Pessoa - Cargo'),
     email: header.indexOf('Pessoa - Email - Work'),
+    phoneWork: header.indexOf('Pessoa - Phone - Work'),
+    phoneHome: header.indexOf('Pessoa - Phone - Home'),
+    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
+    phoneOther: header.indexOf('Pessoa - Phone - Other'),
     tel: header.indexOf('Pessoa - Telefone'),
     cel: header.indexOf('Pessoa - Celular'),
+    normalizado: header.indexOf('Telefone Normalizado'),
     segmento: header.indexOf('Organização - Segmento'),
     tamanho: header.indexOf('Organização - Tamanho da empresa'),
     uf: header.indexOf('uf'),
@@ -57,7 +63,8 @@ function groupRows(rows) {
     if (contactName && !client.contactsMap.has(contactName)) {
       const phone = normalizePhone(row[idx.tel]);
       const mobile = normalizePhone(row[idx.cel]);
-      if (!phone && !mobile) {
+      const normalizedPhones = normalizePhones(row, idx);
+      if (normalizedPhones.length === 0) {
         console.warn('Contato sem telefone', { row: i + 2, company });
       }
       client.contactsMap.set(contactName, {
@@ -66,6 +73,7 @@ function groupRows(rows) {
         email: (row[idx.email] || '').trim(),
         phone,
         mobile,
+        normalizedPhones,
         linkedin: (row[idx.linkedin] || '').trim(),
       });
     }

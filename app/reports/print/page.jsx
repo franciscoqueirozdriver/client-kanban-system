@@ -26,7 +26,7 @@ export default function PrintPage() {
   const dateStr = new Date().toLocaleDateString('pt-BR');
 
   return (
-    <div className="print-container">
+<div className="print-container">
       <h1>Lista de Prospecção</h1>
       <p className="subtitle">Gerado em {dateStr}</p>
 
@@ -51,7 +51,7 @@ export default function PrintPage() {
               <td>{r.size}</td>
               <td>{r.nome}</td>
               <td>{r.cargo}</td>
-              <td>{[r.telefone, r.celular].filter(Boolean).join(' / ')}</td>
+              <td>{(r.normalizedPhones || []).join(' / ')}</td>
               <td>{r.email}</td>
               <td>{r.linkedin}</td>
             </tr>
@@ -76,6 +76,8 @@ export default function PrintPage() {
           width: 100%;
           padding: 0;
         }
+
+
 
         h1 {
           text-align: center;

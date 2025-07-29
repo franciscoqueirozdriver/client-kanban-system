@@ -1,4 +1,4 @@
-📂 Estrutura do projeto Node.js – ter 29 jul 2025 17:08:08 -03
+📂 Estrutura do projeto Node.js – ter 29 jul 2025 18:42:55 -03
 Pasta base: /home/Alessandra/client-kanban-system
 ──────────────────────────────
 📁 client-kanban-system
@@ -27,16 +27,35 @@ Pasta base: /home/Alessandra/client-kanban-system
             
               const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
                 let result = clients.filter((client) => {
-                  if (segmento && client.segment !== segmento) return false;
-                  if (porte) {
-                    if (Array.isArray(porte)) {
-                      if (!porte.includes(client.size)) return false;
-                    } else if (client.size !== porte) {
+                  // segmento filter
+                  if (segmento && segmento.trim()) {
+                    if (client.segment.trim().toLowerCase() !== segmento.trim().toLowerCase()) {
                       return false;
                     }
                   }
-                  if (uf && client.uf !== uf) return false;
-                  if (cidade && client.city !== cidade) return false;
+            
+                  // porte filter - supports array or string
+                  if (porte) {
+                    if (Array.isArray(porte)) {
+                      if (porte.length > 0) {
+                        const options = porte.map((p) => p.trim().toLowerCase());
+                        if (!options.includes(client.size.trim().toLowerCase())) return false;
+                      }
+                    } else if (porte.trim()) {
+                      if (client.size.trim().toLowerCase() !== porte.trim().toLowerCase()) return false;
+                    }
+                  }
+            
+                  // uf filter
+                  if (uf && uf.trim()) {
+                    if (client.uf.trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
+                  }
+            
+                  // cidade filter
+                  if (cidade && cidade.trim()) {
+                    if (client.city.trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
+                  }
+            
                   if (query) {
                     const q = query.toLowerCase();
                     const matchName = client.company.toLowerCase().includes(q);
@@ -46,6 +65,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                   }
                   return true;
                 });
+            
                 setFiltered(result);
               };
             
@@ -66,7 +86,6 @@ Pasta base: /home/Alessandra/client-kanban-system
                 </div>
               );
             }
-            
         ──────────────────────────────
         📁 kanban
         📄 page.jsx
@@ -616,7 +635,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         }
         
         export default function ClientCard({ client }) {
-          console.log(client.contacts);
+          console.log('client contacts', client.contacts);
           const [color, setColor] = useState(client.color || '');
           const [modalOpen, setModalOpen] = useState(false);
           const [modalMessages, setModalMessages] = useState([]);
@@ -710,34 +729,66 @@ Pasta base: /home/Alessandra/client-kanban-system
         
                       </button>
                     </p>
-                    {c.telefone && (
-                      <p className="text-xs">
-                        Telefone:{' '}
-                        <a
-                          href={getWhatsAppLink(c.telefone)}
-                          className="text-green-600 underline"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => handlePhoneClick(e, c.telefone, c)}
-                        >
-                          {c.telefone}
-                        </a>
-                      </p>
-                    )}
-                    {c.celular && (
-                      <p className="text-xs">
-                        Celular:{' '}
-                        <a
-                          href={getWhatsAppLink(c.celular)}
-                          className="text-green-600 underline"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => handlePhoneClick(e, c.celular, c)}
-                        >
-                          {c.celular}
-                        </a>
-                      </p>
-                    )}
+                    {Array.isArray(c.telefone)
+                      ? c.telefone.map((tel, i) => (
+                          <p key={`tel-${i}`} className="text-xs">
+                            Telefone:{' '}
+                            <a
+                              href={getWhatsAppLink(tel)}
+                              className="text-green-600 underline"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => handlePhoneClick(e, tel, c)}
+                            >
+                              {tel}
+                            </a>
+                          </p>
+                        ))
+                      :
+                        c.telefone && c.telefone.trim() !== '' && (
+                          <p className="text-xs">
+                            Telefone:{' '}
+                            <a
+                              href={getWhatsAppLink(c.telefone)}
+                              className="text-green-600 underline"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => handlePhoneClick(e, c.telefone, c)}
+                            >
+                              {c.telefone}
+                            </a>
+                          </p>
+                        )}
+                    {Array.isArray(c.celular)
+                      ? c.celular.map((cel, i) => (
+                          <p key={`cel-${i}`} className="text-xs">
+                            Celular:{' '}
+                            <a
+                              href={getWhatsAppLink(cel)}
+                              className="text-green-600 underline"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => handlePhoneClick(e, cel, c)}
+                            >
+                              {cel}
+                            </a>
+                          </p>
+                        ))
+                      :
+                        c.celular && c.celular.trim() !== '' && (
+                          <p className="text-xs">
+                            Celular:{' '}
+                            <a
+                              href={getWhatsAppLink(c.celular)}
+                              className="text-green-600 underline"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => handlePhoneClick(e, c.celular, c)}
+                            >
+                              {c.celular}
+                            </a>
+                          </p>
+                        )}
                     {c.linkedin_contato && (
                       <p className="text-xs">
                         <a
@@ -1198,6 +1249,16 @@ Pasta base: /home/Alessandra/client-kanban-system
             impresso: header.indexOf('Impresso_Lista'),
           };
         
+          const parsePhones = (v) =>
+            String(v || '')
+              .split(/[,;]+/)
+              .map((p) => p.trim())
+              .filter(Boolean);
+        
+          if (idx.tel === -1 || idx.cel === -1) {
+            console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
+          }
+        
           const filters = {
             segmento: new Set(),
             porte: new Set(),
@@ -1224,13 +1285,20 @@ Pasta base: /home/Alessandra/client-kanban-system
             }
             const item = map.get(company);
             item.rows.push(i + 2);
+        
+            const telefone = parsePhones(row[idx.tel]);
+            const celular = parsePhones(row[idx.cel]);
+            if (telefone.length === 0 && celular.length === 0) {
+              console.warn('Contato sem telefone', { row: i + 2, company });
+            }
+        
             item.contacts.push({
-              nome: row[idx.contato] || '',
-              cargo: row[idx.cargo] || '',
-              telefone: row[idx.tel] || '',
-              celular: row[idx.cel] || '',
-              email: row[idx.email] || '',
-              linkedin: row[idx.linkedin] || '',
+              nome: (row[idx.contato] || '').trim(),
+              cargo: (row[idx.cargo] || '').trim(),
+              telefone,
+              celular,
+              email: (row[idx.email] || '').trim(),
+              linkedin: (row[idx.linkedin] || '').trim(),
             });
         
             if (row[idx.segmento]) filters.segmento.add(row[idx.segmento]);
@@ -1268,18 +1336,22 @@ Pasta base: /home/Alessandra/client-kanban-system
               });
             } else {
               item.contacts.forEach((c) => {
-                if (result.length >= max) return;
-                result.push({
-                  company: item.company,
-                  segment: item.segment,
-                  size: item.size,
-                  nome: c.nome,
-                  cargo: c.cargo,
-                  telefone: c.telefone,
-                  celular: c.celular,
-                  email: c.email,
-                  linkedin: c.linkedin,
-                });
+                const tels = Array.isArray(c.telefone) ? c.telefone : c.telefone ? [c.telefone] : [''];
+                const cels = Array.isArray(c.celular) ? c.celular : c.celular ? [c.celular] : [''];
+                const maxCount = Math.max(tels.length, cels.length);
+                for (let i = 0; i < maxCount && result.length < max; i++) {
+                  result.push({
+                    company: item.company,
+                    segment: item.segment,
+                    size: item.size,
+                    nome: c.nome,
+                    cargo: c.cargo,
+                    telefone: tels[i] || '',
+                    celular: cels[i] || '',
+                    email: c.email,
+                    linkedin: c.linkedin,
+                  });
+                }
               });
             }
             item.rows.forEach((r) => toMark.add(r));
@@ -1293,6 +1365,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             Array.from(rows).map((rowNum) => updateRowFn(rowNum, { impresso_lista: 'Em Lista' }))
           );
         }
+        
         
     ──────────────────────────────
     📄 Sidebar.jsx
@@ -1670,6 +1743,12 @@ Pasta base: /home/Alessandra/client-kanban-system
             impresso: header.indexOf('Impresso_Lista'),
           };
         
+          const normalizePhone = (v) => String(v || '').trim();
+        
+          if (idx.tel === -1 || idx.cel === -1) {
+            console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
+          }
+        
           const filters = {
             segmento: new Set(),
             porte: new Set(),
@@ -1698,14 +1777,21 @@ Pasta base: /home/Alessandra/client-kanban-system
             const item = map.get(company);
         
             item.rows.push(i + 2);
+        
+            const telefone = normalizePhone(row[idx.tel]);
+            const celular = normalizePhone(row[idx.cel]);
+            if (!telefone && !celular) {
+              console.warn('Contato sem telefone', { row: i + 2, company });
+            }
+        
             item.contacts.push({
-              nome: row[idx.contato] || '',
-              cargo: row[idx.cargo] || '',
-              telefone: row[idx.tel] || '',
-              celular: row[idx.cel] || '',
-              email: row[idx.email] || '',
-              linkedin: row[idx.linkedin] || '',
-              impresso: row[idx.impresso] || '',
+              nome: (row[idx.contato] || '').trim(),
+              cargo: (row[idx.cargo] || '').trim(),
+              telefone,
+              celular,
+              email: (row[idx.email] || '').trim(),
+              linkedin: (row[idx.linkedin] || '').trim(),
+              impresso: (row[idx.impresso] || '').trim(),
             });
         
             if (row[idx.segmento]) filters.segmento.add(row[idx.segmento]);
@@ -10216,6 +10302,12 @@ Pasta base: /home/Alessandra/client-kanban-system
                 cor: header.indexOf('Cor_Card'),
               };
             
+              const normalizePhone = (v) => String(v || '').trim();
+            
+              if (idx.tel === -1 || idx.cel === -1) {
+                console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
+              }
+            
               const filters = {
                 segmento: new Set(),
                 porte: new Set(),
@@ -10223,7 +10315,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 cidade: new Set(),
               };
             
-              const clients = data.map(row => {
+              const clients = data.map((row, i) => {
                 const company = row[idx.org] || '';
                 const segment = row[idx.segmento] || '';
                 const size = row[idx.tamanho] || '';
@@ -10238,13 +10330,19 @@ Pasta base: /home/Alessandra/client-kanban-system
                 filters.uf.add(uf);
                 filters.cidade.add(city);
             
+                const phone = normalizePhone(row[idx.tel]);
+                const mobile = normalizePhone(row[idx.cel]);
+                if (!phone && !mobile) {
+                  console.warn('Contato sem telefone', { row: i + 2, company });
+                }
+            
                 const contact = {
-                  name: row[idx.contato] || '',
-                  role: row[idx.cargo] || '',
-                  email: row[idx.email] || '',
-                  phone: row[idx.tel] || '',
-                  mobile: row[idx.cel] || '',
-                  linkedin: row[idx.linkedin] || '',
+                  name: (row[idx.contato] || '').trim(),
+                  role: (row[idx.cargo] || '').trim(),
+                  email: (row[idx.email] || '').trim(),
+                  phone,
+                  mobile,
+                  linkedin: (row[idx.linkedin] || '').trim(),
                 };
             
                 return {
@@ -10318,6 +10416,12 @@ Pasta base: /home/Alessandra/client-kanban-system
                 cor: header.indexOf('Cor_Card'),
               };
             
+              const normalizePhone = (v) => String(v || '').trim();
+            
+              if (idx.tel === -1 || idx.cel === -1) {
+                console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
+              }
+            
               const map = new Map();
             
               data.forEach((row, i) => {
@@ -10347,13 +10451,18 @@ Pasta base: /home/Alessandra/client-kanban-system
             
                 const contactName = row[idx.contato];
                 if (contactName && !client.contactsMap.has(contactName)) {
+                  const phone = normalizePhone(row[idx.tel]);
+                  const mobile = normalizePhone(row[idx.cel]);
+                  if (!phone && !mobile) {
+                    console.warn('Contato sem telefone', { row: i + 2, company });
+                  }
                   client.contactsMap.set(contactName, {
-                    name: contactName,
-                    role: row[idx.cargo],
-                    email: row[idx.email],
-                    phone: row[idx.tel],
-                    mobile: row[idx.cel],
-                    linkedin: row[idx.linkedin],
+                    name: contactName.trim(),
+                    role: (row[idx.cargo] || '').trim(),
+                    email: (row[idx.email] || '').trim(),
+                    phone,
+                    mobile,
+                    linkedin: (row[idx.linkedin] || '').trim(),
                   });
                 }
               });

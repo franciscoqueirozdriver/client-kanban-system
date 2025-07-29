@@ -84,10 +84,16 @@ export default function ClientCard({ client }) {
       openModal(messages, (msg) => {
         const finalMsg = replacePlaceholders(msg, { client, contact, phone });
         const encoded = encodeURIComponent(finalMsg);
-        window.open(`https://wa.me/55${digits}?text=${encoded}`, '_blank');
+        const url = digits.startsWith('55')
+          ? `https://wa.me/${digits}?text=${encoded}`
+          : `https://wa.me/55${digits}?text=${encoded}`;
+        window.open(url, '_blank');
       });
     } else {
-      window.open(`https://wa.me/55${digits}`, '_blank');
+      const url = digits.startsWith('55')
+        ? `https://wa.me/${digits}`
+        : `https://wa.me/55${digits}`;
+      window.open(url, '_blank');
     }
   };
 
@@ -118,7 +124,7 @@ export default function ClientCard({ client }) {
       <h3 className="text-lg font-semibold mb-1">{client.company}</h3>
       {(client.city || client.uf) && (
         <p className="text-xs text-gray-600">
-          {[client.city, client.uf].filter(Boolean).join(' - ')}
+{[client.city, client.uf].filter(Boolean).join(' - ')}
         </p>
       )}
       {client.opportunities.length > 0 && (
@@ -143,32 +149,22 @@ export default function ClientCard({ client }) {
 
               </button>
             </p>
-            {c.telefone && c.telefone.trim() !== '' && (
+            {c.normalizedPhones && c.normalizedPhones.length > 0 && (
               <p className="text-xs">
-                Telefone:{' '}
-                <a
-                  href={getWhatsAppLink(c.telefone)}
-                  className="text-green-600 underline"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => handlePhoneClick(e, c.telefone, c)}
-                >
-                  {c.telefone}
-                </a>
-              </p>
-            )}
-            {c.celular && c.celular.trim() !== '' && (
-              <p className="text-xs">
-                Celular:{' '}
-                <a
-                  href={getWhatsAppLink(c.celular)}
-                  className="text-green-600 underline"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => handlePhoneClick(e, c.celular, c)}
-                >
-                  {c.celular}
-                </a>
+                {c.normalizedPhones.map((p, i) => (
+                  <span key={i}>
+                    <a
+                      href={getWhatsAppLink(p)}
+                      className="text-green-600 underline"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => handlePhoneClick(e, p, c)}
+                    >
+                      {p}
+                    </a>
+                    {i < c.normalizedPhones.length - 1 ? ' / ' : ''}
+                  </span>
+                ))}
               </p>
             )}
             {c.linkedin_contato && (
@@ -188,6 +184,12 @@ export default function ClientCard({ client }) {
       </div>
       <MessageModal
         open={modalOpen}
+        messages={modalMessages}
+        onSelect={(msg) => {
+          if (onSelectMessage) onSelectMessage(msg);
+          setModalOpen(false);
+        }}
+        onClose={() => setModalOpen(false)}
         messages={modalMessages}
         onSelect={(msg) => {
           if (onSelectMessage) onSelectMessage(msg);

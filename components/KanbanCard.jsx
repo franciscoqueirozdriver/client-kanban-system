@@ -40,8 +40,11 @@ export default function KanbanCard({ card, index }) {
                   </a>
                 </p>
               )}
-              {c.telefone && <p>Tel: {c.telefone}</p>}
-              {c.celular && <p>Cel: {c.celular}</p>}
+              {c.normalizedPhones && c.normalizedPhones.length > 0 && (
+                <p>
+                  {c.normalizedPhones.join(' / ')}
+                </p>
+              )}
               {c.linkedin_contato && (
                 <p>
                   <a
@@ -61,4 +64,3 @@ export default function KanbanCard({ card, index }) {
     </Draggable>
   );
 }
-

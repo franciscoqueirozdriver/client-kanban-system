@@ -1,5 +1,43 @@
 // components/reportUtils.js
 
+export function normalizePhones(row, idx) {
+  const val = (i) => (i >= 0 ? String(row[i] || '').trim() : '');
+  const existing = val(idx.normalizado);
+  const rawList = [
+    val(idx.phoneWork),
+    val(idx.phoneHome),
+    val(idx.phoneMobile),
+    val(idx.phoneOther),
+    val(idx.tel),
+    val(idx.cel),
+  ];
+
+  if (existing) {
+    return existing
+      .split(';')
+      .map((p) => p.trim())
+      .filter(Boolean);
+  }
+
+  const numbers = rawList
+    .map((p) => p.replace(/[\s().-]/g, ''))
+    .map((p) => p.replace(/^0+/, ''))
+    .map((p) => p.replace(/[^0-9+]/g, ''))
+    .filter(Boolean)
+    .map((p) => {
+      if (p.startsWith('+')) p = p.slice(1);
+      if (!p.startsWith('55')) {
+        if (p.length === 10 || p.length === 11) p = '55' + p;
+        else return null;
+      }
+      if (p.length === 12 || p.length === 13) return '+' + p;
+      return null;
+    })
+    .filter(Boolean);
+
+  return Array.from(new Set(numbers));
+}
+
 export function buildReport(rows) {
   const [header, ...data] = rows;
   const idx = {
@@ -8,8 +46,13 @@ export function buildReport(rows) {
     tamanho: header.indexOf('Organização - Tamanho da empresa'),
     contato: header.indexOf('Negócio - Pessoa de contato'),
     cargo: header.indexOf('Pessoa - Cargo'),
+    phoneWork: header.indexOf('Pessoa - Phone - Work'),
+    phoneHome: header.indexOf('Pessoa - Phone - Home'),
+    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
+    phoneOther: header.indexOf('Pessoa - Phone - Other'),
     tel: header.indexOf('Pessoa - Telefone'),
     cel: header.indexOf('Pessoa - Celular'),
+    normalizado: header.indexOf('Telefone Normalizado'),
     email: header.indexOf('Pessoa - Email - Work'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
     uf: header.indexOf('uf'),
@@ -52,7 +95,8 @@ export function buildReport(rows) {
 
     const telefone = normalizePhone(row[idx.tel]);
     const celular = normalizePhone(row[idx.cel]);
-    if (!telefone && !celular) {
+    const normalizedPhones = normalizePhones(row, idx);
+    if (normalizedPhones.length === 0) {
       console.warn('Contato sem telefone', { row: i + 2, company });
     }
 
@@ -61,6 +105,7 @@ export function buildReport(rows) {
       cargo: (row[idx.cargo] || '').trim(),
       telefone,
       celular,
+      normalizedPhones,
       email: (row[idx.email] || '').trim(),
       linkedin: (row[idx.linkedin] || '').trim(),
     });
@@ -95,6 +140,7 @@ export function mapToRows(map, query = {}, max = Infinity) {
         cargo: '',
         telefone: '',
         celular: '',
+        normalizedPhones: [],
         email: '',
         linkedin: '',
       });
@@ -111,6 +157,7 @@ export function mapToRows(map, query = {}, max = Infinity) {
           celular: c.celular,
           email: c.email,
           linkedin: c.linkedin,
+          normalizedPhones: c.normalizedPhones || [],
         });
       });
     }
