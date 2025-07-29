@@ -19,16 +19,35 @@ export default function ClientesPage() {
 
   const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
     let result = clients.filter((client) => {
-      if (segmento && client.segment !== segmento) return false;
-      if (porte) {
-        if (Array.isArray(porte)) {
-          if (!porte.includes(client.size)) return false;
-        } else if (client.size !== porte) {
+      // segmento filter
+      if (segmento && segmento.trim()) {
+        if (client.segment.trim().toLowerCase() !== segmento.trim().toLowerCase()) {
           return false;
         }
       }
-      if (uf && client.uf !== uf) return false;
-      if (cidade && client.city !== cidade) return false;
+
+      // porte filter - supports array or string
+      if (porte) {
+        if (Array.isArray(porte)) {
+          if (porte.length > 0) {
+            const options = porte.map((p) => p.trim().toLowerCase());
+            if (!options.includes(client.size.trim().toLowerCase())) return false;
+          }
+        } else if (porte.trim()) {
+          if (client.size.trim().toLowerCase() !== porte.trim().toLowerCase()) return false;
+        }
+      }
+
+      // uf filter
+      if (uf && uf.trim()) {
+        if (client.uf.trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
+      }
+
+      // cidade filter
+      if (cidade && cidade.trim()) {
+        if (client.city.trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
+      }
+
       if (query) {
         const q = query.toLowerCase();
         const matchName = client.company.toLowerCase().includes(q);
@@ -38,6 +57,7 @@ export default function ClientesPage() {
       }
       return true;
     });
+
     setFiltered(result);
   };
 
@@ -58,4 +78,3 @@ export default function ClientesPage() {
     </div>
   );
 }
-
