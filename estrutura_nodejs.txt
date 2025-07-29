@@ -1,4 +1,4 @@
-📂 Estrutura do projeto Node.js – ter 29 jul 2025 09:56:53 -03
+📂 Estrutura do projeto Node.js – ter 29 jul 2025 15:45:51 -03
 Pasta base: /home/Alessandra/client-kanban-system
 ──────────────────────────────
 📁 client-kanban-system
@@ -268,6 +268,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                   if (v) params.append(k, v);
                 });
                 if (limit) params.append('maxLeads', limit);
+            
                 fetch(`/api/reports?${params.toString()}`)
                   .then((res) => res.json())
                   .then((data) => {
@@ -276,8 +277,14 @@ Pasta base: /home/Alessandra/client-kanban-system
               };
             
               const handleFilter = (f) => {
-                setFilters(f);
-                fetchData(f);
+                // ✅ Se o filtro de porte vier como array (do <select multiple>), converte para string
+                const adjusted = { ...f };
+                if (Array.isArray(adjusted.porte)) {
+                  adjusted.porte = adjusted.porte.join(',');
+                }
+            
+                setFilters(adjusted);
+                fetchData(adjusted);
               };
             
               const handleMaxLeadsChange = (value) => {
@@ -295,6 +302,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 .filter(([, v]) => v)
                 .map(([k, v]) => `${k}: ${v}`)
                 .join(' | ');
+            
               const criteriaStr = [criteria, `maxLeads: ${maxLeads || 30}`]
                 .filter(Boolean)
                 .join(' | ');
@@ -305,7 +313,10 @@ Pasta base: /home/Alessandra/client-kanban-system
                 <div className="space-y-4">
                   <h1 className="text-2xl font-bold">Lista de Prospecção – {dateStr}</h1>
                   {criteriaStr && <p className="text-sm text-gray-600">{criteriaStr}</p>}
+            
+                  {/* ✅ Filters envia porte como array, convertido em string aqui */}
                   <Filters onFilter={handleFilter} />
+            
                   <div className="flex items-center gap-2">
                     <label htmlFor="maxLeads" className="text-sm">Max Leads per Print</label>
                     <input
@@ -323,12 +334,142 @@ Pasta base: /home/Alessandra/client-kanban-system
                       <option value="100" />
                     </datalist>
                   </div>
+            
                   <ExportButton data={rows} />
                   <ReportTable rows={rows} />
                 </div>
               );
             }
+            
         ──────────────────────────────
+            📁 print
+            📄 page.jsx
+            └── Conteúdo:
+                'use client';
+                import { useEffect, useState } from 'react';
+                
+                export default function PrintPage() {
+                  const [rows, setRows] = useState([]);
+                
+                  useEffect(() => {
+                    try {
+                      const savedData = localStorage.getItem('printData');
+                      if (savedData) setRows(JSON.parse(savedData));
+                    } catch {
+                      setRows([]);
+                    }
+                
+                    // ✅ Fecha a aba e redireciona para /reports depois da impressão
+                    window.addEventListener('afterprint', () => {
+                      if (window.opener) {
+                        window.opener.location.href = '/reports';
+                      }
+                      window.close();
+                    });
+                
+                    setTimeout(() => window.print(), 500);
+                  }, []);
+                
+                  const dateStr = new Date().toLocaleDateString('pt-BR');
+                
+                  return (
+                    <div className="print-container">
+                      <h1>Lista de Prospecção</h1>
+                      <p className="subtitle">Gerado em {dateStr}</p>
+                
+                      <table className="report-table">
+                        <thead>
+                          <tr>
+                            <th>Empresa</th>
+                            <th>Segmento</th>
+                            <th>Porte</th>
+                            <th>Contato</th>
+                            <th>Cargo</th>
+                            <th>Telefones</th>
+                            <th>Email</th>
+                            <th>LinkedIn</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((r, i) => (
+                            <tr key={i}>
+                              <td>{r.company}</td>
+                              <td>{r.segment}</td>
+                              <td>{r.size}</td>
+                              <td>{r.nome}</td>
+                              <td>{r.cargo}</td>
+                              <td>{[r.telefone, r.celular].filter(Boolean).join(' / ')}</td>
+                              <td>{r.email}</td>
+                              <td>{r.linkedin}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                
+                      <style jsx global>{`
+                        @page {
+                          size: A4 landscape;
+                          margin: 10mm;
+                        }
+                
+                        body {
+                          font-family: Arial, sans-serif;
+                          font-size: 11px;
+                          color: #000;
+                          background: #fff;
+                        }
+                
+                        .print-container {
+                          width: 100%;
+                          padding: 0;
+                        }
+                
+                        h1 {
+                          text-align: center;
+                          font-size: 18px;
+                          margin: 0;
+                        }
+                
+                        .subtitle {
+                          text-align: center;
+                          font-size: 12px;
+                          margin: 4px 0 12px 0;
+                        }
+                
+                        .report-table {
+                          width: 100%;
+                          border-collapse: collapse;
+                        }
+                
+                        .report-table th,
+                        .report-table td {
+                          border: 1px solid #000;
+                          padding: 4px 6px;
+                          text-align: left;
+                          word-break: break-word;
+                        }
+                
+                        .report-table th {
+                          background: #f0f0f0;
+                          font-weight: bold;
+                          font-size: 12px;
+                        }
+                
+                        .report-table td {
+                          font-size: 11px;
+                        }
+                
+                        @media print {
+                          body {
+                            -webkit-print-color-adjust: exact;
+                          }
+                        }
+                      `}</style>
+                    </div>
+                  );
+                }
+                
+            ──────────────────────────────
     📁 components
     📄 Charts.jsx
     └── Conteúdo:
@@ -418,14 +559,59 @@ Pasta base: /home/Alessandra/client-kanban-system
     └── Conteúdo:
         'use client';
         import { useState } from 'react';
+        import MessageModal from './MessageModal';
         
         function getWhatsAppLink(phone) {
           const digits = String(phone || '').replace(/\D/g, '');
           return digits ? `https://wa.me/${digits}` : '';
         }
         
+        function getGreeting() {
+          const h = new Date().getHours();
+          if (h < 12) return 'bom dia';
+          if (h < 18) return 'boa tarde';
+          return 'boa noite';
+        }
+        
+        function replacePlaceholders(template, { client, contact, phone }) {
+          if (!template) return '';
+          let msg = template;
+          const map = {
+            '[Cliente]': client?.company || '',
+            '[Contato]': contact?.nome || '',
+            '[Cargo]': contact?.cargo || '',
+            '[Email]': contact?.email || '',
+            '[Telefone]': phone || '',
+            '[Cidade]': client?.city || '',
+            '[UF]': client?.uf || '',
+            '[Segmento]': client?.segment || '',
+            '[Saudacao]': getGreeting(),
+          };
+          Object.entries(map).forEach(([key, value]) => {
+            msg = msg.split(key).join(value || '');
+          });
+          return msg;
+        }
+        
+        async function fetchMessages(app) {
+          try {
+            const res = await fetch(`/api/mensagens?app=${app}`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            if (Array.isArray(data)) return data;
+            if (Array.isArray(data?.mensagens)) return data.mensagens;
+            if (Array.isArray(data?.messages)) return data.messages;
+            return [];
+          } catch (err) {
+            return [];
+          }
+        }
+        
         export default function ClientCard({ client }) {
           const [color, setColor] = useState(client.color || '');
+          const [modalOpen, setModalOpen] = useState(false);
+          const [modalMessages, setModalMessages] = useState([]);
+          const [onSelectMessage, setOnSelectMessage] = useState(null);
         
           const handleDoubleClick = async () => {
             const newColor = 'green';
@@ -439,6 +625,43 @@ Pasta base: /home/Alessandra/client-kanban-system
                 color: newColor,
               }),
             });
+          };
+        
+          const openModal = (messages, action) => {
+            setModalMessages(messages);
+            setOnSelectMessage(() => action);
+            setModalOpen(true);
+          };
+        
+          const handlePhoneClick = async (e, phone, contact) => {
+            e.preventDefault();
+            const digits = String(phone || '').replace(/\D/g, '');
+            if (!digits) return;
+            const messages = await fetchMessages('whatsapp');
+            if (messages.length > 0) {
+              openModal(messages, (msg) => {
+                const finalMsg = replacePlaceholders(msg, { client, contact, phone });
+                const encoded = encodeURIComponent(finalMsg);
+                window.open(`https://wa.me/55${digits}?text=${encoded}`, '_blank');
+              });
+            } else {
+              window.open(`https://wa.me/55${digits}`, '_blank');
+            }
+          };
+        
+          const handleEmailClick = async (e, email, contact) => {
+            e.preventDefault();
+            const phone = contact.celular || contact.telefone || '';
+            const messages = await fetchMessages('email');
+            if (messages.length > 0) {
+              openModal(messages, (msg) => {
+                const finalMsg = replacePlaceholders(msg, { client, contact, phone });
+                const encoded = encodeURIComponent(finalMsg);
+                window.location.href = `mailto:${email}?subject=&body=${encoded}`;
+              });
+            } else {
+              window.location.href = `mailto:${email}`;
+            }
           };
         
           return (
@@ -469,9 +692,13 @@ Pasta base: /home/Alessandra/client-kanban-system
                     <p className="font-medium">{c.nome}</p>
                     <p className="text-xs">{c.cargo}</p>
                     <p className="text-xs">
-                      <a href={`mailto:${c.email}`} className="text-blue-600 underline">
+                      <a
+                        href={`mailto:${c.email}`}
+                        className="text-blue-600 underline"
+                        onClick={(e) => handleEmailClick(e, c.email, c)}
+                      >
                         {c.email}
-                     
+        
                       </a>
                     </p>
                     {c.telefone && (
@@ -482,6 +709,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                           className="text-green-600 underline"
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={(e) => handlePhoneClick(e, c.telefone, c)}
                         >
                           {c.telefone}
                         </a>
@@ -495,6 +723,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                           className="text-green-600 underline"
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={(e) => handlePhoneClick(e, c.celular, c)}
                         >
                           {c.celular}
                         </a>
@@ -515,9 +744,19 @@ Pasta base: /home/Alessandra/client-kanban-system
                   </div>
                 ))}
               </div>
+              <MessageModal
+                open={modalOpen}
+                messages={modalMessages}
+                onSelect={(msg) => {
+                  if (onSelectMessage) onSelectMessage(msg);
+                  setModalOpen(false);
+                }}
+                onClose={() => setModalOpen(false)}
+              />
             </div>
           );
         }
+        
     ──────────────────────────────
     📄 ExportButton.jsx
     └── Conteúdo:
@@ -536,16 +775,22 @@ Pasta base: /home/Alessandra/client-kanban-system
             XLSX.writeFile(wb, 'lista_prospeccao.xlsx');
           };
         
-          const generatePdf = async (max) => {
-            const params = new URLSearchParams({ ...filters, max });
-            const res = await fetch(`/api/pdf?${params.toString()}`);
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'lista_prospeccao.pdf';
-            a.click();
-            window.URL.revokeObjectURL(url);
+          const generatePdf = (max, onlyNew) => {
+            // ✅ Salva dados no localStorage para evitar URL gigante
+            localStorage.setItem('printData', JSON.stringify(data));
+            localStorage.setItem('printFilters', JSON.stringify({ ...filters, max, onlyNew }));
+        
+            // ✅ Abre nova aba com tela de impressão sem passar JSON pela URL
+            window.open(`/reports/print`, '_blank');
+        
+            // 🔥 Se for somente leads inéditos, marca na planilha
+            if (onlyNew) {
+              fetch('/api/reports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rowsToMark: data.map((d) => d.rowNum).filter(Boolean) }),
+              });
+            }
           };
         
           return (
@@ -562,7 +807,6 @@ Pasta base: /home/Alessandra/client-kanban-system
               >
                 Exportar Excel
               </button>
-        
               <PdfModal
                 open={open}
                 onClose={() => setOpen(false)}
@@ -581,7 +825,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         
         export default function Filters({ onFilter }) {
           const [query, setQuery] = useState('');
-          const [filters, setFilters] = useState({ segmento: '', porte: '', uf: '', cidade: '' });
+          const [filters, setFilters] = useState({ segmento: '', porte: [], uf: '', cidade: '' });
           const [options, setOptions] = useState({ segmento: [], porte: [], uf: [], cidade: [] });
         
           useEffect(() => {
@@ -598,6 +842,11 @@ Pasta base: /home/Alessandra/client-kanban-system
             setFilters((prev) => ({ ...prev, [key]: value }));
           };
         
+          const handleMultiSelect = (e) => {
+            const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
+            setFilters((prev) => ({ ...prev, porte: selected }));
+          };
+        
           return (
             <div className="flex flex-col gap-2">
               <input
@@ -607,26 +856,68 @@ Pasta base: /home/Alessandra/client-kanban-system
                 placeholder="Buscar..."
                 className="border p-2 rounded"
               />
+        
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {Object.entries(options).map(([key, values]) => (
-                  <select
-                    key={key}
-                    value={filters[key]}
-                    onChange={(e) => handleChange(key, e.target.value)}
-                    className="border p-2 rounded"
-                  >
-                    <option value="">{key}</option>
-                    {values.map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                ))}
+                {/* Segmento */}
+                <select
+                  value={filters.segmento}
+                  onChange={(e) => handleChange('segmento', e.target.value)}
+                  className="border p-2 rounded"
+                >
+                  <option value="">segmento</option>
+                  {options.segmento.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+        
+                {/* ✅ Porte com múltipla escolha */}
+                <select
+                  multiple
+                  value={filters.porte}
+                  onChange={handleMultiSelect}
+                  className="border p-2 rounded h-24"
+                >
+                  {options.porte.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+        
+                {/* UF */}
+                <select
+                  value={filters.uf}
+                  onChange={(e) => handleChange('uf', e.target.value)}
+                  className="border p-2 rounded"
+                >
+                  <option value="">uf</option>
+                  {options.uf.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+        
+                {/* Cidade */}
+                <select
+                  value={filters.cidade}
+                  onChange={(e) => handleChange('cidade', e.target.value)}
+                  className="border p-2 rounded"
+                >
+                  <option value="">cidade</option>
+                  {options.cidade.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           );
         }
+        
     ──────────────────────────────
     📄 KanbanCard.jsx
     └── Conteúdo:
@@ -723,6 +1014,42 @@ Pasta base: /home/Alessandra/client-kanban-system
           );
         }
     ──────────────────────────────
+    📄 MessageModal.jsx
+    └── Conteúdo:
+        'use client';
+        
+        export default function MessageModal({ open, messages = [], onSelect, onClose }) {
+          if (!open) return null;
+        
+          return (
+            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+              <div className="bg-white rounded shadow-lg p-6 w-11/12 max-w-md mx-auto">
+                <h2 className="text-lg font-bold mb-4 text-center">Selecione uma mensagem</h2>
+                <div className="flex flex-col gap-2 mb-4">
+                  {messages.map((m, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        if (onSelect) onSelect(m.mensagem);
+                        if (onClose) onClose();
+                      }}
+                      className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
+                    >
+                      {m.titulo}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={onClose}
+                  className="mt-2 px-3 py-2 bg-gray-400 text-white rounded w-full"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          );
+        }
+    ──────────────────────────────
     📄 PdfModal.jsx
     └── Conteúdo:
         'use client';
@@ -732,12 +1059,13 @@ Pasta base: /home/Alessandra/client-kanban-system
           if (!open) return null;
         
           const [customValue, setCustomValue] = useState('');
+          const [onlyNew, setOnlyNew] = useState(true); // ✅ Checkbox começa marcado
           const options = [10, 30, 50, 100];
         
           const handleCustomGenerate = () => {
             const value = parseInt(customValue, 10);
             if (!isNaN(value) && value > 0) {
-              onGenerate(value);
+              onGenerate(value, onlyNew);
               onClose();
             }
           };
@@ -752,7 +1080,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                     <button
                       key={max}
                       onClick={() => {
-                        onGenerate(max);
+                        onGenerate(max, onlyNew);
                         onClose();
                       }}
                       className="px-3 py-1 bg-blue-600 text-white rounded"
@@ -778,6 +1106,16 @@ Pasta base: /home/Alessandra/client-kanban-system
                       OK
                     </button>
                   </div>
+        
+                  {/* ✅ Checkbox para leads inéditos */}
+                  <label className="flex items-center gap-2 mt-3">
+                    <input
+                      type="checkbox"
+                      checked={onlyNew}
+                      onChange={(e) => setOnlyNew(e.target.checked)}
+                    />
+                    <span className="text-sm">Somente Leads Inéditos</span>
+                  </label>
                 </div>
                 <button
                   onClick={onClose}
@@ -1009,6 +1347,42 @@ Pasta base: /home/Alessandra/client-kanban-system
           );
         }
     ──────────────────────────────
+📄 copiar-chave.js
+└── Conteúdo:
+    import fs from 'fs';
+    import path from 'path';
+    import clipboardy from 'clipboardy';
+    
+    // Caminho do arquivo .env.local
+    const envPath = path.resolve('.env.local');
+    
+    // Ler o arquivo .env.local
+    const content = fs.readFileSync(envPath, 'utf8');
+    
+    // Encontrar a linha com GOOGLE_PRIVATE_KEY
+    const match = content.match(/^GOOGLE_PRIVATE_KEY=(["']?)([\s\S]*?)\1$/m);
+    
+    if (!match) {
+      console.error('❌ GOOGLE_PRIVATE_KEY não encontrada no .env.local');
+      process.exit(1);
+    }
+    
+    let key = match[2];
+    
+    // Se tiver aspas, remove
+    key = key.replace(/^"|"$/g, '');
+    
+    // Ajustar quebras de linha para \n
+    const fixedKey = key.replace(/\n/g, '\\n');
+    
+    // Copiar para área de transferência
+    clipboardy.writeSync(fixedKey);
+    
+    console.log('✅ Chave copiada para a área de transferência no formato correto.');
+    console.log('Cole no painel de variáveis com:');
+    console.log(`"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"`);
+    
+──────────────────────────────
 📄 estrutura_nodejs.sh
 └── Conteúdo:
     #!/bin/bash
@@ -1065,20 +1439,7 @@ Pasta base: /home/Alessandra/client-kanban-system
     └── Conteúdo:
         import { google } from 'googleapis';
         
-        /**
-         * Google Sheets helper with in-memory caching and retry logic.
-         *
-         * All read operations are cached for 10 seconds using a module level
-         * object so warm serverless executions share the same data. The cache
-         * stores promises during fetches to prevent parallel requests from
-         * hitting the Google API multiple times.
-         *
-         * When the API responds with a 429 status code we apply exponential
-         * backoff: wait 2 seconds and retry once, then wait 4 seconds and try
-         * again before finally throwing the error.
-         */
-        
-        // Simple in-memory cache shared across warm serverless executions
+        // ✅ Cache simples em memória
         const readCache = new Map();
         
         function sleep(ms) {
@@ -1103,7 +1464,6 @@ Pasta base: /home/Alessandra/client-kanban-system
             return cached.data;
           }
         
-          // store promise so concurrent calls share it
           const promise = withRetry(fn).then((res) => {
             readCache.set(key, { time: Date.now(), data: res });
             return res;
@@ -1119,6 +1479,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
         const SHEET_NAME = 'Sheet1';
         
+        // ✅ Mapeamento de colunas para updateRow
         const COLUMN_MAP = {
           cliente: 'Negócio - Organização',
           titulo_negocio: 'Negócio - Título',
@@ -1135,6 +1496,7 @@ Pasta base: /home/Alessandra/client-kanban-system
           cor_card: 'Cor_Card',
           data_ultima_movimentacao: 'Data_Ultima_Movimentacao',
           linkedin_contato: 'Pessoa - End. Linkedin',
+          impresso_lista: 'Impresso_Lista', // ✅ Adicionada para marcar leads impressos
         };
         
         function getAuth() {
@@ -1216,7 +1578,7 @@ Pasta base: /home/Alessandra/client-kanban-system
           });
           return sheets.spreadsheets.values.append({
             spreadsheetId: process.env.SPREADSHEET_ID,
-        range: SHEET_NAME,
+            range: SHEET_NAME,
             valueInputOption: 'USER_ENTERED',
             requestBody: { values: [row] },
           });
@@ -1307,10 +1669,10 @@ Pasta base: /home/Alessandra/client-kanban-system
           };
         
           const map = new Map();
+        
           data.forEach((row, i) => {
             const company = row[idx.org];
             if (!company) return;
-            if (row[idx.impresso]) return;
         
             if (!map.has(company)) {
               map.set(company, {
@@ -1323,7 +1685,9 @@ Pasta base: /home/Alessandra/client-kanban-system
                 rows: [],
               });
             }
+        
             const item = map.get(company);
+        
             item.rows.push(i + 2);
             item.contacts.push({
               nome: row[idx.contato] || '',
@@ -1332,6 +1696,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               celular: row[idx.cel] || '',
               email: row[idx.email] || '',
               linkedin: row[idx.linkedin] || '',
+              impresso: row[idx.impresso] || '',
             });
         
             if (row[idx.segmento]) filters.segmento.add(row[idx.segmento]);
@@ -1343,48 +1708,63 @@ Pasta base: /home/Alessandra/client-kanban-system
           return { map, filters };
         }
         
-        export function mapToRows(map, query = {}, max = Infinity) {
+        export function mapToRows(map, query = {}, max = Infinity, onlyNew = true) {
           const result = [];
           const toMark = new Set();
+          const seen = new Set(); // ✅ Evita duplicidade
         
           map.forEach((item) => {
             if (query.segmento && item.segment !== query.segmento) return;
-            if (query.porte && item.size !== query.porte) return;
+        
+            if (query.porte) {
+              const selected = Array.isArray(query.porte)
+                ? query.porte
+                : query.porte.split(',');
+              if (!selected.includes(item.size)) return;
+            }
+        
             if (query.uf && item.uf !== query.uf) return;
             if (query.cidade && item.cidade !== query.cidade) return;
         
             if (result.length >= max) return;
         
-            if (item.contacts.length === 0) {
+            const contatos = item.contacts.length === 0
+              ? [{
+                  nome: '',
+                  cargo: '',
+                  telefone: '',
+                  celular: '',
+                  email: '',
+                  linkedin: '',
+                  impresso: '',
+                }]
+              : item.contacts;
+        
+            contatos.forEach((c) => {
+              if (result.length >= max) return;
+        
+              // ✅ Se "Somente Leads Inéditos" estiver ativo, ignora contatos já marcados como "Em Lista"
+              if (onlyNew && c.impresso === 'Em Lista') return;
+        
+              // ✅ Cria chave única para evitar duplicados
+              const key = `${item.company}|${c.nome}|${c.telefone}|${c.celular}|${c.email}|${c.linkedin}`;
+              if (seen.has(key)) return;
+              seen.add(key);
+        
               result.push({
                 company: item.company,
                 segment: item.segment,
                 size: item.size,
-                nome: '',
-                cargo: '',
-                telefone: '',
-                celular: '',
-                email: '',
-                linkedin: '',
+                nome: c.nome,
+                cargo: c.cargo,
+                telefone: c.telefone,
+                celular: c.celular,
+                email: c.email,
+                linkedin: c.linkedin,
               });
-            } else {
-              item.contacts.forEach((c) => {
-                if (result.length >= max) return;
-                result.push({
-                  company: item.company,
-                  segment: item.segment,
-                  size: item.size,
-                  nome: c.nome,
-                  cargo: c.cargo,
-                  telefone: c.telefone,
-                  celular: c.celular,
-                  email: c.email,
-                  linkedin: c.linkedin,
-                });
-              });
-            }
         
-            item.rows.forEach((r) => toMark.add(r));
+              item.rows.forEach((r) => toMark.add(r));
+            });
           });
         
           return { rows: result, toMark };
@@ -1393,7 +1773,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         export async function markPrintedRows(updateRowFn, rows) {
           await Promise.all(
             Array.from(rows).map((rowNum) =>
-              updateRowFn(rowNum, { impresso_lista: 'Em Lista' })
+              updateRowFn(rowNum, { impresso_lista: 'Em Lista' }) // ✅ Marca corretamente na planilha
             )
           );
         }
@@ -1446,6 +1826,7 @@ Pasta base: /home/Alessandra/client-kanban-system
       "dependencies": {
         "@hello-pangea/dnd": "16.5.0",
         "chart.js": "^4.5.0",
+        "clipboardy": "^4.0.0",
         "googleapis": "^150.0.1",
         "jspdf": "^2.5.2",
         "jspdf-autotable": "^3.8.4",
@@ -1482,6 +1863,7 @@ Pasta base: /home/Alessandra/client-kanban-system
           "dependencies": {
             "@hello-pangea/dnd": "16.5.0",
             "chart.js": "^4.5.0",
+            "clipboardy": "^4.0.0",
             "googleapis": "^150.0.1",
             "jspdf": "^2.5.2",
             "jspdf-autotable": "^3.8.4",
@@ -3880,6 +4262,157 @@ Pasta base: /home/Alessandra/client-kanban-system
           "integrity": "sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA==",
           "license": "MIT"
         },
+        "node_modules/clipboardy": {
+          "version": "4.0.0",
+          "resolved": "https://registry.npmjs.org/clipboardy/-/clipboardy-4.0.0.tgz",
+          "integrity": "sha512-5mOlNS0mhX0707P2I0aZ2V/cmHUEO/fL7VFLqszkhUsxt7RwnmrInf/eEQKlf5GzvYeHIjT+Ov1HRfNmymlG0w==",
+          "license": "MIT",
+          "dependencies": {
+            "execa": "^8.0.1",
+            "is-wsl": "^3.1.0",
+            "is64bit": "^2.0.0"
+          },
+          "engines": {
+            "node": ">=18"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
+        "node_modules/clipboardy/node_modules/execa": {
+          "version": "8.0.1",
+          "resolved": "https://registry.npmjs.org/execa/-/execa-8.0.1.tgz",
+          "integrity": "sha512-VyhnebXciFV2DESc+p6B+y0LjSm0krU4OgJN44qFAhBY0TJ+1V61tYD2+wHusZ6F9n5K+vl8k0sTy7PEfV4qpg==",
+          "license": "MIT",
+          "dependencies": {
+            "cross-spawn": "^7.0.3",
+            "get-stream": "^8.0.1",
+            "human-signals": "^5.0.0",
+            "is-stream": "^3.0.0",
+            "merge-stream": "^2.0.0",
+            "npm-run-path": "^5.1.0",
+            "onetime": "^6.0.0",
+            "signal-exit": "^4.1.0",
+            "strip-final-newline": "^3.0.0"
+          },
+          "engines": {
+            "node": ">=16.17"
+          },
+          "funding": {
+            "url": "https://github.com/sindresorhus/execa?sponsor=1"
+          }
+        },
+        "node_modules/clipboardy/node_modules/get-stream": {
+          "version": "8.0.1",
+          "resolved": "https://registry.npmjs.org/get-stream/-/get-stream-8.0.1.tgz",
+          "integrity": "sha512-VaUJspBffn/LMCJVoMvSAdmscJyS1auj5Zulnn5UoYcY531UWmdwhRWkcGKnGU93m5HSXP9LP2usOryrBtQowA==",
+          "license": "MIT",
+          "engines": {
+            "node": ">=16"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
+        "node_modules/clipboardy/node_modules/human-signals": {
+          "version": "5.0.0",
+          "resolved": "https://registry.npmjs.org/human-signals/-/human-signals-5.0.0.tgz",
+          "integrity": "sha512-AXcZb6vzzrFAUE61HnN4mpLqd/cSIwNQjtNWR0euPm6y0iqx3G4gOXaIDdtdDwZmhwe82LA6+zinmW4UBWVePQ==",
+          "license": "Apache-2.0",
+          "engines": {
+            "node": ">=16.17.0"
+          }
+        },
+        "node_modules/clipboardy/node_modules/is-stream": {
+          "version": "3.0.0",
+          "resolved": "https://registry.npmjs.org/is-stream/-/is-stream-3.0.0.tgz",
+          "integrity": "sha512-LnQR4bZ9IADDRSkvpqMGvt/tEJWclzklNgSw48V5EAaAeDd6qGvN8ei6k5p0tvxSR171VmGyHuTiAOfxAbr8kA==",
+          "license": "MIT",
+          "engines": {
+            "node": "^12.20.0 || ^14.13.1 || >=16.0.0"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
+        "node_modules/clipboardy/node_modules/mimic-fn": {
+          "version": "4.0.0",
+          "resolved": "https://registry.npmjs.org/mimic-fn/-/mimic-fn-4.0.0.tgz",
+          "integrity": "sha512-vqiC06CuhBTUdZH+RYl8sFrL096vA45Ok5ISO6sE/Mr1jRbGH4Csnhi8f3wKVl7x8mO4Au7Ir9D3Oyv1VYMFJw==",
+          "license": "MIT",
+          "engines": {
+            "node": ">=12"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
+        "node_modules/clipboardy/node_modules/npm-run-path": {
+          "version": "5.3.0",
+          "resolved": "https://registry.npmjs.org/npm-run-path/-/npm-run-path-5.3.0.tgz",
+          "integrity": "sha512-ppwTtiJZq0O/ai0z7yfudtBpWIoxM8yE6nHi1X47eFR2EWORqfbu6CnPlNsjeN683eT0qG6H/Pyf9fCcvjnnnQ==",
+          "license": "MIT",
+          "dependencies": {
+            "path-key": "^4.0.0"
+          },
+          "engines": {
+            "node": "^12.20.0 || ^14.13.1 || >=16.0.0"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
+        "node_modules/clipboardy/node_modules/onetime": {
+          "version": "6.0.0",
+          "resolved": "https://registry.npmjs.org/onetime/-/onetime-6.0.0.tgz",
+          "integrity": "sha512-1FlR+gjXK7X+AsAHso35MnyN5KqGwJRi/31ft6x0M194ht7S+rWAvd7PHss9xSKMzE0asv1pyIHaJYq+BbacAQ==",
+          "license": "MIT",
+          "dependencies": {
+            "mimic-fn": "^4.0.0"
+          },
+          "engines": {
+            "node": ">=12"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
+        "node_modules/clipboardy/node_modules/path-key": {
+          "version": "4.0.0",
+          "resolved": "https://registry.npmjs.org/path-key/-/path-key-4.0.0.tgz",
+          "integrity": "sha512-haREypq7xkM7ErfgIyA0z+Bj4AGKlMSdlQE2jvJo6huWD1EdkKYV+G/T4nq0YEF2vgTT8kqMFKo1uHn950r4SQ==",
+          "license": "MIT",
+          "engines": {
+            "node": ">=12"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
+        "node_modules/clipboardy/node_modules/signal-exit": {
+          "version": "4.1.0",
+          "resolved": "https://registry.npmjs.org/signal-exit/-/signal-exit-4.1.0.tgz",
+          "integrity": "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==",
+          "license": "ISC",
+          "engines": {
+            "node": ">=14"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/isaacs"
+          }
+        },
+        "node_modules/clipboardy/node_modules/strip-final-newline": {
+          "version": "3.0.0",
+          "resolved": "https://registry.npmjs.org/strip-final-newline/-/strip-final-newline-3.0.0.tgz",
+          "integrity": "sha512-dOESqjYr96iWYylGObzd39EuNTa5VJxyvVAEm5Jnh7KGo75V43Hk1odPQkNDyXNmUR6k+gEiDVXnjB8HJ3crXw==",
+          "license": "MIT",
+          "engines": {
+            "node": ">=12"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
         "node_modules/cliui": {
           "version": "8.0.1",
           "resolved": "https://registry.npmjs.org/cliui/-/cliui-8.0.1.tgz",
@@ -4029,7 +4562,6 @@ Pasta base: /home/Alessandra/client-kanban-system
           "version": "7.0.6",
           "resolved": "https://registry.npmjs.org/cross-spawn/-/cross-spawn-7.0.6.tgz",
           "integrity": "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==",
-          "dev": true,
           "license": "MIT",
           "dependencies": {
             "path-key": "^3.1.0",
@@ -5495,6 +6027,21 @@ Pasta base: /home/Alessandra/client-kanban-system
             "url": "https://github.com/sponsors/ljharb"
           }
         },
+        "node_modules/is-docker": {
+          "version": "3.0.0",
+          "resolved": "https://registry.npmjs.org/is-docker/-/is-docker-3.0.0.tgz",
+          "integrity": "sha512-eljcgEDlEns/7AXFosB5K/2nCM4P7FQPkGc/DWLy5rmFEWvZayGrik1d9/QIY5nJ4f9YsVvBkA6kJpHn9rISdQ==",
+          "license": "MIT",
+          "bin": {
+            "is-docker": "cli.js"
+          },
+          "engines": {
+            "node": "^12.20.0 || ^14.13.1 || >=16.0.0"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
         "node_modules/is-extglob": {
           "version": "2.1.1",
           "resolved": "https://registry.npmjs.org/is-extglob/-/is-extglob-2.1.1.tgz",
@@ -5536,6 +6083,24 @@ Pasta base: /home/Alessandra/client-kanban-system
           },
           "engines": {
             "node": ">=0.10.0"
+          }
+        },
+        "node_modules/is-inside-container": {
+          "version": "1.0.0",
+          "resolved": "https://registry.npmjs.org/is-inside-container/-/is-inside-container-1.0.0.tgz",
+          "integrity": "sha512-KIYLCCJghfHZxqjYBE7rEy0OBuTd5xCHS7tHVgvCLkx7StIoaxwNW3hCALgEUjFfeRk+MG/Qxmp/vtETEF3tRA==",
+          "license": "MIT",
+          "dependencies": {
+            "is-docker": "^3.0.0"
+          },
+          "bin": {
+            "is-inside-container": "cli.js"
+          },
+          "engines": {
+            "node": ">=14.16"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
           }
         },
         "node_modules/is-map": {
@@ -5711,6 +6276,36 @@ Pasta base: /home/Alessandra/client-kanban-system
             "url": "https://github.com/sponsors/ljharb"
           }
         },
+        "node_modules/is-wsl": {
+          "version": "3.1.0",
+          "resolved": "https://registry.npmjs.org/is-wsl/-/is-wsl-3.1.0.tgz",
+          "integrity": "sha512-UcVfVfaK4Sc4m7X3dUSoHoozQGBEFeDC+zVo06t98xe8CzHSZZBekNXH+tu0NalHolcJ/QAGqS46Hef7QXBIMw==",
+          "license": "MIT",
+          "dependencies": {
+            "is-inside-container": "^1.0.0"
+          },
+          "engines": {
+            "node": ">=16"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
+        "node_modules/is64bit": {
+          "version": "2.0.0",
+          "resolved": "https://registry.npmjs.org/is64bit/-/is64bit-2.0.0.tgz",
+          "integrity": "sha512-jv+8jaWCl0g2lSBkNSVXdzfBA0npK1HGC2KtWM9FumFRoGS94g3NbCCLVnCYHLjp4GrW2KZeeSTMo5ddtznmGw==",
+          "license": "MIT",
+          "dependencies": {
+            "system-architecture": "^0.1.0"
+          },
+          "engines": {
+            "node": ">=18"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
         "node_modules/isarray": {
           "version": "2.0.5",
           "resolved": "https://registry.npmjs.org/isarray/-/isarray-2.0.5.tgz",
@@ -5722,7 +6317,6 @@ Pasta base: /home/Alessandra/client-kanban-system
           "version": "2.0.0",
           "resolved": "https://registry.npmjs.org/isexe/-/isexe-2.0.0.tgz",
           "integrity": "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==",
-          "dev": true,
           "license": "ISC"
         },
         "node_modules/istanbul-lib-coverage": {
@@ -7107,7 +7701,6 @@ Pasta base: /home/Alessandra/client-kanban-system
           "version": "2.0.0",
           "resolved": "https://registry.npmjs.org/merge-stream/-/merge-stream-2.0.0.tgz",
           "integrity": "sha512-abv/qOcuPfk3URPfDzmZU1LKmuw8kT+0nIHvKrKgFrwifol/doWcdA4ZqsWQ8ENrFKkd67Mfpo/LovbIUsbt3w==",
-          "dev": true,
           "license": "MIT"
         },
         "node_modules/merge2": {
@@ -7637,7 +8230,6 @@ Pasta base: /home/Alessandra/client-kanban-system
           "version": "3.1.1",
           "resolved": "https://registry.npmjs.org/path-key/-/path-key-3.1.1.tgz",
           "integrity": "sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==",
-          "dev": true,
           "license": "MIT",
           "engines": {
             "node": ">=8"
@@ -8399,7 +8991,6 @@ Pasta base: /home/Alessandra/client-kanban-system
           "version": "2.0.0",
           "resolved": "https://registry.npmjs.org/shebang-command/-/shebang-command-2.0.0.tgz",
           "integrity": "sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==",
-          "dev": true,
           "license": "MIT",
           "dependencies": {
             "shebang-regex": "^3.0.0"
@@ -8412,7 +9003,6 @@ Pasta base: /home/Alessandra/client-kanban-system
           "version": "3.0.0",
           "resolved": "https://registry.npmjs.org/shebang-regex/-/shebang-regex-3.0.0.tgz",
           "integrity": "sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==",
-          "dev": true,
           "license": "MIT",
           "engines": {
             "node": ">=8"
@@ -8862,6 +9452,18 @@ Pasta base: /home/Alessandra/client-kanban-system
           "dev": true,
           "license": "MIT"
         },
+        "node_modules/system-architecture": {
+          "version": "0.1.0",
+          "resolved": "https://registry.npmjs.org/system-architecture/-/system-architecture-0.1.0.tgz",
+          "integrity": "sha512-ulAk51I9UVUyJgxlv9M6lFot2WP3e7t8Kz9+IS6D4rVba1tR9kON+Ey69f+1R4Q8cd45Lod6a4IcJIxnzGc/zA==",
+          "license": "MIT",
+          "engines": {
+            "node": ">=18"
+          },
+          "funding": {
+            "url": "https://github.com/sponsors/sindresorhus"
+          }
+        },
         "node_modules/tailwindcss": {
           "version": "3.4.17",
           "resolved": "https://registry.npmjs.org/tailwindcss/-/tailwindcss-3.4.17.tgz",
@@ -9273,7 +9875,6 @@ Pasta base: /home/Alessandra/client-kanban-system
           "version": "2.0.2",
           "resolved": "https://registry.npmjs.org/which/-/which-2.0.2.tgz",
           "integrity": "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==",
-          "dev": true,
           "license": "ISC",
           "dependencies": {
             "isexe": "^2.0.0"
@@ -9834,53 +10435,175 @@ Pasta base: /home/Alessandra/client-kanban-system
             }
             
         ──────────────────────────────
+        📄 mensagens.js
+        └── Conteúdo:
+            import { google } from 'googleapis';
+            
+            // Simple in-memory cache
+            const cache = { time: 0, data: null };
+            const TTL = 10000; // 10 seconds
+            
+            async function fetchMensagens() {
+              const auth = new google.auth.JWT({
+                email: process.env.GOOGLE_CLIENT_EMAIL,
+                key: process.env.GOOGLE_PRIVATE_KEY,
+                scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+              });
+              await auth.authorize();
+              const sheets = google.sheets({ version: 'v4', auth });
+              const response = await sheets.spreadsheets.values.get({
+                spreadsheetId: process.env.SPREADSHEET_ID,
+                range: 'Mensagens',
+              });
+              const rows = response.data.values || [];
+              if (rows.length === 0) return [];
+              const [header, ...data] = rows;
+              const lower = header.map((h) => h.toLowerCase());
+              const tituloIdx = lower.indexOf('título') !== -1 ? lower.indexOf('título') : lower.indexOf('titulo');
+              const appIdx = lower.indexOf('aplicativo');
+              const msgIdx = lower.indexOf('mensagem');
+            
+              return data
+                .map((row) => ({
+                  titulo: row[tituloIdx] || '',
+                  aplicativo: (row[appIdx] || '').toLowerCase(),
+                  mensagem: row[msgIdx] || '',
+                }))
+                .filter((m) => m.titulo || m.mensagem);
+            }
+            
+            export async function getMensagens() {
+              if (cache.data && Date.now() - cache.time < TTL) {
+                return cache.data;
+              }
+              const data = await fetchMensagens();
+              cache.time = Date.now();
+              cache.data = data;
+              return data;
+            }
+            
+            export default async function handler(req, res) {
+              if (req.method !== 'GET') return res.status(405).end();
+              try {
+                const appFilter = req.query.app && String(req.query.app).toLowerCase();
+                const messages = await getMensagens();
+                const filtered = appFilter
+                  ? messages.filter((m) => m.aplicativo === appFilter)
+                  : messages;
+                res.status(200).json({ messages: filtered });
+              } catch (err) {
+                console.error('Erro ao ler mensagens:', err);
+                res.status(500).json({ error: 'Erro ao ler mensagens' });
+              }
+            }
+        ──────────────────────────────
         📄 pdf.js
         └── Conteúdo:
             import { getSheet, updateRow } from '../../lib/googleSheets';
-            import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
+            import { buildReport, mapToRows } from '../../lib/report';
             import { jsPDF } from 'jspdf';
             import autoTable from 'jspdf-autotable';
             
             export default async function handler(req, res) {
-              if (req.method !== 'GET') return res.status(405).end();
+              try {
+                if (req.method !== 'GET') return res.status(405).end();
             
-              const sheet = await getSheet();
-              const rows = sheet.data.values || [];
-              const { map } = buildReport(rows);
+                const sheet = await getSheet();
+                const rows = sheet.data.values || [];
+                const { map } = buildReport(rows);
             
-              const { max = Infinity, ...query } = req.query || {};
-              const limit = Number(max) || Infinity;
+                const { max = Infinity, ...query } = req.query || {};
+                const limit = Number(max) || Infinity;
             
-              const { rows: result, toMark } = mapToRows(map, query, limit);
+                // ✅ Normalizar valores que venham como array em query params
+                const normalizedQuery = {};
+                Object.entries(query).forEach(([k, v]) => {
+                  normalizedQuery[k] = Array.isArray(v) ? v.join(',') : v;
+                });
             
-              await markPrintedRows(updateRow, toMark);
+                const { rows: result } = mapToRows(map, normalizedQuery, limit);
             
-              const doc = new jsPDF({ orientation: 'landscape' });
-              autoTable(doc, {
-                head: [['Empresa', 'Segmento', 'Porte', 'Contato', 'Cargo', 'Telefones', 'Email', 'LinkedIn']],
-                body: result.map((r) => [
-                  r.company,
-                  r.segment,
-                  r.size,
-                  r.nome,
-                  r.cargo,
-                  [r.telefone, r.celular].filter(Boolean).join(' / '),
-                  r.email,
-                  r.linkedin,
-                ]),
-                margin: { top: 20, bottom: 20, left: 15, right: 15 },
-              });
+                // ✅ Geração do PDF
+                const doc = new jsPDF({ orientation: 'landscape' });
+                autoTable(doc, {
+                  head: [['Empresa', 'Segmento', 'Porte', 'Contato', 'Cargo', 'Telefones', 'Email', 'LinkedIn']],
+                  body: result.map((r) => [
+                    r.company,
+                    r.segment,
+                    r.size,
+                    r.nome,
+                    r.cargo,
+                    [r.telefone, r.celular].filter(Boolean).join(' / '),
+                    r.email,
+                    r.linkedin,
+                  ]),
+                  margin: { top: 20, bottom: 20, left: 15, right: 15 },
+                });
             
-              const pdfData = doc.output('arraybuffer');
-              res.setHeader('Content-Type', 'application/pdf');
-              res.setHeader('Content-Disposition', 'attachment; filename="lista.pdf"');
-              res.send(Buffer.from(pdfData));
+                const pdfData = doc.output('arraybuffer');
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader('Content-Disposition', 'attachment; filename="lista.pdf"');
+                res.send(Buffer.from(pdfData));
+              } catch (err) {
+                console.error('Erro ao gerar PDF:', err);
+                res.status(500).json({ error: 'Erro ao gerar PDF' });
+              }
             }
+            
         ──────────────────────────────
         📄 reports.js
         └── Conteúdo:
             import { getSheet, updateRow } from '../../lib/googleSheets';
             import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
+            
+            export default async function handler(req, res) {
+              if (req.method === 'GET') {
+                try {
+                  const maxLeads = parseInt(req.query.maxLeads || '100', 10);
+                  const onlyNew = req.query.onlyNew === '1'; // ✅ Flag para apenas leads inéditos
+            
+                  const sheet = await getSheet();
+                  const rows = sheet.data.values || [];
+            
+                  const { map, filters } = buildReport(rows);
+                  const { rows: reportRows, toMark } = mapToRows(map, req.query, maxLeads, onlyNew);
+            
+                  return res.status(200).json({
+                    filters: {
+                      segmento: Array.from(filters.segmento),
+                      porte: Array.from(filters.porte),
+                      uf: Array.from(filters.uf),
+                      cidade: Array.from(filters.cidade),
+                    },
+                    rows: reportRows,
+                    total: reportRows.length,
+                    toMark: Array.from(toMark),
+                  });
+                } catch (err) {
+                  console.error('Erro ao gerar relatório:', err);
+                  return res.status(500).json({ error: 'Erro ao gerar relatório' });
+                }
+              }
+            
+              if (req.method === 'POST') {
+                try {
+                  const { rowsToMark } = req.body;
+                  if (!rowsToMark || rowsToMark.length === 0) {
+                    return res.status(400).json({ error: 'Nenhuma linha para marcar' });
+                  }
+            
+                  await markPrintedRows(updateRow, rowsToMark); // ✅ Marca como "Em Lista"
+            
+                  return res.status(200).json({ success: true });
+                } catch (err) {
+                  console.error('Erro ao marcar linhas:', err);
+                  return res.status(500).json({ error: 'Erro ao marcar linhas' });
+                }
+              }
+            
+              return res.status(405).json({ error: 'Método não permitido' });
+            }
+            
         ──────────────────────────────
         📄 test-gsheet.js
         └── Conteúdo:

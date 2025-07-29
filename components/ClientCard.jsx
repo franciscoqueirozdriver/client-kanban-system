@@ -1,13 +1,58 @@
 'use client';
 import { useState } from 'react';
+import MessageModal from './MessageModal';
 
 function getWhatsAppLink(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   return digits ? `https://wa.me/${digits}` : '';
 }
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'bom dia';
+  if (h < 18) return 'boa tarde';
+  return 'boa noite';
+}
+
+function replacePlaceholders(template, { client, contact, phone }) {
+  if (!template) return '';
+  let msg = template;
+  const map = {
+    '[Cliente]': client?.company || '',
+    '[Contato]': contact?.nome || '',
+    '[Cargo]': contact?.cargo || '',
+    '[Email]': contact?.email || '',
+    '[Telefone]': phone || '',
+    '[Cidade]': client?.city || '',
+    '[UF]': client?.uf || '',
+    '[Segmento]': client?.segment || '',
+    '[Saudacao]': getGreeting(),
+  };
+  Object.entries(map).forEach(([key, value]) => {
+    msg = msg.split(key).join(value || '');
+  });
+  return msg;
+}
+
+async function fetchMessages(app) {
+  try {
+    const res = await fetch(`/api/mensagens?app=${app}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.mensagens)) return data.mensagens;
+    if (Array.isArray(data?.messages)) return data.messages;
+    return [];
+  } catch (err) {
+    return [];
+  }
+}
+
 export default function ClientCard({ client }) {
   const [color, setColor] = useState(client.color || '');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMessages, setModalMessages] = useState([]);
+  const [onSelectMessage, setOnSelectMessage] = useState(null);
 
   const handleDoubleClick = async () => {
     const newColor = 'green';
@@ -21,6 +66,43 @@ export default function ClientCard({ client }) {
         color: newColor,
       }),
     });
+  };
+
+  const openModal = (messages, action) => {
+    setModalMessages(messages);
+    setOnSelectMessage(() => action);
+    setModalOpen(true);
+  };
+
+  const handlePhoneClick = async (e, phone, contact) => {
+    e.preventDefault();
+    const digits = String(phone || '').replace(/\D/g, '');
+    if (!digits) return;
+    const messages = await fetchMessages('whatsapp');
+    if (messages.length > 0) {
+      openModal(messages, (msg) => {
+        const finalMsg = replacePlaceholders(msg, { client, contact, phone });
+        const encoded = encodeURIComponent(finalMsg);
+        window.open(`https://wa.me/55${digits}?text=${encoded}`, '_blank');
+      });
+    } else {
+      window.open(`https://wa.me/55${digits}`, '_blank');
+    }
+  };
+
+  const handleEmailClick = async (e, email, contact) => {
+    e.preventDefault();
+    const phone = contact.celular || contact.telefone || '';
+    const messages = await fetchMessages('email');
+    if (messages.length > 0) {
+      openModal(messages, (msg) => {
+        const finalMsg = replacePlaceholders(msg, { client, contact, phone });
+        const encoded = encodeURIComponent(finalMsg);
+        window.location.href = `mailto:${email}?subject=&body=${encoded}`;
+      });
+    } else {
+      window.location.href = `mailto:${email}`;
+    }
   };
 
   return (
@@ -51,9 +133,13 @@ export default function ClientCard({ client }) {
             <p className="font-medium">{c.nome}</p>
             <p className="text-xs">{c.cargo}</p>
             <p className="text-xs">
-              <a href={`mailto:${c.email}`} className="text-blue-600 underline">
+              <a
+                href={`mailto:${c.email}`}
+                className="text-blue-600 underline"
+                onClick={(e) => handleEmailClick(e, c.email, c)}
+              >
                 {c.email}
-             
+
               </a>
             </p>
             {c.telefone && (
@@ -64,6 +150,7 @@ export default function ClientCard({ client }) {
                   className="text-green-600 underline"
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => handlePhoneClick(e, c.telefone, c)}
                 >
                   {c.telefone}
                 </a>
@@ -77,6 +164,7 @@ export default function ClientCard({ client }) {
                   className="text-green-600 underline"
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => handlePhoneClick(e, c.celular, c)}
                 >
                   {c.celular}
                 </a>
@@ -97,6 +185,16 @@ export default function ClientCard({ client }) {
           </div>
         ))}
       </div>
+      <MessageModal
+        open={modalOpen}
+        messages={modalMessages}
+        onSelect={(msg) => {
+          if (onSelectMessage) onSelectMessage(msg);
+          setModalOpen(false);
+        }}
+        onClose={() => setModalOpen(false)}
+      />
     </div>
   );
 }
+
