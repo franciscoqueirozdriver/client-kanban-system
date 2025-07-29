@@ -20,6 +20,12 @@ function groupRows(rows) {
     cor: header.indexOf('Cor_Card'),
   };
 
+  const normalizePhone = (v) => String(v || '').trim();
+
+  if (idx.tel === -1 || idx.cel === -1) {
+    console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
+  }
+
   const filters = {
     segmento: new Set(),
     porte: new Set(),
@@ -27,7 +33,7 @@ function groupRows(rows) {
     cidade: new Set(),
   };
 
-  const clients = data.map(row => {
+  const clients = data.map((row, i) => {
     const company = row[idx.org] || '';
     const segment = row[idx.segmento] || '';
     const size = row[idx.tamanho] || '';
@@ -42,13 +48,19 @@ function groupRows(rows) {
     filters.uf.add(uf);
     filters.cidade.add(city);
 
+    const phone = normalizePhone(row[idx.tel]);
+    const mobile = normalizePhone(row[idx.cel]);
+    if (!phone && !mobile) {
+      console.warn('Contato sem telefone', { row: i + 2, company });
+    }
+
     const contact = {
-      name: row[idx.contato] || '',
-      role: row[idx.cargo] || '',
-      email: row[idx.email] || '',
-      phone: row[idx.tel] || '',
-      mobile: row[idx.cel] || '',
-      linkedin: row[idx.linkedin] || '',
+      name: (row[idx.contato] || '').trim(),
+      role: (row[idx.cargo] || '').trim(),
+      email: (row[idx.email] || '').trim(),
+      phone,
+      mobile,
+      linkedin: (row[idx.linkedin] || '').trim(),
     };
 
     return {

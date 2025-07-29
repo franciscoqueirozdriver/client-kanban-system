@@ -20,6 +20,12 @@ function groupRows(rows) {
     cor: header.indexOf('Cor_Card'),
   };
 
+  const normalizePhone = (v) => String(v || '').trim();
+
+  if (idx.tel === -1 || idx.cel === -1) {
+    console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
+  }
+
   const map = new Map();
 
   data.forEach((row, i) => {
@@ -49,13 +55,18 @@ function groupRows(rows) {
 
     const contactName = row[idx.contato];
     if (contactName && !client.contactsMap.has(contactName)) {
+      const phone = normalizePhone(row[idx.tel]);
+      const mobile = normalizePhone(row[idx.cel]);
+      if (!phone && !mobile) {
+        console.warn('Contato sem telefone', { row: i + 2, company });
+      }
       client.contactsMap.set(contactName, {
-        name: contactName,
-        role: row[idx.cargo],
-        email: row[idx.email],
-        phone: row[idx.tel],
-        mobile: row[idx.cel],
-        linkedin: row[idx.linkedin],
+        name: contactName.trim(),
+        role: (row[idx.cargo] || '').trim(),
+        email: (row[idx.email] || '').trim(),
+        phone,
+        mobile,
+        linkedin: (row[idx.linkedin] || '').trim(),
       });
     }
   });

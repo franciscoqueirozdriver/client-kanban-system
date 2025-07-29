@@ -49,7 +49,7 @@ async function fetchMessages(app) {
 }
 
 export default function ClientCard({ client }) {
-  console.log(client.contacts);
+  console.log('client contacts', client.contacts);
   const [color, setColor] = useState(client.color || '');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
@@ -143,7 +143,7 @@ export default function ClientCard({ client }) {
 
               </button>
             </p>
-            {c.telefone && (
+            {c.telefone && c.telefone.trim() !== '' && (
               <p className="text-xs">
                 Telefone:{' '}
                 <a
@@ -157,7 +157,7 @@ export default function ClientCard({ client }) {
                 </a>
               </p>
             )}
-            {c.celular && (
+            {c.celular && c.celular.trim() !== '' && (
               <p className="text-xs">
                 Celular:{' '}
                 <a
