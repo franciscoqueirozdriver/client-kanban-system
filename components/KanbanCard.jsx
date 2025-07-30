@@ -58,14 +58,20 @@ export default function KanbanCard({ card, index }) {
               <p className="font-medium">{c.name}</p>
               {c.role && <p className="text-[10px]">{c.role}</p>}
 
+              {/* ✅ Suporte a múltiplos e-mails separados por ; */}
               {c.email && (
-                <p>
-                  <a
-                    href={`mailto:${c.email}`}
-                    className="text-blue-600 underline"
-                  >
-                    {c.email}
-                  </a>
+                <p className="text-[10px]">
+                  {c.email.split(';').map((em, idx) => (
+                    <span key={idx}>
+                      <a
+                        href={`mailto:${em.trim()}`}
+                        className="text-blue-600 underline"
+                      >
+                        {em.trim()}
+                      </a>
+                      {idx < c.email.split(';').length - 1 ? ' / ' : ''}
+                    </span>
+                  ))}
                 </p>
               )}
 
@@ -94,4 +100,3 @@ export default function KanbanCard({ card, index }) {
     </Draggable>
   );
 }
-
