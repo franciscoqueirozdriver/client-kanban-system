@@ -4,6 +4,7 @@ import { normalizePhones } from '../../lib/report';
 function groupRows(rows) {
   const [header, ...data] = rows;
   const idx = {
+    clienteId: header.indexOf('Cliente_ID'),
     org: header.indexOf('Organização - Nome'),
     titulo: header.indexOf('Negócio - Título'),
     contato: header.indexOf('Negócio - Pessoa de contato'),
@@ -27,17 +28,16 @@ function groupRows(rows) {
   };
 
   const normalizePhone = (v) => String(v || '').trim();
-
   const map = new Map();
 
   data.forEach((row, i) => {
-    const company = row[idx.org];
-    if (!company) return;
+    const clienteId = row[idx.clienteId];
+    if (!clienteId) return;
 
-    if (!map.has(company)) {
-      map.set(company, {
-        id: company,
-        company,
+    if (!map.has(clienteId)) {
+      map.set(clienteId, {
+        id: clienteId,
+        company: row[idx.org],
         opportunities: [],
         contactsMap: new Map(),
         segment: row[idx.segmento],
@@ -51,7 +51,7 @@ function groupRows(rows) {
       });
     }
 
-    const client = map.get(company);
+    const client = map.get(clienteId);
     client.opportunities.push(row[idx.titulo]);
     client.rows.push(i + 2);
 
@@ -130,13 +130,11 @@ export default async function handler(req, res) {
     const [header, ...data] = rows;
     const colorIdx = header.indexOf('Cor_Card');
     const statusIdx = header.indexOf('Status_Kanban');
-
-    let companyIdx = header.indexOf('Negócio - Organização');
-    if (companyIdx === -1) companyIdx = header.indexOf('Organização - Nome');
+    const clienteIdIdx = header.indexOf('Cliente_ID');
 
     const promises = [];
     data.forEach((row, i) => {
-      if (row[companyIdx] === id) {
+      if (row[clienteIdIdx] === id) {
         const rowNum = i + 2;
         const values = {};
         if (newStatus !== undefined && statusIdx !== -1) {
@@ -156,4 +154,3 @@ export default async function handler(req, res) {
 
   return res.status(405).end();
 }
-
