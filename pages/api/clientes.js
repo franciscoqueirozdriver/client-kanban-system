@@ -27,8 +27,6 @@ function groupRows(rows) {
     cor: header.indexOf('Cor_Card'),
   };
 
-  const normalizePhone = (v) => String(v || '').trim();
-
   const filters = {
     segmento: new Set(),
     porte: new Set(),
@@ -36,10 +34,9 @@ function groupRows(rows) {
     cidade: new Set(),
   };
 
-  // Mapa para agrupar por Cliente_ID
   const clientesMap = new Map();
 
-  data.forEach((row, i) => {
+  data.forEach((row) => {
     const clienteId = row[idx.clienteId] || '';
     const company = row[idx.org] || '';
     const segment = row[idx.segmento] || '';
@@ -55,23 +52,18 @@ function groupRows(rows) {
     filters.uf.add(uf);
     filters.cidade.add(city);
 
-    const phone = normalizePhone(row[idx.tel]);
-    const mobile = normalizePhone(row[idx.cel]);
-    const normalizedPhones = normalizePhones(row, idx);
-
     const contact = {
       name: (row[idx.contato] || '').trim(),
       role: (row[idx.cargo] || '').trim(),
       email: (row[idx.email] || '').trim(),
-      phone,
-      mobile,
-      normalizedPhones,
+      phone: (row[idx.tel] || '').trim(),
+      mobile: (row[idx.cel] || '').trim(),
+      normalizedPhones: normalizePhones(row, idx),
       linkedin: (row[idx.linkedin] || '').trim(),
     };
 
     const opportunity = row[idx.titulo] || '';
 
-    // Se o cliente já existe no mapa, agrega contatos e oportunidades
     if (clientesMap.has(clienteId)) {
       const existing = clientesMap.get(clienteId);
 
@@ -79,11 +71,10 @@ function groupRows(rows) {
         existing.opportunities.push(opportunity);
       }
 
-      // Evita contatos duplicados (mesmo nome e email)
       const existsContact = existing.contacts.find(
         (c) => c.name === contact.name && c.email === contact.email
       );
-      if (!existsContact) {
+      if (!existsContact && (contact.name || contact.email)) {
         existing.contacts.push(contact);
       }
     } else {
