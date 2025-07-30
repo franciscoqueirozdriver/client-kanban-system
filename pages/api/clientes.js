@@ -1,6 +1,16 @@
 import { getSheetCached, appendRow, updateRow } from '../../lib/googleSheets';
 import { normalizePhones } from '../../lib/report';
 
+// ✅ Protege números de telefone para salvar como texto no Sheets
+function protectPhoneValue(value) {
+  if (!value) return '';
+  const str = String(value).trim();
+  if (/^\+?\d{8,}$/.test(str)) {
+    return str.startsWith("'") ? str : `'${str}`;
+  }
+  return str;
+}
+
 function groupRows(rows) {
   const [header, ...data] = rows;
   const idx = {
@@ -56,9 +66,9 @@ function groupRows(rows) {
       name: (row[idx.contato] || '').trim(),
       role: (row[idx.cargo] || '').trim(),
       email: (row[idx.email] || '').trim(),
-      phone: (row[idx.tel] || '').trim(),
-      mobile: (row[idx.cel] || '').trim(),
-      normalizedPhones: normalizePhones(row, idx),
+      phone: protectPhoneValue(row[idx.tel]),
+      mobile: protectPhoneValue(row[idx.cel]),
+      normalizedPhones: normalizePhones(row, idx).map(protectPhoneValue),
       linkedin: (row[idx.linkedin] || '').trim(),
     };
 
@@ -117,6 +127,17 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     const { row, values } = req.body;
+
+    // ✅ Protege telefones antes de salvar
+    if (values?.telefone_normalizado) {
+      values.telefone_normalizado = values.telefone_normalizado
+        .split(';')
+        .map(protectPhoneValue)
+        .join(';');
+    }
+    if (values?.tel) values.tel = protectPhoneValue(values.tel);
+    if (values?.cel) values.cel = protectPhoneValue(values.cel);
+
     if (row) {
       await updateRow(row, values);
     } else {
