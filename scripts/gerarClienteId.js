@@ -39,12 +39,12 @@ async function gerarClienteIds() {
     // Se cliente já recebeu um ID nesta execução, reaproveita
     if (mapaClientes.has(cliente)) {
       const id = mapaClientes.get(cliente);
-      await updateRow(rowNum, { cliente_id: id });
+      await updateRow(rowNum, { Cliente_ID: id });
     } else {
       // Gera novo ID e salva
       const novoId = gerarIdSequencial(contador++);
       mapaClientes.set(cliente, novoId);
-      await updateRow(rowNum, { cliente_id: novoId });
+      await updateRow(rowNum, { Cliente_ID: novoId });
     }
   }
 
