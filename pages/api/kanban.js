@@ -31,22 +31,22 @@ function groupRows(rows) {
     if (!map.has(clienteId)) {
       map.set(clienteId, {
         id: clienteId,
-        company: row[idx.org],
+        company: row[idx.org] || '',
         opportunities: [],
         contactsMap: new Map(),
-        segment: row[idx.segmento],
-        size: row[idx.tamanho],
-        uf: row[idx.uf],
-        city: row[idx.cidade],
-        status: row[idx.status],
-        dataMov: row[idx.data],
-        color: row[idx.cor],
+        segment: row[idx.segmento] || '',
+        size: row[idx.tamanho] || '',
+        uf: row[idx.uf] || '',
+        city: row[idx.cidade] || '',
+        status: row[idx.status] || '',
+        dataMov: row[idx.data] || '',
+        color: row[idx.cor] || '',
         rows: [],
       });
     }
 
     const client = map.get(clienteId);
-    client.opportunities.push(row[idx.titulo]);
+    client.opportunities.push(row[idx.titulo] || '');
     client.rows.push(i + 2);
 
     const contactName = row[idx.contato];
@@ -96,12 +96,14 @@ export default async function handler(req, res) {
       'Perdido',
     ];
     const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
+
     clients.forEach((client) => {
       const col = board.find((c) => c.id === client.status);
       if (col) {
         col.cards.push({ id: client.id, client });
       }
     });
+
     return res.status(200).json(board);
   }
 
@@ -118,11 +120,13 @@ export default async function handler(req, res) {
     const sheet = await getSheetCached();
     const rows = sheet.data.values || [];
     const [header, ...data] = rows;
+
+    const clienteIdIdx = header.indexOf('Cliente_ID');
     const colorIdx = header.indexOf('Cor_Card');
     const statusIdx = header.indexOf('Status_Kanban');
-    const clienteIdIdx = header.indexOf('Cliente_ID');
 
     const promises = [];
+
     data.forEach((row, i) => {
       if (row[clienteIdIdx] === id) {
         const rowNum = i + 2;
