@@ -1,6 +1,16 @@
 import { getSheetCached, updateRow } from '../../lib/googleSheets';
 import { normalizePhones } from '../../lib/report';
 
+// ✅ Protege números de telefone para salvar como texto no Sheets
+function protectPhoneValue(value) {
+  if (!value) return '';
+  const str = String(value).trim();
+  if (/^\+?\d{8,}$/.test(str)) {
+    return str.startsWith("'") ? str : `'${str}`;
+  }
+  return str;
+}
+
 function groupRows(rows) {
   const [header, ...data] = rows;
   const idx = {
@@ -51,13 +61,14 @@ function groupRows(rows) {
 
     const contactName = row[idx.contato];
     if (contactName && !client.contactsMap.has(contactName)) {
+      const normalized = normalizePhones(row, idx).map(protectPhoneValue);
       client.contactsMap.set(contactName, {
         name: contactName.trim(),
         role: (row[idx.cargo] || '').trim(),
         email: (row[idx.email] || '').trim(),
-        phone: (row[idx.tel] || '').trim(),
-        mobile: (row[idx.cel] || '').trim(),
-        normalizedPhones: normalizePhones(row, idx),
+        phone: protectPhoneValue(row[idx.tel]),
+        mobile: protectPhoneValue(row[idx.cel]),
+        normalizedPhones: normalized,
         linkedin: (row[idx.linkedin] || '').trim(),
       });
     }
