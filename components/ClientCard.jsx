@@ -17,10 +17,11 @@ function getGreeting() {
 function replacePlaceholders(template, { client, contact, phone }) {
   if (!template) return '';
   let msg = template;
+  const firstName = (contact?.name || '').split(' ')[0]; // ✅ Primeiro nome
   const map = {
     '[Cliente]': client?.company || '',
-    '[Contato]': contact?.nome || contact?.name || '',
-    '[Cargo]': contact?.cargo || contact?.role || '',
+    '[Contato]': firstName || '',
+    '[Cargo]': contact?.role || '',
     '[Email]': contact?.email || '',
     '[Telefone]': phone || '',
     '[Cidade]': client?.city || '',
@@ -65,11 +66,12 @@ export default function ClientCard({ client, onStatusChange }) {
       onStatusChange(client.id, newStatus, newColor);
     }
 
+    // ✅ Atualiza na planilha usando Cliente_ID
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: client.id,
+        id: client.id,          // Cliente_ID
         status: newStatus,
         color: newColor,
       }),
@@ -106,7 +108,7 @@ export default function ClientCard({ client, onStatusChange }) {
 
   const handleEmailClick = async (e, email, contact) => {
     e.preventDefault();
-    const phone = contact.celular || contact.telefone || '';
+    const phone = contact.mobile || contact.phone || '';
     const messages = await fetchMessages('email');
     if (messages.length > 0) {
       openModal(messages, (msg) => {
@@ -146,45 +148,39 @@ export default function ClientCard({ client, onStatusChange }) {
         </ul>
       )}
       <div className="space-y-2">
-        {client.contacts.map((c, idx) => {
-          const nome = c.nome || c.name || '';
-          const cargo = c.cargo || c.role || '';
-          return (
-            <div key={idx} className="text-sm border-t pt-1">
-              <p className="font-medium">{nome}</p>
-              <p className="text-xs">{cargo}</p>
-              {c.email && (
-                <p className="text-xs">
-                  <button
-                    type="button"
-                    className="text-blue-600 underline"
-                    onClick={(e) => handleEmailClick(e, c.email, c)}
-                  >
-                    {c.email}
-                  </button>
-                </p>
-              )}
-              {c.normalizedPhones && c.normalizedPhones.length > 0 && (
-                <p className="text-xs">
-                  {c.normalizedPhones.map((p, i) => (
-                    <span key={i}>
-                      <a
-                        href={getWhatsAppLink(p)}
-                        className="text-green-600 underline"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => handlePhoneClick(e, p, c)}
-                      >
-                        {p}
-                      </a>
-                      {i < c.normalizedPhones.length - 1 ? ' / ' : ''}
-                    </span>
-                  ))}
-                </p>
-              )}
-            </div>
-          );
-        })}
+        {client.contacts.map((c, idx) => (
+          <div key={idx} className="text-sm border-t pt-1">
+            <p className="font-medium">{c.name}</p>
+            <p className="text-xs">{c.role}</p>
+            <p className="text-xs">
+              <button
+                type="button"
+                className="text-blue-600 underline"
+                onClick={(e) => handleEmailClick(e, c.email, c)}
+              >
+                {c.email}
+              </button>
+            </p>
+            {c.normalizedPhones && c.normalizedPhones.length > 0 && (
+              <p className="text-xs">
+                {c.normalizedPhones.map((p, i) => (
+                  <span key={i}>
+                    <a
+                      href={getWhatsAppLink(p)}
+                      className="text-green-600 underline"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => handlePhoneClick(e, p, c)}
+                    >
+                      {p}
+                    </a>
+                    {i < c.normalizedPhones.length - 1 ? ' / ' : ''}
+                  </span>
+                ))}
+              </p>
+            )}
+          </div>
+        ))}
       </div>
       <MessageModal
         open={modalOpen}
@@ -198,4 +194,3 @@ export default function ClientCard({ client, onStatusChange }) {
     </div>
   );
 }
-
