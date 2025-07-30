@@ -1,17 +1,27 @@
 'use client';
 import { Draggable } from '@hello-pangea/dnd';
 
+// Remove proteção visual dos números ('+553199999999' -> +553199999999)
+function displayPhone(phone) {
+  return String(phone || '').replace(/^'+/, '');
+}
+
 export default function KanbanCard({ card, index }) {
   const { client } = card;
 
-  const colorStyle = {
-    backgroundColor:
-      client.color === 'green'
-        ? '#a3ffac'  // ✅ Novo verde mais leve
-        : client.color === 'red'
-          ? '#ffca99' // ✅ Novo vermelho mais leve
-          : 'white',
-  };
+  const backgroundColor =
+    client.color === 'green'
+      ? '#a3ffac'
+      : client.color === 'red'
+      ? '#ffca99'
+      : 'white';
+
+  const borderLeftColor =
+    client.color === 'green'
+      ? '#4caf50'
+      : client.color === 'red'
+      ? '#ff7043'
+      : 'transparent';
 
   return (
     <Draggable draggableId={card.id} index={index}>
@@ -20,15 +30,21 @@ export default function KanbanCard({ card, index }) {
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          style={{ ...provided.draggableProps.style, ...colorStyle }}
-          className="p-2 mb-2 rounded shadow"
+          style={{
+            ...provided.draggableProps.style,
+            backgroundColor,
+            borderLeft: `4px solid ${borderLeftColor}`,
+          }}
+          className="p-2 mb-2 rounded shadow transition-colors"
         >
           <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
+
           {(client.city || client.uf) && (
             <p className="text-[10px] text-gray-600 mb-1">
               {[client.city, client.uf].filter(Boolean).join(' - ')}
             </p>
           )}
+
           {client.opportunities.length > 0 && (
             <ul className="text-[10px] list-disc ml-4 mb-1">
               {client.opportunities.map((o, i) => (
@@ -36,10 +52,12 @@ export default function KanbanCard({ card, index }) {
               ))}
             </ul>
           )}
+
           {client.contacts.map((c, i) => (
             <div key={i} className="text-xs border-t pt-1">
               <p className="font-medium">{c.name}</p>
               {c.role && <p className="text-[10px]">{c.role}</p>}
+
               {c.email && (
                 <p>
                   <a
@@ -50,11 +68,13 @@ export default function KanbanCard({ card, index }) {
                   </a>
                 </p>
               )}
+
               {c.normalizedPhones && c.normalizedPhones.length > 0 && (
                 <p className="text-[10px]">
-                  {c.normalizedPhones.join(' / ')}
+                  {c.normalizedPhones.map((p, idx) => displayPhone(p)).join(' / ')}
                 </p>
               )}
+
               {c.linkedin && (
                 <p>
                   <a
