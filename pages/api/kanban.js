@@ -11,6 +11,17 @@ function protectPhoneValue(value) {
   return str;
 }
 
+// ✅ Junta os 3 tipos de e-mail e remove duplicados
+function collectEmails(row, idx) {
+  const emails = [
+    row[idx.emailWork] || '',
+    row[idx.emailHome] || '',
+    row[idx.emailOther] || '',
+  ].map(e => e.trim()).filter(Boolean);
+
+  return Array.from(new Set(emails)).join(';');
+}
+
 function groupRows(rows) {
   const [header, ...data] = rows;
   const idx = {
@@ -19,7 +30,9 @@ function groupRows(rows) {
     titulo: header.indexOf('Negócio - Título'),
     contato: header.indexOf('Negócio - Pessoa de contato'),
     cargo: header.indexOf('Pessoa - Cargo'),
-    email: header.indexOf('Pessoa - Email - Work'),
+    emailWork: header.indexOf('Pessoa - Email - Work'),
+    emailHome: header.indexOf('Pessoa - Email - Home'),
+    emailOther: header.indexOf('Pessoa - Email - Other'),
     tel: header.indexOf('Pessoa - Telefone'),
     cel: header.indexOf('Pessoa - Celular'),
     segmento: header.indexOf('Organização - Segmento'),
@@ -65,7 +78,7 @@ function groupRows(rows) {
       client.contactsMap.set(contactName, {
         name: contactName.trim(),
         role: (row[idx.cargo] || '').trim(),
-        email: (row[idx.email] || '').trim(),
+        email: collectEmails(row, idx),
         phone: protectPhoneValue(row[idx.tel]),
         mobile: protectPhoneValue(row[idx.cel]),
         normalizedPhones: normalized,
