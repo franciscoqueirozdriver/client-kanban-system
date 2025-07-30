@@ -1,4 +1,4 @@
-📂 Estrutura do projeto Node.js – ter 29 jul 2025 18:42:55 -03
+📂 Estrutura do projeto Node.js – qua 30 jul 2025 00:44:05 -03
 Pasta base: /home/Alessandra/client-kanban-system
 ──────────────────────────────
 📁 client-kanban-system
@@ -29,7 +29,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 let result = clients.filter((client) => {
                   // segmento filter
                   if (segmento && segmento.trim()) {
-                    if (client.segment.trim().toLowerCase() !== segmento.trim().toLowerCase()) {
+                    if ((client.segment || '').trim().toLowerCase() !== segmento.trim().toLowerCase()) {
                       return false;
                     }
                   }
@@ -39,28 +39,33 @@ Pasta base: /home/Alessandra/client-kanban-system
                     if (Array.isArray(porte)) {
                       if (porte.length > 0) {
                         const options = porte.map((p) => p.trim().toLowerCase());
-                        if (!options.includes(client.size.trim().toLowerCase())) return false;
+                        if (!options.includes((client.size || '').trim().toLowerCase())) return false;
                       }
                     } else if (porte.trim()) {
-                      if (client.size.trim().toLowerCase() !== porte.trim().toLowerCase()) return false;
+                      if ((client.size || '').trim().toLowerCase() !== porte.trim().toLowerCase()) return false;
                     }
                   }
             
                   // uf filter
                   if (uf && uf.trim()) {
-                    if (client.uf.trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
+                    if ((client.uf || '').trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
                   }
             
                   // cidade filter
                   if (cidade && cidade.trim()) {
-                    if (client.city.trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
+                    if ((client.city || '').trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
                   }
             
+                  // query filter
                   if (query) {
                     const q = query.toLowerCase();
-                    const matchName = client.company.toLowerCase().includes(q);
-                    const matchContact = client.contacts.some((c) => c.nome.toLowerCase().includes(q));
-                    const matchOpp = client.opportunities.some((o) => o.toLowerCase().includes(q));
+                    const matchName = (client.company || '').toLowerCase().includes(q);
+                    const matchContact = (client.contacts || []).some((c) =>
+                      (c.nome || '').toLowerCase().includes(q)
+                    );
+                    const matchOpp = (client.opportunities || []).some((o) =>
+                      (o || '').toLowerCase().includes(q)
+                    );
                     if (!matchName && !matchContact && !matchOpp) return false;
                   }
                   return true;
@@ -80,12 +85,12 @@ Pasta base: /home/Alessandra/client-kanban-system
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filtered.map((client) => (
                       <ClientCard key={client.id} client={client} />
-                      
-                     ))}
+                    ))}
                   </div>
                 </div>
               );
             }
+            
         ──────────────────────────────
         📁 kanban
         📄 page.jsx
@@ -400,7 +405,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                   const dateStr = new Date().toLocaleDateString('pt-BR');
                 
                   return (
-                    <div className="print-container">
+                <div className="print-container">
                       <h1>Lista de Prospecção</h1>
                       <p className="subtitle">Gerado em {dateStr}</p>
                 
@@ -425,7 +430,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                               <td>{r.size}</td>
                               <td>{r.nome}</td>
                               <td>{r.cargo}</td>
-                              <td>{[r.telefone, r.celular].filter(Boolean).join(' / ')}</td>
+                              <td>{(r.normalizedPhones || []).join(' / ')}</td>
                               <td>{r.email}</td>
                               <td>{r.linkedin}</td>
                             </tr>
@@ -450,6 +455,8 @@ Pasta base: /home/Alessandra/client-kanban-system
                           width: 100%;
                           padding: 0;
                         }
+                
+                
                 
                         h1 {
                           text-align: center;
@@ -670,10 +677,16 @@ Pasta base: /home/Alessandra/client-kanban-system
               openModal(messages, (msg) => {
                 const finalMsg = replacePlaceholders(msg, { client, contact, phone });
                 const encoded = encodeURIComponent(finalMsg);
-                window.open(`https://wa.me/55${digits}?text=${encoded}`, '_blank');
+                const url = digits.startsWith('55')
+                  ? `https://wa.me/${digits}?text=${encoded}`
+                  : `https://wa.me/55${digits}?text=${encoded}`;
+                window.open(url, '_blank');
               });
             } else {
-              window.open(`https://wa.me/55${digits}`, '_blank');
+              const url = digits.startsWith('55')
+                ? `https://wa.me/${digits}`
+                : `https://wa.me/55${digits}`;
+              window.open(url, '_blank');
             }
           };
         
@@ -704,7 +717,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               <h3 className="text-lg font-semibold mb-1">{client.company}</h3>
               {(client.city || client.uf) && (
                 <p className="text-xs text-gray-600">
-                  {[client.city, client.uf].filter(Boolean).join(' - ')}
+        {[client.city, client.uf].filter(Boolean).join(' - ')}
                 </p>
               )}
               {client.opportunities.length > 0 && (
@@ -729,66 +742,24 @@ Pasta base: /home/Alessandra/client-kanban-system
         
                       </button>
                     </p>
-                    {Array.isArray(c.telefone)
-                      ? c.telefone.map((tel, i) => (
-                          <p key={`tel-${i}`} className="text-xs">
-                            Telefone:{' '}
+                    {c.normalizedPhones && c.normalizedPhones.length > 0 && (
+                      <p className="text-xs">
+                        {c.normalizedPhones.map((p, i) => (
+                          <span key={i}>
                             <a
-                              href={getWhatsAppLink(tel)}
+                              href={getWhatsAppLink(p)}
                               className="text-green-600 underline"
                               target="_blank"
                               rel="noopener noreferrer"
-                              onClick={(e) => handlePhoneClick(e, tel, c)}
+                              onClick={(e) => handlePhoneClick(e, p, c)}
                             >
-                              {tel}
+                              {p}
                             </a>
-                          </p>
-                        ))
-                      :
-                        c.telefone && c.telefone.trim() !== '' && (
-                          <p className="text-xs">
-                            Telefone:{' '}
-                            <a
-                              href={getWhatsAppLink(c.telefone)}
-                              className="text-green-600 underline"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => handlePhoneClick(e, c.telefone, c)}
-                            >
-                              {c.telefone}
-                            </a>
-                          </p>
-                        )}
-                    {Array.isArray(c.celular)
-                      ? c.celular.map((cel, i) => (
-                          <p key={`cel-${i}`} className="text-xs">
-                            Celular:{' '}
-                            <a
-                              href={getWhatsAppLink(cel)}
-                              className="text-green-600 underline"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => handlePhoneClick(e, cel, c)}
-                            >
-                              {cel}
-                            </a>
-                          </p>
-                        ))
-                      :
-                        c.celular && c.celular.trim() !== '' && (
-                          <p className="text-xs">
-                            Celular:{' '}
-                            <a
-                              href={getWhatsAppLink(c.celular)}
-                              className="text-green-600 underline"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => handlePhoneClick(e, c.celular, c)}
-                            >
-                              {c.celular}
-                            </a>
-                          </p>
-                        )}
+                            {i < c.normalizedPhones.length - 1 ? ' / ' : ''}
+                          </span>
+                        ))}
+                      </p>
+                    )}
                     {c.linkedin_contato && (
                       <p className="text-xs">
                         <a
@@ -806,6 +777,12 @@ Pasta base: /home/Alessandra/client-kanban-system
               </div>
               <MessageModal
                 open={modalOpen}
+                messages={modalMessages}
+                onSelect={(msg) => {
+                  if (onSelectMessage) onSelectMessage(msg);
+                  setModalOpen(false);
+                }}
+                onClose={() => setModalOpen(false)}
                 messages={modalMessages}
                 onSelect={(msg) => {
                   if (onSelectMessage) onSelectMessage(msg);
@@ -1023,8 +1000,11 @@ Pasta base: /home/Alessandra/client-kanban-system
                           </a>
                         </p>
                       )}
-                      {c.telefone && <p>Tel: {c.telefone}</p>}
-                      {c.celular && <p>Cel: {c.celular}</p>}
+                      {c.normalizedPhones && c.normalizedPhones.length > 0 && (
+                        <p>
+                          {c.normalizedPhones.join(' / ')}
+                        </p>
+                      )}
                       {c.linkedin_contato && (
                         <p>
                           <a
@@ -1044,7 +1024,6 @@ Pasta base: /home/Alessandra/client-kanban-system
             </Draggable>
           );
         }
-        
     ──────────────────────────────
     📄 KanbanColumn.jsx
     └── Conteúdo:
@@ -1192,7 +1171,6 @@ Pasta base: /home/Alessandra/client-kanban-system
     📄 ReportTable.jsx
     └── Conteúdo:
         'use client';
-        
         export default function ReportTable({ rows }) {
           return (
             <div className="overflow-auto">
@@ -1217,7 +1195,9 @@ Pasta base: /home/Alessandra/client-kanban-system
                       <td className="px-2 py-1 border-r">{r.size}</td>
                       <td className="px-2 py-1 border-r">{r.nome}</td>
                       <td className="px-2 py-1 border-r">{r.cargo}</td>
-                      <td className="px-2 py-1 border-r">{[r.telefone, r.celular].filter(Boolean).join(' / ')}</td>
+                      <td className="px-2 py-1 border-r">
+                        {(r.normalizedPhones || []).join(' / ')}
+                      </td>
                       <td className="px-2 py-1 border-r">{r.email}</td>
                       <td className="px-2 py-1">{r.linkedin}</td>
                     </tr>
@@ -1227,10 +1207,49 @@ Pasta base: /home/Alessandra/client-kanban-system
             </div>
           );
         }
+        
     ──────────────────────────────
     📄 reportUtils.js
     └── Conteúdo:
         // components/reportUtils.js
+        
+        export function normalizePhones(row, idx) {
+          const val = (i) => (i >= 0 ? String(row[i] || '').trim() : '');
+          const existing = val(idx.normalizado);
+          const rawList = [
+            val(idx.phoneWork),
+            val(idx.phoneHome),
+            val(idx.phoneMobile),
+            val(idx.phoneOther),
+            val(idx.tel),
+            val(idx.cel),
+          ];
+        
+          if (existing) {
+            return existing
+              .split(';')
+              .map((p) => p.trim())
+              .filter(Boolean);
+          }
+        
+          const numbers = rawList
+            .map((p) => p.replace(/[\s().-]/g, ''))
+            .map((p) => p.replace(/^0+/, ''))
+            .map((p) => p.replace(/[^0-9+]/g, ''))
+            .filter(Boolean)
+            .map((p) => {
+              if (p.startsWith('+')) p = p.slice(1);
+              if (!p.startsWith('55')) {
+                if (p.length === 10 || p.length === 11) p = '55' + p;
+                else return null;
+              }
+              if (p.length === 12 || p.length === 13) return '+' + p;
+              return null;
+            })
+            .filter(Boolean);
+        
+          return Array.from(new Set(numbers));
+        }
         
         export function buildReport(rows) {
           const [header, ...data] = rows;
@@ -1240,8 +1259,13 @@ Pasta base: /home/Alessandra/client-kanban-system
             tamanho: header.indexOf('Organização - Tamanho da empresa'),
             contato: header.indexOf('Negócio - Pessoa de contato'),
             cargo: header.indexOf('Pessoa - Cargo'),
+            phoneWork: header.indexOf('Pessoa - Phone - Work'),
+            phoneHome: header.indexOf('Pessoa - Phone - Home'),
+            phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
+            phoneOther: header.indexOf('Pessoa - Phone - Other'),
             tel: header.indexOf('Pessoa - Telefone'),
             cel: header.indexOf('Pessoa - Celular'),
+            normalizado: header.indexOf('Telefone Normalizado'),
             email: header.indexOf('Pessoa - Email - Work'),
             linkedin: header.indexOf('Pessoa - End. Linkedin'),
             uf: header.indexOf('uf'),
@@ -1249,11 +1273,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             impresso: header.indexOf('Impresso_Lista'),
           };
         
-          const parsePhones = (v) =>
-            String(v || '')
-              .split(/[,;]+/)
-              .map((p) => p.trim())
-              .filter(Boolean);
+          const normalizePhone = (v) => String(v || '').trim();
         
           if (idx.tel === -1 || idx.cel === -1) {
             console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
@@ -1286,9 +1306,10 @@ Pasta base: /home/Alessandra/client-kanban-system
             const item = map.get(company);
             item.rows.push(i + 2);
         
-            const telefone = parsePhones(row[idx.tel]);
-            const celular = parsePhones(row[idx.cel]);
-            if (telefone.length === 0 && celular.length === 0) {
+            const telefone = normalizePhone(row[idx.tel]);
+            const celular = normalizePhone(row[idx.cel]);
+            const normalizedPhones = normalizePhones(row, idx);
+            if (normalizedPhones.length === 0) {
               console.warn('Contato sem telefone', { row: i + 2, company });
             }
         
@@ -1297,6 +1318,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               cargo: (row[idx.cargo] || '').trim(),
               telefone,
               celular,
+              normalizedPhones,
               email: (row[idx.email] || '').trim(),
               linkedin: (row[idx.linkedin] || '').trim(),
             });
@@ -1331,27 +1353,25 @@ Pasta base: /home/Alessandra/client-kanban-system
                 cargo: '',
                 telefone: '',
                 celular: '',
+                normalizedPhones: [],
                 email: '',
                 linkedin: '',
               });
             } else {
               item.contacts.forEach((c) => {
-                const tels = Array.isArray(c.telefone) ? c.telefone : c.telefone ? [c.telefone] : [''];
-                const cels = Array.isArray(c.celular) ? c.celular : c.celular ? [c.celular] : [''];
-                const maxCount = Math.max(tels.length, cels.length);
-                for (let i = 0; i < maxCount && result.length < max; i++) {
-                  result.push({
-                    company: item.company,
-                    segment: item.segment,
-                    size: item.size,
-                    nome: c.nome,
-                    cargo: c.cargo,
-                    telefone: tels[i] || '',
-                    celular: cels[i] || '',
-                    email: c.email,
-                    linkedin: c.linkedin,
-                  });
-                }
+                if (result.length >= max) return;
+                result.push({
+                  company: item.company,
+                  segment: item.segment,
+                  size: item.size,
+                  nome: c.nome,
+                  cargo: c.cargo,
+                  telefone: c.telefone,
+                  celular: c.celular,
+                  email: c.email,
+                  linkedin: c.linkedin,
+                  normalizedPhones: c.normalizedPhones || [],
+                });
               });
             }
             item.rows.forEach((r) => toMark.add(r));
@@ -1365,7 +1385,6 @@ Pasta base: /home/Alessandra/client-kanban-system
             Array.from(rows).map((rowNum) => updateRowFn(rowNum, { impresso_lista: 'Em Lista' }))
           );
         }
-        
         
     ──────────────────────────────
     📄 Sidebar.jsx
@@ -1554,7 +1573,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             throw err;
           });
         
-          readCache.set(key, { time: Date.now(), data: promise });
+            readCache.set(key, { time: Date.now(), data: promise });
           return promise;
         }
         
@@ -1579,6 +1598,7 @@ Pasta base: /home/Alessandra/client-kanban-system
           data_ultima_movimentacao: 'Data_Ultima_Movimentacao',
           linkedin_contato: 'Pessoa - End. Linkedin',
           impresso_lista: 'Impresso_Lista', // ✅ Adicionada para marcar leads impressos
+          telefone_normalizado: 'Telefone Normalizado',
         };
         
         function getAuth() {
@@ -1726,7 +1746,95 @@ Pasta base: /home/Alessandra/client-kanban-system
     ──────────────────────────────
     📄 report.js
     └── Conteúdo:
-        export function buildReport(rows) {
+        import { updateRow } from './googleSheets';
+        
+        export function normalizePhones(row, idx) {
+          const val = (i) => (i >= 0 ? String(row[i] || '').trim() : '');
+          const existing = val(idx.normalizado);
+          const rawList = [
+            val(idx.phoneWork),
+            val(idx.phoneHome),
+            val(idx.phoneMobile),
+            val(idx.phoneOther),
+            val(idx.tel),
+            val(idx.cel),
+          ];
+        
+          // ✅ Se já existe na coluna "Telefone Normalizado", usa direto
+          if (existing) {
+            return existing
+              .split(/[,;/]/)
+              .map((p) => p.trim())
+              .filter(Boolean);
+          }
+        
+          // ✅ Junta todos os telefones e separa por delimitadores
+          let allNumbers = rawList
+            .join(';')
+            .split(/[,;/]/)
+            .map((p) => p.trim())
+            .filter(Boolean);
+        
+          const normalized = new Set();
+        
+          for (let num of allNumbers) {
+            let original = num;
+        
+            // 🔹 Remove qualquer texto que não seja número ou +
+            num = num.replace(/[^\d+]/g, '');
+        
+            // 🔹 Remove códigos de operadora (031, 014)
+            num = num.replace(/^(0\d{2})(\d{8,9})$/, '$2');
+        
+            // 🔹 Ramais e números curtos (<8 dígitos)
+            const digitsOnly = num.replace(/\D/g, '');
+            if (digitsOnly.length < 8) {
+              console.warn('Telefone curto/ramal descartado:', original);
+              continue;
+            }
+        
+            // 🔹 Números 0800 e 4003 - mantém formato puro
+            if (/^0800\d{6,7}$/.test(digitsOnly) || /^4003\d{4}$/.test(digitsOnly)) {
+              normalized.add(digitsOnly);
+              continue;
+            }
+        
+            // 🔹 Números internacionais válidos (+XX...)
+            if (/^\+\d{10,15}$/.test(num)) {
+              normalized.add(num);
+              continue;
+            }
+        
+            // 🔹 Remove + duplicado e garante padrão
+            if (num.startsWith('+')) num = num.slice(1);
+        
+            // 🔹 Adiciona +55 se não tiver DDI e for número brasileiro
+            if (!num.startsWith('55')) {
+              if (digitsOnly.length === 10 || digitsOnly.length === 11) {
+                num = '55' + digitsOnly;
+              } else {
+                console.warn('Número descartado por formato inválido:', original);
+                continue;
+              }
+            }
+        
+            // 🔹 Aceita apenas 12 ou 13 dígitos (E.164 para Brasil)
+            if (num.length === 12 || num.length === 13) {
+              normalized.add('+' + num);
+            } else {
+              console.warn('Número descartado por tamanho inválido:', original);
+            }
+          }
+        
+          return Array.from(normalized);
+        }
+        
+        export async function saveNormalizedPhones(updateRowFn, rowNum, numbers) {
+          const value = numbers.join(';');
+          await updateRowFn(rowNum, { telefone_normalizado: value });
+        }
+        
+        export async function buildReport(rows) {
           const [header, ...data] = rows;
           const idx = {
             org: header.indexOf('Organização - Nome'),
@@ -1734,8 +1842,13 @@ Pasta base: /home/Alessandra/client-kanban-system
             tamanho: header.indexOf('Organização - Tamanho da empresa'),
             contato: header.indexOf('Negócio - Pessoa de contato'),
             cargo: header.indexOf('Pessoa - Cargo'),
+            phoneWork: header.indexOf('Pessoa - Phone - Work'),
+            phoneHome: header.indexOf('Pessoa - Phone - Home'),
+            phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
+            phoneOther: header.indexOf('Pessoa - Phone - Other'),
             tel: header.indexOf('Pessoa - Telefone'),
             cel: header.indexOf('Pessoa - Celular'),
+            normalizado: header.indexOf('Telefone Normalizado'),
             email: header.indexOf('Pessoa - Email - Work'),
             linkedin: header.indexOf('Pessoa - End. Linkedin'),
             uf: header.indexOf('uf'),
@@ -1744,10 +1857,6 @@ Pasta base: /home/Alessandra/client-kanban-system
           };
         
           const normalizePhone = (v) => String(v || '').trim();
-        
-          if (idx.tel === -1 || idx.cel === -1) {
-            console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
-          }
         
           const filters = {
             segmento: new Set(),
@@ -1758,9 +1867,10 @@ Pasta base: /home/Alessandra/client-kanban-system
         
           const map = new Map();
         
-          data.forEach((row, i) => {
+          for (let i = 0; i < data.length; i++) {
+            const row = data[i];
             const company = row[idx.org];
-            if (!company) return;
+            if (!company) continue;
         
             if (!map.has(company)) {
               map.set(company, {
@@ -1775,13 +1885,22 @@ Pasta base: /home/Alessandra/client-kanban-system
             }
         
             const item = map.get(company);
-        
             item.rows.push(i + 2);
         
             const telefone = normalizePhone(row[idx.tel]);
             const celular = normalizePhone(row[idx.cel]);
-            if (!telefone && !celular) {
+            const normalizedPhones = normalizePhones(row, idx);
+        
+            if (normalizedPhones.length === 0) {
               console.warn('Contato sem telefone', { row: i + 2, company });
+            }
+        
+            if (normalizedPhones.length > 0 && !row[idx.normalizado]) {
+              try {
+                await saveNormalizedPhones(updateRow, i + 2, normalizedPhones);
+              } catch (err) {
+                console.error('Erro ao salvar telefone normalizado', { row: i + 2, err });
+              }
             }
         
             item.contacts.push({
@@ -1789,6 +1908,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               cargo: (row[idx.cargo] || '').trim(),
               telefone,
               celular,
+              normalizedPhones,
               email: (row[idx.email] || '').trim(),
               linkedin: (row[idx.linkedin] || '').trim(),
               impresso: (row[idx.impresso] || '').trim(),
@@ -1798,7 +1918,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             if (row[idx.tamanho]) filters.porte.add(row[idx.tamanho]);
             if (row[idx.uf]) filters.uf.add(row[idx.uf]);
             if (row[idx.cidade]) filters.cidade.add(row[idx.cidade]);
-          });
+          }
         
           return { map, filters };
         }
@@ -1806,7 +1926,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         export function mapToRows(map, query = {}, max = Infinity, onlyNew = true) {
           const result = [];
           const toMark = new Set();
-          const seen = new Set(); // ✅ Evita duplicidade
+          const seen = new Set();
         
           map.forEach((item) => {
             if (query.segmento && item.segment !== query.segmento) return;
@@ -1837,12 +1957,9 @@ Pasta base: /home/Alessandra/client-kanban-system
         
             contatos.forEach((c) => {
               if (result.length >= max) return;
-        
-              // ✅ Se "Somente Leads Inéditos" estiver ativo, ignora contatos já marcados como "Em Lista"
               if (onlyNew && c.impresso === 'Em Lista') return;
         
-              // ✅ Cria chave única para evitar duplicados
-              const key = `${item.company}|${c.nome}|${c.telefone}|${c.celular}|${c.email}|${c.linkedin}`;
+              const key = `${item.company}|${c.nome}|${c.telefone}|${c.celular}|${c.email}|${c.linkedin}|${(c.normalizedPhones || []).join(',')}`;
               if (seen.has(key)) return;
               seen.add(key);
         
@@ -1856,6 +1973,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 celular: c.celular,
                 email: c.email,
                 linkedin: c.linkedin,
+                normalizedPhones: c.normalizedPhones || [],
               });
         
               item.rows.forEach((r) => toMark.add(r));
@@ -1868,7 +1986,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         export async function markPrintedRows(updateRowFn, rows) {
           await Promise.all(
             Array.from(rows).map((rowNum) =>
-              updateRowFn(rowNum, { impresso_lista: 'Em Lista' }) // ✅ Marca corretamente na planilha
+              updateRowFn(rowNum, { impresso_lista: 'Em Lista' })
             )
           );
         }
@@ -10281,6 +10399,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         📄 clientes.js
         └── Conteúdo:
             import { getSheetCached, appendRow, updateRow } from '../../lib/googleSheets';
+            import { normalizePhones } from '../../lib/report';
             
             function groupRows(rows) {
               const [header, ...data] = rows;
@@ -10290,8 +10409,13 @@ Pasta base: /home/Alessandra/client-kanban-system
                 contato: header.indexOf('Negócio - Pessoa de contato'),
                 cargo: header.indexOf('Pessoa - Cargo'),
                 email: header.indexOf('Pessoa - Email - Work'),
+                phoneWork: header.indexOf('Pessoa - Phone - Work'),
+                phoneHome: header.indexOf('Pessoa - Phone - Home'),
+                phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
+                phoneOther: header.indexOf('Pessoa - Phone - Other'),
                 tel: header.indexOf('Pessoa - Telefone'),
                 cel: header.indexOf('Pessoa - Celular'),
+                normalizado: header.indexOf('Telefone Normalizado'),
                 segmento: header.indexOf('Organização - Segmento'),
                 tamanho: header.indexOf('Organização - Tamanho da empresa'),
                 uf: header.indexOf('uf'),
@@ -10332,7 +10456,8 @@ Pasta base: /home/Alessandra/client-kanban-system
             
                 const phone = normalizePhone(row[idx.tel]);
                 const mobile = normalizePhone(row[idx.cel]);
-                if (!phone && !mobile) {
+                const normalizedPhones = normalizePhones(row, idx);
+                if (normalizedPhones.length === 0) {
                   console.warn('Contato sem telefone', { row: i + 2, company });
                 }
             
@@ -10342,6 +10467,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                   email: (row[idx.email] || '').trim(),
                   phone,
                   mobile,
+                  normalizedPhones,
                   linkedin: (row[idx.linkedin] || '').trim(),
                 };
             
@@ -10395,6 +10521,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         📄 kanban.js
         └── Conteúdo:
             import { getSheetCached, updateRow } from '../../lib/googleSheets';
+            import { normalizePhones } from '../../lib/report';
             
             function groupRows(rows) {
               const [header, ...data] = rows;
@@ -10404,8 +10531,13 @@ Pasta base: /home/Alessandra/client-kanban-system
                 contato: header.indexOf('Negócio - Pessoa de contato'),
                 cargo: header.indexOf('Pessoa - Cargo'),
                 email: header.indexOf('Pessoa - Email - Work'),
+                phoneWork: header.indexOf('Pessoa - Phone - Work'),
+                phoneHome: header.indexOf('Pessoa - Phone - Home'),
+                phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
+                phoneOther: header.indexOf('Pessoa - Phone - Other'),
                 tel: header.indexOf('Pessoa - Telefone'),
                 cel: header.indexOf('Pessoa - Celular'),
+                normalizado: header.indexOf('Telefone Normalizado'),
                 segmento: header.indexOf('Organização - Segmento'),
                 tamanho: header.indexOf('Organização - Tamanho da empresa'),
                 uf: header.indexOf('uf'),
@@ -10453,7 +10585,8 @@ Pasta base: /home/Alessandra/client-kanban-system
                 if (contactName && !client.contactsMap.has(contactName)) {
                   const phone = normalizePhone(row[idx.tel]);
                   const mobile = normalizePhone(row[idx.cel]);
-                  if (!phone && !mobile) {
+                  const normalizedPhones = normalizePhones(row, idx);
+                  if (normalizedPhones.length === 0) {
                     console.warn('Contato sem telefone', { row: i + 2, company });
                   }
                   client.contactsMap.set(contactName, {
@@ -10462,6 +10595,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                     email: (row[idx.email] || '').trim(),
                     phone,
                     mobile,
+                    normalizedPhones,
                     linkedin: (row[idx.linkedin] || '').trim(),
                   });
                 }
@@ -10626,7 +10760,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               try {
                 if (req.method !== 'GET') return res.status(405).end();
             
-                const sheet = await getSheet();
+                 const sheet = await getSheet();
                 const rows = sheet.data.values || [];
                 const { map } = buildReport(rows);
             
@@ -10651,7 +10785,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                     r.size,
                     r.nome,
                     r.cargo,
-                    [r.telefone, r.celular].filter(Boolean).join(' / '),
+                    (r.normalizedPhones || []).join(' / '),
                     r.email,
                     r.linkedin,
                   ]),
