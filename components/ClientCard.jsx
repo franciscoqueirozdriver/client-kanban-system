@@ -19,8 +19,8 @@ function replacePlaceholders(template, { client, contact, phone }) {
   let msg = template;
   const map = {
     '[Cliente]': client?.company || '',
-    '[Contato]': contact?.nome || '',
-    '[Cargo]': contact?.cargo || '',
+    '[Contato]': contact?.nome || contact?.name || '',
+    '[Cargo]': contact?.cargo || contact?.role || '',
     '[Email]': contact?.email || '',
     '[Telefone]': phone || '',
     '[Cidade]': client?.city || '',
@@ -61,7 +61,6 @@ export default function ClientCard({ client, onStatusChange }) {
     setColor(newColor);
     setStatus(newStatus);
 
-    // Atualiza no Kanban local
     if (onStatusChange) {
       onStatusChange(client.id, newStatus, newColor);
     }
@@ -147,39 +146,45 @@ export default function ClientCard({ client, onStatusChange }) {
         </ul>
       )}
       <div className="space-y-2">
-        {client.contacts.map((c, idx) => (
-          <div key={idx} className="text-sm border-t pt-1">
-            <p className="font-medium">{c.nome}</p>
-            <p className="text-xs">{c.cargo}</p>
-            <p className="text-xs">
-              <button
-                type="button"
-                className="text-blue-600 underline"
-                onClick={(e) => handleEmailClick(e, c.email, c)}
-              >
-                {c.email}
-              </button>
-            </p>
-            {c.normalizedPhones && c.normalizedPhones.length > 0 && (
-              <p className="text-xs">
-                {c.normalizedPhones.map((p, i) => (
-                  <span key={i}>
-                    <a
-                      href={getWhatsAppLink(p)}
-                      className="text-green-600 underline"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => handlePhoneClick(e, p, c)}
-                    >
-                      {p}
-                    </a>
-                    {i < c.normalizedPhones.length - 1 ? ' / ' : ''}
-                  </span>
-                ))}
-              </p>
-            )}
-          </div>
-        ))}
+        {client.contacts.map((c, idx) => {
+          const nome = c.nome || c.name || '';
+          const cargo = c.cargo || c.role || '';
+          return (
+            <div key={idx} className="text-sm border-t pt-1">
+              <p className="font-medium">{nome}</p>
+              <p className="text-xs">{cargo}</p>
+              {c.email && (
+                <p className="text-xs">
+                  <button
+                    type="button"
+                    className="text-blue-600 underline"
+                    onClick={(e) => handleEmailClick(e, c.email, c)}
+                  >
+                    {c.email}
+                  </button>
+                </p>
+              )}
+              {c.normalizedPhones && c.normalizedPhones.length > 0 && (
+                <p className="text-xs">
+                  {c.normalizedPhones.map((p, i) => (
+                    <span key={i}>
+                      <a
+                        href={getWhatsAppLink(p)}
+                        className="text-green-600 underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => handlePhoneClick(e, p, c)}
+                      >
+                        {p}
+                      </a>
+                      {i < c.normalizedPhones.length - 1 ? ' / ' : ''}
+                    </span>
+                  ))}
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
       <MessageModal
         open={modalOpen}
@@ -193,4 +198,3 @@ export default function ClientCard({ client, onStatusChange }) {
     </div>
   );
 }
-
