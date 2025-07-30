@@ -10,13 +10,8 @@ function groupRows(rows) {
     contato: header.indexOf('Negócio - Pessoa de contato'),
     cargo: header.indexOf('Pessoa - Cargo'),
     email: header.indexOf('Pessoa - Email - Work'),
-    phoneWork: header.indexOf('Pessoa - Phone - Work'),
-    phoneHome: header.indexOf('Pessoa - Phone - Home'),
-    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
-    phoneOther: header.indexOf('Pessoa - Phone - Other'),
     tel: header.indexOf('Pessoa - Telefone'),
     cel: header.indexOf('Pessoa - Celular'),
-    normalizado: header.indexOf('Telefone Normalizado'),
     segmento: header.indexOf('Organização - Segmento'),
     tamanho: header.indexOf('Organização - Tamanho da empresa'),
     uf: header.indexOf('uf'),
@@ -27,7 +22,6 @@ function groupRows(rows) {
     cor: header.indexOf('Cor_Card'),
   };
 
-  const normalizePhone = (v) => String(v || '').trim();
   const map = new Map();
 
   data.forEach((row, i) => {
@@ -57,23 +51,19 @@ function groupRows(rows) {
 
     const contactName = row[idx.contato];
     if (contactName && !client.contactsMap.has(contactName)) {
-      const phone = normalizePhone(row[idx.tel]);
-      const mobile = normalizePhone(row[idx.cel]);
-      const normalizedPhones = normalizePhones(row, idx);
       client.contactsMap.set(contactName, {
         name: contactName.trim(),
         role: (row[idx.cargo] || '').trim(),
         email: (row[idx.email] || '').trim(),
-        phone,
-        mobile,
-        normalizedPhones,
+        phone: (row[idx.tel] || '').trim(),
+        mobile: (row[idx.cel] || '').trim(),
+        normalizedPhones: normalizePhones(row, idx),
         linkedin: (row[idx.linkedin] || '').trim(),
       });
     }
   });
 
   return {
-    header,
     clients: Array.from(map.values()).map((c) => ({
       id: c.id,
       company: c.company,
