@@ -17,7 +17,7 @@ function getGreeting() {
 function replacePlaceholders(template, { client, contact, phone }) {
   if (!template) return '';
   let msg = template;
-  const firstName = (contact?.name || '').split(' ')[0]; // ✅ Primeiro nome
+  const firstName = (contact?.name || '').split(' ')[0]; // ✅ Apenas primeiro nome
   const map = {
     '[Cliente]': client?.company || '',
     '[Contato]': firstName || '',
@@ -44,7 +44,7 @@ async function fetchMessages(app) {
     if (Array.isArray(data?.mensagens)) return data.mensagens;
     if (Array.isArray(data?.messages)) return data.messages;
     return [];
-  } catch (err) {
+  } catch {
     return [];
   }
 }
@@ -71,7 +71,7 @@ export default function ClientCard({ client, onStatusChange }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: client.id,          // Cliente_ID
+        id: client.id, // Cliente_ID
         status: newStatus,
         color: newColor,
       }),
