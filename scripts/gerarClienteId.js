@@ -35,7 +35,6 @@ async function gerarClienteIds() {
       continue;
     }
 
-    // Se cliente já recebeu um ID nesta execução, reaproveita
     let novoId;
     if (mapaClientes.has(cliente)) {
       novoId = mapaClientes.get(cliente);
@@ -44,16 +43,20 @@ async function gerarClienteIds() {
       mapaClientes.set(cliente, novoId);
     }
 
+    // Log de depuração para confirmar geração
+    console.log(`Linha ${rowNum}: Cliente="${cliente}" -> ID="${novoId}"`);
+
     // Atualiza a célula em memória
     data[i][idxClienteId] = novoId;
 
-    // Monta o objeto da linha baseado no cabeçalho
+    // Monta o objeto completo da linha baseado no cabeçalho
     const rowObj = {};
     header.forEach((col, idx) => {
       rowObj[col] = data[i][idx] || '';
     });
 
-    await updateRow(rowNum, rowObj);
+    // Força a gravação do Cliente_ID independente do estado anterior
+    await updateRow(rowNum, { ...rowObj, Cliente_ID: novoId });
   }
 
   console.log('✅ IDs de clientes gerados/atualizados com sucesso.');
