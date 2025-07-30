@@ -1,4 +1,3 @@
-
 import { getSheetCached, updateRow } from '../lib/googleSheets.js';
 
 function gerarIdSequencial(numero) {
@@ -26,7 +25,7 @@ async function gerarClienteIds() {
   let contador = 1;
 
   for (let i = 0; i < data.length; i++) {
-    const rowNum = i + 2; // linha real na planilha
+    const rowNum = i + 2; // linha real na planilha (considerando cabeçalho)
     const cliente = (data[i][idxOrg] || '').trim();
     if (!cliente) continue;
 
@@ -37,15 +36,24 @@ async function gerarClienteIds() {
     }
 
     // Se cliente já recebeu um ID nesta execução, reaproveita
+    let novoId;
     if (mapaClientes.has(cliente)) {
-      const id = mapaClientes.get(cliente);
-      await updateRow(rowNum, { Cliente_ID: id });
+      novoId = mapaClientes.get(cliente);
     } else {
-      // Gera novo ID e salva
-      const novoId = gerarIdSequencial(contador++);
+      novoId = gerarIdSequencial(contador++);
       mapaClientes.set(cliente, novoId);
-      await updateRow(rowNum, { Cliente_ID: novoId });
     }
+
+    // Atualiza a célula em memória
+    data[i][idxClienteId] = novoId;
+
+    // Monta o objeto da linha baseado no cabeçalho
+    const rowObj = {};
+    header.forEach((col, idx) => {
+      rowObj[col] = data[i][idx] || '';
+    });
+
+    await updateRow(rowNum, rowObj);
   }
 
   console.log('✅ IDs de clientes gerados/atualizados com sucesso.');
