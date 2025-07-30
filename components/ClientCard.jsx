@@ -17,7 +17,7 @@ function getGreeting() {
 function replacePlaceholders(template, { client, contact, phone }) {
   if (!template) return '';
   let msg = template;
-  const firstName = (contact?.name || '').split(' ')[0];
+  const firstName = (contact?.name || '').split(' ')[0]; // ✅ Apenas primeiro nome
   const map = {
     '[Cliente]': client?.company || '',
     '[Contato]': firstName || '',
@@ -120,18 +120,19 @@ export default function ClientCard({ client, onStatusChange }) {
     }
   };
 
+  // ✅ Cores mais leves solicitadas
   const backgroundColor =
     color === 'green'
-      ? '#C8E6C9' // Verde pastel claro
+      ? '#a3ffac'
       : color === 'red'
-      ? '#FFCDD2' // Vermelho pastel claro
+      ? '#ffca99'
       : 'white';
 
   const borderLeftColor =
     color === 'green'
-      ? '#388E3C' // Verde mais escuro para borda
+      ? '#4caf50'
       : color === 'red'
-      ? '#D32F2F' // Vermelho mais escuro para borda
+      ? '#ff7043'
       : 'transparent';
 
   return (
