@@ -2,8 +2,13 @@
 import { useState } from 'react';
 import MessageModal from './MessageModal';
 
+function displayPhone(phone) {
+  return String(phone || '').replace(/^'+/, ''); // remove proteção visualmente
+}
+
 function getWhatsAppLink(phone) {
-  const digits = String(phone || '').replace(/\D/g, '');
+  const clean = displayPhone(phone);
+  const digits = clean.replace(/\D/g, '');
   return digits ? `https://wa.me/${digits}` : '';
 }
 
@@ -17,13 +22,13 @@ function getGreeting() {
 function replacePlaceholders(template, { client, contact, phone }) {
   if (!template) return '';
   let msg = template;
-  const firstName = (contact?.name || '').split(' ')[0]; // ✅ Apenas primeiro nome
+  const firstName = (contact?.name || '').split(' ')[0];
   const map = {
     '[Cliente]': client?.company || '',
     '[Contato]': firstName || '',
     '[Cargo]': contact?.role || '',
     '[Email]': contact?.email || '',
-    '[Telefone]': phone || '',
+    '[Telefone]': displayPhone(phone) || '',
     '[Cidade]': client?.city || '',
     '[UF]': client?.uf || '',
     '[Segmento]': client?.segment || '',
@@ -85,7 +90,7 @@ export default function ClientCard({ client, onStatusChange }) {
 
   const handlePhoneClick = async (e, phone, contact) => {
     e.preventDefault();
-    const digits = String(phone || '').replace(/\D/g, '');
+    const digits = displayPhone(phone).replace(/\D/g, '');
     if (!digits) return;
     const messages = await fetchMessages('whatsapp');
     if (messages.length > 0) {
@@ -120,7 +125,6 @@ export default function ClientCard({ client, onStatusChange }) {
     }
   };
 
-  // ✅ Cores mais leves solicitadas
   const backgroundColor =
     color === 'green'
       ? '#a3ffac'
@@ -182,7 +186,7 @@ export default function ClientCard({ client, onStatusChange }) {
                       rel="noopener noreferrer"
                       onClick={(e) => handlePhoneClick(e, p, c)}
                     >
-                      {p}
+                      {displayPhone(p)}
                     </a>
                     {i < c.normalizedPhones.length - 1 ? ' / ' : ''}
                   </span>
