@@ -4,6 +4,7 @@ import { normalizePhones } from '../../lib/report';
 function groupRows(rows) {
   const [header, ...data] = rows;
   const idx = {
+    clienteId: header.indexOf('Cliente_ID'),
     org: header.indexOf('Organização - Nome'),
     titulo: header.indexOf('Negócio - Título'),
     contato: header.indexOf('Negócio - Pessoa de contato'),
@@ -28,10 +29,6 @@ function groupRows(rows) {
 
   const normalizePhone = (v) => String(v || '').trim();
 
-  if (idx.tel === -1 || idx.cel === -1) {
-    console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
-  }
-
   const filters = {
     segmento: new Set(),
     porte: new Set(),
@@ -39,7 +36,11 @@ function groupRows(rows) {
     cidade: new Set(),
   };
 
-  const clients = data.map((row, i) => {
+  // Mapa para agrupar por Cliente_ID
+  const clientesMap = new Map();
+
+  data.forEach((row, i) => {
+    const clienteId = row[idx.clienteId] || '';
     const company = row[idx.org] || '';
     const segment = row[idx.segmento] || '';
     const size = row[idx.tamanho] || '';
@@ -57,9 +58,6 @@ function groupRows(rows) {
     const phone = normalizePhone(row[idx.tel]);
     const mobile = normalizePhone(row[idx.cel]);
     const normalizedPhones = normalizePhones(row, idx);
-    if (normalizedPhones.length === 0) {
-      console.warn('Contato sem telefone', { row: i + 2, company });
-    }
 
     const contact = {
       name: (row[idx.contato] || '').trim(),
@@ -71,19 +69,41 @@ function groupRows(rows) {
       linkedin: (row[idx.linkedin] || '').trim(),
     };
 
-    return {
-      company,
-      opportunities: [row[idx.titulo] || ''],
-      contacts: [contact],
-      segment,
-      size,
-      uf,
-      city,
-      status,
-      dataMov,
-      color,
-    };
+    const opportunity = row[idx.titulo] || '';
+
+    // Se o cliente já existe no mapa, agrega contatos e oportunidades
+    if (clientesMap.has(clienteId)) {
+      const existing = clientesMap.get(clienteId);
+
+      if (opportunity && !existing.opportunities.includes(opportunity)) {
+        existing.opportunities.push(opportunity);
+      }
+
+      // Evita contatos duplicados (mesmo nome e email)
+      const existsContact = existing.contacts.find(
+        (c) => c.name === contact.name && c.email === contact.email
+      );
+      if (!existsContact) {
+        existing.contacts.push(contact);
+      }
+    } else {
+      clientesMap.set(clienteId, {
+        id: clienteId,
+        company,
+        opportunities: opportunity ? [opportunity] : [],
+        contacts: contact.name || contact.email ? [contact] : [],
+        segment,
+        size,
+        uf,
+        city,
+        status,
+        dataMov,
+        color,
+      });
+    }
   });
+
+  const clients = Array.from(clientesMap.values());
 
   return {
     clients,
@@ -116,4 +136,3 @@ export default async function handler(req, res) {
 
   return res.status(405).end();
 }
-
