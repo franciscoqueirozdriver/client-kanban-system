@@ -166,15 +166,25 @@ export default function ClientCard({ client, onStatusChange }) {
           <div key={idx} className="text-sm border-t pt-1">
             <p className="font-medium">{c.name}</p>
             <p className="text-xs">{c.role}</p>
-            <p className="text-xs">
-              <button
-                type="button"
-                className="text-blue-600 underline"
-                onClick={(e) => handleEmailClick(e, c.email, c)}
-              >
-                {c.email}
-              </button>
-            </p>
+
+            {/* ✅ Múltiplos e-mails separados por ; */}
+            {c.email && (
+              <p className="text-xs">
+                {c.email.split(';').map((em, i) => (
+                  <span key={i}>
+                    <button
+                      type="button"
+                      className="text-blue-600 underline"
+                      onClick={(e) => handleEmailClick(e, em.trim(), c)}
+                    >
+                      {em.trim()}
+                    </button>
+                    {i < c.email.split(';').length - 1 ? ' / ' : ''}
+                  </span>
+                ))}
+              </p>
+            )}
+
             {c.normalizedPhones && c.normalizedPhones.length > 0 && (
               <p className="text-xs">
                 {c.normalizedPhones.map((p, i) => (
