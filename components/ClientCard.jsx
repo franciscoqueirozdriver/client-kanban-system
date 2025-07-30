@@ -17,7 +17,7 @@ function getGreeting() {
 function replacePlaceholders(template, { client, contact, phone }) {
   if (!template) return '';
   let msg = template;
-  const firstName = (contact?.name || '').split(' ')[0]; // ✅ Apenas primeiro nome
+  const firstName = (contact?.name || '').split(' ')[0];
   const map = {
     '[Cliente]': client?.company || '',
     '[Contato]': firstName || '',
@@ -66,12 +66,11 @@ export default function ClientCard({ client, onStatusChange }) {
       onStatusChange(client.id, newStatus, newColor);
     }
 
-    // ✅ Atualiza na planilha usando Cliente_ID
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: client.id, // Cliente_ID
+        id: client.id,
         status: newStatus,
         color: newColor,
       }),
@@ -121,18 +120,28 @@ export default function ClientCard({ client, onStatusChange }) {
     }
   };
 
+  const backgroundColor =
+    color === 'green'
+      ? '#C8E6C9' // Verde pastel claro
+      : color === 'red'
+      ? '#FFCDD2' // Vermelho pastel claro
+      : 'white';
+
+  const borderLeftColor =
+    color === 'green'
+      ? '#388E3C' // Verde mais escuro para borda
+      : color === 'red'
+      ? '#D32F2F' // Vermelho mais escuro para borda
+      : 'transparent';
+
   return (
     <div
       onDoubleClick={handleDoubleClick}
       style={{
-        backgroundColor:
-          color === 'green'
-            ? '#8BC34A'
-            : color === 'red'
-              ? '#E57373'
-              : 'white',
+        backgroundColor,
+        borderLeft: `6px solid ${borderLeftColor}`,
       }}
-      className="p-4 border rounded shadow hover:shadow-lg cursor-pointer"
+      className="p-4 border rounded shadow hover:shadow-lg cursor-pointer transition-colors"
     >
       <h3 className="text-lg font-semibold mb-1">{client.company}</h3>
       {(client.city || client.uf) && (
