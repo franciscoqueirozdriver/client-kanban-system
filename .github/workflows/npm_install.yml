@@ -20,12 +20,15 @@ jobs:
         run: npm install
 
       - name: ✅ Commit do package-lock.json atualizado
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           git config --global user.name "Auto Bot"
           git config --global user.email "bot@github.com"
+          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/franciscoqueirozdriver/client-kanban-system.git
           git add package-lock.json
           git commit -m "chore: atualizar dependências via Actions" || echo "Sem alterações"
-          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/franciscoqueirozdriver/client-kanban-system.git HEAD:main
+          git push origin HEAD:main
 
       - name: 🚀 Rodar script de geração de Cliente_ID
         run: node scripts/gerarClienteId.js
