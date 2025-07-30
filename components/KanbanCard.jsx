@@ -94,3 +94,4 @@ export default function KanbanCard({ card, index }) {
     </Draggable>
   );
 }
+
