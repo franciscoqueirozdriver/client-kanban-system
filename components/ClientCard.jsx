@@ -198,3 +198,4 @@ export default function ClientCard({ client, onStatusChange }) {
     </div>
   );
 }
+
