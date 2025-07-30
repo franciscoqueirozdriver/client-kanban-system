@@ -28,10 +28,6 @@ function groupRows(rows) {
 
   const normalizePhone = (v) => String(v || '').trim();
 
-  if (idx.tel === -1 || idx.cel === -1) {
-    console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
-  }
-
   const map = new Map();
 
   data.forEach((row, i) => {
@@ -64,9 +60,6 @@ function groupRows(rows) {
       const phone = normalizePhone(row[idx.tel]);
       const mobile = normalizePhone(row[idx.cel]);
       const normalizedPhones = normalizePhones(row, idx);
-      if (normalizedPhones.length === 0) {
-        console.warn('Contato sem telefone', { row: i + 2, company });
-      }
       client.contactsMap.set(contactName, {
         name: contactName.trim(),
         role: (row[idx.cargo] || '').trim(),
@@ -132,11 +125,12 @@ export default async function handler(req, res) {
         ? 'red'
         : undefined;
 
-    let existingColor = '';
     const sheet = await getSheetCached();
     const rows = sheet.data.values || [];
     const [header, ...data] = rows;
     const colorIdx = header.indexOf('Cor_Card');
+    const statusIdx = header.indexOf('Status_Kanban');
+
     let companyIdx = header.indexOf('Negócio - Organização');
     if (companyIdx === -1) companyIdx = header.indexOf('Organização - Nome');
 
@@ -144,21 +138,20 @@ export default async function handler(req, res) {
     data.forEach((row, i) => {
       if (row[companyIdx] === id) {
         const rowNum = i + 2;
-        if (existingColor === '') existingColor = row[colorIdx] || '';
-
-        const values = {
-          data_ultima_movimentacao: new Date().toISOString().split('T')[0],
-        };
-        if (newStatus !== undefined) values.status_kanban = newStatus;
-        if (newColor !== undefined) values.cor_card = newColor;
+        const values = {};
+        if (newStatus !== undefined && statusIdx !== -1) {
+          values.status_kanban = newStatus;
+        }
+        if (newColor !== undefined && colorIdx !== -1) {
+          values.cor_card = newColor;
+        }
+        values.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
         promises.push(updateRow(rowNum, values));
       }
     });
 
     await Promise.all(promises);
-    return res
-      .status(200)
-      .json({ status: newStatus, color: newColor ?? existingColor });
+    return res.status(200).json({ status: newStatus, color: newColor });
   }
 
   return res.status(405).end();

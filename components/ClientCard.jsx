@@ -48,22 +48,30 @@ async function fetchMessages(app) {
   }
 }
 
-export default function ClientCard({ client }) {
-  console.log('client contacts', client.contacts);
+export default function ClientCard({ client, onStatusChange }) {
   const [color, setColor] = useState(client.color || '');
+  const [status, setStatus] = useState(client.status || '');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
   const [onSelectMessage, setOnSelectMessage] = useState(null);
 
   const handleDoubleClick = async () => {
     const newColor = 'green';
+    const newStatus = 'Lead Selecionado';
     setColor(newColor);
+    setStatus(newStatus);
+
+    // Atualiza no Kanban local
+    if (onStatusChange) {
+      onStatusChange(client.id, newStatus, newColor);
+    }
+
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: client.id,
-        status: 'Lead Selecionado',
+        status: newStatus,
         color: newColor,
       }),
     });
@@ -117,14 +125,18 @@ export default function ClientCard({ client }) {
       onDoubleClick={handleDoubleClick}
       style={{
         backgroundColor:
-          color === 'green' ? '#22c55e' : color === 'red' ? '#ef4444' : 'white',
+          color === 'green'
+            ? '#8BC34A'
+            : color === 'red'
+              ? '#E57373'
+              : 'white',
       }}
       className="p-4 border rounded shadow hover:shadow-lg cursor-pointer"
     >
       <h3 className="text-lg font-semibold mb-1">{client.company}</h3>
       {(client.city || client.uf) && (
         <p className="text-xs text-gray-600">
-{[client.city, client.uf].filter(Boolean).join(' - ')}
+          {[client.city, client.uf].filter(Boolean).join(' - ')}
         </p>
       )}
       {client.opportunities.length > 0 && (
@@ -146,7 +158,6 @@ export default function ClientCard({ client }) {
                 onClick={(e) => handleEmailClick(e, c.email, c)}
               >
                 {c.email}
-
               </button>
             </p>
             {c.normalizedPhones && c.normalizedPhones.length > 0 && (
@@ -167,29 +178,11 @@ export default function ClientCard({ client }) {
                 ))}
               </p>
             )}
-            {c.linkedin_contato && (
-              <p className="text-xs">
-                <a
-                  href={c.linkedin_contato}
-                  className="text-blue-600 underline"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  LinkedIn
-                </a>
-              </p>
-            )}
           </div>
         ))}
       </div>
       <MessageModal
         open={modalOpen}
-        messages={modalMessages}
-        onSelect={(msg) => {
-          if (onSelectMessage) onSelectMessage(msg);
-          setModalOpen(false);
-        }}
-        onClose={() => setModalOpen(false)}
         messages={modalMessages}
         onSelect={(msg) => {
           if (onSelectMessage) onSelectMessage(msg);

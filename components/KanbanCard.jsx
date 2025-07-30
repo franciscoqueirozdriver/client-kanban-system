@@ -7,9 +7,9 @@ export default function KanbanCard({ card, index }) {
   const colorStyle = {
     backgroundColor:
       client.color === 'green'
-        ? '#22c55e'
+        ? '#8BC34A'
         : client.color === 'red'
-          ? '#ef4444'
+          ? '#E57373'
           : 'white',
   };
 

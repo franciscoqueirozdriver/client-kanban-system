@@ -6,10 +6,14 @@ import KanbanColumn from '../../components/KanbanColumn';
 export default function KanbanPage() {
   const [columns, setColumns] = useState([]);
 
+  const fetchColumns = async () => {
+    const res = await fetch('/api/kanban');
+    const data = await res.json();
+    setColumns(data);
+  };
+
   useEffect(() => {
-    fetch('/api/kanban')
-      .then((res) => res.json())
-      .then(setColumns);
+    fetchColumns();
   }, []);
 
   const onDragEnd = async (result) => {
@@ -20,20 +24,25 @@ export default function KanbanPage() {
     const destCol = newColumns.find((c) => c.id === destination.droppableId);
     const [moved] = sourceCol.cards.splice(source.index, 1);
     destCol.cards.splice(destination.index, 0, moved);
-    moved.client.status = destCol.id;
-    if (destCol.id === 'Perdido') {
-      moved.client.color = 'red';
+
+    const newStatus = destCol.id;
+    let newColor = moved.client.color;
+
+    if (newStatus === 'Perdido') {
+      newColor = 'red';
+    } else if (newStatus === 'Lead Selecionado') {
+      newColor = 'green';
     }
+
+    moved.client.status = newStatus;
+    moved.client.color = newColor;
+
     setColumns(newColumns);
 
-    const payload = { id: draggableId, destination };
-    if (destCol.id === 'Perdido') {
-      payload.color = 'red';
-    }
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
     });
   };
 
@@ -49,3 +58,4 @@ export default function KanbanPage() {
     </div>
   );
 }
+

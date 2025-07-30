@@ -1,4 +1,4 @@
-📂 Estrutura do projeto Node.js – qua 30 jul 2025 00:44:05 -03
+📂 Estrutura do projeto Node.js – qua 30 jul 2025 01:37:54 -03
 Pasta base: /home/Alessandra/client-kanban-system
 ──────────────────────────────
 📁 client-kanban-system
@@ -118,19 +118,17 @@ Pasta base: /home/Alessandra/client-kanban-system
                 const [moved] = sourceCol.cards.splice(source.index, 1);
                 destCol.cards.splice(destination.index, 0, moved);
                 moved.client.status = destCol.id;
+                let newColor;
                 if (destCol.id === 'Perdido') {
-                  moved.client.color = 'red';
+                  newColor = 'red';
+                  moved.client.color = newColor;
                 }
                 setColumns(newColumns);
             
-                const payload = { id: draggableId, destination };
-                if (destCol.id === 'Perdido') {
-                  payload.color = 'red';
-                }
                 await fetch('/api/kanban', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload),
+                  body: JSON.stringify({ id: draggableId, status: destCol.id, color: newColor }),
                 });
               };
             
@@ -619,7 +617,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             '[Cidade]': client?.city || '',
             '[UF]': client?.uf || '',
             '[Segmento]': client?.segment || '',
-            '[Saudacao]': getGreeting(),
+           '[Saudacao]': getGreeting(),
           };
           Object.entries(map).forEach(([key, value]) => {
             msg = msg.split(key).join(value || '');
@@ -644,19 +642,22 @@ Pasta base: /home/Alessandra/client-kanban-system
         export default function ClientCard({ client }) {
           console.log('client contacts', client.contacts);
           const [color, setColor] = useState(client.color || '');
+          const [status, setStatus] = useState(client.status || '');
           const [modalOpen, setModalOpen] = useState(false);
           const [modalMessages, setModalMessages] = useState([]);
           const [onSelectMessage, setOnSelectMessage] = useState(null);
         
           const handleDoubleClick = async () => {
             const newColor = 'green';
+            const newStatus = 'Lead Selecionado';
             setColor(newColor);
+            setStatus(newStatus);
             await fetch('/api/kanban', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 id: client.id,
-                status: 'Lead Selecionado',
+                status: newStatus,
                 color: newColor,
               }),
             });
@@ -710,7 +711,11 @@ Pasta base: /home/Alessandra/client-kanban-system
               onDoubleClick={handleDoubleClick}
               style={{
                 backgroundColor:
-                  color === 'green' ? '#22c55e' : color === 'red' ? '#ef4444' : 'white',
+                  color === 'green'
+                    ? '#8BC34A'
+                    : color === 'red'
+                      ? '#E57373'
+                      : 'white',
               }}
               className="p-4 border rounded shadow hover:shadow-lg cursor-pointer"
             >
@@ -783,10 +788,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                   setModalOpen(false);
                 }}
                 onClose={() => setModalOpen(false)}
-                messages={modalMessages}
-                onSelect={(msg) => {
-                  if (onSelectMessage) onSelectMessage(msg);
-                  setModalOpen(false);
+        
                 }}
                 onClose={() => setModalOpen(false)}
               />
@@ -967,9 +969,9 @@ Pasta base: /home/Alessandra/client-kanban-system
           const colorStyle = {
             backgroundColor:
               client.color === 'green'
-                ? '#22c55e'
+                ? '#8BC34A'
                 : client.color === 'red'
-                  ? '#ef4444'
+                  ? '#E57373'
                   : 'white',
           };
         
@@ -10668,11 +10670,10 @@ Pasta base: /home/Alessandra/client-kanban-system
                     const rowNum = i + 2;
                     if (existingColor === '') existingColor = row[colorIdx] || '';
             
-                    const values = {
-                      data_ultima_movimentacao: new Date().toISOString().split('T')[0],
-                    };
+                    const values = {};
                     if (newStatus !== undefined) values.status_kanban = newStatus;
                     if (newColor !== undefined) values.cor_card = newColor;
+                    values.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
                     promises.push(updateRow(rowNum, values));
                   }
                 });
