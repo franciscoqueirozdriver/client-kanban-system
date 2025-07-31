@@ -12,7 +12,7 @@ export default function MessageModal({ open, messages = [], onSelect, onClose })
             <button
               key={idx}
               onClick={() => {
-                if (onSelect) onSelect(m.mensagem);
+                if (onSelect) onSelect(m);
                 if (onClose) onClose();
               }}
               className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
