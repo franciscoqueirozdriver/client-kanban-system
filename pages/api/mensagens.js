@@ -4,6 +4,12 @@ import { google } from 'googleapis';
 const cache = { time: 0, data: null };
 const TTL = 10000; // 10 seconds
 
+function normalizeApp(str) {
+  return String(str || '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+}
+
 async function fetchMensagens() {
   const auth = new google.auth.JWT({
     email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -27,7 +33,7 @@ async function fetchMensagens() {
   return data
     .map((row) => ({
       titulo: row[tituloIdx] || '',
-      aplicativo: (row[appIdx] || '').toLowerCase(),
+      aplicativo: normalizeApp(row[appIdx]),
       mensagem: row[msgIdx] || '',
     }))
     .filter((m) => m.titulo || m.mensagem);
@@ -46,7 +52,7 @@ export async function getMensagens() {
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
   try {
-    const appFilter = req.query.app && String(req.query.app).toLowerCase();
+    const appFilter = req.query.app ? normalizeApp(req.query.app) : '';
     const messages = await getMensagens();
     const filtered = appFilter
       ? messages.filter((m) => m.aplicativo === appFilter)
