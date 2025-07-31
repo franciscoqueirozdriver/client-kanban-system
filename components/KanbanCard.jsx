@@ -1,13 +1,128 @@
 'use client';
 import { Draggable } from '@hello-pangea/dnd';
+import { useState } from 'react';
+import MessageModal from './MessageModal';
 
 // Remove proteção visual dos números ('+553199999999' -> +553199999999)
 function displayPhone(phone) {
   return String(phone || '').replace(/^'+/, '');
 }
 
+function displayEmail(email) {
+  return String(email || '').replace(/^'+/, '');
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'bom dia';
+  if (h < 18) return 'boa tarde';
+  return 'boa noite';
+}
+
+function replacePlaceholders(template, { client, contact, phone }) {
+  if (!template) return '';
+  let msg = template;
+  const firstName = (contact?.name || contact?.nome || '').split(' ')[0];
+  const map = {
+    '[nome]': firstName || '',
+    '[Cliente]': client?.company || '',
+    '[Cargo]': contact?.role || contact?.cargo || '',
+    '[Email]': contact?.email || '',
+    '[Telefone]': displayPhone(phone) || '',
+    '[Cidade]': client?.city || '',
+    '[UF]': client?.uf || '',
+    '[Segmento]': client?.segment || '',
+  };
+  if (msg.includes('[Saudacao]')) {
+    map['[Saudacao]'] = getGreeting();
+  }
+  Object.entries(map).forEach(([key, value]) => {
+    msg = msg.split(key).join(value || '');
+  });
+  return msg;
+}
+
+async function fetchMessages(app) {
+  try {
+    const res = await fetch(`/api/mensagens?app=${app}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.mensagens)) return data.mensagens;
+    if (Array.isArray(data?.messages)) return data.messages;
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export default function KanbanCard({ card, index }) {
   const { client } = card;
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMessages, setModalMessages] = useState([]);
+  const [onSelectMessage, setOnSelectMessage] = useState(null);
+
+  const openModal = (messages, action) => {
+    setModalMessages(messages);
+    setOnSelectMessage(() => action);
+    setModalOpen(true);
+  };
+
+  const handlePhoneClick = async (e, phone, contact) => {
+    e.preventDefault();
+    const digits = displayPhone(phone).replace(/\D/g, '');
+    if (!digits) return;
+    const number = digits.startsWith('55') ? digits : `55${digits}`;
+    const messages = await fetchMessages('whatsapp');
+    if (messages.length > 0) {
+      openModal(messages, ({ mensagem }) => {
+        const finalMsg = encodeURIComponent(
+          replacePlaceholders(mensagem, { client, contact, phone })
+        );
+        const url = `https://web.whatsapp.com/send/?phone=${number}&text=${finalMsg}&type=phone_number&app_absent=0`;
+        window.open(url, '_blank');
+      });
+    } else {
+      const url = `https://web.whatsapp.com/send/?phone=${number}&type=phone_number&app_absent=0`;
+      window.open(url, '_blank');
+    }
+  };
+
+  const handleEmailClick = async (e, email, contact) => {
+    e.preventDefault();
+    const phone = contact.mobile || contact.phone || '';
+    const cleanEmail = displayEmail(email);
+    const messages = await fetchMessages('email');
+    if (messages.length > 0) {
+      openModal(messages, ({ titulo, mensagem }) => {
+        const subject = encodeURIComponent(
+          replacePlaceholders(titulo, { client, contact, phone })
+        );
+        const body = encodeURIComponent(
+          replacePlaceholders(mensagem, { client, contact, phone })
+        );
+        window.location.href = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
+      });
+    } else {
+      window.location.href = `mailto:${cleanEmail}`;
+    }
+  };
+
+  const handleLinkedinClick = async (e, url, contact) => {
+    e.preventDefault();
+    const phone = contact.mobile || contact.phone || '';
+    const messages = await fetchMessages('linkedin');
+    if (messages.length > 0) {
+      openModal(messages, ({ mensagem }) => {
+        const finalMsg = encodeURIComponent(
+          replacePlaceholders(mensagem, { client, contact, phone })
+        );
+        window.open(`${url}?message=${finalMsg}`, '_blank');
+      });
+    } else {
+      window.open(url, '_blank');
+    }
+  };
 
   const backgroundColor =
     client.color === 'green'
@@ -26,6 +141,7 @@ export default function KanbanCard({ card, index }) {
   return (
     <Draggable draggableId={card.id} index={index}>
       {(provided) => (
+        <>
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
@@ -61,23 +177,42 @@ export default function KanbanCard({ card, index }) {
               {/* ✅ Suporte a múltiplos e-mails separados por ; */}
               {c.email && (
                 <p className="text-[10px]">
-                  {c.email.split(';').map((em, idx) => (
-                    <span key={idx}>
-                      <a
-                        href={`mailto:${em.trim()}`}
-                        className="text-blue-600 underline"
-                      >
-                        {em.trim()}
-                      </a>
-                      {idx < c.email.split(';').length - 1 ? ' / ' : ''}
-                    </span>
-                  ))}
+                  {c.email.split(';').map((em, idx) => {
+                    const clean = displayEmail(em.trim());
+                    return (
+                      <span key={idx}>
+                        <button
+                          type="button"
+                          className="text-blue-600 underline"
+                          onClick={(e) => handleEmailClick(e, clean, c)}
+                        >
+                          {clean}
+                        </button>
+                        {idx < c.email.split(';').length - 1 ? ' / ' : ''}
+                      </span>
+                    );
+                  })}
                 </p>
               )}
 
               {c.normalizedPhones && c.normalizedPhones.length > 0 && (
                 <p className="text-[10px]">
-                  {c.normalizedPhones.map((p, idx) => displayPhone(p)).join(' / ')}
+                  {c.normalizedPhones.map((p, idx) => (
+                    <span key={idx}>
+                      <a
+                        href={`https://web.whatsapp.com/send/?phone=${displayPhone(p)
+                          .replace(/\D/g, '')
+                          .replace(/^/, (d) => (d.startsWith('55') ? d : `55${d}`))}&type=phone_number&app_absent=0`}
+                        className="text-green-600 underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => handlePhoneClick(e, p, c)}
+                      >
+                        {displayPhone(p)}
+                      </a>
+                      {idx < c.normalizedPhones.length - 1 ? ' / ' : ''}
+                    </span>
+                  ))}
                 </p>
               )}
 
@@ -96,6 +231,16 @@ export default function KanbanCard({ card, index }) {
             </div>
           ))}
         </div>
+        <MessageModal
+          open={modalOpen}
+          messages={modalMessages}
+          onSelect={(msg) => {
+            if (onSelectMessage) onSelectMessage(msg);
+            setModalOpen(false);
+          }}
+          onClose={() => setModalOpen(false)}
+        />
+        </>
       )}
     </Draggable>
   );
