@@ -5,7 +5,14 @@ import KanbanCard from './KanbanCard';
 export default function KanbanColumn({ column }) {
   return (
     <div className="w-64">
-      <h2 className="font-bold mb-2">{column.title}</h2>
+      {/*
+        Append the current number of cards to the column title.
+        This updates automatically whenever the column prop changes,
+        ensuring the count reflects drag-and-drop operations or refreshes.
+      */}
+      <h2 className="font-bold mb-2">
+        {`${column.title} | ${column.cards.length}`}
+      </h2>
       <Droppable droppableId={column.id}>
         {(provided) => (
           <div
