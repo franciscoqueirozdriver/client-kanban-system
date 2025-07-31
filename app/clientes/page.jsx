@@ -53,7 +53,7 @@ export default function ClientesPage() {
         const q = query.toLowerCase();
         const matchName = (client.company || '').toLowerCase().includes(q);
         const matchContact = (client.contacts || []).some((c) =>
-          (c.nome || '').toLowerCase().includes(q)
+          (c.name || c.nome || '').toLowerCase().includes(q)
         );
         const matchOpp = (client.opportunities || []).some((o) =>
           (o || '').toLowerCase().includes(q)
