@@ -7,11 +7,14 @@ export default async function handler(req, res) {
       const maxLeads = parseInt(req.query.maxLeads || '100', 10);
       const onlyNew = req.query.onlyNew === '1';
 
+      console.log('API /reports GET', { query: req.query, maxLeads, onlyNew });
+
       const sheet = await getSheet();
       const rows = sheet.data.values || [];
 
       // ✅ buildReport já agrupa por Cliente_ID agora
-      const { map, filters } = await buildReport(rows);
+      // Evita atualizar telefones durante a geração do relatório
+      const { map, filters } = await buildReport(rows, { savePhones: false });
       const { rows: reportRows, toMark } = mapToRows(
         map,
         req.query,
@@ -19,7 +22,7 @@ export default async function handler(req, res) {
         onlyNew
       );
 
-      return res.status(200).json({
+      const resposta = {
         filters: {
           segmento: Array.from(filters.segmento),
           porte: Array.from(filters.porte),
@@ -29,7 +32,10 @@ export default async function handler(req, res) {
         rows: reportRows,
         total: reportRows.length,
         toMark: Array.from(toMark),
-      });
+      };
+
+      console.log('API /reports resposta', { total: resposta.total });
+      return res.status(200).json(resposta);
     } catch (err) {
       console.error('Erro ao gerar relatório:', err);
       return res.status(500).json({ error: 'Erro ao gerar relatório' });
