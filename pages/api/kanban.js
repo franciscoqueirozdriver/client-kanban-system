@@ -11,15 +11,15 @@ function protectPhoneValue(value) {
   return str;
 }
 
-// ✅ Junta os 3 tipos de e-mail e remove duplicados
-function collectEmails(row, idx) {
-  const emails = [
-    row[idx.emailWork] || '',
-    row[idx.emailHome] || '',
-    row[idx.emailOther] || '',
-  ].map(e => e.trim()).filter(Boolean);
-
-  return Array.from(new Set(emails)).join(';');
+function mergeEmails(row, idx) {
+  const emails = [];
+  const work = (row[idx.emailWork] || '').trim();
+  const home = (row[idx.emailHome] || '').trim();
+  const other = (row[idx.emailOther] || '').trim();
+  if (work) emails.push(work);
+  if (home) emails.push(home);
+  if (other) emails.push(other);
+  return emails.join('; ');
 }
 
 function groupRows(rows) {
@@ -72,13 +72,16 @@ function groupRows(rows) {
     client.opportunities.push(row[idx.titulo] || '');
     client.rows.push(i + 2);
 
-    const contactName = row[idx.contato];
-    if (contactName && !client.contactsMap.has(contactName)) {
+    const contactName = (row[idx.contato] || '').trim();
+    const allEmails = mergeEmails(row, idx);
+    const key = `${contactName}|${allEmails}`;
+
+    if (!client.contactsMap.has(key)) {
       const normalized = normalizePhones(row, idx).map(protectPhoneValue);
-      client.contactsMap.set(contactName, {
-        name: contactName.trim(),
+      client.contactsMap.set(key, {
+        name: contactName,
         role: (row[idx.cargo] || '').trim(),
-        email: collectEmails(row, idx),
+        email: allEmails,
         phone: protectPhoneValue(row[idx.tel]),
         mobile: protectPhoneValue(row[idx.cel]),
         normalizedPhones: normalized,
