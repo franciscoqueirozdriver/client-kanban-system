@@ -9,7 +9,10 @@ function displayPhone(phone) {
 function getWhatsAppLink(phone) {
   const clean = displayPhone(phone);
   const digits = clean.replace(/\D/g, '');
-  return digits ? `https://wa.me/${digits}` : '';
+  const number = digits.startsWith('55') ? digits : `55${digits}`;
+  return digits
+    ? `https://web.whatsapp.com/send/?phone=${number}&type=phone_number&app_absent=0`
+    : '';
 }
 
 function getGreeting() {
@@ -24,16 +27,19 @@ function replacePlaceholders(template, { client, contact, phone }) {
   let msg = template;
   const firstName = (contact?.name || '').split(' ')[0];
   const map = {
+    '[nome]': firstName || '',
     '[Cliente]': client?.company || '',
-    '[Contato]': firstName || '',
     '[Cargo]': contact?.role || '',
     '[Email]': contact?.email || '',
     '[Telefone]': displayPhone(phone) || '',
     '[Cidade]': client?.city || '',
     '[UF]': client?.uf || '',
     '[Segmento]': client?.segment || '',
-    '[Saudacao]': getGreeting(),
   };
+  // Suporta placeholder de saudação existente
+  if (msg.includes('[Saudacao]')) {
+    map['[Saudacao]'] = getGreeting();
+  }
   Object.entries(map).forEach(([key, value]) => {
     msg = msg.split(key).join(value || '');
   });
@@ -58,7 +64,7 @@ export default function ClientCard({ client, onStatusChange }) {
   const [color, setColor] = useState(client.color || '');
   const [status, setStatus] = useState(client.status || '');
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalMessages, setModalMessages] = useState([]);
+  const [modalMessages, setModalMessages] = useState([]);  
   const [onSelectMessage, setOnSelectMessage] = useState(null);
 
   const handleDoubleClick = async () => {
@@ -92,20 +98,17 @@ export default function ClientCard({ client, onStatusChange }) {
     e.preventDefault();
     const digits = displayPhone(phone).replace(/\D/g, '');
     if (!digits) return;
+    const number = digits.startsWith('55') ? digits : `55${digits}`;
     const messages = await fetchMessages('whatsapp');
     if (messages.length > 0) {
-      openModal(messages, (msg) => {
-        const finalMsg = replacePlaceholders(msg, { client, contact, phone });
+      openModal(messages, ({ mensagem }) => {
+        const finalMsg = replacePlaceholders(mensagem, { client, contact, phone });
         const encoded = encodeURIComponent(finalMsg);
-        const url = digits.startsWith('55')
-          ? `https://wa.me/${digits}?text=${encoded}`
-          : `https://wa.me/55${digits}?text=${encoded}`;
+        const url = `https://web.whatsapp.com/send/?phone=${number}&text=${encoded}&type=phone_number&app_absent=0`;
         window.open(url, '_blank');
       });
     } else {
-      const url = digits.startsWith('55')
-        ? `https://wa.me/${digits}`
-        : `https://wa.me/55${digits}`;
+      const url = `https://web.whatsapp.com/send/?phone=${number}&type=phone_number&app_absent=0`;
       window.open(url, '_blank');
     }
   };
@@ -115,13 +118,30 @@ export default function ClientCard({ client, onStatusChange }) {
     const phone = contact.mobile || contact.phone || '';
     const messages = await fetchMessages('email');
     if (messages.length > 0) {
-      openModal(messages, (msg) => {
-        const finalMsg = replacePlaceholders(msg, { client, contact, phone });
-        const encoded = encodeURIComponent(finalMsg);
-        window.location.href = `mailto:${email}?subject=&body=${encoded}`;
+      openModal(messages, ({ titulo, mensagem }) => {
+        const subject = encodeURIComponent(replacePlaceholders(titulo, { client, contact, phone }));
+        const body = encodeURIComponent(replacePlaceholders(mensagem, { client, contact, phone }));
+        window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
       });
     } else {
       window.location.href = `mailto:${email}`;
+    }
+  };
+
+  const handleLinkedinClick = async (e, url, contact) => {
+    e.preventDefault();
+    const phone = contact.mobile || contact.phone || '';
+    const messages = await fetchMessages('linkedin');
+    if (messages.length > 0) {
+      openModal(messages, ({ mensagem }) => {
+        const finalMsg = encodeURIComponent(
+          replacePlaceholders(mensagem, { client, contact, phone })
+        );
+        const finalUrl = `${url}?message=${finalMsg}`;
+        window.open(finalUrl, '_blank');
+      });
+    } else {
+      window.open(url, '_blank');
     }
   };
 
@@ -177,8 +197,7 @@ export default function ClientCard({ client, onStatusChange }) {
                       className="text-blue-600 underline"
                       onClick={(e) => handleEmailClick(e, em.trim(), c)}
                     >
-                      {em.trim()}
-                    </button>
+                     </button>
                     {i < c.email.split(';').length - 1 ? ' / ' : ''}
                   </span>
                 ))}
@@ -201,6 +220,20 @@ export default function ClientCard({ client, onStatusChange }) {
                     {i < c.normalizedPhones.length - 1 ? ' / ' : ''}
                   </span>
                 ))}
+              </p>
+            )}
+
+            {c.linkedin && (
+              <p>
+                <a
+                  href={c.linkedin}
+                  className="text-blue-600 underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => handleLinkedinClick(e, c.linkedin, c)}
+                >
+                  LinkedIn
+                </a>
               </p>
             )}
           </div>
