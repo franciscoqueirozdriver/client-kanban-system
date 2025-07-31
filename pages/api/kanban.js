@@ -11,15 +11,17 @@ function protectPhoneValue(value) {
   return str;
 }
 
-function mergeEmails(row, idx) {
-  const emails = [];
-  const work = (row[idx.emailWork] || '').trim();
-  const home = (row[idx.emailHome] || '').trim();
-  const other = (row[idx.emailOther] || '').trim();
-  if (work) emails.push(work);
-  if (home) emails.push(home);
-  if (other) emails.push(other);
-  return emails.join('; ');
+// ✅ Junta os 3 tipos de e-mail e remove duplicados
+function collectEmails(row, idx) {
+  const emails = [
+    row[idx.emailWork] || '',
+    row[idx.emailHome] || '',
+    row[idx.emailOther] || '',
+  ]
+    .map((e) => String(e).trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(emails)).join(';');
 }
 
 function groupRows(rows) {
@@ -33,8 +35,13 @@ function groupRows(rows) {
     emailWork: header.indexOf('Pessoa - Email - Work'),
     emailHome: header.indexOf('Pessoa - Email - Home'),
     emailOther: header.indexOf('Pessoa - Email - Other'),
+    phoneWork: header.indexOf('Pessoa - Phone - Work'),
+    phoneHome: header.indexOf('Pessoa - Phone - Home'),
+    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
+    phoneOther: header.indexOf('Pessoa - Phone - Other'),
     tel: header.indexOf('Pessoa - Telefone'),
     cel: header.indexOf('Pessoa - Celular'),
+    normalizado: header.indexOf('Telefone Normalizado'),
     segmento: header.indexOf('Organização - Segmento'),
     tamanho: header.indexOf('Organização - Tamanho da empresa'),
     uf: header.indexOf('uf'),
@@ -73,7 +80,7 @@ function groupRows(rows) {
     client.rows.push(i + 2);
 
     const contactName = (row[idx.contato] || '').trim();
-    const allEmails = mergeEmails(row, idx);
+    const allEmails = collectEmails(row, idx);
     const key = `${contactName}|${allEmails}`;
 
     if (!client.contactsMap.has(key)) {
