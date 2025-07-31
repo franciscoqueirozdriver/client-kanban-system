@@ -6,6 +6,10 @@ function displayPhone(phone) {
   return String(phone || '').replace(/^'+/, ''); // remove proteção visualmente
 }
 
+function displayEmail(email) {
+  return String(email || '').replace(/^'+/, '');
+}
+
 function getWhatsAppLink(phone) {
   const clean = displayPhone(phone);
   const digits = clean.replace(/\D/g, '');
@@ -25,11 +29,11 @@ function getGreeting() {
 function replacePlaceholders(template, { client, contact, phone }) {
   if (!template) return '';
   let msg = template;
-  const firstName = (contact?.name || '').split(' ')[0];
+  const firstName = (contact?.name || contact?.nome || '').split(' ')[0];
   const map = {
     '[nome]': firstName || '',
     '[Cliente]': client?.company || '',
-    '[Cargo]': contact?.role || '',
+    '[Cargo]': contact?.role || contact?.cargo || '',
     '[Email]': contact?.email || '',
     '[Telefone]': displayPhone(phone) || '',
     '[Cidade]': client?.city || '',
@@ -64,7 +68,7 @@ export default function ClientCard({ client, onStatusChange }) {
   const [color, setColor] = useState(client.color || '');
   const [status, setStatus] = useState(client.status || '');
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalMessages, setModalMessages] = useState([]);  
+  const [modalMessages, setModalMessages] = useState([]);
   const [onSelectMessage, setOnSelectMessage] = useState(null);
 
   const handleDoubleClick = async () => {
@@ -73,7 +77,7 @@ export default function ClientCard({ client, onStatusChange }) {
     setColor(newColor);
     setStatus(newStatus);
 
-    if (onStatusChange) {
+  if (onStatusChange) {
       onStatusChange(client.id, newStatus, newColor);
     }
 
@@ -116,15 +120,16 @@ export default function ClientCard({ client, onStatusChange }) {
   const handleEmailClick = async (e, email, contact) => {
     e.preventDefault();
     const phone = contact.mobile || contact.phone || '';
+    const cleanEmail = displayEmail(email);
     const messages = await fetchMessages('email');
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem }) => {
         const subject = encodeURIComponent(replacePlaceholders(titulo, { client, contact, phone }));
         const body = encodeURIComponent(replacePlaceholders(mensagem, { client, contact, phone }));
-        window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+        window.location.href = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
       });
     } else {
-      window.location.href = `mailto:${email}`;
+      window.location.href = `mailto:${cleanEmail}`;
     }
   };
 
@@ -190,17 +195,21 @@ export default function ClientCard({ client, onStatusChange }) {
             {/* ✅ Múltiplos e-mails separados por ; */}
             {c.email && (
               <p className="text-xs">
-                {c.email.split(';').map((em, i) => (
-                  <span key={i}>
-                    <button
-                      type="button"
-                      className="text-blue-600 underline"
-                      onClick={(e) => handleEmailClick(e, em.trim(), c)}
-                    >
-                     </button>
-                    {i < c.email.split(';').length - 1 ? ' / ' : ''}
-                  </span>
-                ))}
+                {c.email.split(';').map((em, i) => {
+                  const clean = displayEmail(em.trim());
+                  return (
+                    <span key={i}>
+                      <button
+                        type="button"
+                        className="text-blue-600 underline"
+                        onClick={(e) => handleEmailClick(e, clean, c)}
+                      >
+                        {clean}
+                      </button>
+                      {i < c.email.split(';').length - 1 ? ' / ' : ''}
+                    </span>
+                  );
+                })}
               </p>
             )}
 
