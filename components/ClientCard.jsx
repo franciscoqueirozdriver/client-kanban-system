@@ -87,6 +87,7 @@ export default function ClientCard({ client, onStatusChange }) {
       onStatusChange(client.id, newStatus, newColor);
     }
 
+    const agora = new Date().toISOString();
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -94,6 +95,7 @@ export default function ClientCard({ client, onStatusChange }) {
         id: client.id,
         status: newStatus,
         color: newColor,
+        dataEntradaColuna: agora,
       }),
     });
   };

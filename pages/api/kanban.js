@@ -48,6 +48,7 @@ function groupRows(rows) {
     cidade: header.indexOf('cidade_estimada'),
     status: header.indexOf('Status_Kanban'),
     data: header.indexOf('Data_Ultima_Movimentacao'),
+    entrada: header.indexOf('Data_Entrada_Coluna'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
     cor: header.indexOf('Cor_Card'),
   };
@@ -70,6 +71,7 @@ function groupRows(rows) {
         city: row[idx.cidade] || '',
         status: row[idx.status] || '',
         dataMov: row[idx.data] || '',
+        dataEntradaColuna: row[idx.entrada] || '',
         color: row[idx.cor] || '',
         rows: [],
       });
@@ -109,6 +111,7 @@ function groupRows(rows) {
       city: c.city,
       status: c.status,
       dataMov: c.dataMov,
+      dataEntradaColuna: c.dataEntradaColuna,
       color: c.color,
       rows: c.rows,
     })),
@@ -142,7 +145,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { id, destination, status, color } = req.body;
+    const { id, destination, status, color, dataEntradaColuna } = req.body;
     const newStatus = status || (destination && destination.droppableId);
     const newColor =
       color !== undefined
@@ -159,6 +162,7 @@ export default async function handler(req, res) {
     const colorIdx = header.indexOf('Cor_Card');
     const statusIdx = header.indexOf('Status_Kanban');
 
+    const entryIdx = header.indexOf('Data_Entrada_Coluna');
     const promises = [];
 
     data.forEach((row, i) => {
@@ -171,13 +175,18 @@ export default async function handler(req, res) {
         if (newColor !== undefined && colorIdx !== -1) {
           values.cor_card = newColor;
         }
+        if (dataEntradaColuna && entryIdx !== -1) {
+          values.data_entrada_coluna = dataEntradaColuna;
+        }
         values.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
         promises.push(updateRow(rowNum, values));
       }
     });
 
     await Promise.all(promises);
-    return res.status(200).json({ status: newStatus, color: newColor });
+    return res
+      .status(200)
+      .json({ status: newStatus, color: newColor, dataEntradaColuna });
   }
 
   return res.status(405).end();

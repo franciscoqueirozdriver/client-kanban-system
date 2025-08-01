@@ -5,16 +5,78 @@ import KanbanColumn from '../../components/KanbanColumn';
 
 export default function KanbanPage() {
   const [columns, setColumns] = useState([]);
+  const [allColumns, setAllColumns] = useState([]);
+  const [search, setSearch] = useState('');
+  const [view, setView] = useState('card');
+
+  const sortColumns = (cols) =>
+    cols.map((col) => ({
+      ...col,
+      cards: col.cards
+        .slice()
+        .sort((a, b) => {
+          const da = new Date(a.client.dataEntradaColuna || '');
+          const db = new Date(b.client.dataEntradaColuna || '');
+          return da - db;
+        }),
+    }));
 
   const fetchColumns = async () => {
     const res = await fetch('/api/kanban');
     const data = await res.json();
-    setColumns(data);
+
+    data.forEach((col) => {
+      col.cards.forEach((card) => {
+        if (!card.client.dataEntradaColuna) {
+          const agora = new Date().toISOString();
+          card.client.dataEntradaColuna = agora;
+          fetch('/api/kanban', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: card.id, dataEntradaColuna: agora }),
+          });
+        }
+      });
+    });
+
+    const sorted = sortColumns(data);
+    setAllColumns(sorted);
+    setColumns(sorted);
   };
 
   useEffect(() => {
     fetchColumns();
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const q = search.toLowerCase();
+      const filtered = allColumns.map((col) => ({
+        ...col,
+        cards: col.cards.filter((card) => {
+          if (!q) return true;
+          const c = card.client;
+          const texto = [
+            c.company,
+            c.city,
+            c.uf,
+            ...(c.opportunities || []),
+            ...(c.contacts || []).flatMap((ct) => [
+              ct.name || '',
+              ct.email || '',
+              ct.phone || '',
+              ...(ct.normalizedPhones || []),
+            ]),
+          ]
+            .join(' ')
+            .toLowerCase();
+          return texto.includes(q);
+        }),
+      }));
+      setColumns(sortColumns(filtered));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, allColumns]);
 
   const onDragEnd = async (result) => {
     if (!result.destination) return;
@@ -27,6 +89,7 @@ export default function KanbanPage() {
 
     const newStatus = destCol.id;
     let newColor = moved.client.color;
+    const agora = new Date().toISOString();
 
     if (newStatus === 'Perdido') {
       newColor = 'red';
@@ -36,13 +99,19 @@ export default function KanbanPage() {
 
     moved.client.status = newStatus;
     moved.client.color = newColor;
+    moved.client.dataEntradaColuna = agora;
 
-    setColumns(newColumns);
+    setColumns(sortColumns(newColumns));
 
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
+      body: JSON.stringify({
+        id: draggableId,
+        status: newStatus,
+        color: newColor,
+        dataEntradaColuna: agora,
+      }),
     });
 
     await fetch('/api/interacoes', {
@@ -59,11 +128,27 @@ export default function KanbanPage() {
   };
 
   return (
-    <div className="p-4 overflow-x-auto">
+    <div className="p-4 overflow-x-auto space-y-2">
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar..."
+          className="border p-2 rounded flex-1"
+        />
+        <button
+          type="button"
+          onClick={() => setView(view === 'card' ? 'list' : 'card')}
+          className="border p-2 rounded"
+        >
+          {view === 'card' ? 'Ver Lista' : 'Ver Cards'}
+        </button>
+      </div>
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex gap-4">
           {columns.map((col) => (
-            <KanbanColumn key={col.id} column={col} />
+            <KanbanColumn key={col.id} column={col} view={view} />
           ))}
         </div>
       </DragDropContext>

@@ -46,6 +46,7 @@ function groupRows(rows) {
     cidade: header.indexOf('cidade_estimada'),
     status: header.indexOf('Status_Kanban'),
     data: header.indexOf('Data_Ultima_Movimentacao'),
+    entrada: header.indexOf('Data_Entrada_Coluna'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
     cor: header.indexOf('Cor_Card'),
   };
@@ -68,6 +69,7 @@ function groupRows(rows) {
     const city = row[idx.cidade] || '';
     const status = row[idx.status] || '';
     const dataMov = row[idx.data] || '';
+    const dataEntradaColuna = row[idx.entrada] || '';
     const color = row[idx.cor] || '';
 
     filters.segmento.add(segment);
@@ -100,6 +102,9 @@ function groupRows(rows) {
       if (!existsContact && (contact.name || contact.email)) {
         existing.contacts.push(contact);
       }
+      if (!existing.dataEntradaColuna) {
+        existing.dataEntradaColuna = dataEntradaColuna;
+      }
     } else {
       clientesMap.set(clienteId, {
         id: clienteId,
@@ -112,6 +117,7 @@ function groupRows(rows) {
         city,
         status,
         dataMov,
+        dataEntradaColuna,
         color,
       });
     }
