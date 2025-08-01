@@ -21,8 +21,8 @@ export default function HistoryModal({ open, interactions = [], onClose }) {
               {i.observacao && (
                 <p className="text-xs text-gray-700">Obs: {i.observacao}</p>
               )}
-              {i.mensagemUsada && (
-                <p className="text-xs text-gray-700">Mensagem: {i.mensagemUsada}</p>
+              {i.mensagem && (
+                <p className="text-xs text-gray-700">Mensagem: {i.mensagem}</p>
               )}
             </div>
           ))}

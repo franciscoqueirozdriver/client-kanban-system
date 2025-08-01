@@ -1,36 +1,49 @@
-import { getHistorySheetCached, appendHistoryRow } from '../../lib/googleSheets';
+import {
+  getMessageSheetCached,
+  appendMessageRow,
+  generateNextMessageId,
+} from '../../lib/googleSheets';
 
 export default async function handler(req, res) {
   if (req.method === 'POST') {
     const {
       clienteId,
       tipo,
-      dataHora,
       deFase,
       paraFase,
       canal,
       observacao,
-      mensagemUsada,
+      mensagem,
     } = req.body || {};
 
-    if (!clienteId || !tipo || !dataHora) {
+    if (!clienteId || !tipo) {
       return res.status(400).json({ error: 'Dados obrigatórios ausentes' });
     }
 
+    const messageId = await generateNextMessageId();
+    const now = new Date();
+    const dataHora = now
+      .toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        hour12: false,
+      })
+      .replace(',', '');
+
     const rowData = {
+      message_id: messageId,
       cliente_id: clienteId,
-      tipo,
       data_hora: dataHora,
+      tipo,
     };
     if (deFase) rowData.de_fase = deFase;
     if (paraFase) rowData.para_fase = paraFase;
     if (canal) rowData.canal = canal;
     if (observacao) rowData.observacao = observacao;
-    if (mensagemUsada) rowData.mensagem_usada = mensagemUsada;
+    if (mensagem) rowData.mensagem = mensagem;
 
     try {
-      await appendHistoryRow(rowData);
-      return res.status(200).json({ ok: true });
+      await appendMessageRow(rowData);
+      return res.status(200).json(rowData);
     } catch (err) {
       console.error('Erro ao registrar interação:', err);
       return res.status(500).json({ error: 'Falha ao registrar interação' });
@@ -40,11 +53,12 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const clienteId = req.query.clienteId || '';
-      const sheet = await getHistorySheetCached();
+      const sheet = await getMessageSheetCached();
       const rows = sheet.data.values || [];
       if (rows.length === 0) return res.status(200).json([]);
       const [header, ...data] = rows;
       const idx = {
+        id: header.indexOf('Message_ID'),
         cliente: header.indexOf('Cliente_ID'),
         dataHora: header.indexOf('Data_Hora'),
         tipo: header.indexOf('Tipo'),
@@ -52,12 +66,13 @@ export default async function handler(req, res) {
         paraFase: header.indexOf('Para_Fase'),
         canal: header.indexOf('Canal'),
         obs: header.indexOf('Observacao'),
-        msg: header.indexOf('Mensagem_Usada'),
+        msg: header.indexOf('Mensagem'),
       };
 
       const itens = data
         .filter((r) => !clienteId || r[idx.cliente] === clienteId)
         .map((r) => ({
+          messageId: r[idx.id] || '',
           clienteId: r[idx.cliente] || '',
           dataHora: r[idx.dataHora] || '',
           tipo: r[idx.tipo] || '',
@@ -65,7 +80,7 @@ export default async function handler(req, res) {
           paraFase: r[idx.paraFase] || '',
           canal: r[idx.canal] || '',
           observacao: r[idx.obs] || '',
-          mensagemUsada: r[idx.msg] || '',
+          mensagem: r[idx.msg] || '',
         }))
         .sort((a, b) => (a.dataHora < b.dataHora ? 1 : -1));
 

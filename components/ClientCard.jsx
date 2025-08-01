@@ -113,7 +113,7 @@ export default function ClientCard({ client, onStatusChange }) {
     await fetch('/api/interacoes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clienteId: client.id, dataHora: new Date().toISOString(), ...data }),
+      body: JSON.stringify({ clienteId: client.id, ...data }),
     });
   };
 
@@ -136,7 +136,7 @@ export default function ClientCard({ client, onStatusChange }) {
         const encoded = encodeURIComponent(finalMsg);
         const url = `https://web.whatsapp.com/send/?phone=${number}&text=${encoded}&type=phone_number&app_absent=0`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagemUsada: titulo, observacao: obs });
+          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagem: finalMsg, observacao: obs });
           window.open(url, '_blank');
         });
       });
@@ -156,11 +156,13 @@ export default function ClientCard({ client, onStatusChange }) {
     const messages = await fetchMessages('email');
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem }) => {
-        const subject = encodeURIComponent(replacePlaceholders(titulo, { client, contact, phone }));
-        const body = encodeURIComponent(replacePlaceholders(mensagem, { client, contact, phone }));
+        const subjectText = replacePlaceholders(titulo, { client, contact, phone });
+        const bodyText = replacePlaceholders(mensagem, { client, contact, phone });
+        const subject = encodeURIComponent(subjectText);
+        const body = encodeURIComponent(bodyText);
         const url = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagemUsada: titulo, observacao: obs });
+          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagem: bodyText, observacao: obs });
           window.location.href = url;
         });
       });
@@ -179,12 +181,11 @@ export default function ClientCard({ client, onStatusChange }) {
     const messages = await fetchMessages('linkedin');
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem }) => {
-        const finalMsg = encodeURIComponent(
-          replacePlaceholders(mensagem, { client, contact, phone })
-        );
+        const finalText = replacePlaceholders(mensagem, { client, contact, phone });
+        const finalMsg = encodeURIComponent(finalText);
         const finalUrl = `${url}?message=${finalMsg}`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'LinkedIn', canal: url, mensagemUsada: titulo, observacao: obs });
+          await logInteraction({ tipo: 'LinkedIn', canal: url, mensagem: finalText, observacao: obs });
           window.open(finalUrl, '_blank');
         });
       });
