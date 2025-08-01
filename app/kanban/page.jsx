@@ -44,6 +44,18 @@ export default function KanbanPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
     });
+
+    await fetch('/api/interacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clienteId: draggableId,
+        tipo: 'Mudança de Fase',
+        deFase: source.droppableId,
+        paraFase: destination.droppableId,
+        dataHora: new Date().toISOString(),
+      }),
+    });
   };
 
   return (
