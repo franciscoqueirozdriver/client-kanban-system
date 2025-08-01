@@ -223,7 +223,9 @@ export default function ClientCard({ client, onStatusChange }) {
       }}
       className="p-4 border rounded shadow hover:shadow-lg cursor-pointer transition-colors"
     >
-      <h3 className="text-lg font-semibold mb-1">{client.company}</h3>
+      <h3 className="text-lg font-semibold mb-1">
+        {`${client.id} | ${client.company}`}
+      </h3>
       {(client.city || client.uf) && (
         <p className="text-xs text-gray-600">
           {[client.city, client.uf].filter(Boolean).join(' - ')}

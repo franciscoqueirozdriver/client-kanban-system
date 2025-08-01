@@ -200,7 +200,9 @@ export default function KanbanCard({ card, index }) {
           }}
           className="p-2 mb-2 rounded shadow transition-colors"
         >
-          <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
+          <h4 className="text-sm font-semibold mb-1">
+            {`${client.id} | ${client.company}`}
+          </h4>
 
           {(client.city || client.uf) && (
             <p className="text-[10px] text-gray-600 mb-1">
