@@ -103,12 +103,18 @@ export default function KanbanCard({ card, index }) {
     const messages = await fetchMessages('whatsapp');
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem, id }) => {
-        const finalMsg = encodeURIComponent(
-          replacePlaceholders(mensagem, { client, contact, phone })
-        );
-        const url = `https://web.whatsapp.com/send/?phone=${number}&text=${finalMsg}&type=phone_number&app_absent=0`;
+        const finalMsg = replacePlaceholders(mensagem, { client, contact, phone });
+        const encoded = encodeURIComponent(finalMsg);
+        const url = `https://web.whatsapp.com/send/?phone=${number}&text=${encoded}&type=phone_number&app_absent=0`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagemUsada: titulo, mensagem, messageId: generateMessageId(), observacao: obs });
+          await logInteraction({
+            tipo: 'WhatsApp',
+            canal: phone,
+            mensagemUsada: titulo,
+            mensagem: finalMsg,
+            messageId: generateMessageId(),
+            observacao: obs,
+          });
           window.open(url, '_blank');
         });
       });
@@ -128,15 +134,18 @@ export default function KanbanCard({ card, index }) {
     const messages = await fetchMessages('email');
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem, id }) => {
-        const subject = encodeURIComponent(
-          replacePlaceholders(titulo, { client, contact, phone })
-        );
-        const body = encodeURIComponent(
-          replacePlaceholders(mensagem, { client, contact, phone })
-        );
-        const url = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
+        const finalSubject = replacePlaceholders(titulo, { client, contact, phone });
+        const finalBody = replacePlaceholders(mensagem, { client, contact, phone });
+        const url = `mailto:${cleanEmail}?subject=${encodeURIComponent(finalSubject)}&body=${encodeURIComponent(finalBody)}`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagemUsada: titulo, mensagem, messageId: generateMessageId(), observacao: obs });
+          await logInteraction({
+            tipo: 'E-mail',
+            canal: cleanEmail,
+            mensagemUsada: titulo,
+            mensagem: finalBody,
+            messageId: generateMessageId(),
+            observacao: obs,
+          });
           window.location.href = url;
         });
       });
@@ -155,12 +164,18 @@ export default function KanbanCard({ card, index }) {
     const messages = await fetchMessages('linkedin');
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem, id }) => {
-        const finalMsg = encodeURIComponent(
-          replacePlaceholders(mensagem, { client, contact, phone })
-        );
-        const finalUrl = `${url}?message=${finalMsg}`;
+        const finalMsg = replacePlaceholders(mensagem, { client, contact, phone });
+        const encoded = encodeURIComponent(finalMsg);
+        const finalUrl = `${url}?message=${encoded}`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'LinkedIn', canal: url, mensagemUsada: titulo, mensagem, messageId: generateMessageId(), observacao: obs });
+          await logInteraction({
+            tipo: 'LinkedIn',
+            canal: url,
+            mensagemUsada: titulo,
+            mensagem: finalMsg,
+            messageId: generateMessageId(),
+            observacao: obs,
+          });
           window.open(finalUrl, '_blank');
         });
       });
