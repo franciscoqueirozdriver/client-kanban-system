@@ -58,7 +58,10 @@ export default async function handler(req, res) {
         deFase: header.indexOf('De_Fase'),
         paraFase: header.indexOf('Para_Fase'),
         canal: header.indexOf('Canal'),
-        obs: header.indexOf('Observacao'),
+        obs:
+          header.indexOf('Observacao') !== -1
+            ? header.indexOf('Observacao')
+            : header.indexOf('Observação'),
         msg: header.indexOf('Mensagem_Usada'),
         msgTxt: header.indexOf('Mensagem'),
       };
