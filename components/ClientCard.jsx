@@ -109,16 +109,20 @@ export default function ClientCard({ client, onStatusChange }) {
     setObsOpen(true);
   };
 
+  function timestamp() {
+    return new Date().toISOString().replace('T', ' ').substring(0, 19);
+  }
+
   const logInteraction = async (data) => {
-    await fetch('/api/interacoes', {
+    await fetch('/api/historico', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clienteId: client.id, dataHora: new Date().toISOString(), ...data }),
+      body: JSON.stringify({ clienteId: client.id, dataHora: timestamp(), ...data }),
     });
   };
 
   const handleHistoryClick = async () => {
-    const res = await fetch(`/api/interacoes?clienteId=${client.id}`);
+    const res = await fetch(`/api/historico?clienteId=${client.id}`);
     const history = await res.json();
     setHistoryData(history);
     setHistoryOpen(true);
@@ -136,7 +140,7 @@ export default function ClientCard({ client, onStatusChange }) {
         const encoded = encodeURIComponent(finalMsg);
         const url = `https://web.whatsapp.com/send/?phone=${number}&text=${encoded}&type=phone_number&app_absent=0`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagemUsada: titulo, observacao: obs });
+          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagem: finalMsg, observacao: obs });
           window.open(url, '_blank');
         });
       });
@@ -159,8 +163,9 @@ export default function ClientCard({ client, onStatusChange }) {
         const subject = encodeURIComponent(replacePlaceholders(titulo, { client, contact, phone }));
         const body = encodeURIComponent(replacePlaceholders(mensagem, { client, contact, phone }));
         const url = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
+        const finalMsg = replacePlaceholders(mensagem, { client, contact, phone });
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagemUsada: titulo, observacao: obs });
+          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagem: finalMsg, observacao: obs });
           window.location.href = url;
         });
       });
@@ -183,8 +188,9 @@ export default function ClientCard({ client, onStatusChange }) {
           replacePlaceholders(mensagem, { client, contact, phone })
         );
         const finalUrl = `${url}?message=${finalMsg}`;
+        const msgCompleta = replacePlaceholders(mensagem, { client, contact, phone });
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'LinkedIn', canal: url, mensagemUsada: titulo, observacao: obs });
+          await logInteraction({ tipo: 'LinkedIn', canal: url, mensagem: msgCompleta, observacao: obs });
           window.open(finalUrl, '_blank');
         });
       });
