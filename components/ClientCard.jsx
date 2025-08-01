@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import generateMessageId from '../lib/messageId';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
@@ -140,14 +141,14 @@ export default function ClientCard({ client, onStatusChange }) {
         const encoded = encodeURIComponent(finalMsg);
         const url = `https://web.whatsapp.com/send/?phone=${number}&text=${encoded}&type=phone_number&app_absent=0`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagemUsada: titulo, mensagem, messageId: id, observacao: obs });
+          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagemUsada: titulo, mensagem, messageId: generateMessageId(), observacao: obs });
           window.open(url, '_blank');
         });
       });
     } else {
       const url = `https://web.whatsapp.com/send/?phone=${number}&type=phone_number&app_absent=0`;
       openObservation(async (obs) => {
-        await logInteraction({ tipo: 'WhatsApp', canal: phone, observacao: obs });
+        await logInteraction({ tipo: 'WhatsApp', canal: phone, observacao: obs, messageId: generateMessageId() });
         window.open(url, '_blank');
       });
     }
@@ -164,14 +165,14 @@ export default function ClientCard({ client, onStatusChange }) {
         const body = encodeURIComponent(replacePlaceholders(mensagem, { client, contact, phone }));
         const url = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagemUsada: titulo, mensagem, messageId: id, observacao: obs });
+          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagemUsada: titulo, mensagem, messageId: generateMessageId(), observacao: obs });
           window.location.href = url;
         });
       });
     } else {
       const url = `mailto:${cleanEmail}`;
       openObservation(async (obs) => {
-        await logInteraction({ tipo: 'E-mail', canal: cleanEmail, observacao: obs });
+        await logInteraction({ tipo: 'E-mail', canal: cleanEmail, observacao: obs, messageId: generateMessageId() });
         window.location.href = url;
       });
     }
@@ -188,13 +189,13 @@ export default function ClientCard({ client, onStatusChange }) {
         );
         const finalUrl = `${url}?message=${finalMsg}`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'LinkedIn', canal: url, mensagemUsada: titulo, mensagem, messageId: id, observacao: obs });
+          await logInteraction({ tipo: 'LinkedIn', canal: url, mensagemUsada: titulo, mensagem, messageId: generateMessageId(), observacao: obs });
           window.open(finalUrl, '_blank');
         });
       });
     } else {
       openObservation(async (obs) => {
-        await logInteraction({ tipo: 'LinkedIn', canal: url, observacao: obs });
+        await logInteraction({ tipo: 'LinkedIn', canal: url, observacao: obs, messageId: generateMessageId() });
         window.open(url, '_blank');
       });
     }

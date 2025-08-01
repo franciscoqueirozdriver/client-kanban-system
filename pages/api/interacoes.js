@@ -1,4 +1,5 @@
 import { getHistorySheetCached, appendHistoryRow } from '../../lib/googleSheets';
+import generateMessageId from '../../lib/messageId';
 
 export default async function handler(req, res) {
   if (req.method === 'POST') {
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
 
     const rowData = {
       cliente_id: clienteId,
-      message_id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+      message_id: messageId || generateMessageId(),
       tipo,
       data_hora: dataHora,
     };

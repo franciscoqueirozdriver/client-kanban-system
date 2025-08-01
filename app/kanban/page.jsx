@@ -1,6 +1,7 @@
 'use client';
 import { DragDropContext } from '@hello-pangea/dnd';
 import { useEffect, useState } from 'react';
+import generateMessageId from '../../lib/messageId';
 import KanbanColumn from '../../components/KanbanColumn';
 import InteractionModal from '../../components/InteractionModal';
 
@@ -58,6 +59,7 @@ export default function KanbanPage() {
           mensagem,
           observacao,
           dataHora: new Date().toISOString(),
+          messageId: generateMessageId(),
         }),
       });
       if (!interRes.ok) throw new Error('Erro ao salvar histórico');
