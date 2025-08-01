@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 
 export default function Filters({ onFilter }) {
-  const [query, setQuery] = useState('');
   const [filters, setFilters] = useState({ segmento: '', porte: [], uf: '', cidade: '' });
   const [options, setOptions] = useState({ segmento: [], porte: [], uf: [], cidade: [] });
 
@@ -13,8 +12,8 @@ export default function Filters({ onFilter }) {
   }, []);
 
   useEffect(() => {
-    onFilter && onFilter({ query, ...filters });
-  }, [query, filters]);
+    onFilter && onFilter(filters);
+  }, [filters]);
 
   const handleChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -27,14 +26,6 @@ export default function Filters({ onFilter }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Buscar..."
-        className="border p-2 rounded"
-      />
-
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {/* Segmento */}
         <select
