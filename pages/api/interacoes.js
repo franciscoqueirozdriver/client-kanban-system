@@ -11,7 +11,11 @@ export default async function handler(req, res) {
       canal,
       observacao,
       mensagemUsada,
+      mensagem,
+      messageId,
     } = req.body || {};
+
+    console.log('POST /interacoes body', req.body);
 
     if (!clienteId || !tipo || !dataHora) {
       return res.status(400).json({ error: 'Dados obrigatórios ausentes' });
@@ -19,6 +23,7 @@ export default async function handler(req, res) {
 
     const rowData = {
       cliente_id: clienteId,
+      message_id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
       tipo,
       data_hora: dataHora,
     };
@@ -27,6 +32,7 @@ export default async function handler(req, res) {
     if (canal) rowData.canal = canal;
     if (observacao) rowData.observacao = observacao;
     if (mensagemUsada) rowData.mensagem_usada = mensagemUsada;
+    if (mensagem) rowData.mensagem = mensagem;
 
     try {
       await appendHistoryRow(rowData);
@@ -46,6 +52,7 @@ export default async function handler(req, res) {
       const [header, ...data] = rows;
       const idx = {
         cliente: header.indexOf('Cliente_ID'),
+        messageId: header.indexOf('Message_ID'),
         dataHora: header.indexOf('Data_Hora'),
         tipo: header.indexOf('Tipo'),
         deFase: header.indexOf('De_Fase'),
@@ -53,12 +60,14 @@ export default async function handler(req, res) {
         canal: header.indexOf('Canal'),
         obs: header.indexOf('Observacao'),
         msg: header.indexOf('Mensagem_Usada'),
+        msgTxt: header.indexOf('Mensagem'),
       };
 
       const itens = data
         .filter((r) => !clienteId || r[idx.cliente] === clienteId)
         .map((r) => ({
           clienteId: r[idx.cliente] || '',
+          messageId: r[idx.messageId] || '',
           dataHora: r[idx.dataHora] || '',
           tipo: r[idx.tipo] || '',
           deFase: r[idx.deFase] || '',
@@ -66,6 +75,7 @@ export default async function handler(req, res) {
           canal: r[idx.canal] || '',
           observacao: r[idx.obs] || '',
           mensagemUsada: r[idx.msg] || '',
+          mensagem: r[idx.msgTxt] || '',
         }))
         .sort((a, b) => (a.dataHora < b.dataHora ? 1 : -1));
 

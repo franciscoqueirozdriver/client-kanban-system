@@ -34,28 +34,34 @@ export default function KanbanPage() {
       newColor = 'green';
     }
 
-    moved.client.status = newStatus;
-    moved.client.color = newColor;
+    try {
+      const interRes = await fetch('/api/interacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clienteId: draggableId,
+          tipo: 'Mudança de Fase',
+          deFase: source.droppableId,
+          paraFase: destination.droppableId,
+          dataHora: new Date().toISOString(),
+        }),
+      });
+      if (!interRes.ok) throw new Error('Erro ao salvar histórico');
 
-    setColumns(newColumns);
+      const kanbanRes = await fetch('/api/kanban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
+      });
+      if (!kanbanRes.ok) throw new Error('Erro ao atualizar Kanban');
 
-    await fetch('/api/kanban', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
-    });
-
-    await fetch('/api/interacoes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clienteId: draggableId,
-        tipo: 'Mudança de Fase',
-        deFase: source.droppableId,
-        paraFase: destination.droppableId,
-        dataHora: new Date().toISOString(),
-      }),
-    });
+      moved.client.status = newStatus;
+      moved.client.color = newColor;
+      setColumns(newColumns);
+    } catch (err) {
+      console.error('Falha ao mover card:', err);
+      fetchColumns();
+    }
   };
 
   return (

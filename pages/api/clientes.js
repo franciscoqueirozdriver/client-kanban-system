@@ -139,6 +139,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
+    console.log('POST /clientes body', req.body);
     const { row, values } = req.body;
 
     // ✅ Protege telefones antes de salvar
