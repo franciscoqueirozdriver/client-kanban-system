@@ -2,9 +2,11 @@
 import { DragDropContext } from '@hello-pangea/dnd';
 import { useEffect, useState } from 'react';
 import KanbanColumn from '../../components/KanbanColumn';
+import PhaseChangeModal from '../../components/PhaseChangeModal';
 
 export default function KanbanPage() {
   const [columns, setColumns] = useState([]);
+  const [pendingMove, setPendingMove] = useState(null);
 
   const fetchColumns = async () => {
     const res = await fetch('/api/kanban');
@@ -16,7 +18,11 @@ export default function KanbanPage() {
     fetchColumns();
   }, []);
 
-  const onDragEnd = async (result) => {
+  function timestamp() {
+    return new Date().toISOString().replace('T', ' ').substring(0, 19);
+  }
+
+  const onDragEnd = (result) => {
     if (!result.destination) return;
     const { source, destination, draggableId } = result;
     const newColumns = columns.map((c) => ({ ...c, cards: [...c.cards] }));
@@ -38,24 +44,45 @@ export default function KanbanPage() {
     moved.client.color = newColor;
 
     setColumns(newColumns);
+    setPendingMove({
+      id: draggableId,
+      source: source.droppableId,
+      dest: destination.droppableId,
+      status: newStatus,
+      color: newColor,
+      prev: columns,
+    });
+  };
 
+  const handleConfirmMove = async ({ observacao, mensagem }) => {
+    if (!pendingMove) return;
+    const { id, source, dest, status, color } = pendingMove;
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
+      body: JSON.stringify({ id, status, color }),
     });
 
-    await fetch('/api/interacoes', {
+    await fetch('/api/historico', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        clienteId: draggableId,
-        tipo: 'Mudança de Fase',
-        deFase: source.droppableId,
-        paraFase: destination.droppableId,
-        dataHora: new Date().toISOString(),
+        clienteId: id,
+        tipo: 'Kanban',
+        deFase: source,
+        paraFase: dest,
+        canal: 'Sistema',
+        observacao,
+        mensagem,
+        dataHora: timestamp(),
       }),
     });
+    setPendingMove(null);
+  };
+
+  const handleCancelMove = () => {
+    if (pendingMove?.prev) setColumns(pendingMove.prev);
+    setPendingMove(null);
   };
 
   return (
@@ -67,6 +94,11 @@ export default function KanbanPage() {
           ))}
         </div>
       </DragDropContext>
+      <PhaseChangeModal
+        open={!!pendingMove}
+        onConfirm={handleConfirmMove}
+        onClose={handleCancelMove}
+      />
     </div>
   );
 }

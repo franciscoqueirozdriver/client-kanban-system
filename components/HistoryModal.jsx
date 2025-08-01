@@ -13,7 +13,7 @@ export default function HistoryModal({ open, interactions = [], onClose }) {
               <p className="font-medium">
                 {new Date(i.dataHora).toLocaleString('pt-BR')} - {i.tipo}
               </p>
-              {i.tipo === 'Mudança de Fase' && (
+              {i.deFase && i.paraFase && (
                 <p className="text-xs">
                   {i.deFase} → {i.paraFase}
                 </p>
@@ -21,8 +21,8 @@ export default function HistoryModal({ open, interactions = [], onClose }) {
               {i.observacao && (
                 <p className="text-xs text-gray-700">Obs: {i.observacao}</p>
               )}
-              {i.mensagemUsada && (
-                <p className="text-xs text-gray-700">Mensagem: {i.mensagemUsada}</p>
+              {i.mensagem && (
+                <p className="text-xs text-gray-700 break-all">Mensagem: {i.mensagem}</p>
               )}
             </div>
           ))}
