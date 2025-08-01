@@ -1,6 +1,6 @@
 'use client';
 import { DragDropContext } from '@hello-pangea/dnd';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import KanbanColumn from '../../components/KanbanColumn';
 
 export default function KanbanPage() {
@@ -8,6 +8,7 @@ export default function KanbanPage() {
   const [allColumns, setAllColumns] = useState([]);
   const [search, setSearch] = useState('');
   const [view, setView] = useState('card');
+  const toggleTimer = useRef(null);
 
   const sortColumns = (cols) =>
     cols.map((col) => ({
@@ -46,6 +47,14 @@ export default function KanbanPage() {
 
   useEffect(() => {
     fetchColumns();
+  }, []);
+
+  // Lê modo salvo em localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('kanbanView');
+    if (saved === 'card' || saved === 'list') {
+      setView(saved);
+    }
   }, []);
 
   useEffect(() => {
@@ -127,6 +136,15 @@ export default function KanbanPage() {
     });
   };
 
+  const handleToggleView = () => {
+    const novo = view === 'card' ? 'list' : 'card';
+    if (toggleTimer.current) clearTimeout(toggleTimer.current);
+    toggleTimer.current = setTimeout(() => {
+      setView(novo);
+      localStorage.setItem('kanbanView', novo);
+    }, 300);
+  };
+
   return (
     <div className="p-4 overflow-x-auto space-y-2">
       <div className="flex items-center gap-2">
@@ -139,7 +157,7 @@ export default function KanbanPage() {
         />
         <button
           type="button"
-          onClick={() => setView(view === 'card' ? 'list' : 'card')}
+          onClick={handleToggleView}
           className="border p-2 rounded"
         >
           {view === 'card' ? 'Ver Lista' : 'Ver Cards'}
