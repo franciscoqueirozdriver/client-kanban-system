@@ -2,6 +2,8 @@
 import { Draggable } from '@hello-pangea/dnd';
 import { useState } from 'react';
 import MessageModal from './MessageModal';
+import ObservationModal from './ObservationModal';
+import HistoryModal from './HistoryModal';
 
 // Remove proteção visual dos números ('+553199999999' -> +553199999999)
 function displayPhone(phone) {
@@ -61,11 +63,35 @@ export default function KanbanCard({ card, index }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
   const [onSelectMessage, setOnSelectMessage] = useState(null);
+  const [obsOpen, setObsOpen] = useState(false);
+  const [obsAction, setObsAction] = useState(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyData, setHistoryData] = useState([]);
 
   const openModal = (messages, action) => {
     setModalMessages(messages);
     setOnSelectMessage(() => action);
     setModalOpen(true);
+  };
+
+  const openObservation = (action) => {
+    setObsAction(() => action);
+    setObsOpen(true);
+  };
+
+  const logInteraction = async (data) => {
+    await fetch('/api/interacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clienteId: client.id, dataHora: new Date().toISOString(), ...data }),
+    });
+  };
+
+  const handleHistoryClick = async () => {
+    const res = await fetch(`/api/interacoes?clienteId=${client.id}`);
+    const history = await res.json();
+    setHistoryData(history);
+    setHistoryOpen(true);
   };
 
   const handlePhoneClick = async (e, phone, contact) => {
@@ -75,16 +101,22 @@ export default function KanbanCard({ card, index }) {
     const number = digits.startsWith('55') ? digits : `55${digits}`;
     const messages = await fetchMessages('whatsapp');
     if (messages.length > 0) {
-      openModal(messages, ({ mensagem }) => {
+      openModal(messages, ({ titulo, mensagem }) => {
         const finalMsg = encodeURIComponent(
           replacePlaceholders(mensagem, { client, contact, phone })
         );
         const url = `https://web.whatsapp.com/send/?phone=${number}&text=${finalMsg}&type=phone_number&app_absent=0`;
-        window.open(url, '_blank');
+        openObservation(async (obs) => {
+          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagemUsada: titulo, observacao: obs });
+          window.open(url, '_blank');
+        });
       });
     } else {
       const url = `https://web.whatsapp.com/send/?phone=${number}&type=phone_number&app_absent=0`;
-      window.open(url, '_blank');
+      openObservation(async (obs) => {
+        await logInteraction({ tipo: 'WhatsApp', canal: phone, observacao: obs });
+        window.open(url, '_blank');
+      });
     }
   };
 
@@ -101,10 +133,18 @@ export default function KanbanCard({ card, index }) {
         const body = encodeURIComponent(
           replacePlaceholders(mensagem, { client, contact, phone })
         );
-        window.location.href = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
+        const url = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
+        openObservation(async (obs) => {
+          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagemUsada: titulo, observacao: obs });
+          window.location.href = url;
+        });
       });
     } else {
-      window.location.href = `mailto:${cleanEmail}`;
+      const url = `mailto:${cleanEmail}`;
+      openObservation(async (obs) => {
+        await logInteraction({ tipo: 'E-mail', canal: cleanEmail, observacao: obs });
+        window.location.href = url;
+      });
     }
   };
 
@@ -113,14 +153,21 @@ export default function KanbanCard({ card, index }) {
     const phone = contact.mobile || contact.phone || '';
     const messages = await fetchMessages('linkedin');
     if (messages.length > 0) {
-      openModal(messages, ({ mensagem }) => {
+      openModal(messages, ({ titulo, mensagem }) => {
         const finalMsg = encodeURIComponent(
           replacePlaceholders(mensagem, { client, contact, phone })
         );
-        window.open(`${url}?message=${finalMsg}`, '_blank');
+        const finalUrl = `${url}?message=${finalMsg}`;
+        openObservation(async (obs) => {
+          await logInteraction({ tipo: 'LinkedIn', canal: url, mensagemUsada: titulo, observacao: obs });
+          window.open(finalUrl, '_blank');
+        });
       });
     } else {
-      window.open(url, '_blank');
+      openObservation(async (obs) => {
+        await logInteraction({ tipo: 'LinkedIn', canal: url, observacao: obs });
+        window.open(url, '_blank');
+      });
     }
   };
 
@@ -230,6 +277,15 @@ export default function KanbanCard({ card, index }) {
               )}
             </div>
           ))}
+          <div className="mt-1">
+            <button
+              type="button"
+              className="text-blue-600 underline text-[10px]"
+              onClick={handleHistoryClick}
+            >
+              Histórico
+            </button>
+          </div>
         </div>
         <MessageModal
           open={modalOpen}
@@ -239,6 +295,19 @@ export default function KanbanCard({ card, index }) {
             setModalOpen(false);
           }}
           onClose={() => setModalOpen(false)}
+        />
+        <ObservationModal
+          open={obsOpen}
+          onConfirm={async (obs) => {
+            if (obsAction) await obsAction(obs);
+            setObsOpen(false);
+          }}
+          onClose={() => setObsOpen(false)}
+        />
+        <HistoryModal
+          open={historyOpen}
+          interactions={historyData}
+          onClose={() => setHistoryOpen(false)}
         />
         </>
       )}

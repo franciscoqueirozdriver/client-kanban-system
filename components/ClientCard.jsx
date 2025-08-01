@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import MessageModal from './MessageModal';
+import ObservationModal from './ObservationModal';
+import HistoryModal from './HistoryModal';
 
 function displayPhone(phone) {
   return String(phone || '').replace(/^'+/, ''); // remove proteção visualmente
@@ -70,6 +72,10 @@ export default function ClientCard({ client, onStatusChange }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
   const [onSelectMessage, setOnSelectMessage] = useState(null);
+  const [obsOpen, setObsOpen] = useState(false);
+  const [obsAction, setObsAction] = useState(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyData, setHistoryData] = useState([]);
 
   const handleDoubleClick = async () => {
     const newColor = 'green';
@@ -98,6 +104,26 @@ export default function ClientCard({ client, onStatusChange }) {
     setModalOpen(true);
   };
 
+  const openObservation = (action) => {
+    setObsAction(() => action);
+    setObsOpen(true);
+  };
+
+  const logInteraction = async (data) => {
+    await fetch('/api/interacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clienteId: client.id, dataHora: new Date().toISOString(), ...data }),
+    });
+  };
+
+  const handleHistoryClick = async () => {
+    const res = await fetch(`/api/interacoes?clienteId=${client.id}`);
+    const history = await res.json();
+    setHistoryData(history);
+    setHistoryOpen(true);
+  };
+
   const handlePhoneClick = async (e, phone, contact) => {
     e.preventDefault();
     const digits = displayPhone(phone).replace(/\D/g, '');
@@ -105,15 +131,21 @@ export default function ClientCard({ client, onStatusChange }) {
     const number = digits.startsWith('55') ? digits : `55${digits}`;
     const messages = await fetchMessages('whatsapp');
     if (messages.length > 0) {
-      openModal(messages, ({ mensagem }) => {
+      openModal(messages, ({ titulo, mensagem }) => {
         const finalMsg = replacePlaceholders(mensagem, { client, contact, phone });
         const encoded = encodeURIComponent(finalMsg);
         const url = `https://web.whatsapp.com/send/?phone=${number}&text=${encoded}&type=phone_number&app_absent=0`;
-        window.open(url, '_blank');
+        openObservation(async (obs) => {
+          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagemUsada: titulo, observacao: obs });
+          window.open(url, '_blank');
+        });
       });
     } else {
       const url = `https://web.whatsapp.com/send/?phone=${number}&type=phone_number&app_absent=0`;
-      window.open(url, '_blank');
+      openObservation(async (obs) => {
+        await logInteraction({ tipo: 'WhatsApp', canal: phone, observacao: obs });
+        window.open(url, '_blank');
+      });
     }
   };
 
@@ -126,10 +158,18 @@ export default function ClientCard({ client, onStatusChange }) {
       openModal(messages, ({ titulo, mensagem }) => {
         const subject = encodeURIComponent(replacePlaceholders(titulo, { client, contact, phone }));
         const body = encodeURIComponent(replacePlaceholders(mensagem, { client, contact, phone }));
-        window.location.href = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
+        const url = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
+        openObservation(async (obs) => {
+          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagemUsada: titulo, observacao: obs });
+          window.location.href = url;
+        });
       });
     } else {
-      window.location.href = `mailto:${cleanEmail}`;
+      const url = `mailto:${cleanEmail}`;
+      openObservation(async (obs) => {
+        await logInteraction({ tipo: 'E-mail', canal: cleanEmail, observacao: obs });
+        window.location.href = url;
+      });
     }
   };
 
@@ -138,15 +178,21 @@ export default function ClientCard({ client, onStatusChange }) {
     const phone = contact.mobile || contact.phone || '';
     const messages = await fetchMessages('linkedin');
     if (messages.length > 0) {
-      openModal(messages, ({ mensagem }) => {
+      openModal(messages, ({ titulo, mensagem }) => {
         const finalMsg = encodeURIComponent(
           replacePlaceholders(mensagem, { client, contact, phone })
         );
         const finalUrl = `${url}?message=${finalMsg}`;
-        window.open(finalUrl, '_blank');
+        openObservation(async (obs) => {
+          await logInteraction({ tipo: 'LinkedIn', canal: url, mensagemUsada: titulo, observacao: obs });
+          window.open(finalUrl, '_blank');
+        });
       });
     } else {
-      window.open(url, '_blank');
+      openObservation(async (obs) => {
+        await logInteraction({ tipo: 'LinkedIn', canal: url, observacao: obs });
+        window.open(url, '_blank');
+      });
     }
   };
 
@@ -248,6 +294,15 @@ export default function ClientCard({ client, onStatusChange }) {
           </div>
         ))}
       </div>
+      <div className="mt-2">
+        <button
+          type="button"
+          className="text-blue-600 underline text-xs"
+          onClick={handleHistoryClick}
+        >
+          Histórico
+        </button>
+      </div>
       <MessageModal
         open={modalOpen}
         messages={modalMessages}
@@ -256,6 +311,19 @@ export default function ClientCard({ client, onStatusChange }) {
           setModalOpen(false);
         }}
         onClose={() => setModalOpen(false)}
+      />
+      <ObservationModal
+        open={obsOpen}
+        onConfirm={async (obs) => {
+          if (obsAction) await obsAction(obs);
+          setObsOpen(false);
+        }}
+        onClose={() => setObsOpen(false)}
+      />
+      <HistoryModal
+        open={historyOpen}
+        interactions={historyData}
+        onClose={() => setHistoryOpen(false)}
       />
     </div>
   );
