@@ -53,7 +53,7 @@ export default async function handler(req, res) {
       const idx = {
         cliente: header.indexOf('Cliente_ID'),
         messageId: header.indexOf('Message_ID'),
-        dataHora: header.indexOf('Data_Hora'),
+        dataHora: header.indexOf('Data/Hora'),
         tipo: header.indexOf('Tipo'),
         deFase: header.indexOf('De_Fase'),
         paraFase: header.indexOf('Para_Fase'),
