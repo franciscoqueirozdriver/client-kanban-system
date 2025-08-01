@@ -199,8 +199,12 @@ export default function ClientCard({ client, onStatusChange }) {
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem, id }) => {
         const finalMsg = replacePlaceholders(mensagem, { client, contact, phone });
-        const encoded = encodeURIComponent(finalMsg);
-        const finalUrl = `${url}?message=${encoded}`;
+        try {
+          navigator.clipboard.writeText(finalMsg);
+          alert('Mensagem copiada para a área de transferência. Cole no chat do LinkedIn.');
+        } catch (err) {
+          console.error('Falha ao copiar mensagem:', err);
+        }
         openObservation(async (obs) => {
           await logInteraction({
             tipo: 'LinkedIn',
@@ -210,7 +214,7 @@ export default function ClientCard({ client, onStatusChange }) {
             messageId: generateMessageId(),
             observacao: obs,
           });
-          window.open(finalUrl, '_blank');
+          window.open(url, '_blank');
         });
       });
     } else {

@@ -165,8 +165,12 @@ export default function KanbanCard({ card, index }) {
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem, id }) => {
         const finalMsg = replacePlaceholders(mensagem, { client, contact, phone });
-        const encoded = encodeURIComponent(finalMsg);
-        const finalUrl = `${url}?message=${encoded}`;
+        try {
+          navigator.clipboard.writeText(finalMsg);
+          alert('Mensagem copiada para a área de transferência. Cole no chat do LinkedIn.');
+        } catch (err) {
+          console.error('Falha ao copiar mensagem:', err);
+        }
         openObservation(async (obs) => {
           await logInteraction({
             tipo: 'LinkedIn',
@@ -176,7 +180,7 @@ export default function KanbanCard({ card, index }) {
             messageId: generateMessageId(),
             observacao: obs,
           });
-          window.open(finalUrl, '_blank');
+          window.open(url, '_blank');
         });
       });
     } else {
@@ -288,6 +292,7 @@ export default function KanbanCard({ card, index }) {
                     className="text-blue-600 underline"
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => handleLinkedinClick(e, c.linkedin, c)}
                   >
                     LinkedIn
                   </a>
