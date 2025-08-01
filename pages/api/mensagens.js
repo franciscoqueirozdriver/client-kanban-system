@@ -31,7 +31,8 @@ async function fetchMensagens() {
   const msgIdx = lower.indexOf('mensagem');
 
   return data
-    .map((row) => ({
+    .map((row, index) => ({
+      id: String(index + 2),
       titulo: row[tituloIdx] || '',
       aplicativo: normalizeApp(row[appIdx]),
       mensagem: row[msgIdx] || '',

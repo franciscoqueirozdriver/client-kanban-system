@@ -1,6 +1,7 @@
 'use client';
 import { Draggable } from '@hello-pangea/dnd';
 import { useState } from 'react';
+import generateMessageId from '../lib/messageId';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
@@ -101,20 +102,26 @@ export default function KanbanCard({ card, index }) {
     const number = digits.startsWith('55') ? digits : `55${digits}`;
     const messages = await fetchMessages('whatsapp');
     if (messages.length > 0) {
-      openModal(messages, ({ titulo, mensagem }) => {
-        const finalMsg = encodeURIComponent(
-          replacePlaceholders(mensagem, { client, contact, phone })
-        );
-        const url = `https://web.whatsapp.com/send/?phone=${number}&text=${finalMsg}&type=phone_number&app_absent=0`;
+      openModal(messages, ({ titulo, mensagem, id }) => {
+        const finalMsg = replacePlaceholders(mensagem, { client, contact, phone });
+        const encoded = encodeURIComponent(finalMsg);
+        const url = `https://web.whatsapp.com/send/?phone=${number}&text=${encoded}&type=phone_number&app_absent=0`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagemUsada: titulo, observacao: obs });
+          await logInteraction({
+            tipo: 'WhatsApp',
+            canal: phone,
+            mensagemUsada: titulo,
+            mensagem: finalMsg,
+            messageId: generateMessageId(),
+            observacao: obs,
+          });
           window.open(url, '_blank');
         });
       });
     } else {
       const url = `https://web.whatsapp.com/send/?phone=${number}&type=phone_number&app_absent=0`;
       openObservation(async (obs) => {
-        await logInteraction({ tipo: 'WhatsApp', canal: phone, observacao: obs });
+        await logInteraction({ tipo: 'WhatsApp', canal: phone, observacao: obs, messageId: generateMessageId() });
         window.open(url, '_blank');
       });
     }
@@ -126,23 +133,26 @@ export default function KanbanCard({ card, index }) {
     const cleanEmail = displayEmail(email);
     const messages = await fetchMessages('email');
     if (messages.length > 0) {
-      openModal(messages, ({ titulo, mensagem }) => {
-        const subject = encodeURIComponent(
-          replacePlaceholders(titulo, { client, contact, phone })
-        );
-        const body = encodeURIComponent(
-          replacePlaceholders(mensagem, { client, contact, phone })
-        );
-        const url = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
+      openModal(messages, ({ titulo, mensagem, id }) => {
+        const finalSubject = replacePlaceholders(titulo, { client, contact, phone });
+        const finalBody = replacePlaceholders(mensagem, { client, contact, phone });
+        const url = `mailto:${cleanEmail}?subject=${encodeURIComponent(finalSubject)}&body=${encodeURIComponent(finalBody)}`;
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagemUsada: titulo, observacao: obs });
+          await logInteraction({
+            tipo: 'E-mail',
+            canal: cleanEmail,
+            mensagemUsada: titulo,
+            mensagem: finalBody,
+            messageId: generateMessageId(),
+            observacao: obs,
+          });
           window.location.href = url;
         });
       });
     } else {
       const url = `mailto:${cleanEmail}`;
       openObservation(async (obs) => {
-        await logInteraction({ tipo: 'E-mail', canal: cleanEmail, observacao: obs });
+        await logInteraction({ tipo: 'E-mail', canal: cleanEmail, observacao: obs, messageId: generateMessageId() });
         window.location.href = url;
       });
     }
@@ -153,19 +163,29 @@ export default function KanbanCard({ card, index }) {
     const phone = contact.mobile || contact.phone || '';
     const messages = await fetchMessages('linkedin');
     if (messages.length > 0) {
-      openModal(messages, ({ titulo, mensagem }) => {
-        const finalMsg = encodeURIComponent(
-          replacePlaceholders(mensagem, { client, contact, phone })
-        );
-        const finalUrl = `${url}?message=${finalMsg}`;
+      openModal(messages, ({ titulo, mensagem, id }) => {
+        const finalMsg = replacePlaceholders(mensagem, { client, contact, phone });
+        try {
+          navigator.clipboard.writeText(finalMsg);
+          alert('Mensagem copiada para a área de transferência. Cole no chat do LinkedIn.');
+        } catch (err) {
+          console.error('Falha ao copiar mensagem:', err);
+        }
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'LinkedIn', canal: url, mensagemUsada: titulo, observacao: obs });
-          window.open(finalUrl, '_blank');
+          await logInteraction({
+            tipo: 'LinkedIn',
+            canal: url,
+            mensagemUsada: titulo,
+            mensagem: finalMsg,
+            messageId: generateMessageId(),
+            observacao: obs,
+          });
+          window.open(url, '_blank');
         });
       });
     } else {
       openObservation(async (obs) => {
-        await logInteraction({ tipo: 'LinkedIn', canal: url, observacao: obs });
+        await logInteraction({ tipo: 'LinkedIn', canal: url, observacao: obs, messageId: generateMessageId() });
         window.open(url, '_blank');
       });
     }
@@ -200,7 +220,9 @@ export default function KanbanCard({ card, index }) {
           }}
           className="p-2 mb-2 rounded shadow transition-colors"
         >
-          <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
+          <h4 className="text-sm font-semibold mb-1">
+            {`${client.id} | ${client.company}`}
+          </h4>
 
           {(client.city || client.uf) && (
             <p className="text-[10px] text-gray-600 mb-1">
@@ -270,6 +292,7 @@ export default function KanbanCard({ card, index }) {
                     className="text-blue-600 underline"
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => handleLinkedinClick(e, c.linkedin, c)}
                   >
                     LinkedIn
                   </a>

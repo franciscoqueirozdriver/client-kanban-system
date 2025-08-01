@@ -142,6 +142,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
+    console.log('POST /kanban body', req.body);
     const { id, destination, status, color } = req.body;
     const newStatus = status || (destination && destination.droppableId);
     const newColor =
