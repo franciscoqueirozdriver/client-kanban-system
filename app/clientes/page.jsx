@@ -12,8 +12,9 @@ export default function ClientesPage() {
     fetch('/api/clientes')
       .then((res) => res.json())
       .then((data) => {
-        setClients(data.clients);
-        setFiltered(data.clients);
+        const list = Array.isArray(data.clients) ? data.clients : [];
+        setClients(list);
+        setFiltered(list);
       });
   }, []);
 
@@ -26,7 +27,7 @@ export default function ClientesPage() {
     proprietario,
     negocioStatus,
   }) => {
-    let result = clients.filter((client) => {
+    let result = (clients || []).filter((client) => {
       // segmento filter
       if (segmento && segmento.trim()) {
         if ((client.segment || '').trim().toLowerCase() !== segmento.trim().toLowerCase()) {
@@ -93,7 +94,7 @@ export default function ClientesPage() {
       </div>
       <Filters onFilter={handleFilter} />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((client) => (
+        {(filtered || []).map((client) => (
           <ClientCard key={client.id} client={client} />
         ))}
       </div>

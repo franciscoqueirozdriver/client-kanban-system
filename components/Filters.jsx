@@ -23,7 +23,9 @@ export default function Filters({ onFilter }) {
   useEffect(() => {
     fetch('/api/clientes')
       .then((res) => res.json())
-      .then((data) => setOptions(data.filters));
+      .then((data) =>
+        setOptions((prev) => ({ ...prev, ...(data.filters || {}) }))
+      );
   }, []);
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export default function Filters({ onFilter }) {
           className="border p-2 rounded"
         >
           <option value="">segmento</option>
-          {options.segmento.map((v) => (
+          {(options.segmento || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
@@ -71,7 +73,7 @@ export default function Filters({ onFilter }) {
           onChange={handleMultiSelect}
           className="border p-2 rounded h-24"
         >
-          {options.porte.map((v) => (
+          {(options.porte || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
@@ -85,7 +87,7 @@ export default function Filters({ onFilter }) {
           className="border p-2 rounded"
         >
           <option value="">uf</option>
-          {options.uf.map((v) => (
+          {(options.uf || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
@@ -99,7 +101,7 @@ export default function Filters({ onFilter }) {
           className="border p-2 rounded"
         >
           <option value="">cidade</option>
-          {options.cidade.map((v) => (
+          {(options.cidade || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
@@ -113,7 +115,7 @@ export default function Filters({ onFilter }) {
           className="border p-2 rounded"
         >
           <option value="">negócio - proprietário</option>
-          {options.proprietario.map((v) => (
+          {(options.proprietario || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
@@ -127,7 +129,7 @@ export default function Filters({ onFilter }) {
           className="border p-2 rounded"
         >
           <option value="">negócio - status</option>
-          {options.negocioStatus.map((v) => (
+          {(options.negocioStatus || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
