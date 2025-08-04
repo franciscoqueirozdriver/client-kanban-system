@@ -17,7 +17,15 @@ export default function ClientesPage() {
       });
   }, []);
 
-  const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
+  const handleFilter = ({
+    query,
+    segmento,
+    porte,
+    uf,
+    cidade,
+    proprietario,
+    negocioStatus,
+  }) => {
     let result = clients.filter((client) => {
       // segmento filter
       if (segmento && segmento.trim()) {
@@ -46,6 +54,16 @@ export default function ClientesPage() {
       // cidade filter
       if (cidade && cidade.trim()) {
         if ((client.city || '').trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
+      }
+
+      // negócio - proprietário filter
+      if (proprietario && proprietario.trim()) {
+        if ((client.owner || '').trim().toLowerCase() !== proprietario.trim().toLowerCase()) return false;
+      }
+
+      // negócio - status filter
+      if (negocioStatus && negocioStatus.trim()) {
+        if ((client.dealStatus || '').trim().toLowerCase() !== negocioStatus.trim().toLowerCase()) return false;
       }
 
       // query filter

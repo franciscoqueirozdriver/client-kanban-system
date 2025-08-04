@@ -3,8 +3,22 @@ import { useEffect, useState } from 'react';
 
 export default function Filters({ onFilter }) {
   const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState({ segmento: '', porte: [], uf: '', cidade: '' });
-  const [options, setOptions] = useState({ segmento: [], porte: [], uf: [], cidade: [] });
+  const [filters, setFilters] = useState({
+    segmento: '',
+    porte: [],
+    uf: '',
+    cidade: '',
+    proprietario: '',
+    negocioStatus: '',
+  });
+  const [options, setOptions] = useState({
+    segmento: [],
+    porte: [],
+    uf: [],
+    cidade: [],
+    proprietario: [],
+    negocioStatus: [],
+  });
 
   useEffect(() => {
     fetch('/api/clientes')
@@ -35,7 +49,7 @@ export default function Filters({ onFilter }) {
         className="border p-2 rounded"
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
         {/* Segmento */}
         <select
           value={filters.segmento}
@@ -86,6 +100,34 @@ export default function Filters({ onFilter }) {
         >
           <option value="">cidade</option>
           {options.cidade.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+
+        {/* Negócio - Proprietário */}
+        <select
+          value={filters.proprietario}
+          onChange={(e) => handleChange('proprietario', e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option value="">negócio - proprietário</option>
+          {options.proprietario.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+
+        {/* Negócio - Status */}
+        <select
+          value={filters.negocioStatus}
+          onChange={(e) => handleChange('negocioStatus', e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option value="">negócio - status</option>
+          {options.negocioStatus.map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
