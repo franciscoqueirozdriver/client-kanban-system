@@ -1,44 +1,28 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-export default function Filters({ onFilter }) {
+export default function Filters({ onFilter, filters = {} }) {
   const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState({
+  const [values, setValues] = useState({
     segmento: '',
     porte: [],
     uf: '',
     cidade: '',
     proprietario: '',
-    negocioStatus: '',
-  });
-  const [options, setOptions] = useState({
-    segmento: [],
-    porte: [],
-    uf: [],
-    cidade: [],
-    proprietario: [],
-    negocioStatus: [],
+    status: '',
   });
 
   useEffect(() => {
-    fetch('/api/clientes')
-      .then((res) => res.json())
-      .then((data) =>
-        setOptions((prev) => ({ ...prev, ...(data.filters || {}) }))
-      );
-  }, []);
-
-  useEffect(() => {
-    onFilter && onFilter({ query, ...filters });
-  }, [query, filters]);
+    onFilter && onFilter({ query, ...values });
+  }, [query, values, onFilter]);
 
   const handleChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    setValues((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleMultiSelect = (e) => {
     const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
-    setFilters((prev) => ({ ...prev, porte: selected }));
+    setValues((prev) => ({ ...prev, porte: selected }));
   };
 
   return (
@@ -54,12 +38,12 @@ export default function Filters({ onFilter }) {
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
         {/* Segmento */}
         <select
-          value={filters.segmento}
+          value={values.segmento}
           onChange={(e) => handleChange('segmento', e.target.value)}
           className="border p-2 rounded"
         >
-          <option value="">segmento</option>
-          {(options.segmento || []).map((v) => (
+          <option value="">Todos</option>
+          {(filters.segmento || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
@@ -69,25 +53,29 @@ export default function Filters({ onFilter }) {
         {/* ✅ Porte com múltipla escolha */}
         <select
           multiple
-          value={filters.porte}
+          value={values.porte}
           onChange={handleMultiSelect}
           className="border p-2 rounded h-24"
         >
-          {(options.porte || []).map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
+          {(filters.porte || []).length > 0 ? (
+            (filters.porte || []).map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))
+          ) : (
+            <option value="">Todos</option>
+          )}
         </select>
 
         {/* UF */}
         <select
-          value={filters.uf}
+          value={values.uf}
           onChange={(e) => handleChange('uf', e.target.value)}
           className="border p-2 rounded"
         >
-          <option value="">uf</option>
-          {(options.uf || []).map((v) => (
+          <option value="">Todos</option>
+          {(filters.uf || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
@@ -96,12 +84,12 @@ export default function Filters({ onFilter }) {
 
         {/* Cidade */}
         <select
-          value={filters.cidade}
+          value={values.cidade}
           onChange={(e) => handleChange('cidade', e.target.value)}
           className="border p-2 rounded"
         >
-          <option value="">cidade</option>
-          {(options.cidade || []).map((v) => (
+          <option value="">Todos</option>
+          {(filters.cidade || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
@@ -110,12 +98,12 @@ export default function Filters({ onFilter }) {
 
         {/* Negócio - Proprietário */}
         <select
-          value={filters.proprietario}
+          value={values.proprietario}
           onChange={(e) => handleChange('proprietario', e.target.value)}
           className="border p-2 rounded"
         >
-          <option value="">negócio - proprietário</option>
-          {(options.proprietario || []).map((v) => (
+          <option value="">Todos</option>
+          {(filters.proprietario || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
@@ -124,12 +112,12 @@ export default function Filters({ onFilter }) {
 
         {/* Negócio - Status */}
         <select
-          value={filters.negocioStatus}
-          onChange={(e) => handleChange('negocioStatus', e.target.value)}
+          value={values.status}
+          onChange={(e) => handleChange('status', e.target.value)}
           className="border p-2 rounded"
         >
-          <option value="">negócio - status</option>
-          {(options.negocioStatus || []).map((v) => (
+          <option value="">Todos</option>
+          {(filters.status || []).map((v) => (
             <option key={v} value={v}>
               {v}
             </option>

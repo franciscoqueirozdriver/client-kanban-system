@@ -7,6 +7,7 @@ import Filters from '../../components/Filters';
 export default function ClientesPage() {
   const [clients, setClients] = useState([]);
   const [filtered, setFiltered] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({});
 
   useEffect(() => {
     fetch('/api/clientes')
@@ -15,6 +16,7 @@ export default function ClientesPage() {
         const list = Array.isArray(data.clients) ? data.clients : [];
         setClients(list);
         setFiltered(list);
+        setFilterOptions(data.filters || {});
       });
   }, []);
 
@@ -25,7 +27,7 @@ export default function ClientesPage() {
     uf,
     cidade,
     proprietario,
-    negocioStatus,
+    status,
   }) => {
     let result = (clients || []).filter((client) => {
       // segmento filter
@@ -63,8 +65,8 @@ export default function ClientesPage() {
       }
 
       // negócio - status filter
-      if (negocioStatus && negocioStatus.trim()) {
-        if ((client.dealStatus || '').trim().toLowerCase() !== negocioStatus.trim().toLowerCase()) return false;
+      if (status && status.trim()) {
+        if ((client.dealStatus || '').trim().toLowerCase() !== status.trim().toLowerCase()) return false;
       }
 
       // query filter
@@ -92,7 +94,7 @@ export default function ClientesPage() {
           Ver Kanban
         </Link>
       </div>
-      <Filters onFilter={handleFilter} />
+      <Filters onFilter={handleFilter} filters={filterOptions} />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {(filtered || []).map((client) => (
           <ClientCard key={client.id} client={client} />
