@@ -3,6 +3,7 @@ import { useState } from 'react';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
+import ModalWhatsApp from './ModalWhatsApp';
 
 function displayPhone(phone) {
   return String(phone || '').replace(/^'+/, ''); // remove proteção visualmente
@@ -76,6 +77,8 @@ export default function ClientCard({ client, onStatusChange }) {
   const [obsAction, setObsAction] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState([]);
+  const [waOpen, setWaOpen] = useState(false);
+  const [waNumber, setWaNumber] = useState(null);
 
   const handleDoubleClick = async () => {
     const newColor = 'green';
@@ -122,6 +125,13 @@ export default function ClientCard({ client, onStatusChange }) {
     const history = await res.json();
     setHistoryData(history);
     setHistoryOpen(true);
+  };
+
+  const openWhatsAppModal = () => {
+    const num = client.contacts[0]?.normalizedPhones?.[0];
+    if (!num) return;
+    setWaNumber(num);
+    setWaOpen(true);
   };
 
   const handlePhoneClick = async (e, phone, contact) => {
@@ -295,13 +305,24 @@ export default function ClientCard({ client, onStatusChange }) {
         ))}
       </div>
       <div className="mt-2">
-        <button
-          type="button"
-          className="text-blue-600 underline text-xs"
-          onClick={handleHistoryClick}
-        >
-          Histórico
-        </button>
+        <div className="flex space-x-2">
+          <button
+            type="button"
+            className="text-blue-600 underline text-xs"
+            onClick={handleHistoryClick}
+          >
+            Histórico
+          </button>
+          {client.contacts[0]?.normalizedPhones?.[0] && (
+            <button
+              type="button"
+              className="text-green-600 underline text-xs"
+              onClick={openWhatsAppModal}
+            >
+              💬 WhatsApp
+            </button>
+          )}
+        </div>
       </div>
       <MessageModal
         open={modalOpen}
@@ -324,6 +345,12 @@ export default function ClientCard({ client, onStatusChange }) {
         open={historyOpen}
         interactions={historyData}
         onClose={() => setHistoryOpen(false)}
+      />
+      <ModalWhatsApp
+        open={waOpen}
+        onClose={() => setWaOpen(false)}
+        clienteId={client.id}
+        numero={waNumber}
       />
     </div>
   );

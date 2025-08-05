@@ -26,3 +26,6 @@ package-lock.json
 # Backup ou arquivos temporários
 *.bak
 *.tmp
+
+# Sessão do WhatsApp
+server-whatsapp/.wwebjs_auth/
