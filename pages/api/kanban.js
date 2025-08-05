@@ -142,8 +142,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { id, destination, status, color } = req.body;
-    const newStatus = status || (destination && destination.droppableId);
+    const { id, status, color } = req.body;
+    const newStatus = status;
     const newColor =
       color !== undefined
         ? color

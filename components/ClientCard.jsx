@@ -77,24 +77,42 @@ export default function ClientCard({ client, onStatusChange }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState([]);
 
-  const handleDoubleClick = async () => {
+  const handleDoubleClick = () => {
     const newColor = 'green';
     const newStatus = 'Lead Selecionado';
-    setColor(newColor);
-    setStatus(newStatus);
-
-  if (onStatusChange) {
-      onStatusChange(client.id, newStatus, newColor);
-    }
-
-    await fetch('/api/kanban', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: client.id,
-        status: newStatus,
-        color: newColor,
-      }),
+    const prevStatus = status;
+    const prevColor = color;
+    openObservation(async (obs) => {
+      setColor(newColor);
+      setStatus(newStatus);
+      if (onStatusChange) {
+        onStatusChange(client.id, newStatus, newColor);
+      }
+      try {
+        const resKanban = await fetch('/api/kanban', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: client.id,
+            status: newStatus,
+            color: newColor,
+          }),
+        });
+        if (!resKanban.ok) throw new Error('Falha ao atualizar Kanban');
+        await logInteraction({
+          tipo: 'Mudança de Fase',
+          deFase: prevStatus,
+          paraFase: newStatus,
+          observacao: obs,
+        });
+      } catch (err) {
+        console.error(err);
+        setColor(prevColor);
+        setStatus(prevStatus);
+        if (onStatusChange) {
+          onStatusChange(client.id, prevStatus, prevColor);
+        }
+      }
     });
   };
 
