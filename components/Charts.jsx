@@ -1,8 +1,16 @@
 'use client';
-import { Doughnut } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Bar, Doughnut } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 export default function Charts({ clients }) {
   const phaseLabels = [
@@ -21,20 +29,14 @@ export default function Charts({ clients }) {
     phaseCounts[c.status] = (phaseCounts[c.status] || 0) + 1;
     if (c.segment) segmentCounts[c.segment] = (segmentCounts[c.segment] || 0) + 1;
   });
-  const phaseData = {
+
+  const barData = {
     labels: phaseLabels,
     datasets: [
       {
         label: 'Contatos',
         data: phaseLabels.map((p) => phaseCounts[p] || 0),
-        backgroundColor: [
-          '#60a5fa',
-          '#34d399',
-          '#fbbf24',
-          '#c084fc',
-          '#f87171',
-          '#9ca3af',
-        ],
+        backgroundColor: '#60a5fa',
       },
     ],
   };
@@ -54,7 +56,7 @@ export default function Charts({ clients }) {
   return (
     <div className="grid md:grid-cols-2 gap-4">
       <div className="bg-white p-4 rounded shadow">
-        <Doughnut data={phaseData} options={options} />
+        <Bar data={barData} options={options} />
       </div>
       <div className="bg-white p-4 rounded shadow">
         <Doughnut data={segmentData} options={options} />
