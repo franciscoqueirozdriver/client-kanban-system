@@ -2,9 +2,12 @@
 import { DragDropContext } from '@hello-pangea/dnd';
 import { useEffect, useState } from 'react';
 import KanbanColumn from '../../components/KanbanColumn';
+import ObservationModal from '../../components/ObservationModal';
 
 export default function KanbanPage() {
   const [columns, setColumns] = useState([]);
+  const [obsOpen, setObsOpen] = useState(false);
+  const [pendingLog, setPendingLog] = useState(null);
 
   const fetchColumns = async () => {
     const res = await fetch('/api/kanban');
@@ -45,17 +48,12 @@ export default function KanbanPage() {
       body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
     });
 
-    await fetch('/api/interacoes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clienteId: draggableId,
-        tipo: 'Mudança de Fase',
-        deFase: source.droppableId,
-        paraFase: destination.droppableId,
-        dataHora: new Date().toISOString(),
-      }),
+    setPendingLog({
+      clienteId: draggableId,
+      deFase: source.droppableId,
+      paraFase: destination.droppableId,
     });
+    setObsOpen(true);
   };
 
   return (
@@ -67,6 +65,27 @@ export default function KanbanPage() {
           ))}
         </div>
       </DragDropContext>
+      <ObservationModal
+        open={obsOpen}
+        onConfirm={async (obs) => {
+          if (pendingLog) {
+            await fetch('/api/interacoes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...pendingLog,
+                tipo: 'Mudança de Fase',
+                observacao: obs,
+                dataHora: new Date().toISOString(),
+              }),
+            });
+          }
+        }}
+        onClose={() => {
+          setObsOpen(false);
+          setPendingLog(null);
+        }}
+      />
     </div>
   );
 }
