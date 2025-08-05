@@ -41,17 +41,29 @@ export default function Charts({ clients }) {
     ],
   };
 
+  const sortedSegments = Object.entries(segmentCounts).sort((a, b) => b[1] - a[1]);
+  const segmentLabels = sortedSegments.map(([label]) => label);
+  const segmentValues = sortedSegments.map(([, count]) => count);
   const segmentData = {
-    labels: Object.keys(segmentCounts),
+    labels: segmentLabels,
     datasets: [
       {
-        data: Object.values(segmentCounts),
+        data: segmentValues,
         backgroundColor: ['#34d399', '#60a5fa', '#fbbf24', '#c084fc', '#f87171', '#9ca3af'],
       },
     ],
   };
 
-  const options = { plugins: { legend: { position: 'bottom' } } };
+  const options = {
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          filter: (item) => item.index < 15,
+        },
+      },
+    },
+  };
 
   return (
     <div className="grid md:grid-cols-2 gap-4">
