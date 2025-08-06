@@ -2,15 +2,21 @@
 import { DragDropContext } from '@hello-pangea/dnd';
 import { useEffect, useState } from 'react';
 import KanbanColumn from '../../components/KanbanColumn';
-import ObservationModal from '../../components/ObservationModal';
-import MessageModal from '../../components/MessageModal';
+import Filters from '../../components/Filters';
 
 export default function KanbanPage() {
   const [columns, setColumns] = useState([]);
-  const [obsOpen, setObsOpen] = useState(false);
-  const [pendingLog, setPendingLog] = useState(null);
-  const [msgOpen, setMsgOpen] = useState(false);
-  const [modalMessages, setModalMessages] = useState([]);
+  const [filteredColumns, setFilteredColumns] = useState(null);
+
+  // Buscar dados ao montar
+  useEffect(() => {
+    fetchColumns();
+  }, []);
+
+  // Sempre que columns mudar, reseta o filtro
+  useEffect(() => {
+    setFilteredColumns(null);
+  }, [columns]);
 
   const fetchColumns = async () => {
     const res = await fetch('/api/kanban');
@@ -18,22 +24,61 @@ export default function KanbanPage() {
     setColumns(data);
   };
 
-  useEffect(() => {
-    fetchColumns();
-  }, []);
+  const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
+    // Função de filtro
+    const filterFn = (client) => {
+      // segmento
+      if (segmento && segmento.trim()) {
+        if ((client.segment || '').trim().toLowerCase() !== segmento.trim().toLowerCase()) {
+          return false;
+        }
+      }
 
-  const fetchMessages = async () => {
-    try {
-      const res = await fetch('/api/mensagens?app=kanban');
-      if (!res.ok) return [];
-      const data = await res.json();
-      if (Array.isArray(data)) return data;
-      if (Array.isArray(data?.mensagens)) return data.mensagens;
-      if (Array.isArray(data?.messages)) return data.messages;
-      return [];
-    } catch {
-      return [];
-    }
+      // porte
+      if (porte) {
+        if (Array.isArray(porte)) {
+          if (porte.length > 0) {
+            const options = porte.map((p) => p.trim().toLowerCase());
+            if (!options.includes((client.size || '').trim().toLowerCase())) return false;
+          }
+        } else if (porte.trim()) {
+          if ((client.size || '').trim().toLowerCase() !== porte.trim().toLowerCase()) return false;
+        }
+      }
+
+      // uf
+      if (uf && uf.trim()) {
+        if ((client.uf || '').trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
+      }
+
+      // cidade
+      if (cidade && cidade.trim()) {
+        if ((client.city || '').trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
+      }
+
+      // query de texto
+      if (query) {
+        const q = query.toLowerCase();
+        const matchName = (client.company || '').toLowerCase().includes(q);
+        const matchContact = (client.contacts || []).some((c) =>
+          (c.name || c.nome || '').toLowerCase().includes(q)
+        );
+        const matchOpp = (client.opportunities || []).some((o) =>
+          (o || '').toLowerCase().includes(q)
+        );
+        if (!matchName && !matchContact && !matchOpp) return false;
+      }
+      return true;
+    };
+
+    // Aplica o filtro em todas as colunas
+    const newFiltered = columns.map(col => ({
+      ...col,
+      cards: col.cards.filter(card => filterFn(card.client))
+    }));
+
+    // Se o filtro resultar em todas as colunas vazias, mostra vazio (poderia ser um estado especial se quiser)
+    setFilteredColumns(newFiltered);
   };
 
   const onDragEnd = async (result) => {
@@ -65,64 +110,33 @@ export default function KanbanPage() {
       body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
     });
 
-    const pending = {
-      clienteId: draggableId,
-      deFase: source.droppableId,
-      paraFase: destination.droppableId,
-    };
-
-    const messages = await fetchMessages();
-    if (messages.length > 0) {
-      setModalMessages(messages);
-      setPendingLog(pending);
-      setMsgOpen(true);
-    } else {
-      setPendingLog(pending);
-      setObsOpen(true);
-    }
+    await fetch('/api/interacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clienteId: draggableId,
+        tipo: 'Mudança de Fase',
+        deFase: source.droppableId,
+        paraFase: destination.droppableId,
+        dataHora: new Date().toISOString(),
+      }),
+    });
   };
+
+  const columnsToShow = filteredColumns ?? columns;
 
   return (
     <div className="p-4 overflow-x-auto">
+      <div className="mb-4">
+        <Filters onFilter={handleFilter} />
+      </div>
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex gap-4">
-          {columns.map((col) => (
+          {columnsToShow.map((col) => (
             <KanbanColumn key={col.id} column={col} />
           ))}
         </div>
       </DragDropContext>
-      <MessageModal
-        open={msgOpen}
-        messages={modalMessages}
-        onSelect={(msg) => {
-          setPendingLog((prev) => ({ ...prev, mensagemUsada: msg.titulo }));
-          setMsgOpen(false);
-          setObsOpen(true);
-        }}
-        onClose={() => setMsgOpen(false)}
-      />
-      <ObservationModal
-        open={obsOpen}
-        onConfirm={async (obs) => {
-          if (pendingLog) {
-            await fetch('/api/interacoes', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                ...pendingLog,
-                tipo: 'Mudança de Fase',
-                observacao: obs,
-                dataHora: new Date().toISOString(),
-              }),
-            });
-          }
-        }}
-        onClose={() => {
-          setObsOpen(false);
-          setPendingLog(null);
-        }}
-      />
     </div>
   );
 }
-
