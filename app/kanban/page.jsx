@@ -3,11 +3,14 @@ import { DragDropContext } from '@hello-pangea/dnd';
 import { useEffect, useState } from 'react';
 import KanbanColumn from '../../components/KanbanColumn';
 import ObservationModal from '../../components/ObservationModal';
+import MessageModal from '../../components/MessageModal';
 
 export default function KanbanPage() {
   const [columns, setColumns] = useState([]);
   const [obsOpen, setObsOpen] = useState(false);
   const [pendingLog, setPendingLog] = useState(null);
+  const [msgOpen, setMsgOpen] = useState(false);
+  const [modalMessages, setModalMessages] = useState([]);
 
   const fetchColumns = async () => {
     const res = await fetch('/api/kanban');
@@ -18,6 +21,20 @@ export default function KanbanPage() {
   useEffect(() => {
     fetchColumns();
   }, []);
+
+  const fetchMessages = async () => {
+    try {
+      const res = await fetch('/api/mensagens?app=kanban');
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.mensagens)) return data.mensagens;
+      if (Array.isArray(data?.messages)) return data.messages;
+      return [];
+    } catch {
+      return [];
+    }
+  };
 
   const onDragEnd = async (result) => {
     if (!result.destination) return;
@@ -48,12 +65,21 @@ export default function KanbanPage() {
       body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
     });
 
-    setPendingLog({
+    const pending = {
       clienteId: draggableId,
       deFase: source.droppableId,
       paraFase: destination.droppableId,
-    });
-    setObsOpen(true);
+    };
+
+    const messages = await fetchMessages();
+    if (messages.length > 0) {
+      setModalMessages(messages);
+      setPendingLog(pending);
+      setMsgOpen(true);
+    } else {
+      setPendingLog(pending);
+      setObsOpen(true);
+    }
   };
 
   return (
@@ -65,6 +91,16 @@ export default function KanbanPage() {
           ))}
         </div>
       </DragDropContext>
+      <MessageModal
+        open={msgOpen}
+        messages={modalMessages}
+        onSelect={(msg) => {
+          setPendingLog((prev) => ({ ...prev, mensagemUsada: msg.titulo }));
+          setMsgOpen(false);
+          setObsOpen(true);
+        }}
+        onClose={() => setMsgOpen(false)}
+      />
       <ObservationModal
         open={obsOpen}
         onConfirm={async (obs) => {
