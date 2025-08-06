@@ -2,9 +2,21 @@
 import { DragDropContext } from '@hello-pangea/dnd';
 import { useEffect, useState } from 'react';
 import KanbanColumn from '../../components/KanbanColumn';
+import Filters from '../../components/Filters';
 
 export default function KanbanPage() {
   const [columns, setColumns] = useState([]);
+  const [filteredColumns, setFilteredColumns] = useState(null);
+
+  // Buscar dados ao montar
+  useEffect(() => {
+    fetchColumns();
+  }, []);
+
+  // Sempre que columns mudar, reseta o filtro
+  useEffect(() => {
+    setFilteredColumns(null);
+  }, [columns]);
 
   const fetchColumns = async () => {
     const res = await fetch('/api/kanban');
@@ -12,9 +24,62 @@ export default function KanbanPage() {
     setColumns(data);
   };
 
-  useEffect(() => {
-    fetchColumns();
-  }, []);
+  const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
+    // Função de filtro
+    const filterFn = (client) => {
+      // segmento
+      if (segmento && segmento.trim()) {
+        if ((client.segment || '').trim().toLowerCase() !== segmento.trim().toLowerCase()) {
+          return false;
+        }
+      }
+
+      // porte
+      if (porte) {
+        if (Array.isArray(porte)) {
+          if (porte.length > 0) {
+            const options = porte.map((p) => p.trim().toLowerCase());
+            if (!options.includes((client.size || '').trim().toLowerCase())) return false;
+          }
+        } else if (porte.trim()) {
+          if ((client.size || '').trim().toLowerCase() !== porte.trim().toLowerCase()) return false;
+        }
+      }
+
+      // uf
+      if (uf && uf.trim()) {
+        if ((client.uf || '').trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
+      }
+
+      // cidade
+      if (cidade && cidade.trim()) {
+        if ((client.city || '').trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
+      }
+
+      // query de texto
+      if (query) {
+        const q = query.toLowerCase();
+        const matchName = (client.company || '').toLowerCase().includes(q);
+        const matchContact = (client.contacts || []).some((c) =>
+          (c.name || c.nome || '').toLowerCase().includes(q)
+        );
+        const matchOpp = (client.opportunities || []).some((o) =>
+          (o || '').toLowerCase().includes(q)
+        );
+        if (!matchName && !matchContact && !matchOpp) return false;
+      }
+      return true;
+    };
+
+    // Aplica o filtro em todas as colunas
+    const newFiltered = columns.map(col => ({
+      ...col,
+      cards: col.cards.filter(card => filterFn(card.client))
+    }));
+
+    // Se o filtro resultar em todas as colunas vazias, mostra vazio (poderia ser um estado especial se quiser)
+    setFilteredColumns(newFiltered);
+  };
 
   const onDragEnd = async (result) => {
     if (!result.destination) return;
@@ -58,11 +123,16 @@ export default function KanbanPage() {
     });
   };
 
+  const columnsToShow = filteredColumns ?? columns;
+
   return (
     <div className="p-4 overflow-x-auto">
+      <div className="mb-4">
+        <Filters onFilter={handleFilter} />
+      </div>
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex gap-4">
-          {columns.map((col) => (
+          {columnsToShow.map((col) => (
             <KanbanColumn key={col.id} column={col} />
           ))}
         </div>
@@ -70,4 +140,3 @@ export default function KanbanPage() {
     </div>
   );
 }
-
