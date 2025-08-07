@@ -50,6 +50,7 @@ function groupRows(rows) {
     data: header.indexOf('Data_Ultima_Movimentacao'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
     cor: header.indexOf('Cor_Card'),
+    spotter: header.indexOf('Spotter_ID'),
   };
 
   const map = new Map();
@@ -71,6 +72,7 @@ function groupRows(rows) {
         status: row[idx.status] || '',
         dataMov: row[idx.data] || '',
         color: row[idx.cor] || '',
+        spotterId: row[idx.spotter] || '',
         rows: [],
       });
     }
@@ -110,6 +112,7 @@ function groupRows(rows) {
       status: c.status,
       dataMov: c.dataMov,
       color: c.color,
+      spotterId: c.spotterId,
       rows: c.rows,
     })),
   };
