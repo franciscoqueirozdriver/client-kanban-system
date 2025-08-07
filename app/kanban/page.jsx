@@ -103,15 +103,7 @@ export default function KanbanPage() {
     moved.client.status = newStatus;
     moved.client.color = newColor;
 
-    setColumns(newColumns);
-
-    await fetch('/api/kanban', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
-    });
-
-    await fetch('/api/interacoes', {
+    const resp = await fetch('/api/interacoes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -119,8 +111,20 @@ export default function KanbanPage() {
         tipo: 'Mudança de Fase',
         deFase: source.droppableId,
         paraFase: destination.droppableId,
-        dataHora: new Date().toISOString(),
       }),
+    });
+
+    if (!resp.ok) {
+      await fetchColumns();
+      return;
+    }
+
+    setColumns(newColumns);
+
+    await fetch('/api/kanban', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
     });
   };
 
