@@ -59,7 +59,7 @@ async function fetchMessages(app) {
 }
 
 export default function KanbanCard({ card, index }) {
-  const { client } = card;
+  const [client, setClient] = useState(card.client);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
   const [onSelectMessage, setOnSelectMessage] = useState(null);
@@ -170,7 +170,28 @@ export default function KanbanCard({ card, index }) {
       });
     }
   };
-
+ const handleRegisterCompany = async () => {
+    if (!window.confirm('Deseja realmente cadastrar essa empresa na planilha?')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/companies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('Empresa cadastrada com sucesso!');
+        setClient((prev) => ({ ...prev, sheetRow: data.row }));
+      } else {
+        alert(data.error || 'Erro ao cadastrar empresa');
+      }
+    } catch (err) {
+      alert('Erro ao cadastrar empresa');
+    }
+  };
+  
   const backgroundColor =
     client.color === 'green'
       ? '#a3ffac'
@@ -199,9 +220,14 @@ export default function KanbanCard({ card, index }) {
             borderLeft: `4px solid ${borderLeftColor}`,
           }}
           className="p-2 mb-2 rounded shadow transition-colors"
+          onDoubleClick={handleRegisterCompany}
         >
           <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
-
+          {client.sheetRow && (
+            <p className="text-[10px] text-gray-600 mb-1">
+              Linha Planilha: {client.sheetRow}
+            </p>
+          )}
           {(client.city || client.uf) && (
             <p className="text-[10px] text-gray-600 mb-1">
               {[client.city, client.uf].filter(Boolean).join(' - ')}
