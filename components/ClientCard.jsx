@@ -225,15 +225,15 @@ export default function ClientCard({ client, onStatusChange }) {
           {[client.city, client.uf].filter(Boolean).join(' - ')}
         </p>
       )}
-      {client.opportunities.length > 0 && (
+      {Array.isArray(client.opportunities) && client.opportunities.length > 0 && (
         <ul className="text-xs list-disc ml-4 my-2">
-          {client.opportunities.map((o, i) => (
+          {(client.opportunities || []).map((o, i) => (
             <li key={i}>{o}</li>
           ))}
         </ul>
       )}
       <div className="space-y-2">
-        {client.contacts.map((c, idx) => (
+        {(client.contacts || []).map((c, idx) => (
           <div key={idx} className="text-sm border-t pt-1">
             <p className="font-medium">{c.name}</p>
             <p className="text-xs">{c.role}</p>
@@ -259,7 +259,7 @@ export default function ClientCard({ client, onStatusChange }) {
               </p>
             )}
 
-            {c.normalizedPhones && c.normalizedPhones.length > 0 && (
+            {Array.isArray(c.normalizedPhones) && c.normalizedPhones.length > 0 && (
               <p className="text-xs">
                 {c.normalizedPhones.map((p, i) => (
                   <span key={i}>

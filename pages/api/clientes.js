@@ -45,6 +45,8 @@ function groupRows(rows) {
     uf: header.indexOf('uf'),
     cidade: header.indexOf('cidade_estimada'),
     status: header.indexOf('Status_Kanban'),
+    owner: header.indexOf('Negócio - Proprietário'),
+    dealStatus: header.indexOf('Negócio - Status'),
     data: header.indexOf('Data_Ultima_Movimentacao'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
     cor: header.indexOf('Cor_Card'),
@@ -55,6 +57,8 @@ function groupRows(rows) {
     porte: new Set(),
     uf: new Set(),
     cidade: new Set(),
+    proprietario: new Set(),
+    status: new Set(),
   };
 
   const clientesMap = new Map();
@@ -62,18 +66,22 @@ function groupRows(rows) {
   data.forEach((row) => {
     const clienteId = row[idx.clienteId] || '';
     const company = row[idx.org] || '';
-    const segment = row[idx.segmento] || '';
-    const size = row[idx.tamanho] || '';
-    const uf = row[idx.uf] || '';
-    const city = row[idx.cidade] || '';
-    const status = row[idx.status] || '';
+    const segment = (row[idx.segmento] || '').trim();
+    const size = (row[idx.tamanho] || '').trim();
+    const uf = (row[idx.uf] || '').trim();
+    const city = (row[idx.cidade] || '').trim();
+    const status = (row[idx.status] || '').trim();
+    const owner = idx.owner >= 0 ? (row[idx.owner] || '').trim() : '';
+    const dealStatus = idx.dealStatus >= 0 ? (row[idx.dealStatus] || '').trim() : '';
     const dataMov = row[idx.data] || '';
     const color = row[idx.cor] || '';
 
-    filters.segmento.add(segment);
-    filters.porte.add(size);
-    filters.uf.add(uf);
-    filters.cidade.add(city);
+    if (segment) filters.segmento.add(segment);
+    if (size) filters.porte.add(size);
+    if (uf) filters.uf.add(uf);
+    if (city) filters.cidade.add(city);
+    if (owner) filters.proprietario.add(owner);
+    if (dealStatus) filters.status.add(dealStatus);
 
     const contact = {
       name: (row[idx.contato] || '').trim(),
@@ -111,6 +119,8 @@ function groupRows(rows) {
         uf,
         city,
         status,
+        owner,
+        dealStatus,
         dataMov,
         color,
       });
@@ -126,6 +136,8 @@ function groupRows(rows) {
       porte: Array.from(filters.porte).sort(),
       uf: Array.from(filters.uf).sort(),
       cidade: Array.from(filters.cidade).sort(),
+      proprietario: Array.from(filters.proprietario).sort(),
+      status: Array.from(filters.status).sort(),
     },
   };
 }

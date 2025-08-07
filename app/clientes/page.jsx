@@ -7,18 +7,29 @@ import Filters from '../../components/Filters';
 export default function ClientesPage() {
   const [clients, setClients] = useState([]);
   const [filtered, setFiltered] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({});
 
   useEffect(() => {
     fetch('/api/clientes')
       .then((res) => res.json())
       .then((data) => {
-        setClients(data.clients);
-        setFiltered(data.clients);
+        const list = Array.isArray(data.clients) ? data.clients : [];
+        setClients(list);
+        setFiltered(list);
+        setFilterOptions(data.filters || {});
       });
   }, []);
 
-  const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
-    let result = clients.filter((client) => {
+  const handleFilter = ({
+    query,
+    segmento,
+    porte,
+    uf,
+    cidade,
+    proprietario,
+    status,
+  }) => {
+    let result = (clients || []).filter((client) => {
       // segmento filter
       if (segmento && segmento.trim()) {
         if ((client.segment || '').trim().toLowerCase() !== segmento.trim().toLowerCase()) {
@@ -48,6 +59,16 @@ export default function ClientesPage() {
         if ((client.city || '').trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
       }
 
+      // negócio - proprietário filter
+      if (proprietario && proprietario.trim()) {
+        if ((client.owner || '').trim().toLowerCase() !== proprietario.trim().toLowerCase()) return false;
+      }
+
+      // negócio - status filter
+      if (status && status.trim()) {
+        if ((client.dealStatus || '').trim().toLowerCase() !== status.trim().toLowerCase()) return false;
+      }
+
       // query filter
       if (query) {
         const q = query.toLowerCase();
@@ -73,9 +94,9 @@ export default function ClientesPage() {
           Ver Kanban
         </Link>
       </div>
-      <Filters onFilter={handleFilter} />
+      <Filters onFilter={handleFilter} filters={filterOptions} />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((client) => (
+        {(filtered || []).map((client) => (
           <ClientCard key={client.id} client={client} />
         ))}
       </div>
