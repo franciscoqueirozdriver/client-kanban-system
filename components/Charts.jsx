@@ -1,5 +1,5 @@
 'use client';
-import { Bar, Pie } from 'react-chartjs-2';
+import { Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -24,12 +24,10 @@ export default function Charts({ clients }) {
 
   const phaseCounts = {};
   const segmentCounts = {};
-  const ufCounts = {};
 
   clients.forEach((c) => {
     phaseCounts[c.status] = (phaseCounts[c.status] || 0) + 1;
     if (c.segment) segmentCounts[c.segment] = (segmentCounts[c.segment] || 0) + 1;
-    if (c.uf) ufCounts[c.uf] = (ufCounts[c.uf] || 0) + c.contacts.length;
   });
 
   const barData = {
@@ -43,38 +41,37 @@ export default function Charts({ clients }) {
     ],
   };
 
+  const sortedSegments = Object.entries(segmentCounts).sort((a, b) => b[1] - a[1]);
+  const segmentLabels = sortedSegments.map(([label]) => label);
+  const segmentValues = sortedSegments.map(([, count]) => count);
   const segmentData = {
-    labels: Object.keys(segmentCounts),
+    labels: segmentLabels,
     datasets: [
       {
-        data: Object.values(segmentCounts),
+        data: segmentValues,
         backgroundColor: ['#34d399', '#60a5fa', '#fbbf24', '#c084fc', '#f87171', '#9ca3af'],
       },
     ],
   };
 
-  const ufData = {
-    labels: Object.keys(ufCounts),
-    datasets: [
-      {
-        data: Object.values(ufCounts),
-        backgroundColor: ['#60a5fa', '#34d399', '#fbbf24', '#c084fc', '#f87171', '#9ca3af'],
+  const options = {
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          filter: (item) => item.index < 15,
+        },
       },
-    ],
+    },
   };
 
-  const options = { plugins: { legend: { position: 'bottom' } } };
-
   return (
-    <div className="grid md:grid-cols-3 gap-4">
+    <div className="grid md:grid-cols-2 gap-4">
       <div className="bg-white p-4 rounded shadow">
         <Bar data={barData} options={options} />
       </div>
       <div className="bg-white p-4 rounded shadow">
-        <Pie data={segmentData} options={options} />
-      </div>
-      <div className="bg-white p-4 rounded shadow">
-        <Pie data={ufData} options={options} />
+        <Doughnut data={segmentData} options={options} />
       </div>
     </div>
   );

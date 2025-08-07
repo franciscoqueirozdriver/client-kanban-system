@@ -296,6 +296,7 @@ export default function KanbanCard({ card, index }) {
                     className="text-blue-600 underline"
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => handleLinkedinClick(e, c.linkedin, c)}
                   >
                     LinkedIn
                   </a>
