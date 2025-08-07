@@ -59,7 +59,7 @@ async function fetchMessages(app) {
 }
 
 export default function KanbanCard({ card, index }) {
-  const { client } = card;
+  const [client, setClient] = useState(card.client);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
   const [onSelectMessage, setOnSelectMessage] = useState(null);
@@ -171,6 +171,28 @@ export default function KanbanCard({ card, index }) {
     }
   };
 
+  const handleRegisterSpotter = async () => {
+    if (!window.confirm('Deseja realmente cadastrar essa empresa no Spotter?')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/spotter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('Empresa cadastrada com sucesso!');
+        setClient((prev) => ({ ...prev, spotterId: data.id }));
+      } else {
+        alert(data.error || 'Erro ao cadastrar empresa');
+      }
+    } catch (err) {
+      alert('Erro ao cadastrar empresa');
+    }
+  };
+
   const backgroundColor =
     client.color === 'green'
       ? '#a3ffac'
@@ -199,8 +221,14 @@ export default function KanbanCard({ card, index }) {
             borderLeft: `4px solid ${borderLeftColor}`,
           }}
           className="p-2 mb-2 rounded shadow transition-colors"
+          onDoubleClick={handleRegisterSpotter}
         >
           <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
+          {client.spotterId && (
+            <p className="text-[10px] text-gray-600 mb-1">
+              ID Spotter: {client.spotterId}
+            </p>
+          )}
 
           {(client.city || client.uf) && (
             <p className="text-[10px] text-gray-600 mb-1">
