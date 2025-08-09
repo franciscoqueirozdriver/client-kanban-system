@@ -1,6 +1,5 @@
 'use client';
-import { Draggable } from '@hello-pangea/dnd';
-import { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
@@ -58,7 +57,15 @@ async function fetchMessages(app) {
   }
 }
 
-export default function KanbanCard({ card, index }) {
+export default function KanbanCard({
+  card,
+  index,
+  provided,
+  snapshot,
+  onDoubleClick,
+  className = '',
+  ...rest
+}) {
   const [client, setClient] = useState(card.client);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
@@ -67,6 +74,15 @@ export default function KanbanCard({ card, index }) {
   const [obsAction, setObsAction] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState([]);
+
+  const isDraggingRef = useRef(false);
+
+  const handleDragStart = () => {
+    isDraggingRef.current = true;
+  };
+  const handleDragEnd = () => {
+    isDraggingRef.current = false;
+  };
 
   const openModal = (messages, action) => {
     setModalMessages(messages);
@@ -170,7 +186,7 @@ export default function KanbanCard({ card, index }) {
       });
     }
   };
- const handleRegisterCompany = async () => {
+const handleRegisterCompany = async () => {
     if (!window.confirm('Deseja realmente cadastrar essa empresa na planilha?')) {
       return;
     }
@@ -191,6 +207,16 @@ export default function KanbanCard({ card, index }) {
       alert('Erro ao cadastrar empresa');
     }
   };
+
+  const handleDouble = (e) => {
+    if (isDraggingRef.current) return;
+    e.stopPropagation();
+    if (typeof onDoubleClick === 'function') {
+      onDoubleClick(card);
+    } else {
+      handleRegisterCompany();
+    }
+  };
   
   const backgroundColor =
     client.color === 'green'
@@ -206,137 +232,140 @@ export default function KanbanCard({ card, index }) {
       ? '#ff7043'
       : 'transparent';
 
+  const dragHandleProps = provided?.dragHandleProps || {};
+  const draggableProps = provided?.draggableProps || {};
+  const innerRef = provided?.innerRef;
+
   return (
-    <Draggable draggableId={card.id} index={index}>
-      {(provided) => (
-        <>
-        <div
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          {...provided.dragHandleProps}
-          style={{
-            ...provided.draggableProps.style,
-            backgroundColor,
-            borderLeft: `4px solid ${borderLeftColor}`,
-          }}
-          className="p-2 mb-2 rounded shadow transition-colors"
-          onDoubleClick={handleRegisterCompany}
-        >
-          <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
-          {client.sheetRow && (
-            <p className="text-[10px] text-gray-600 mb-1">
-              Linha Planilha: {client.sheetRow}
-            </p>
-          )}
-          {(client.city || client.uf) && (
-            <p className="text-[10px] text-gray-600 mb-1">
-              {[client.city, client.uf].filter(Boolean).join(' - ')}
-            </p>
-          )}
+    <>
+      <div
+        ref={innerRef}
+        {...draggableProps}
+        {...dragHandleProps}
+        onMouseDown={handleDragStart}
+        onMouseUp={handleDragEnd}
+        onDoubleClick={handleDouble}
+        style={{
+          ...draggableProps.style,
+          backgroundColor,
+          borderLeft: `4px solid ${borderLeftColor}`,
+        }}
+        className={`p-2 mb-2 rounded shadow transition-colors ${className}`}
+        {...rest}
+      >
+        <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
+        {client.sheetRow && (
+          <p className="text-[10px] text-gray-600 mb-1">
+            Linha Planilha: {client.sheetRow}
+          </p>
+        )}
+        {(client.city || client.uf) && (
+          <p className="text-[10px] text-gray-600 mb-1">
+            {[client.city, client.uf].filter(Boolean).join(' - ')}
+          </p>
+        )}
 
-          {client.opportunities.length > 0 && (
-            <ul className="text-[10px] list-disc ml-4 mb-1">
-              {client.opportunities.map((o, i) => (
-                <li key={i}>{o}</li>
-              ))}
-            </ul>
-          )}
+        {client.opportunities.length > 0 && (
+          <ul className="text-[10px] list-disc ml-4 mb-1">
+            {client.opportunities.map((o, i) => (
+              <li key={i}>{o}</li>
+            ))}
+          </ul>
+        )}
 
-          {client.contacts.map((c, i) => (
-            <div key={i} className="text-xs border-t pt-1">
-              <p className="font-medium">{c.name}</p>
-              {c.role && <p className="text-[10px]">{c.role}</p>}
+        {client.contacts.map((c, i) => (
+          <div key={i} className="text-xs border-t pt-1">
+            <p className="font-medium">{c.name}</p>
+            {c.role && <p className="text-[10px]">{c.role}</p>}
 
-              {/* ✅ Suporte a múltiplos e-mails separados por ; */}
-              {c.email && (
-                <p className="text-[10px]">
-                  {c.email.split(';').map((em, idx) => {
-                    const clean = displayEmail(em.trim());
-                    return (
-                      <span key={idx}>
-                        <button
-                          type="button"
-                          className="text-blue-600 underline"
-                          onClick={(e) => handleEmailClick(e, clean, c)}
-                        >
-                          {clean}
-                        </button>
-                        {idx < c.email.split(';').length - 1 ? ' / ' : ''}
-                      </span>
-                    );
-                  })}
-                </p>
-              )}
-
-              {c.normalizedPhones && c.normalizedPhones.length > 0 && (
-                <p className="text-[10px]">
-                  {c.normalizedPhones.map((p, idx) => (
+            {/* ✅ Suporte a múltiplos e-mails separados por ; */}
+            {c.email && (
+              <p className="text-[10px]">
+                {c.email.split(';').map((em, idx) => {
+                  const clean = displayEmail(em.trim());
+                  return (
                     <span key={idx}>
-                      <a
-                        href={`https://web.whatsapp.com/send/?phone=${displayPhone(p)
-                          .replace(/\D/g, '')
-                          .replace(/^/, (d) => (d.startsWith('55') ? d : `55${d}`))}&type=phone_number&app_absent=0`}
-                        className="text-green-600 underline"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => handlePhoneClick(e, p, c)}
+                      <button
+                        type="button"
+                        className="text-blue-600 underline"
+                        onClick={(e) => handleEmailClick(e, clean, c)}
                       >
-                        {displayPhone(p)}
-                      </a>
-                      {idx < c.normalizedPhones.length - 1 ? ' / ' : ''}
+                        {clean}
+                      </button>
+                      {idx < c.email.split(';').length - 1 ? ' / ' : ''}
                     </span>
-                  ))}
-                </p>
-              )}
+                  );
+                })}
+              </p>
+            )}
 
-              {c.linkedin && (
-                <p>
-                  <a
-                    href={c.linkedin}
-                    className="text-blue-600 underline"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    LinkedIn
-                  </a>
-                </p>
-              )}
-            </div>
-          ))}
-          <div className="mt-1">
-            <button
-              type="button"
-              className="text-blue-600 underline text-[10px]"
-              onClick={handleHistoryClick}
-            >
-              Histórico
-            </button>
+            {c.normalizedPhones && c.normalizedPhones.length > 0 && (
+              <p className="text-[10px]">
+                {c.normalizedPhones.map((p, idx) => (
+                  <span key={idx}>
+                    <a
+                      href={`https://web.whatsapp.com/send/?phone=${displayPhone(p)
+                        .replace(/\D/g, '')
+                        .replace(/^/, (d) => (d.startsWith('55') ? d : `55${d}`))}&type=phone_number&app_absent=0`}
+                      className="text-green-600 underline"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => handlePhoneClick(e, p, c)}
+                    >
+                      {displayPhone(p)}
+                    </a>
+                    {idx < c.normalizedPhones.length - 1 ? ' / ' : ''}
+                  </span>
+                ))}
+              </p>
+            )}
+
+            {c.linkedin && (
+              <p>
+                <a
+                  href={c.linkedin}
+                  className="text-blue-600 underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  LinkedIn
+                </a>
+              </p>
+            )}
           </div>
+        ))}
+        <div className="mt-1">
+          <button
+            type="button"
+            className="text-blue-600 underline text-[10px]"
+            onClick={handleHistoryClick}
+          >
+            Histórico
+          </button>
         </div>
-        <MessageModal
-          open={modalOpen}
-          messages={modalMessages}
-          onSelect={(msg) => {
-            if (onSelectMessage) onSelectMessage(msg);
-            setModalOpen(false);
-          }}
-          onClose={() => setModalOpen(false)}
-        />
-        <ObservationModal
-          open={obsOpen}
-          onConfirm={async (obs) => {
-            if (obsAction) await obsAction(obs);
-            setObsOpen(false);
-          }}
-          onClose={() => setObsOpen(false)}
-        />
-        <HistoryModal
-          open={historyOpen}
-          interactions={historyData}
-          onClose={() => setHistoryOpen(false)}
-        />
-        </>
-      )}
-    </Draggable>
+      </div>
+      <MessageModal
+        open={modalOpen}
+        messages={modalMessages}
+        onSelect={(msg) => {
+          if (onSelectMessage) onSelectMessage(msg);
+          setModalOpen(false);
+        }}
+        onClose={() => setModalOpen(false)}
+      />
+      <ObservationModal
+        open={obsOpen}
+        onConfirm={async (obs) => {
+          if (obsAction) await obsAction(obs);
+          setObsOpen(false);
+        }}
+        onClose={() => setObsOpen(false)}
+      />
+      <HistoryModal
+        open={historyOpen}
+        interactions={historyData}
+        onClose={() => setHistoryOpen(false)}
+      />
+    </>
   );
 }
