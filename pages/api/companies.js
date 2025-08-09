@@ -13,6 +13,17 @@ import {
 } from '../../lib/googleSheets';
 import { enrichCompanyData } from '../../lib/perplexity';
 
+function norm(v) { return v == null ? '' : String(v).trim(); }
+function onlyDigits(s) { return norm(s).replace(/\D+/g, ''); }
+function normalizeCNPJ(s) {
+  const d = onlyDigits(s);
+  if (d.length !== 14) return '';
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+}
+function isValidCNPJFormat(s) {
+  return onlyDigits(s).length === 14;
+}
+
 // ---- DEBUG / LOG ----
 const __DEBUG_SHEETS__ = process.env.DEBUG_SHEETS === '1';
 function log(...args) { if (__DEBUG_SHEETS__) console.log('[companies]', ...args); }
@@ -29,10 +40,6 @@ const GENERIC_DOMAINS = new Set([
   'bol.com.br','uol.com.br','terra.com.br','live.com'
 ]);
 
-function norm(v) {
-  if (v == null) return '';
-  return String(v).trim();
-}
 function ensureHttps(domain) {
   if (!domain) return '';
   return /^https?:\/\//i.test(domain) ? domain : `https://${domain}`;
@@ -173,18 +180,28 @@ export default async function handler(req, res) {
   }
 
   // 4) Enriquecer dados COM AI só se NÃO houver CNPJ
-  if (!norm(empresa.cnpj)) {
-    log('perplexity: iniciando enrichCompanyData (sem CNPJ)');
-  } else {
-    log('perplexity: pulado (CNPJ presente)');
-  }
   try {
     if (!norm(empresa.cnpj) && typeof enrichCompanyData === 'function') {
       empresa = await enrichCompanyData(empresa);
     }
   } catch (err) {
-    warn('perplexity.falha', err?.message || err);
+    console.error('Falha ao enriquecer dados com Perplexity:', err?.message || err);
     // segue com o que temos
+  }
+
+  // 4.1) CNPJ obrigatório: normalizar e validar (14 dígitos)
+  if (empresa.cnpj) {
+    const fixed = normalizeCNPJ(empresa.cnpj);
+    if (fixed) empresa.cnpj = fixed;
+  }
+  if (!isValidCNPJFormat(empresa.cnpj)) {
+    return res.status(422).json({
+      error: 'CNPJ obrigatório',
+      code: 'CNPJ_REQUIRED',
+      company: norm(empresa.nome),
+      receivedCNPJ: norm(empresa.cnpj),
+      hint: 'Informe um CNPJ válido (14 dígitos) ou ajuste o nome/UF para permitir o enriquecimento automático.',
+    });
   }
 
   // 5) Registrar na planilha de importação
