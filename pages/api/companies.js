@@ -13,33 +13,15 @@ import {
 } from '../../lib/googleSheets';
 import { enrichCompanyData } from '../../lib/perplexity';
 
-function norm(v) { return v == null ? '' : String(v).trim(); }
-function onlyDigits(s) { return norm(s).replace(/\D+/g, ''); }
-function normalizeCNPJ(s) {
-  const d = onlyDigits(s);
-  if (d.length !== 14) return '';
-  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-}
-function isValidCNPJFormat(s) {
-  return onlyDigits(s).length === 14;
-}
-
-// ---- DEBUG / LOG ----
-const __DEBUG_SHEETS__ = process.env.DEBUG_SHEETS === '1';
-function log(...args) { if (__DEBUG_SHEETS__) console.log('[companies]', ...args); }
-function warn(...args) { if (__DEBUG_SHEETS__) console.warn('[companies][warn]', ...args); }
-function errlog(...args) { console.error('[companies][error]', ...args); }
-
-function safeStr(v, max = 120) {
-  const s = typeof v === 'string' ? v : JSON.stringify(v);
-  return s.length > max ? s.slice(0, max) + '…' : s;
-}
-
 const GENERIC_DOMAINS = new Set([
   'gmail.com','outlook.com','hotmail.com','yahoo.com','icloud.com',
   'bol.com.br','uol.com.br','terra.com.br','live.com'
 ]);
 
+function norm(v) {
+  if (v == null) return '';
+  return String(v).trim();
+}
 function ensureHttps(domain) {
   if (!domain) return '';
   return /^https?:\/\//i.test(domain) ? domain : `https://${domain}`;
@@ -91,12 +73,9 @@ function tryDeriveSiteFromMainSheet(companyName) {
 }
 
 export default async function handler(req, res) {
-  log('incoming method:', req.method);
   if (req.method !== 'POST') return res.status(405).end();
 
   const { client } = req.body || {};
-  log('incoming client keys:', client ? Object.keys(client) : 'none');
-
   if (!client) return res.status(400).json({ error: 'Client data missing' });
 
   let empresa = {
@@ -116,19 +95,6 @@ export default async function handler(req, res) {
     telefone2: client?.phone2 || '',
     observacao: client?.observation || '',
   };
-
-  log('empresa.montada', {
-    nome: empresa.nome,
-    site: empresa.site,
-    pais: empresa.pais,
-    estado: empresa.estado,
-    cidade: empresa.cidade,
-    cep: empresa.cep,
-    cnpj: empresa.cnpj ? '[present]' : '',
-    ddi: empresa.ddi,
-    telefone: empresa.telefone ? '[present]' : '',
-    telefone2: empresa.telefone2 ? '[present]' : '',
-  });
 
   // 1) Duplicidade na aba de importação (CNPJ ou Nome)
   try {
@@ -153,8 +119,6 @@ export default async function handler(req, res) {
         nomeVal.toLowerCase() === normalize(empresa.nome).toLowerCase();
       return sameCnpj || sameNome;
     });
-    log('duplicidade.indices', idx);
-    log('duplicidade.found', duplicate);
 
     if (duplicate) {
       return res.status(200).json({ duplicate: true });
@@ -166,11 +130,9 @@ export default async function handler(req, res) {
 
   // 2) Site por e-mail (fallback): se não veio site, tentar derivar pelo domínio corporativo
   if (!norm(empresa.site) && norm(empresa.nome)) {
-    log('site.fallback: tentar derivar pelo domínio de e-mail (planilha principal) para', safeStr(empresa.nome));
     try {
       const derived = await tryDeriveSiteFromMainSheet(empresa.nome);
       if (derived) empresa.site = derived;
-      log('site.fallback.result', derived || '(vazio)');
     } catch (_) {}
   }
 
@@ -189,42 +151,16 @@ export default async function handler(req, res) {
     // segue com o que temos
   }
 
-  // 4.1) CNPJ obrigatório: normalizar e validar (14 dígitos)
-  if (empresa.cnpj) {
-    const fixed = normalizeCNPJ(empresa.cnpj);
-    if (fixed) empresa.cnpj = fixed;
-  }
-  if (!isValidCNPJFormat(empresa.cnpj)) {
-    return res.status(422).json({
-      error: 'CNPJ obrigatório',
-      code: 'CNPJ_REQUIRED',
-      company: norm(empresa.nome),
-      receivedCNPJ: norm(empresa.cnpj),
-      hint: 'Informe um CNPJ válido (14 dígitos) ou ajuste o nome/UF para permitir o enriquecimento automático.',
-    });
-  }
-
   // 5) Registrar na planilha de importação
   try {
-    log('sheets.append: start');
-    const result = await appendCompanyImportRow(empresa);
-    log('sheets.append: ok', { tableRange: result?.tableRange || null, totalRows: result?.totalRows || null });
-    return res.status(200).json({
-      success: true,
-      tableRange: result?.tableRange || null,
-      totalRows: result?.totalRows || null,
-    });
+    const appendRes = await appendCompanyImportRow(empresa);
+    const range = appendRes?.data?.updates?.updatedRange || '';
+    const match = range.match(/!(?:[A-Z]+)(\d+):/);
+    const row = match ? parseInt(match[1], 10) : undefined;
+    return res.status(200).json({ row });
   } catch (err) {
-    errlog('sheets.append: fail', {
-      message: err?.message,
-      code: err?.code,
-      status: err?.response?.status,
-      data: err?.response?.data,
-      stack: err?.stack,
-    });
-    return res.status(500).json({
-      error: 'Erro ao registrar planilha',
-      details: err?.response?.data || err?.message || 'unknown',
-    });
+    console.error('Erro ao registrar planilha:', err);
+    return res.status(500).json({ error: 'Erro ao registrar planilha' });
   }
 }
+
