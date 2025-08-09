@@ -153,13 +153,24 @@ export default async function handler(req, res) {
 
   // 5) Registrar na planilha de importação
   try {
-    const appendRes = await appendCompanyImportRow(empresa);
-    const range = appendRes?.data?.updates?.updatedRange || '';
-    const match = range.match(/!(?:[A-Z]+)(\d+):/);
-    const row = match ? parseInt(match[1], 10) : undefined;
-    return res.status(200).json({ row });
+    const result = await appendCompanyImportRow(empresa);
+    // Não depender de "updates.updatedRange". Retornar sucesso simples.
+    return res.status(200).json({
+      success: true,
+      tableRange: result?.tableRange || null,
+      totalRows: result?.totalRows || null,
+    });
   } catch (err) {
-    console.error('Erro ao registrar planilha:', err);
-    return res.status(500).json({ error: 'Erro ao registrar planilha' });
+    console.error('Erro ao registrar planilha:', {
+      message: err?.message,
+      code: err?.code,
+      status: err?.response?.status,
+      data: err?.response?.data,
+      stack: err?.stack,
+    });
+    return res.status(500).json({
+      error: 'Erro ao registrar planilha',
+      details: err?.response?.data || err?.message || 'unknown',
+    });
   }
 }
