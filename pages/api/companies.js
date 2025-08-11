@@ -44,25 +44,29 @@ export default async function handler(req, res) {
   try {
     const sheet = await getCompanySheetCached();
     const rows = sheet.data.values || [];
-    const [header, ...dataRows] = rows;
-    const lowerHeader = header.map((h) => (h ? h.toLowerCase() : ''));
-    const idx = {
-      cnpj: lowerHeader.indexOf('cnpj'),
-      nome: lowerHeader.indexOf('nome'),
-    };
-    const duplicate = dataRows.some((row) => {
-      const cnpjVal = idx.cnpj >= 0 ? row[idx.cnpj] : '';
-      const nomeVal = idx.nome >= 0 ? row[idx.nome] : '';
-      return (
-        (empresa.cnpj && cnpjVal === empresa.cnpj) ||
-        (empresa.nome && nomeVal && nomeVal.toLowerCase() === empresa.nome.toLowerCase())
-      );
-    });
-    if (duplicate) {
-      return res.status(200).json({ duplicate: true });
+
+    if (rows.length > 0) {
+      const [header, ...dataRows] = rows;
+      const lowerHeader = header.map((h) => (h ? h.toLowerCase() : ''));
+      const idx = {
+        cnpj: lowerHeader.indexOf('cnpj'),
+        nome: lowerHeader.indexOf('nome'),
+      };
+      const duplicate = dataRows.some((row) => {
+        const cnpjVal = idx.cnpj >= 0 ? row[idx.cnpj] : '';
+        const nomeVal = idx.nome >= 0 ? row[idx.nome] : '';
+        return (
+          (empresa.cnpj && cnpjVal === empresa.cnpj) ||
+          (empresa.nome && nomeVal && nomeVal.toLowerCase() === empresa.nome.toLowerCase())
+        );
+      });
+      if (duplicate) {
+        return res.status(200).json({ duplicate: true });
+      }
     }
   } catch (err) {
     console.error('Erro ao verificar duplicidade:', err);
+    return res.status(500).json({ error: 'Erro ao verificar duplicidade na planilha.' });
   }
 
   // enriquecer dados
