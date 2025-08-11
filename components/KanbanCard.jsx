@@ -67,6 +67,7 @@ export default function KanbanCard({ card, index }) {
   const [obsAction, setObsAction] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const openModal = (messages, action) => {
     setModalMessages(messages);
@@ -92,6 +93,37 @@ export default function KanbanCard({ card, index }) {
     const history = await res.json();
     setHistoryData(history);
     setHistoryOpen(true);
+  };
+
+  const handleDoubleClick = async () => {
+    try {
+      setLoading(true);
+      const payload = {
+        clienteId: client?.id,
+        nome: client?.company || client?.nome || '',
+        estado: client?.uf || '',
+        cidade: client?.city || '',
+      };
+
+      const res = await fetch('/api/enriquecer-empresa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!json.ok) {
+        throw new Error(json.error || 'Falha ao enriquecer empresa');
+      }
+
+      console.log('Enriquecimento concluído:', json.data);
+      alert('Dados da empresa enriquecidos e salvos na planilha.');
+    } catch (err) {
+      console.error('Erro no enriquecimento:', err);
+      alert(`Erro ao enriquecer: ${err?.message || err}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handlePhoneClick = async (e, phone, contact) => {
@@ -198,7 +230,9 @@ export default function KanbanCard({ card, index }) {
             backgroundColor,
             borderLeft: `4px solid ${borderLeftColor}`,
           }}
-          className="p-2 mb-2 rounded shadow transition-colors"
+          className={`p-2 mb-2 rounded shadow transition-colors ${loading ? 'opacity-60 pointer-events-none' : ''}`}
+          onDoubleClick={handleDoubleClick}
+          title="Dê duplo clique para enriquecer os dados desta empresa"
         >
           <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
 
