@@ -1,12 +1,30 @@
 import { appendCompanyImportRow, getCompanySheetCached } from '../../lib/googleSheets';
 
-// A função enrichCompanyData foi movida para este arquivo para evitar dependências circulares
-// e para limpar a estrutura de arquivos. A implementação original foi perdida durante uma
-// refatoração anterior e atualmente é um placeholder.
-const enrichCompanyData = async (empresa) => {
-  // TODO: Implementar a lógica de enriquecimento de dados da empresa usando a API do Perplexity.
-  console.log('A função enrichCompanyData foi chamada, mas está usando a implementação de placeholder.');
-  return empresa;
+// Esta função é um placeholder. A implementação real deveria usar o nome da
+// empresa para buscar dados detalhados (CNPJ, endereço, etc.) de uma fonte
+// externa, como uma API de dados de empresas ou um serviço de IA.
+const enrichCompanyData = async (companyName) => {
+  console.log(`--- STUB: A função enrichCompanyData foi chamada para: ${companyName}`);
+  console.log('--- STUB: Retornando dados vazios pois a implementação real não existe.');
+  // Como a implementação real não existe, retornamos um objeto que apenas
+  // contém o nome, para que o resto do fluxo possa ser validado.
+  return {
+    nome: companyName,
+    site: '',
+    pais: '',
+    estado: '',
+    cidade: '',
+    logradouro: '',
+    numero: '',
+    bairro: '',
+    complemento: '',
+    cep: '',
+    cnpj: '',
+    ddi: '',
+    telefone: '',
+    telefone2: '',
+    observacao: 'Dados não enriquecidos - implementação pendente.',
+  };
 };
 
 export default async function handler(req, res) {
@@ -15,36 +33,36 @@ export default async function handler(req, res) {
   }
 
   const { client } = req.body || {};
-  if (!client) {
-    return res.status(400).json({ error: 'Client data missing' });
+  if (!client || !client.company) {
+    return res.status(400).json({ error: 'Dados do cliente ou nome da empresa ausentes.' });
   }
 
-  const hasPhone = client.contacts?.some((c) => c.normalizedPhones?.length > 0);
-  const allPhones = client.contacts?.flatMap((c) => c.normalizedPhones || []) || [];
-
-  let empresa = {
-    nome: client?.company || '',
-    site: client?.website || '',
-    pais: client?.country || '',
-    estado: client?.state || '',
-    cidade: client?.city || '',
-    logradouro: client?.address || '',
-    numero: client?.number || '',
-    bairro: client?.neighborhood || '',
-    complemento: client?.complement || '',
-    cep: client?.zipcode || '',
-    cnpj: client?.cnpj || '',
-    ddi: hasPhone ? (client.ddi || '55') : '',
-    telefone: allPhones[0] || '',
-    telefone2: allPhones[1] || '',
-    observacao: client?.observation || '',
-  };
-
-  // verificar duplicidade na planilha
   try {
+    // 1. Enriquecer os dados
+    const enrichedData = await enrichCompanyData(client.company);
+
+    // 2. Construir o objeto 'empresa' a partir dos dados enriquecidos
+    const empresa = {
+      nome: enrichedData.nome || client.company,
+      site: enrichedData.site || '',
+      pais: enrichedData.pais || '',
+      estado: enrichedData.estado || '',
+      cidade: enrichedData.cidade || '',
+      logradouro: enrichedData.logradouro || '',
+      numero: enrichedData.numero || '',
+      bairro: enrichedData.bairro || '',
+      complemento: enrichedData.complemento || '',
+      cep: enrichedData.cep || '',
+      cnpj: enrichedData.cnpj || '',
+      ddi: enrichedData.ddi || '',
+      telefone: enrichedData.telefone || '',
+      telefone2: enrichedData.telefone2 || '',
+      observacao: enrichedData.observacao || '',
+    };
+
+    // 3. Verificar duplicidade na planilha de importação
     const sheet = await getCompanySheetCached();
     const rows = sheet.data.values || [];
-
     if (rows.length > 0) {
       const [header, ...dataRows] = rows;
       const lowerHeader = header.map((h) => (h ? h.toLowerCase() : ''));
@@ -56,30 +74,24 @@ export default async function handler(req, res) {
         const cnpjVal = idx.cnpj >= 0 ? row[idx.cnpj] : '';
         const nomeVal = idx.nome >= 0 ? row[idx.nome] : '';
         return (
-          (empresa.cnpj && cnpjVal === empresa.cnpj) ||
-          (empresa.nome && nomeVal && nomeVal.toLowerCase() === empresa.nome.toLowerCase())
+          (empresa.cnpj && cnpjVal && empresa.cnpj === cnpjVal) ||
+          (empresa.nome && nomeVal && empresa.nome.toLowerCase() === nomeVal.toLowerCase())
         );
       });
       if (duplicate) {
         return res.status(200).json({ duplicate: true });
       }
     }
-  } catch (err) {
-    console.error('Erro ao verificar duplicidade:', err);
-    return res.status(500).json({ error: 'Erro ao verificar duplicidade na planilha.' });
-  }
 
-  // enriquecer dados
-  empresa = await enrichCompanyData(empresa);
-
-  try {
+    // 4. Adicionar à planilha
     const appendRes = await appendCompanyImportRow(empresa);
     const range = appendRes.data?.updates?.updatedRange || '';
     const match = range.match(/!(?:[A-Z]+)(\d+):/);
     const row = match ? parseInt(match[1], 10) : undefined;
     return res.status(200).json({ row });
+
   } catch (err) {
-    console.error('Erro ao registrar planilha:', err);
-    return res.status(500).json({ error: 'Erro ao registrar planilha' });
+    console.error('Erro no processo de registro da empresa:', err);
+    return res.status(500).json({ error: 'Erro interno ao registrar a empresa.' });
   }
 }

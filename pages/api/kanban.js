@@ -26,43 +26,30 @@ function collectEmails(row, idx) {
 
 function groupRows(rows) {
   const [header, ...data] = rows;
-  const lowerHeader = header.map((h) => (h ? h.toLowerCase() : ''));
   const idx = {
-    clienteId: lowerHeader.indexOf('cliente_id'),
-    org: lowerHeader.indexOf('organização - nome'),
-    titulo: lowerHeader.indexOf('negócio - título'),
-    contato: lowerHeader.indexOf('negócio - pessoa de contato'),
-    cargo: lowerHeader.indexOf('pessoa - cargo'),
-    emailWork: lowerHeader.indexOf('pessoa - email - work'),
-    emailHome: lowerHeader.indexOf('pessoa - email - home'),
-    emailOther: lowerHeader.indexOf('pessoa - email - other'),
-    phoneWork: lowerHeader.indexOf('pessoa - phone - work'),
-    phoneHome: lowerHeader.indexOf('pessoa - phone - home'),
-    phoneMobile: lowerHeader.indexOf('pessoa - phone - mobile'),
-    phoneOther: lowerHeader.indexOf('pessoa - phone - other'),
-    tel: lowerHeader.indexOf('pessoa - telefone'),
-    cel: lowerHeader.indexOf('pessoa - celular'),
-    normalizado: lowerHeader.indexOf('telefone normalizado'),
-    segmento: lowerHeader.indexOf('organização - segmento'),
-    tamanho: lowerHeader.indexOf('organização - tamanho da empresa'),
-    uf: lowerHeader.indexOf('uf'),
-    cidade: lowerHeader.indexOf('cidade_estimada'),
-    status: lowerHeader.indexOf('status_kanban'),
-    data: lowerHeader.indexOf('data_ultima_movimentacao'),
-    linkedin: lowerHeader.indexOf('pessoa - end. linkedin'),
-    cor: lowerHeader.indexOf('cor_card'),
-    // Detalhes da empresa para registro
-    website: lowerHeader.indexOf('site'),
-    country: lowerHeader.indexOf('país'),
-    state: lowerHeader.indexOf('estado'),
-    address: lowerHeader.indexOf('logradouro'),
-    number: lowerHeader.indexOf('número'),
-    neighborhood: lowerHeader.indexOf('bairro'),
-    complement: lowerHeader.indexOf('complemento'),
-    zipcode: lowerHeader.indexOf('cep'),
-    cnpj: lowerHeader.indexOf('cnpj'),
-    observation: lowerHeader.indexOf('observação'),
-    ddi: lowerHeader.indexOf('ddi'),
+    clienteId: header.indexOf('Cliente_ID'),
+    org: header.indexOf('Organização - Nome'),
+    titulo: header.indexOf('Negócio - Título'),
+    contato: header.indexOf('Negócio - Pessoa de contato'),
+    cargo: header.indexOf('Pessoa - Cargo'),
+    emailWork: header.indexOf('Pessoa - Email - Work'),
+    emailHome: header.indexOf('Pessoa - Email - Home'),
+    emailOther: header.indexOf('Pessoa - Email - Other'),
+    phoneWork: header.indexOf('Pessoa - Phone - Work'),
+    phoneHome: header.indexOf('Pessoa - Phone - Home'),
+    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
+    phoneOther: header.indexOf('Pessoa - Phone - Other'),
+    tel: header.indexOf('Pessoa - Telefone'),
+    cel: header.indexOf('Pessoa - Celular'),
+    normalizado: header.indexOf('Telefone Normalizado'),
+    segmento: header.indexOf('Organização - Segmento'),
+    tamanho: header.indexOf('Organização - Tamanho da empresa'),
+    uf: header.indexOf('uf'),
+    cidade: header.indexOf('cidade_estimada'),
+    status: header.indexOf('Status_Kanban'),
+    data: header.indexOf('Data_Ultima_Movimentacao'),
+    linkedin: header.indexOf('Pessoa - End. Linkedin'),
+    cor: header.indexOf('Cor_Card'),
   };
 
   const map = new Map();
@@ -85,18 +72,6 @@ function groupRows(rows) {
         dataMov: row[idx.data] || '',
         color: row[idx.cor] || '',
         rows: [],
-        // Detalhes da empresa
-        website: row[idx.website] || '',
-        country: row[idx.country] || '',
-        state: row[idx.state] || '',
-        address: row[idx.address] || '',
-        number: row[idx.number] || '',
-        neighborhood: row[idx.neighborhood] || '',
-        complement: row[idx.complement] || '',
-        zipcode: row[idx.zipcode] || '',
-        cnpj: row[idx.cnpj] || '',
-        observation: row[idx.observation] || '',
-        ddi: row[idx.ddi] || '',
       });
     }
 
@@ -124,9 +99,18 @@ function groupRows(rows) {
 
   return {
     clients: Array.from(map.values()).map((c) => ({
-      ...c, // Inclui todos os campos do objeto do map
+      id: c.id,
+      company: c.company,
       opportunities: Array.from(new Set(c.opportunities)),
       contacts: Array.from(c.contactsMap.values()),
+      segment: c.segment,
+      size: c.size,
+      uf: c.uf,
+      city: c.city,
+      status: c.status,
+      dataMov: c.dataMov,
+      color: c.color,
+      rows: c.rows,
     })),
   };
 }
