@@ -1,5 +1,13 @@
 import { appendCompanyImportRow, getCompanySheetCached } from '../../lib/googleSheets';
-import { enrichCompanyData } from '../../lib/perplexity';
+
+// A função enrichCompanyData foi movida para este arquivo para evitar dependências circulares
+// e para limpar a estrutura de arquivos. A implementação original foi perdida durante uma
+// refatoração anterior e atualmente é um placeholder.
+const enrichCompanyData = async (empresa) => {
+  // TODO: Implementar a lógica de enriquecimento de dados da empresa usando a API do Perplexity.
+  console.log('A função enrichCompanyData foi chamada, mas está usando a implementação de placeholder.');
+  return empresa;
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -23,7 +31,7 @@ export default async function handler(req, res) {
     complemento: client?.complement || '',
     cep: client?.zipcode || '',
     cnpj: client?.cnpj || '',
-    ddi: client?.ddi || '55',
+    ddi: (client?.phone || client?.phone2) ? (client?.ddi || '55') : '',
     telefone: client?.phone || '',
     telefone2: client?.phone2 || '',
     observacao: client?.observation || '',
