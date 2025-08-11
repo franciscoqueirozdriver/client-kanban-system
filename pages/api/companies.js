@@ -45,9 +45,10 @@ export default async function handler(req, res) {
     const sheet = await getCompanySheetCached();
     const rows = sheet.data.values || [];
     const [header, ...dataRows] = rows;
+    const lowerHeader = header.map((h) => (h ? h.toLowerCase() : ''));
     const idx = {
-      cnpj: header.indexOf('cnpj'),
-      nome: header.indexOf('nome'),
+      cnpj: lowerHeader.indexOf('cnpj'),
+      nome: lowerHeader.indexOf('nome'),
     };
     const duplicate = dataRows.some((row) => {
       const cnpjVal = idx.cnpj >= 0 ? row[idx.cnpj] : '';
