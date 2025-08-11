@@ -19,6 +19,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Client data missing' });
   }
 
+  const hasPhone = client.contacts?.some((c) => c.normalizedPhones?.length > 0);
+  const allPhones = client.contacts?.flatMap((c) => c.normalizedPhones || []) || [];
+
   let empresa = {
     nome: client?.company || '',
     site: client?.website || '',
@@ -31,9 +34,9 @@ export default async function handler(req, res) {
     complemento: client?.complement || '',
     cep: client?.zipcode || '',
     cnpj: client?.cnpj || '',
-    ddi: (client?.phone || client?.phone2) ? (client?.ddi || '55') : '',
-    telefone: client?.phone || '',
-    telefone2: client?.phone2 || '',
+    ddi: hasPhone ? (client.ddi || '55') : '',
+    telefone: allPhones[0] || '',
+    telefone2: allPhones[1] || '',
     observacao: client?.observation || '',
   };
 

@@ -50,6 +50,18 @@ function groupRows(rows) {
     data: header.indexOf('Data_Ultima_Movimentacao'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
     cor: header.indexOf('Cor_Card'),
+    // Detalhes da empresa para registro
+    website: header.indexOf('Site'),
+    country: header.indexOf('País'),
+    state: header.indexOf('Estado'),
+    address: header.indexOf('Logradouro'),
+    number: header.indexOf('Número'),
+    neighborhood: header.indexOf('Bairro'),
+    complement: header.indexOf('Complemento'),
+    zipcode: header.indexOf('CEP'),
+    cnpj: header.indexOf('CNPJ'),
+    observation: header.indexOf('Observação'),
+    ddi: header.indexOf('DDI'),
   };
 
   const map = new Map();
@@ -72,6 +84,18 @@ function groupRows(rows) {
         dataMov: row[idx.data] || '',
         color: row[idx.cor] || '',
         rows: [],
+        // Detalhes da empresa
+        website: row[idx.website] || '',
+        country: row[idx.country] || '',
+        state: row[idx.state] || '',
+        address: row[idx.address] || '',
+        number: row[idx.number] || '',
+        neighborhood: row[idx.neighborhood] || '',
+        complement: row[idx.complement] || '',
+        zipcode: row[idx.zipcode] || '',
+        cnpj: row[idx.cnpj] || '',
+        observation: row[idx.observation] || '',
+        ddi: row[idx.ddi] || '',
       });
     }
 
@@ -99,18 +123,9 @@ function groupRows(rows) {
 
   return {
     clients: Array.from(map.values()).map((c) => ({
-      id: c.id,
-      company: c.company,
+      ...c, // Inclui todos os campos do objeto do map
       opportunities: Array.from(new Set(c.opportunities)),
       contacts: Array.from(c.contactsMap.values()),
-      segment: c.segment,
-      size: c.size,
-      uf: c.uf,
-      city: c.city,
-      status: c.status,
-      dataMov: c.dataMov,
-      color: c.color,
-      rows: c.rows,
     })),
   };
 }
