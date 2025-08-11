@@ -170,7 +170,7 @@ export default function KanbanCard({ card, index }) {
       });
     }
   };
- const handleRegisterCompany = async () => {
+  const handleRegisterCompany = async () => {
     if (!window.confirm('Deseja realmente cadastrar essa empresa na planilha?')) {
       return;
     }
@@ -181,9 +181,15 @@ export default function KanbanCard({ card, index }) {
         body: JSON.stringify({ client }),
       });
       const data = await res.json();
+      if (data.duplicate) {
+        alert('Empresa já cadastrada!');
+        return;
+      }
       if (res.ok) {
         alert('Empresa cadastrada com sucesso!');
-        setClient((prev) => ({ ...prev, sheetRow: data.row }));
+        if (data.row) {
+          setClient((prev) => ({ ...prev, sheetRow: data.row }));
+        }
       } else {
         alert(data.error || 'Erro ao cadastrar empresa');
       }
