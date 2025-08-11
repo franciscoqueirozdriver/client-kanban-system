@@ -55,8 +55,7 @@ export default async function handler(req, res) {
       cep: enrichedData.cep || '',
       cnpj: enrichedData.cnpj || '',
       ddi: enrichedData.ddi || '',
-      telefone: enrichedData.telefone || '',
-      telefone2: enrichedData.telefone2 || '',
+      telefone: [enrichedData.telefone, enrichedData.telefone2].filter(Boolean).join(' / '),
       observacao: enrichedData.observacao || '',
     };
 
