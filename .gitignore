@@ -23,6 +23,9 @@ Thumbs.db
 # Arquivos de lock gerados
 package-lock.json
 
+# Relatórios de teste
+coverage/
+
 # Backup ou arquivos temporários
 *.bak
 *.tmp

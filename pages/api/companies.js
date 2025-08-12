@@ -1,6 +1,25 @@
 import { appendCompanyImportRow, getCompanySheetCached } from '../../lib/googleSheets';
 import { enrichCompanyData } from '../../lib/perplexity';
 
+const stateMapping = {
+  'Acre': 'AC', 'Alagoas': 'AL', 'Amapá': 'AP', 'Amazonas': 'AM', 'Bahia': 'BA', 'Ceará': 'CE',
+  'Distrito Federal': 'DF', 'Espírito Santo': 'ES', 'Goiás': 'GO', 'Maranhão': 'MA', 'Mato Grosso': 'MT',
+  'Mato Grosso do Sul': 'MS', 'Minas Gerais': 'MG', 'Pará': 'PA', 'Paraíba': 'PB', 'Paraná': 'PR',
+  'Pernambuco': 'PE', 'Piauí': 'PI', 'Rio de Janeiro': 'RJ', 'Rio Grande do Norte': 'RN',
+  'Rio Grande do Sul': 'RS', 'Rondônia': 'RO', 'Roraima': 'RR', 'Santa Catarina': 'SC', 'São Paulo': 'SP',
+  'Sergipe': 'SE', 'Tocantins': 'TO'
+};
+
+function getUf(estado) {
+  if (!estado) return '';
+  const upper = estado.trim().toUpperCase();
+  if (upper.length === 2 && Object.values(stateMapping).includes(upper)) {
+    return upper;
+  }
+  const fromMap = Object.keys(stateMapping).find(key => key.toUpperCase() === upper);
+  return fromMap ? stateMapping[fromMap] : '';
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).end();
@@ -15,7 +34,7 @@ export default async function handler(req, res) {
     nome: client?.company || '',
     site: client?.website || '',
     pais: client?.country || '',
-    estado: client?.state || '',
+    estado: getUf(client?.uf),
     cidade: client?.city || '',
     logradouro: client?.address || '',
     numero: client?.number || '',
