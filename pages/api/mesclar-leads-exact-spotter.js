@@ -8,6 +8,13 @@ const DEST_KEY = 'Cliente_ID'; // chave única padronizada
 
 // Utils
 const clean = (v) => (v ?? '').toString().trim();
+const pick = (row, ...names) => {
+  for (const n of names) {
+    const v = row[n];
+    if (v !== undefined && v !== null && clean(v)) return clean(v);
+  }
+  return '';
+};
 
 function normalizeUF(uf) {
   const u = clean(uf).toUpperCase();
@@ -45,7 +52,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1) Ler abas (usar somente helpers do lib)
+    // 1) Ler abas com helpers do lib
     const [{ rows: layout }, { rows: sheet1 }, { rows: padroes }, destRaw] = await Promise.all([
       getSheetData(SHEET_LAYOUT),
       getSheetData(SHEET_SHEET1),
@@ -59,7 +66,7 @@ export default async function handler(req, res) {
     const produtosValidos = padroes.map(r => clean(r['Produtos'])).filter(Boolean);
     const mercadosValidos = padroes.map(r => clean(r['Mercados'])).filter(Boolean);
 
-    // 3) Índices por Cliente_ID (somente Cliente_ID)
+    // 3) Índices por Cliente_ID
     const idOf = (r) => clean(r[DEST_KEY]);
     const mapSheet1 = new Map(sheet1.map(r => [idOf(r), r]).filter(([k]) => !!k));
     const mapDest = new Map(destRows.map(r => [idOf(r), r]).filter(([k]) => !!k));
@@ -68,7 +75,7 @@ export default async function handler(req, res) {
     const neededCols = new Set([
       DEST_KEY,
       'Nome do Lead','Origem','Sub-Origem','Mercado','Produto',
-      'Site','Estado','Cidade','Logradouro','Número','Bairro','Complemento','CEP',
+      'Site','País','Estado','Cidade','Logradouro','Número','Bairro','Complemento','CEP',
       'DDI','Telefones',
       'Observação','CPF/CNPJ',
       'Nome Contato','E-mail Contato','Cargo Contato','DDI Contato','Telefones Contato',
@@ -77,15 +84,11 @@ export default async function handler(req, res) {
     ]);
 
     let header = Array.isArray(destHeadersRaw) ? [...destHeadersRaw] : [];
-
-    // MIGRAÇÃO: se existir "Client_ID" e não existir "Cliente_ID", renomeia o cabeçalho
     const hasOld = header.includes('Client_ID');
     const hasNew = header.includes(DEST_KEY);
     if (hasOld && !hasNew) {
       header = header.map(h => (h === 'Client_ID' ? DEST_KEY : h));
     }
-
-    // Garante coluna-chave e demais colunas
     if (!header.includes(DEST_KEY)) header.unshift(DEST_KEY);
     for (const c of neededCols) {
       if (!header.includes(c)) header.push(c);
@@ -122,54 +125,57 @@ export default async function handler(req, res) {
       const atual = mapDest.get(id) || {};
 
       // Nome da Empresa
-      const nomeEmpresa = clean(row['Nome da Empresa']) || clean(atual['Nome da Empresa']);
+      const nomeEmpresa = pick(row, 'Nome da Empresa') || clean(atual['Nome da Empresa']);
 
-      // Produto (apenas se ∈ Padroes/Produtos)
-      const produtoInput = clean(row['Produto']);
+      // Produto (pode não existir na layout; só aceita se ∈ Padroes/Produtos)
+      const produtoInput = pick(row, 'Produto'); // se não existir, virá vazio
       const produto = produtosValidos.includes(produtoInput) ? produtoInput : clean(atual['Produto']);
 
       // Nome do Lead
       const nomeLead = produto ? `${nomeEmpresa} - ${produto}` : `${nomeEmpresa}`;
 
-      // Mercado
+      // Mercado (Sheet1 -> Organização - Segmento)
       const segmento = clean(base['Organização - Segmento']);
       const mercado = segmento && mercadosValidos.includes(segmento) ? segmento : 'N/A';
 
       // Site (remover barras finais)
-      const rawSite = clean(row['Site Empresa']);
+      const rawSite = pick(row, 'Site Empresa');
       const site = rawSite.replace(/\/+$/, '');
 
-      // Endereço
-      const camposEndereco = {
-        Estado: row['Estado Empresa'] ? normalizeUF(row['Estado Empresa']) : '',
-        Cidade: clean(row['Cidade Empresa']),
-        Logradouro: clean(row['Logradouro Empresa']),
-        Número: clean(row['Numero Empresa']),
-        Bairro: clean(row['Bairro Empresa']),
-        Complemento: clean(row['Complemento Empresa']),
-        CEP: clean(row['CEP Empresa']),
-      };
+      // Endereço vindo da layout
+      const estado = normalizeUF(pick(row, 'Estado Empresa'));
+      const cidade = pick(row, 'Cidade Empresa');
+      const logradouro = pick(row, 'Logradouro Empresa');
+      const numero = pick(row, 'Numero Empresa', 'Número Empresa');
+      const bairro = pick(row, 'Bairro Empresa');
+      const complemento = pick(row, 'Complemento Empresa');
+      const cep = pick(row, 'CEP Empresa');
 
-      // Telefones (Card -> layout -> Sheet1)
-      const telsCard = splitPhones(row['Telefones Card']);
-      const telsLayout = splitPhones(row['Telefones Empresa']);
+      // País: preferir “País Empresa” (ou “Pais Empresa”); se faltar e houver cidade+estado, usar "Brasil"
+      const pais = pick(row, 'País Empresa', 'Pais Empresa') || ((cidade && estado) ? 'Brasil' : '');
+
+      // Telefones (prioridade: Card -> layout -> Sheet1)
+      const telsCard = splitPhones(pick(row, 'Telefones Card')); // pode não existir
+      const telsLayout = splitPhones(pick(row, 'Telefones Empresa'));
       const telSheet1 = splitPhones(base['Telefone Normalizado']);
       const telefones = telsCard.length ? telsCard : (telsLayout.length ? telsLayout : telSheet1);
       const telefonesStr = joinPhones(telefones);
-      const ddi = telefones.length ? clean(row['DDI']) : '';
 
-      // Observação (se vier vazio, manter vazio)
-      const observacao = clean(row['Observação']);
+      // DDI apenas se houver algum telefone
+      const ddi = telefones.length ? pick(row, 'DDI Empresa', 'DDI') : '';
+
+      // Observação (não herdar se vazio)
+      const observacao = pick(row, 'Observação Empresa', 'Observação');
 
       // CPF/CNPJ
-      const cnpj = clean(row['CNPJ Empresa']);
+      const cnpj = pick(row, 'CNPJ Empresa');
 
-      // Contatos (Card)
-      const nomeContato = clean(row['Nome Contato']);
-      const emailContato = clean(row['E-mail Contato']);
-      const cargoContato = clean(row['Cargo Contato']);
-      const telsContato = splitPhones(row['Telefones Contato']);
-      const ddiContato = telsContato.length ? clean(row['DDI Contato']) : '';
+      // Contatos (Card) — podem não existir na layout
+      const nomeContato = pick(row, 'Nome Contato');
+      const emailContato = pick(row, 'E-mail Contato', 'Email Contato');
+      const cargoContato = pick(row, 'Cargo Contato');
+      const telsContato = splitPhones(pick(row, 'Telefones Contato'));
+      const ddiContato = telsContato.length ? pick(row, 'DDI Contato') : '';
       const algumContatoPreenchido = !!(nomeContato || emailContato || cargoContato || telsContato.length);
       if (algumContatoPreenchido && !nomeContato) {
         errosObrigatorios.push({ Cliente_ID: id, erro: 'Nome Contato obrigatório quando houver outros campos de contato' });
@@ -188,13 +194,14 @@ export default async function handler(req, res) {
 
         'Site': preferNonEmpty(atual['Site'], site),
 
-        'Estado': preferNonEmpty(atual['Estado'], camposEndereco.Estado),
-        'Cidade': preferNonEmpty(atual['Cidade'], camposEndereco.Cidade),
-        'Logradouro': preferNonEmpty(atual['Logradouro'], camposEndereco.Logradouro),
-        'Número': preferNonEmpty(atual['Número'], camposEndereco.Número),
-        'Bairro': preferNonEmpty(atual['Bairro'], camposEndereco.Bairro),
-        'Complemento': preferNonEmpty(atual['Complemento'], camposEndereco.Complemento),
-        'CEP': preferNonEmpty(atual['CEP'], camposEndereco.CEP),
+        'País': preferNonEmpty(atual['País'], pais),
+        'Estado': preferNonEmpty(atual['Estado'], estado),
+        'Cidade': preferNonEmpty(atual['Cidade'], cidade),
+        'Logradouro': preferNonEmpty(atual['Logradouro'], logradouro),
+        'Número': preferNonEmpty(atual['Número'], numero),
+        'Bairro': preferNonEmpty(atual['Bairro'], bairro),
+        'Complemento': preferNonEmpty(atual['Complemento'], complemento),
+        'CEP': preferNonEmpty(atual['CEP'], cep),
 
         'DDI': preferNonEmpty(atual['DDI'], ddi),
         'Telefones': preferNonEmpty(atual['Telefones'], telefonesStr),
