@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     nome: client?.company || '',
     site: client?.website || '',
     pais: client?.country || '',
-    estado: getUf(client?.uf),
+    estado: client?.state || '',
     cidade: client?.city || '',
     logradouro: client?.address || '',
     numero: client?.number || '',
@@ -74,6 +74,11 @@ export default async function handler(req, res) {
 
   // enriquecer dados
   empresa = await enrichCompanyData(empresa);
+
+  // Garante que o estado seja a sigla oficial (UF)
+  if (empresa.estado) {
+    empresa.estado = getUf(empresa.estado);
+  }
 
   try {
     const appendRes = await appendCompanyImportRow(empresa);
