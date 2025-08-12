@@ -4,6 +4,16 @@ import { enrichCompanyData } from '../../lib/perplexity.js';
 
 const SHEET_NAME = 'layout_importacao_empresas';
 
+// Normaliza cabeçalhos removendo acentos, espaços extras e case
+function normalizeHeader(h) {
+  return (h || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 // Ordem exata das colunas na planilha:
 const HEADERS = [
   'Client_ID',
@@ -22,6 +32,9 @@ const HEADERS = [
   'Telefones Empresa',
   'Observação Empresa'
 ];
+
+// Versões normalizadas para comparações flexíveis
+const NORMALIZED_HEADERS = HEADERS.map(normalizeHeader);
 
 function mapToRow(enriched, clienteId) {
   // Garantir strings simples sem undefined
@@ -78,7 +91,8 @@ async function getAllRows(sheets, spreadsheetId) {
 }
 
 function getColumnIndex(headers, name) {
-  return headers.findIndex((h) => h.toLowerCase() === name.toLowerCase());
+  const target = normalizeHeader(name);
+  return headers.findIndex((h) => normalizeHeader(h) === target);
 }
 
 async function getRowIndexByClientId(sheets, spreadsheetId, headers, clientId) {
@@ -94,9 +108,15 @@ async function getRowIndexByClientId(sheets, spreadsheetId, headers, clientId) {
 }
 
 async function upsertCompany(sheets, spreadsheetId, headers, rowValues, overwrite) {
-  // headers devem bater 1:1 com HEADERS
-  if (headers.length !== HEADERS.length) {
-    throw new Error(`Headers da planilha não batem com o esperado. Esperado: ${HEADERS.join(' | ')}`);
+  // headers devem bater 1:1 com HEADERS (normalizados)
+  const normalized = headers.map(normalizeHeader);
+  if (
+    normalized.length !== NORMALIZED_HEADERS.length ||
+    normalized.some((h, i) => h !== NORMALIZED_HEADERS[i])
+  ) {
+    throw new Error(
+      `Headers da planilha não batem com o esperado. Esperado: ${HEADERS.join(' | ')}`
+    );
   }
 
   const idIdx = getColumnIndex(headers, 'Client_ID');
@@ -150,10 +170,11 @@ export default async function handler(req, res) {
     const spreadsheetId = process.env.SPREADSHEET_ID;
     const headers = await getHeaderRow(sheets, spreadsheetId);
 
-    // Validação rápida de cabeçalho (ordem e nomes)
+    // Validação rápida de cabeçalho (ordem e nomes, normalizados)
+    const normalized = headers.map(normalizeHeader);
     const mismatch =
-      headers.length !== HEADERS.length ||
-      headers.some((h, i) => (h || '').trim() !== HEADERS[i]);
+      normalized.length !== NORMALIZED_HEADERS.length ||
+      normalized.some((h, i) => h !== NORMALIZED_HEADERS[i]);
     if (mismatch) {
       return res.status(412).json({
         ok: false,
