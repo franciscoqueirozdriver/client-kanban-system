@@ -103,6 +103,7 @@ export default function KanbanCard({ card, index }) {
         nome: client?.company || client?.nome || '',
         estado: client?.uf || '',
         cidade: client?.city || '',
+        cep: client?.cep || '',
         overwrite: false,
       };
 

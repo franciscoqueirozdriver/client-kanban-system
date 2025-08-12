@@ -154,13 +154,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { clienteId, nome, estado, cidade, overwrite } = req.body || {};
+    const { clienteId, nome, estado, cidade, cep, overwrite } = req.body || {};
     if (!nome) {
       return res.status(400).json({ ok: false, error: 'Nome é obrigatório' });
     }
 
     // 1) Enriquecer com Perplexity
-    const enriched = await enrichCompanyData({ nome, estado, cidade });
+    const enriched = await enrichCompanyData({ nome, estado, cidade, cep });
 
     // 2) Mapear para a linha no formato exato da planilha
     const rowValues = mapToRow(enriched, clienteId);
