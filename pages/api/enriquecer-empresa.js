@@ -16,7 +16,7 @@ function normalizeHeader(h) {
 
 // Ordem exata das colunas na planilha:
 const HEADERS = [
-  'Client_ID',
+  'Cliente_ID',
   'Nome da Empresa',
   'Site Empresa',
   'País Empresa',
@@ -96,7 +96,7 @@ function getColumnIndex(headers, name) {
 }
 
 async function getRowIndexByClientId(sheets, spreadsheetId, headers, clientId) {
-  const idIdx = getColumnIndex(headers, 'Client_ID');
+  const idIdx = getColumnIndex(headers, 'Cliente_ID');
   if (idIdx < 0) return -1;
   const rows = await getAllRows(sheets, spreadsheetId);
   for (let i = 0; i < rows.length; i++) {
@@ -179,7 +179,7 @@ async function upsertCompany(sheets, spreadsheetId, headers, rowValues, overwrit
     );
   }
 
-  const idIdx = getColumnIndex(headers, 'Client_ID');
+  const idIdx = getColumnIndex(headers, 'Cliente_ID');
   const clientId = rowValues[idIdx] || '';
   const rowIndex = await getRowIndexByClientId(sheets, spreadsheetId, headers, clientId);
 
