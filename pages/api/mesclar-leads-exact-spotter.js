@@ -59,8 +59,8 @@ export default async function handler(req, res) {
     const produtosValidos = padroes.map(r => clean(r['Produtos'])).filter(Boolean);
     const mercadosValidos = padroes.map(r => clean(r['Mercados'])).filter(Boolean);
 
-    // 3) Índices por Cliente_ID
-    const idOf = (r) => clean(r[DEST_KEY]); // agora só aceita Cliente_ID
+    // 3) Índices por Cliente_ID (somente Cliente_ID)
+    const idOf = (r) => clean(r[DEST_KEY]);
     const mapSheet1 = new Map(sheet1.map(r => [idOf(r), r]).filter(([k]) => !!k));
     const mapDest = new Map(destRows.map(r => [idOf(r), r]).filter(([k]) => !!k));
 
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
 
     let header = Array.isArray(destHeadersRaw) ? [...destHeadersRaw] : [];
 
-    // MIGRAÇÃO: se existir "Client_ID" e não existir "Cliente_ID", renomeie o cabeçalho
+    // MIGRAÇÃO: se existir "Client_ID" e não existir "Cliente_ID", renomeia o cabeçalho
     const hasOld = header.includes('Client_ID');
     const hasNew = header.includes(DEST_KEY);
     if (hasOld && !hasNew) {
@@ -109,7 +109,7 @@ export default async function handler(req, res) {
     // 5) Preparar upserts
     const updates = [];
     const appends = [];
-    let created = 0, updated = 0, ignoradas = 0, ignoradasSemId = 0, ignoradasSemBase = 0;
+    let created = 0, updated = 0, ignoradasSemId = 0, ignoradasSemBase = 0;
     const errosObrigatorios = [];
 
     for (const row of layout) {
@@ -255,7 +255,7 @@ export default async function handler(req, res) {
     }
 
     // 7) Retorno
-    const ignoradas = 0; // mantido para retrocompatibilidade se quiser exibir
+    const ignoradas = ignoradasSemId + ignoradasSemBase; // total ignoradas
     return res.status(200).json({
       criadas: created,
       atualizadas: updated,
