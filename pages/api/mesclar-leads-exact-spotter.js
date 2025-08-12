@@ -1,179 +1,251 @@
-import { getSheetData, getSheetsClient } from '../../lib/googleSheets';
-import { normalizeUF } from '../../lib/perplexity';
+import { getSheetsClient, getSheetData } from '../../lib/googleSheets';
 
-function clean(v) {
-  return (v || '').toString().trim();
+const SHEET_LAYOUT = 'layout_importacao_empresas';
+const SHEET_SHEET1 = 'Sheet1';
+const SHEET_PADROES = 'Padroes';
+const SHEET_DEST = 'Leads Exact Spotter';
+const KEY = 'Client_ID';
+
+// Utils
+const clean = (v) => (v ?? '').toString().trim();
+
+function normalizeUF(uf) {
+  const u = clean(uf).toUpperCase();
+  const map = {
+    AC: 'AC', AL: 'AL', AP: 'AP', AM: 'AM', BA: 'BA', CE: 'CE', DF: 'DF', ES: 'ES',
+    GO: 'GO', MA: 'MA', MT: 'MT', MS: 'MS', MG: 'MG', PA: 'PA', PB: 'PB', PR: 'PR',
+    PE: 'PE', PI: 'PI', RJ: 'RJ', RN: 'RN', RS: 'RS', RO: 'RO', RR: 'RR', SC: 'SC',
+    SP: 'SP', SE: 'SE', TO: 'TO'
+  };
+  return map[u] || u;
 }
 
-function columnToLetter(index) {
-  let letter = '';
-  let temp = index;
-  while (temp >= 0) {
-    letter = String.fromCharCode((temp % 26) + 65) + letter;
-    temp = Math.floor(temp / 26) - 1;
+function splitPhones(str) {
+  if (!str) return [];
+  return [...new Set(
+    str.split(';').map(s => clean(s)).filter(Boolean)
+  )];
+}
+
+function joinPhones(arr) {
+  return (arr && arr.length) ? arr.join(';') : '';
+}
+
+function preferNonEmpty(curr, next) {
+  return clean(next) || clean(curr) || '';
+}
+
+// Converte índice numérico (0-based) em letra de coluna (A, B, ... Z, AA...)
+function colLetter(n) {
+  let s = '';
+  while (n >= 0) {
+    s = String.fromCharCode((n % 26) + 65) + s;
+    n = Math.floor(n / 26) - 1;
   }
-  return letter;
-}
-
-function mergePhones(a = '', b = '') {
-  const parts = [...a.split(';'), ...b.split(';')]
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return Array.from(new Set(parts)).join(';');
+  return s;
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-  const { produto } = req.body || {};
   try {
-    // Carrega dados das abas
-    const layout = await getSheetData('layout_importacao_empresas');
-    const sheet1 = await getSheetData('Sheet1');
-    const padroes = await getSheetData('Padroes');
-    const leads = await getSheetData('Leads Exact Spotter');
+    // 1) Ler todas as abas necessárias
+    const [{ rows: layout }, { rows: sheet1 }, { rows: padroes }, destRaw] = await Promise.all([
+      getSheetData(SHEET_LAYOUT),
+      getSheetData(SHEET_SHEET1),
+      getSheetData(SHEET_PADROES),
+      getSheetData(SHEET_DEST),
+    ]);
 
-    const produtosValidos = Array.from(new Set(padroes.rows.map((r) => r.Produtos).filter(Boolean)));
-    const mercadosValidosRaw = padroes.rows.map((r) => r.Mercados).filter(Boolean);
-    const normalizeTxt = (s) => clean(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const mercadosValidos = new Set(mercadosValidosRaw.map((m) => normalizeTxt(m)));
+    const { headers: destHeadersRaw, rows: destRows } = destRaw;
 
-    if (!produto || !produtosValidos.includes(produto)) {
-      return res.status(400).json({ error: 'Produto inválido' });
+    // 2) Montar listas válidas de Produtos e Mercados
+    const produtosValidos = padroes.map(r => clean(r['Produtos'])).filter(Boolean);
+    const mercadosValidos = padroes.map(r => clean(r['Mercados'])).filter(Boolean);
+
+    // 3) Índices rápidos por Client_ID
+    const mapSheet1 = new Map(sheet1.filter(r => clean(r[KEY])).map(r => [clean(r[KEY]), r]));
+    const mapDest = new Map(destRows.filter(r => clean(r[KEY])).map(r => [clean(r[KEY]), r]));
+
+    // 4) Conjunto de colunas obrigatórias do destino
+    const neededCols = new Set([
+      KEY,
+      'Nome do Lead', 'Origem', 'Sub-Origem', 'Mercado', 'Produto',
+      'Site', 'Estado', 'Cidade', 'Logradouro', 'Número', 'Bairro', 'Complemento', 'CEP',
+      'DDI', 'Telefones',
+      'Observação', 'CPF/CNPJ',
+      'Nome Contato', 'E-mail Contato', 'Cargo Contato', 'DDI Contato', 'Telefones Contato',
+      'Tipo do Serv. Comunicação', 'ID do Serv. Comunicação', 'Área',
+      'Nome da Empresa', 'Etapa', 'Funil',
+    ]);
+
+    // 5) Garantir header do destino (unir header atual com neededCols)
+    let header = Array.isArray(destHeadersRaw) ? [...destHeadersRaw] : [];
+    for (const c of neededCols) {
+      if (!header.includes(c)) header.push(c);
+    }
+    const sheets = await getSheetsClient();
+    if (!destHeadersRaw || header.length !== destHeadersRaw.length || header.some((h, i) => h !== destHeadersRaw[i])) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.SPREADSHEET_ID,
+        range: `${SHEET_DEST}!1:1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [header] },
+      });
     }
 
-    const sheet1Map = new Map(sheet1.rows.map((r) => [r.Client_ID, r]));
-    const leadsMap = new Map(leads.rows.map((r) => [r.Client_ID, r]));
+    const endCol = colLetter(header.length - 1);
 
-    const sheetsClient = await getSheetsClient();
-    const spreadsheetId = process.env.SPREADSHEET_ID;
+    // 6) Preparar upserts
+    const updates = []; // { range, values }
+    const appends = []; // [ ...values ]
+    let created = 0, updated = 0, ignored = 0;
+    const errosObrigatorios = [];
 
-    let criadas = 0,
-      atualizadas = 0,
-      ignoradas = 0;
-    const erros = [];
+    for (const row of layout) {
+      const clientId = clean(row[KEY]);
+      if (!clientId) { ignored++; continue; }
 
-    for (const row of layout.rows) {
-      const clientId = clean(row.Client_ID);
-      if (!clientId) continue;
-      const base = sheet1Map.get(clientId);
-      if (!base) continue;
+      const base = mapSheet1.get(clientId);
+      if (!base) { ignored++; continue; }
 
-      const existing = leadsMap.get(clientId);
-      const novoLead = { Client_ID: clientId };
+      const atual = mapDest.get(clientId) || {};
 
-      // Nome do Lead
-      novoLead['Nome do Lead'] = `${clean(row['Nome da Empresa'])}${produto ? ' - ' + produto : ''}`;
-      novoLead['Origem'] = 'Carteira de Clientes';
-      novoLead['Sub-Origem'] = '';
+      const nomeEmpresa = clean(row['Nome da Empresa']) || clean(atual['Nome da Empresa']);
 
-      // Mercado
-      const seg = base['Organização - Segmento'] || '';
-      novoLead['Mercado'] = mercadosValidos.has(normalizeTxt(seg)) ? seg : 'N/A';
+      const produtoInput = clean(row['Produto']);
+      const produto = produtosValidos.includes(produtoInput) ? produtoInput : clean(atual['Produto']);
 
-      // Produto
-      novoLead['Produto'] = produto;
+      const nomeLead = produto ? `${nomeEmpresa} - ${produto}` : `${nomeEmpresa}`;
 
-      // Campos de endereço / site
-      const site = clean(row['Site Empresa']).replace(/\/+$, '');
-      if (site) novoLead['Site'] = site;
-      if (row['Estado Empresa']) novoLead['Estado Empresa'] = normalizeUF(row['Estado Empresa']);
-      ['Cidade Empresa', 'Logradouro Empresa', 'Numero Empresa', 'Bairro Empresa', 'Complemento Empresa', 'CEP Empresa'].forEach(
-        (c) => {
-          const v = clean(row[c]);
-          if (v) novoLead[c] = v;
-        }
-      );
+      const segmento = clean(base['Organização - Segmento']);
+      const mercado = segmento && mercadosValidos.includes(segmento) ? segmento : 'N/A';
 
-      // Telefones
-      const telCard = clean(row['Telefones Card']);
-      const telOrigem = clean(row['Telefones Empresa']) || clean(base['Telefone Normalizado']);
-      const telefones = mergePhones(telCard, telOrigem);
-      if (telefones) {
-        novoLead['Telefones'] = telefones;
-        novoLead['DDI'] = clean(row['DDI Empresa']);
-      }
+      const rawSite = clean(row['Site Empresa']);
+      const site = rawSite.replace(/\/+$/, '');
 
-      // Observação
-      const obs = clean(row['Observação Empresa']);
-      if (obs) novoLead['Observação'] = obs;
+      const camposEndereco = {
+        Estado: row['Estado Empresa'] ? normalizeUF(row['Estado Empresa']) : '',
+        Cidade: clean(row['Cidade Empresa']),
+        Logradouro: clean(row['Logradouro Empresa']),
+        Número: clean(row['Numero Empresa']),
+        Bairro: clean(row['Bairro Empresa']),
+        Complemento: clean(row['Complemento Empresa']),
+        CEP: clean(row['CEP Empresa']),
+      };
 
-      // CPF/CNPJ
+      const telsCard = splitPhones(row['Telefones Card']);
+      const telsLayout = splitPhones(row['Telefones Empresa']);
+      const telSheet1 = splitPhones(base['Telefone Normalizado']);
+      const telefones = telsCard.length ? telsCard : (telsLayout.length ? telsLayout : telSheet1);
+      const telefonesStr = joinPhones(telefones);
+      const ddi = telefones.length ? clean(row['DDI'] || row['DDI Empresa']) : '';
+
+      const observacao = clean(row['Observação'] ?? row['Observação Empresa']);
+
       const cnpj = clean(row['CNPJ Empresa']);
-      if (cnpj) novoLead['CPF/CNPJ'] = cnpj;
 
-      // Contatos do card (derivados da Sheet1)
-      const nomeContato = clean(base['Negócio - Pessoa de contato']);
-      const emailContato =
-        clean(base['Pessoa - Email - Work']) || clean(base['Pessoa - Email - Home']) || clean(base['Pessoa - Email - Other']);
-      const cargoContato = clean(base['Pessoa - Cargo']);
-      const telsContato = clean(base['Telefone Normalizado']);
-      if (nomeContato || emailContato || cargoContato || telsContato) {
-        if (!nomeContato) erros.push(clientId);
-        novoLead['Nome Contato'] = nomeContato || '***FALTANDO***';
-        if (emailContato) novoLead['E-mail Contato'] = emailContato;
-        if (cargoContato) novoLead['Cargo Contato'] = cargoContato;
-        if (telsContato) {
-          novoLead['Telefones Contato'] = mergePhones('', telsContato);
-          novoLead['DDI Contato'] = clean(row['DDI Empresa']);
-        }
+      const nomeContato = clean(row['Nome Contato']);
+      const emailContato = clean(row['E-mail Contato']);
+      const cargoContato = clean(row['Cargo Contato']);
+      const telsContato = splitPhones(row['Telefones Contato']);
+      const ddiContato = telsContato.length ? clean(row['DDI Contato'] || row['DDI Contato Empresa']) : '';
+      const algumContatoPreenchido = !!(nomeContato || emailContato || cargoContato || telsContato.length);
+      if (algumContatoPreenchido && !nomeContato) {
+        errosObrigatorios.push({ Client_ID: clientId, erro: 'Nome Contato obrigatório quando houver outros campos de contato' });
       }
 
-      // Nome da Empresa, Etapa, Funil
-      novoLead['Nome da Empresa'] = clean(row['Nome da Empresa']);
-      novoLead['Etapa'] = 'Agendados';
-      novoLead['Funil'] = 'Padrão';
+      const novo = {
+        [KEY]: clientId,
 
-      if (!existing) {
-        // Preparar linha completa
-        const rowVals = leads.headers.map((h) => clean(novoLead[h] || ''));
-        await sheetsClient.spreadsheets.values.append({
-          spreadsheetId,
-          range: 'Leads Exact Spotter',
-          valueInputOption: 'RAW',
-          insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: [rowVals] },
+        'Nome do Lead': preferNonEmpty(atual['Nome do Lead'], nomeLead),
+        'Origem': 'Carteira de Clientes',
+        'Sub-Origem': '',
+
+        'Mercado': preferNonEmpty(atual['Mercado'], mercado),
+        'Produto': preferNonEmpty(atual['Produto'], produto),
+
+        'Site': preferNonEmpty(atual['Site'], site),
+
+        'Estado': preferNonEmpty(atual['Estado'], camposEndereco.Estado),
+        'Cidade': preferNonEmpty(atual['Cidade'], camposEndereco.Cidade),
+        'Logradouro': preferNonEmpty(atual['Logradouro'], camposEndereco.Logradouro),
+        'Número': preferNonEmpty(atual['Número'], camposEndereco.Número),
+        'Bairro': preferNonEmpty(atual['Bairro'], camposEndereco.Bairro),
+        'Complemento': preferNonEmpty(atual['Complemento'], camposEndereco.Complemento),
+        'CEP': preferNonEmpty(atual['CEP'], camposEndereco.CEP),
+
+        'DDI': preferNonEmpty(atual['DDI'], ddi),
+        'Telefones': preferNonEmpty(atual['Telefones'], telefonesStr),
+
+        'Observação': observacao || clean(atual['Observação']),
+
+        'CPF/CNPJ': preferNonEmpty(atual['CPF/CNPJ'], cnpj),
+
+        'Nome Contato': preferNonEmpty(atual['Nome Contato'], nomeContato),
+        'E-mail Contato': preferNonEmpty(atual['E-mail Contato'], emailContato),
+        'Cargo Contato': preferNonEmpty(atual['Cargo Contato'], cargoContato),
+        'DDI Contato': preferNonEmpty(atual['DDI Contato'], ddiContato),
+        'Telefones Contato': preferNonEmpty(atual['Telefones Contato'], joinPhones(telsContato)),
+
+        'Tipo do Serv. Comunicação': '',
+        'ID do Serv. Comunicação': '',
+        'Área': '',
+
+        'Nome da Empresa': preferNonEmpty(atual['Nome da Empresa'], nomeEmpresa),
+        'Etapa': 'Agendados',
+        'Funil': 'Padrão',
+      };
+
+      const rowValues = header.map(col => (novo[col] ?? '').toString());
+
+      const exists = mapDest.get(clientId);
+      if (exists && exists._rowNumber) {
+        const rowIndex = exists._rowNumber;
+        updates.push({
+          range: `${SHEET_DEST}!A${rowIndex}:${endCol}${rowIndex}`,
+          values: [rowValues],
         });
-        criadas++;
-        leadsMap.set(clientId, { ...novoLead, _rowNumber: leads.rows.length + criadas + atualizadas + 1 });
+        updated++;
       } else {
-        // Mesclar sem sobrescrever valores existentes
-        let changed = false;
-        const merged = { ...existing };
-        for (const h of leads.headers) {
-          const nv = clean(novoLead[h]);
-          if (!nv) continue;
-          if (h === 'Telefones' || h === 'Telefones Contato') {
-            const mergedPhones = mergePhones(existing[h], nv);
-            if (mergedPhones !== clean(existing[h])) {
-              merged[h] = mergedPhones;
-              changed = true;
-            }
-          } else if (!clean(existing[h])) {
-            merged[h] = nv;
-            changed = true;
-          }
-        }
-        if (changed) {
-          const rowVals = leads.headers.map((h) => clean(merged[h] || ''));
-          const lastCol = columnToLetter(leads.headers.length - 1);
-          const range = `Leads Exact Spotter!A${existing._rowNumber}:${lastCol}${existing._rowNumber}`;
-          await sheetsClient.spreadsheets.values.update({
-            spreadsheetId,
-            range,
-            valueInputOption: 'RAW',
-            requestBody: { values: [rowVals] },
-          });
-          atualizadas++;
-        } else {
-          ignoradas++;
-        }
+        appends.push(rowValues);
+        created++;
       }
     }
 
-    res.status(200).json({ criadas, atualizadas, ignoradas, erros });
+    // 7) Executar updates / appends
+    if (updates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: process.env.SPREADSHEET_ID,
+        requestBody: {
+          valueInputOption: 'RAW',
+          data: updates,
+        },
+      });
+    }
+
+    if (appends.length > 0) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: process.env.SPREADSHEET_ID,
+        range: `${SHEET_DEST}!A1`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: appends },
+      });
+    }
+
+    return res.status(200).json({
+      criadas: created,
+      atualizadas: updated,
+      ignoradas: ignored,
+      errosObrigatorios,
+    });
+
   } catch (err) {
-    console.error('[mesclar-leads-exact-spotter] fail', err);
-    res.status(500).json({ error: err.message });
+    console.error('[mesclar-leads-exact-spotter] ERRO:', err);
+    return res.status(500).json({ error: err.message });
   }
 }
+
