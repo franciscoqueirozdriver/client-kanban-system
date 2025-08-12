@@ -1,6 +1,6 @@
 // pages/api/enriquecer-empresa.js
 import { google } from 'googleapis';
-import { enrichCompanyData } from '../../lib/perplexity';
+import { enrichCompanyData } from '../../lib/perplexity.js';
 
 const SHEET_NAME = 'layout_importacao_empresas';
 
