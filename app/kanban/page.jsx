@@ -1,143 +1,94 @@
 'use client';
 
 import { DragDropContext } from '@hello-pangea/dnd';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import KanbanColumn from '../../components/KanbanColumn';
 import Filters from '../../components/Filters';
 
 export default function KanbanPage() {
   const [columns, setColumns] = useState([]);
-  const [filteredColumns, setFilteredColumns] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Buscar dados ao montar
-  useEffect(() => {
-    fetchColumns();
-  }, []);
+  const fetchColumns = useCallback(async (filters = {}) => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) {
+        if (Array.isArray(value)) {
+          value.forEach(v => params.append(key, v));
+        } else {
+          params.append(key, value);
+        }
+      }
+    });
 
-  // Sempre que columns mudar, reseta o filtro
-  useEffect(() => {
-    setFilteredColumns(null);
-  }, [columns]);
-
-  const fetchColumns = async () => {
-    const res = await fetch('/api/kanban');
+    const res = await fetch(`/api/kanban?${params.toString()}`);
     const data = await res.json();
     setColumns(data);
-  };
+    setLoading(false);
+  }, []);
 
-  const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
-    // Função de filtro
-    const filterFn = (client) => {
-      // segmento
-      if (segmento && segmento.trim()) {
-        if ((client.segment || '').trim().toLowerCase() !== segmento.trim().toLowerCase()) {
-          return false;
-        }
-      }
+  useEffect(() => {
+    fetchColumns();
+  }, [fetchColumns]);
 
-      // porte
-      if (porte) {
-        if (Array.isArray(porte)) {
-          if (porte.length > 0) {
-            const options = porte.map((p) => p.trim().toLowerCase());
-            if (!options.includes((client.size || '').trim().toLowerCase())) return false;
-          }
-        } else if (porte.trim()) {
-          if ((client.size || '').trim().toLowerCase() !== porte.trim().toLowerCase()) return false;
-        }
-      }
-
-      // uf
-      if (uf && uf.trim()) {
-        if ((client.uf || '').trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
-      }
-
-      // cidade
-      if (cidade && cidade.trim()) {
-        if ((client.city || '').trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
-      }
-
-      // query de texto
-      if (query) {
-        const q = query.toLowerCase();
-        const matchName = (client.company || '').toLowerCase().includes(q);
-        const matchContact = (client.contacts || []).some((c) =>
-          (c.name || c.nome || '').toLowerCase().includes(q)
-        );
-        const matchOpp = (client.opportunities || []).some((o) =>
-          (o || '').toLowerCase().includes(q)
-        );
-        if (!matchName && !matchContact && !matchOpp) return false;
-      }
-      return true;
-    };
-
-    // Aplica o filtro em todas as colunas
-    const newFiltered = columns.map(col => ({
-      ...col,
-      cards: col.cards.filter(card => filterFn(card.client))
-    }));
-
-    // Se o filtro resultar em todas as colunas vazias, mostra vazio (poderia ser um estado especial se quiser)
-    setFilteredColumns(newFiltered);
+  const handleFilter = (filters) => {
+    fetchColumns(filters);
   };
 
   const onDragEnd = async (result) => {
     if (!result.destination) return;
     const { source, destination, draggableId } = result;
+
+    // Optimistic update
     const newColumns = columns.map((c) => ({ ...c, cards: [...c.cards] }));
     const sourceCol = newColumns.find((c) => c.id === source.droppableId);
     const destCol = newColumns.find((c) => c.id === destination.droppableId);
     const [moved] = sourceCol.cards.splice(source.index, 1);
     destCol.cards.splice(destination.index, 0, moved);
+    setColumns(newColumns);
 
     const newStatus = destCol.id;
     let newColor = moved.client.color;
-
     if (newStatus === 'Perdido') {
       newColor = 'red';
     } else if (newStatus === 'Lead Selecionado') {
       newColor = 'green';
     }
 
-    moved.client.status = newStatus;
-    moved.client.color = newColor;
-
-    setColumns(newColumns);
-
+    // Update backend
     await fetch('/api/kanban', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
-    });
-
-    await fetch('/api/interacoes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        clienteId: draggableId,
-        tipo: 'Mudança de Fase',
-        deFase: source.droppableId,
-        paraFase: destination.droppableId,
-        dataHora: new Date().toISOString(),
+        id: draggableId,
+        status: newStatus,
+        color: newColor,
+        source: source.droppableId,
+        destination: destination.droppableId,
       }),
     });
-  };
 
-  const columnsToShow = filteredColumns ?? columns;
+    // Optional: refetch data after drag to ensure consistency, though optimistic update should be fine.
+    // fetchColumns();
+  };
 
   return (
     <div className="p-4 overflow-x-auto">
       <div className="mb-4">
         <Filters onFilter={handleFilter} />
       </div>
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-4">
-          {columnsToShow.map((col) => (
-            <KanbanColumn key={col.id} column={col} />
-          ))}
-        </div>
-      </DragDropContext>
+      {loading ? (
+        <p>Carregando...</p>
+      ) : (
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div className="flex gap-4">
+            {columns.map((col) => (
+              <KanbanColumn key={col.id} column={col} />
+            ))}
+          </div>
+        </DragDropContext>
+      )}
     </div>
   );
 }

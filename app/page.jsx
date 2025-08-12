@@ -1,30 +1,38 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import SummaryCard from '../components/SummaryCard';
 import Charts from '../components/Charts';
 
 export default function Dashboard() {
-  const [allClients, setAllClients] = useState([]);
   const [clients, setClients] = useState([]);
   const [options, setOptions] = useState({ segmento: [], uf: [] });
   const [filters, setFilters] = useState({ segmento: '', uf: '' });
+  const [loading, setLoading] = useState(true);
+
+  const fetchClients = useCallback(async (currentFilters) => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (currentFilters.segmento) params.append('segmento', currentFilters.segmento);
+    if (currentFilters.uf) params.append('uf', currentFilters.uf);
+
+    const res = await fetch(`/api/clientes?${params.toString()}`);
+    const data = await res.json();
+
+    setClients(data.clients || []);
+    // Set options only once on the first load
+    if (options.segmento.length === 0 && data.filters?.segmento) {
+      setOptions({ segmento: data.filters.segmento, uf: data.filters.uf });
+    }
+    setLoading(false);
+  }, [options.segmento.length]); // Dependency ensures options are not reset on subsequent fetches
 
   useEffect(() => {
-    fetch('/api/clientes')
-      .then((res) => res.json())
-      .then((data) => {
-        setAllClients(data.clients || []);
-        setClients(data.clients || []);
-        setOptions({ segmento: data.filters.segmento, uf: data.filters.uf });
-      });
-  }, []);
+    fetchClients(filters);
+  }, [filters, fetchClients]);
 
-  useEffect(() => {
-    let filtered = allClients;
-    if (filters.segmento) filtered = filtered.filter((c) => c.segment === filters.segmento);
-    if (filters.uf) filtered = filtered.filter((c) => c.uf === filters.uf);
-    setClients(filtered);
-  }, [filters, allClients]);
+  const handleChange = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
 
   const phaseLabels = [
     'Lead Selecionado',
@@ -61,9 +69,6 @@ export default function Dashboard() {
   const meetingRate = funnelTotal ? ((meetings / funnelTotal) * 100).toFixed(1) : '0';
   const lossRate = funnelTotal ? ((losses / funnelTotal) * 100).toFixed(1) : '0';
 
-  const handleChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  };
 
   return (
     <div className="space-y-6">
@@ -95,16 +100,20 @@ export default function Dashboard() {
         </select>
         <input type="text" placeholder="Data Range" className="border p-2 rounded" disabled />
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <SummaryCard title="Empresas" value={companies} />
-        <SummaryCard title="Contatos Únicos" value={contacts} />
-        {phaseLabels.map((label) => (
-          <SummaryCard key={label} title={label} value={phaseCounts[label] || 0} />
-        ))}
-        <SummaryCard title="Taxa de Reuniões" value={`${meetingRate}%`} />
-        <SummaryCard title="Taxa de Perda" value={`${lossRate}%`} />
-      </div>
-      <Charts clients={clients} />
+      {loading ? <p>Carregando...</p> : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <SummaryCard title="Empresas" value={companies} />
+            <SummaryCard title="Contatos Únicos" value={contacts} />
+            {phaseLabels.map((label) => (
+              <SummaryCard key={label} title={label} value={phaseCounts[label] || 0} />
+            ))}
+            <SummaryCard title="Taxa de Reuniões" value={`${meetingRate}%`} />
+            <SummaryCard title="Taxa de Perda" value={`${lossRate}%`} />
+          </div>
+          <Charts clients={clients} />
+        </>
+      )}
     </div>
   );
 }

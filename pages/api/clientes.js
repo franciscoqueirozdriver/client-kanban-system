@@ -132,10 +132,22 @@ function groupRows(rows) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
+    const { segmento, uf } = req.query;
+
     const sheet = await getSheetCached();
     const rows = sheet.data.values || [];
     const { clients, filters } = groupRows(rows);
-    return res.status(200).json({ clients, filters });
+
+    let filteredClients = clients;
+
+    if (segmento) {
+      filteredClients = filteredClients.filter((c) => c.segment === segmento);
+    }
+    if (uf) {
+      filteredClients = filteredClients.filter((c) => c.uf === uf);
+    }
+
+    return res.status(200).json({ clients: filteredClients, filters });
   }
 
   if (req.method === 'POST') {

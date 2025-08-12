@@ -1,5 +1,5 @@
 import { appendCompanyImportRow, getCompanySheetCached } from '../../lib/googleSheets';
-import { enrichCompanyData } from '../../lib/perplexity';
+// import { enrichCompanyData } from '../../lib/perplexity';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -53,8 +53,8 @@ export default async function handler(req, res) {
     console.error('Erro ao verificar duplicidade:', err);
   }
 
-  // enriquecer dados
-  empresa = await enrichCompanyData(empresa);
+  // TODO: Implementar enriquecimento de dados da empresa
+  // empresa = await enrichCompanyData(empresa);
 
   try {
     const appendRes = await appendCompanyImportRow(empresa);

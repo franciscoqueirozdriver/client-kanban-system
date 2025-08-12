@@ -1,4 +1,4 @@
-import { getSheetCached, updateRow } from '../../lib/googleSheets';
+import { getSheetCached, updateRow, appendHistoryRow } from '../../lib/googleSheets';
 import { normalizePhones } from '../../lib/report';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
@@ -117,9 +117,41 @@ function groupRows(rows) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
+    const { query, segmento, porte, uf, cidade } = req.query;
+
     const sheet = await getSheetCached();
     const rows = sheet.data.values || [];
-    const { clients } = groupRows(rows);
+    let { clients } = groupRows(rows);
+
+    if (segmento) {
+      clients = clients.filter((c) => (c.segment || '').trim().toLowerCase() === segmento.trim().toLowerCase());
+    }
+    if (porte) {
+      const portes = Array.isArray(porte) ? porte : [porte];
+      const options = portes.map((p) => p.trim().toLowerCase());
+      if (options.length > 0) {
+        clients = clients.filter((c) => options.includes((c.size || '').trim().toLowerCase()));
+      }
+    }
+    if (uf) {
+      clients = clients.filter((c) => (c.uf || '').trim().toLowerCase() === uf.trim().toLowerCase());
+    }
+    if (cidade) {
+      clients = clients.filter((c) => (c.city || '').trim().toLowerCase() === cidade.trim().toLowerCase());
+    }
+    if (query) {
+      const q = query.toLowerCase();
+      clients = clients.filter((client) => {
+        const matchName = (client.company || '').toLowerCase().includes(q);
+        const matchContact = (client.contacts || []).some((c) =>
+          (c.name || c.nome || '').toLowerCase().includes(q)
+        );
+        const matchOpp = (client.opportunities || []).some((o) =>
+          (o || '').toLowerCase().includes(q)
+        );
+        return matchName || matchContact || matchOpp;
+      });
+    }
 
     const columns = [
       'Lead Selecionado',
@@ -142,42 +174,39 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { id, destination, status, color } = req.body;
-    const newStatus = status || (destination && destination.droppableId);
-    const newColor =
-      color !== undefined
-        ? color
-        : newStatus === 'Perdido'
-        ? 'red'
-        : undefined;
+    const { id, status, color, source, destination } = req.body;
 
     const sheet = await getSheetCached();
     const rows = sheet.data.values || [];
     const [header, ...data] = rows;
-
     const clienteIdIdx = header.indexOf('Cliente_ID');
-    const colorIdx = header.indexOf('Cor_Card');
-    const statusIdx = header.indexOf('Status_Kanban');
 
-    const promises = [];
+    const updatePromises = data
+      .map((row, i) => {
+        if (row[clienteIdIdx] === id) {
+          const rowNum = i + 2;
+          const values = {
+            status_kanban: status,
+            cor_card: color,
+            data_ultima_movimentacao: new Date().toISOString().split('T')[0],
+          };
+          return updateRow(rowNum, values);
+        }
+        return null;
+      })
+      .filter(Boolean);
 
-    data.forEach((row, i) => {
-      if (row[clienteIdIdx] === id) {
-        const rowNum = i + 2;
-        const values = {};
-        if (newStatus !== undefined && statusIdx !== -1) {
-          values.status_kanban = newStatus;
-        }
-        if (newColor !== undefined && colorIdx !== -1) {
-          values.cor_card = newColor;
-        }
-        values.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
-        promises.push(updateRow(rowNum, values));
-      }
+    const historyPromise = appendHistoryRow({
+      cliente_id: id,
+      tipo: 'Mudança de Fase',
+      de_fase: source,
+      para_fase: destination,
+      data_hora: new Date().toISOString(),
     });
 
-    await Promise.all(promises);
-    return res.status(200).json({ status: newStatus, color: newColor });
+    await Promise.all([...updatePromises, historyPromise]);
+
+    return res.status(200).json({ ok: true });
   }
 
   return res.status(405).end();
