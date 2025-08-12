@@ -107,6 +107,66 @@ async function getRowIndexByClientId(sheets, spreadsheetId, headers, clientId) {
   return -1;
 }
 
+const FREE_EMAIL_DOMAINS = new Set([
+  'gmail.com',
+  'gmail.com.br',
+  'hotmail.com',
+  'hotmail.com.br',
+  'outlook.com',
+  'outlook.com.br',
+  'live.com',
+  'yahoo.com',
+  'yahoo.com.br',
+  'bol.com.br',
+  'uol.com.br',
+  'icloud.com',
+  'msn.com',
+  'aol.com',
+  'terra.com.br',
+]);
+
+function extractDomain(email) {
+  const match = String(email || '')
+    .toLowerCase()
+    .match(/@([^\s@]+)/);
+  if (!match) return '';
+  const domain = match[1];
+  if (FREE_EMAIL_DOMAINS.has(domain)) return '';
+  return domain;
+}
+
+async function findDomainFromSheet1(sheets, spreadsheetId, clientId) {
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'Sheet1!A:Z',
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    });
+    const rows = res.data.values || [];
+    if (!rows.length) return '';
+    const headers = rows[0];
+    const idIdx = headers.indexOf('Cliente_ID');
+    if (idIdx < 0) return '';
+    const workIdx = headers.indexOf('Pessoa - Email - Work');
+    const homeIdx = headers.indexOf('Pessoa - Email - Home');
+    const otherIdx = headers.indexOf('Pessoa - Email - Other');
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if ((row[idIdx] || '').toString() !== (clientId || '').toString()) continue;
+      const emails = [];
+      [workIdx, homeIdx, otherIdx].forEach((idx) => {
+        if (idx >= 0 && row[idx]) emails.push(row[idx]);
+      });
+      for (const email of emails) {
+        const domain = extractDomain(email);
+        if (domain) return domain;
+      }
+      break;
+    }
+  } catch {}
+  return '';
+}
+
 async function upsertCompany(sheets, spreadsheetId, headers, rowValues, overwrite) {
   // headers devem bater 1:1 com HEADERS (normalizados)
   const normalized = headers.map(normalizeHeader);
@@ -162,12 +222,18 @@ export default async function handler(req, res) {
     // 1) Enriquecer com Perplexity
     const enriched = await enrichCompanyData({ nome, estado, cidade, cep });
 
+    // 1.1) Se site ausente, tentar derivar do domínio de e-mail da Sheet1
+    const sheets = await getSheetsClient();
+    const spreadsheetId = process.env.SPREADSHEET_ID;
+    if (!enriched.site && clienteId) {
+      const domain = await findDomainFromSheet1(sheets, spreadsheetId, clienteId);
+      if (domain) enriched.site = `www.${domain}`;
+    }
+
     // 2) Mapear para a linha no formato exato da planilha
     const rowValues = mapToRow(enriched, clienteId);
 
     // 3) Persistir (upsert) na planilha
-    const sheets = await getSheetsClient();
-    const spreadsheetId = process.env.SPREADSHEET_ID;
     const headers = await getHeaderRow(sheets, spreadsheetId);
 
     // Validação rápida de cabeçalho (ordem e nomes, normalizados)
