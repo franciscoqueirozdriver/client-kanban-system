@@ -4,7 +4,7 @@ const SHEET_LAYOUT = 'layout_importacao_empresas';
 const SHEET_SHEET1 = 'Sheet1';
 const SHEET_PADROES = 'Padroes';
 const SHEET_DEST = 'Leads Exact Spotter';
-const DEST_KEY = 'Cliente_ID'; // chave única padronizada
+const DEST_KEY = 'Client_ID'; // chave única padronizada
 
 // Utils
 const clean = (v) => (v ?? '').toString().trim();
@@ -66,12 +66,12 @@ export default async function handler(req, res) {
     const produtosValidos = padroes.map(r => clean(r['Produtos'])).filter(Boolean);
     const mercadosValidos = padroes.map(r => clean(r['Mercados'])).filter(Boolean);
 
-    // 3) Índices por Cliente_ID
-    const idOf = (r) => clean(r[DEST_KEY]);
+    // 3) Índices por Client_ID (tolerando Cliente_ID)
+    const idOf = (r) => clean(r[DEST_KEY] || r['Cliente_ID']);
     const mapSheet1 = new Map(sheet1.map(r => [idOf(r), r]).filter(([k]) => !!k));
     const mapDest = new Map(destRows.map(r => [idOf(r), r]).filter(([k]) => !!k));
 
-    // 4) Header do destino (migrar Client_ID -> Cliente_ID se necessário)
+    // 4) Header do destino (migrar Cliente_ID -> Client_ID se necessário)
     const neededCols = new Set([
       DEST_KEY,
       'Nome do Lead','Origem','Sub-Origem','Mercado','Produto',
@@ -84,10 +84,10 @@ export default async function handler(req, res) {
     ]);
 
     let header = Array.isArray(destHeadersRaw) ? [...destHeadersRaw] : [];
-    const hasOld = header.includes('Client_ID');
+    const hasOld = header.includes('Cliente_ID');
     const hasNew = header.includes(DEST_KEY);
     if (hasOld && !hasNew) {
-      header = header.map(h => (h === 'Client_ID' ? DEST_KEY : h));
+      header = header.map(h => (h === 'Cliente_ID' ? DEST_KEY : h));
     }
     if (!header.includes(DEST_KEY)) header.unshift(DEST_KEY);
     for (const c of neededCols) {
@@ -178,7 +178,7 @@ export default async function handler(req, res) {
       const ddiContato = telsContato.length ? pick(row, 'DDI Contato') : '';
       const algumContatoPreenchido = !!(nomeContato || emailContato || cargoContato || telsContato.length);
       if (algumContatoPreenchido && !nomeContato) {
-        errosObrigatorios.push({ Cliente_ID: id, erro: 'Nome Contato obrigatório quando houver outros campos de contato' });
+        errosObrigatorios.push({ [DEST_KEY]: id, erro: 'Nome Contato obrigatório quando houver outros campos de contato' });
       }
 
       // Monta objeto final com política "não sobrescrever com vazio"
