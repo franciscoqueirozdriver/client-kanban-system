@@ -201,6 +201,8 @@ export default function ClientCard({ client, onStatusChange }) {
       ? '#a3ffac'
       : color === 'red'
       ? '#ffca99'
+      : color === 'gray'
+      ? '#e5e7eb'
       : 'white';
 
   const borderLeftColor =
@@ -208,6 +210,8 @@ export default function ClientCard({ client, onStatusChange }) {
       ? '#4caf50'
       : color === 'red'
       ? '#ff7043'
+      : color === 'gray'
+      ? '#9ca3af'
       : 'transparent';
 
   return (
