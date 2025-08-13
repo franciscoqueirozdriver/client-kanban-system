@@ -11,13 +11,11 @@ const KEY = 'Client_ID';
 // ---- Utils ---------------------------------------------------------------
 const clean = (v) => (v ?? '').toString().trim();
 
-function normalizeHeader(h) {
-  return clean(h)
+const normalize = (v) =>
+  clean(v)
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/\p{Diacritic}/gu, '')
     .toLowerCase();
-}
 
 function normalizeEmpty(v) {
   const s = clean(v).toLowerCase();
@@ -98,8 +96,8 @@ const normalizeName = (v) =>
     .replace(/\s+/g, ' ')
     .toLowerCase();
 
-// layout headers esperados
-const LAYOUT_HEADERS = [
+// cabeçalho canônico e aliases para layout_importacao_empresas
+const CANON = [
   'Client_ID',
   'Nome da Empresa',
   'Site Empresa',
@@ -116,7 +114,22 @@ const LAYOUT_HEADERS = [
   'Telefones Empresa',
   'Observação Empresa',
 ];
-const NORMALIZED_LAYOUT_HEADERS = LAYOUT_HEADERS.map(normalizeHeader);
+
+const ALIASES = {
+  'cliente_id': 'Client_ID',
+  'pais empresa': 'País Empresa',
+  'país empresa': 'País Empresa',
+  'numero empresa': 'Numero Empresa',
+  'número empresa': 'Numero Empresa',
+  'observacao empresa': 'Observação Empresa',
+};
+
+function canonize(label) {
+  const n = normalize(label);
+  if (ALIASES[n]) return ALIASES[n];
+  const hit = CANON.find((c) => normalize(c) === n);
+  return hit || label;
+}
 
 // colunas necessárias no destino
 const LEAD_COLS = new Set([
@@ -296,11 +309,81 @@ export default async function handler(req, res) {
     }
 
     // ler demais abas
-    const [padroesData, leadsData, layoutData] = await Promise.all([
+    const [padroesData, leadsData] = await Promise.all([
       getSheetData(SHEET_PADROES),
       getSheetData(SHEET_LEADS),
-      getSheetData(SHEET_LAYOUT),
     ]);
+
+    // leitura robusta da layout_importacao_empresas
+    const layoutHeaderResp = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_LAYOUT}!1:1`,
+    });
+    const rawLayoutHeader = layoutHeaderResp.data.values?.[0] || [];
+    let mappedLayoutHeader = rawLayoutHeader.map(canonize);
+    const missingLayoutCols = CANON.filter((c) => !mappedLayoutHeader.includes(c));
+    let fixedHeaders = false;
+    if (missingLayoutCols.length) {
+      fixedHeaders = true;
+      mappedLayoutHeader = [...mappedLayoutHeader, ...missingLayoutCols];
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SHEET_LAYOUT}!1:1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [mappedLayoutHeader] },
+      });
+    }
+    const endColLayout = colLetter(mappedLayoutHeader.length - 1);
+    let layoutBodyResp = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_LAYOUT}!A2:${endColLayout}`,
+    });
+    let layoutValues = layoutBodyResp.data.values || [];
+    if (missingLayoutCols.length && layoutValues.length) {
+      const patched = layoutValues.map((row) => [
+        ...row,
+        ...new Array(missingLayoutCols.length).fill(''),
+      ]);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SHEET_LAYOUT}!A2:${endColLayout}`,
+        valueInputOption: 'RAW',
+        requestBody: { values: patched },
+      });
+      layoutValues = patched;
+    }
+    const layoutRows = layoutValues.map((vals, idx) => {
+      const obj = { _rowNumber: idx + 2 };
+      mappedLayoutHeader.forEach((h, i) => {
+        obj[h] = vals[i] ?? '';
+      });
+      return obj;
+    });
+
+    // contagens de colunas opcionais vazias e índices por Client_ID
+    const optionalCols = CANON.filter((c) => c !== 'Client_ID' && c !== 'Nome da Empresa');
+    const missingOptional = {};
+    let ignoradasSemId = 0,
+      ignoradasSemNome = 0;
+    const layoutMap = new Map();
+    for (const r of layoutRows) {
+      const id = clean(r['Client_ID'] || r['Cliente_ID']);
+      const nomeEmp = clean(r['Nome da Empresa']);
+      if (!id) {
+        ignoradasSemId++;
+        continue;
+      }
+      if (!nomeEmp) {
+        ignoradasSemNome++;
+        continue;
+      }
+      layoutMap.set(id, r);
+      for (const c of optionalCols) {
+        if (!clean(r[c])) {
+          missingOptional[c] = (missingOptional[c] || 0) + 1;
+        }
+      }
+    }
 
     // se site ausente, tenta derivar de e-mail
     if (!enriched.site) {
@@ -308,23 +391,7 @@ export default async function handler(req, res) {
       if (domain) enriched.site = `www.${domain}`;
     }
 
-    // validar header da layout
-    const normalized = layoutData.headers.map(normalizeHeader);
-    const mismatch =
-      normalized.length !== NORMALIZED_LAYOUT_HEADERS.length ||
-      normalized.some((h, i) => h !== NORMALIZED_LAYOUT_HEADERS[i]);
-    if (mismatch) {
-      return res.status(412).json({
-        ok: false,
-        error: 'Cabeçalho da planilha não corresponde ao esperado para layout_importacao_empresas.',
-        expected: LAYOUT_HEADERS,
-        got: layoutData.headers,
-      });
-    }
-
-    const existingLayout = layoutData.rows.find(
-      (r) => clean(r[KEY]) === clean(clienteId)
-    );
+    const existingLayout = layoutMap.get(clean(clienteId));
     if (existingLayout && !overwrite) {
       return res.status(200).json({ ok: false, exists: true });
     }
@@ -456,29 +523,30 @@ export default async function handler(req, res) {
     );
     const paisLayout = enriched.pais ||
       ((enriched.cidade && enriched.estado) ? 'Brasil' : '');
-    const layoutRowValues = [
-      clienteId,
-      enriched.nome,
-      enriched.site,
-      paisLayout,
-      enriched.estado,
-      enriched.cidade,
-      enriched.logradouro,
-      enriched.numero,
-      enriched.bairro,
-      enriched.complemento,
-      enriched.cep,
-      enriched.cnpj,
-      enriched.ddi,
-      telefonesLayout,
-      enriched.observacao,
-    ];
+    const layoutObj = {
+      Client_ID: clienteId,
+      'Nome da Empresa': enriched.nome,
+      'Site Empresa': enriched.site,
+      'País Empresa': paisLayout,
+      'Estado Empresa': enriched.estado,
+      'Cidade Empresa': enriched.cidade,
+      'Logradouro Empresa': enriched.logradouro,
+      'Numero Empresa': enriched.numero,
+      'Bairro Empresa': enriched.bairro,
+      'Complemento Empresa': enriched.complemento,
+      'CEP Empresa': enriched.cep,
+      'CNPJ Empresa': enriched.cnpj,
+      'DDI Empresa': enriched.ddi,
+      'Telefones Empresa': telefonesLayout,
+      'Observação Empresa': enriched.observacao,
+    };
+    const layoutRowValues = mappedLayoutHeader.map((h) => (layoutObj[h] ?? '').toString());
 
     let layoutAction;
     if (existingLayout && existingLayout._rowNumber) {
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: `${SHEET_LAYOUT}!A${existingLayout._rowNumber}:O${existingLayout._rowNumber}`,
+        range: `${SHEET_LAYOUT}!A${existingLayout._rowNumber}:${endColLayout}${existingLayout._rowNumber}`,
         valueInputOption: 'RAW',
         requestBody: { values: [layoutRowValues] },
       });
@@ -486,7 +554,7 @@ export default async function handler(req, res) {
     } else {
       await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: `${SHEET_LAYOUT}!A:O`,
+        range: `${SHEET_LAYOUT}!A1`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: [layoutRowValues] },
@@ -496,6 +564,12 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
+      headerUsed: mappedLayoutHeader,
+      addedColumns: missingLayoutCols,
+      fixedHeaders,
+      missingOptional,
+      ignoradasSemId,
+      ignoradasSemNome,
       data: { enriched, leadAction, layoutAction, errosObrigatorios },
     });
   } catch (error) {
