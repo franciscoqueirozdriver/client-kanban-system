@@ -7,6 +7,9 @@ import Filters from '../../components/Filters';
 export default function KanbanPage() {
   const [columns, setColumns] = useState([]);
   const [filteredColumns, setFilteredColumns] = useState(null);
+  const [produtos, setProdutos] = useState([]);
+  const [produto, setProduto] = useState('');
+  const isAdmin = process.env.NEXT_PUBLIC_IS_ADMIN === 'true';
 
   // Buscar dados ao montar
   useEffect(() => {
@@ -22,6 +25,36 @@ export default function KanbanPage() {
     const res = await fetch('/api/kanban');
     const data = await res.json();
     setColumns(data);
+  };
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const loadProdutos = async () => {
+      const res = await fetch('/api/padroes');
+      const data = await res.json();
+      setProdutos(data.produtos || []);
+    };
+    loadProdutos();
+  }, [isAdmin]);
+
+  const handleMesclar = async () => {
+    if (!produto) {
+      alert('Selecione um produto');
+      return;
+    }
+    const res = await fetch('/api/mesclar-leads-exact-spotter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ produto }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Erro ao mesclar');
+      return;
+    }
+    alert(
+      `Criadas: ${data.criadas}\nAtualizadas: ${data.atualizadas}\nIgnoradas: ${data.ignoradas}\nErros: ${data.erros.join(', ')}`
+    );
   };
 
   const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
@@ -130,6 +163,28 @@ export default function KanbanPage() {
       <div className="mb-4">
         <Filters onFilter={handleFilter} />
       </div>
+      {isAdmin && (
+        <div className="mb-4 flex items-center gap-2">
+          <select
+            className="border p-1"
+            value={produto}
+            onChange={(e) => setProduto(e.target.value)}
+          >
+            <option value="">Produto</option>
+            {produtos.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          <button
+            className="bg-blue-500 text-white px-3 py-1 rounded"
+            onClick={handleMesclar}
+          >
+            Mesclar Leads Exact Spotter
+          </button>
+        </div>
+      )}
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex gap-4">
           {columnsToShow.map((col) => (

@@ -59,7 +59,7 @@ async function fetchMessages(app) {
 }
 
 export default function KanbanCard({ card, index }) {
-  const { client } = card;
+  const [client, setClient] = useState(card.client);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
   const [onSelectMessage, setOnSelectMessage] = useState(null);
@@ -103,18 +103,41 @@ export default function KanbanCard({ card, index }) {
         nome: client?.company || client?.nome || '',
         estado: client?.uf || '',
         cidade: client?.city || '',
+        cep: client?.cep || '',
+        overwrite: false,
       };
 
-      const res = await fetch('/api/enriquecer-empresa', {
+      let res = await fetch('/api/enriquecer-empresa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      const json = await res.json();
+      let json = await res.json();
+
+      if (json.exists) {
+        const proceed = confirm('cliente já adicionado em lista anterior');
+        if (!proceed) {
+          return;
+        }
+        res = await fetch('/api/enriquecer-empresa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, overwrite: true }),
+        });
+        json = await res.json();
+      }
+
       if (!json.ok) {
         throw new Error(json.error || 'Falha ao enriquecer empresa');
       }
+
+      await fetch('/api/kanban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: client.id, status: 'Lead Importado', color: 'gray' }),
+      });
+      setClient((prev) => ({ ...prev, status: 'Lead Importado', color: 'gray' }));
 
       console.log('Enriquecimento concluído:', json.data);
       alert('Dados da empresa enriquecidos e salvos na planilha.');
@@ -208,6 +231,8 @@ export default function KanbanCard({ card, index }) {
       ? '#a3ffac'
       : client.color === 'red'
       ? '#ffca99'
+      : client.color === 'gray'
+      ? '#e5e7eb'
       : 'white';
 
   const borderLeftColor =
@@ -215,6 +240,8 @@ export default function KanbanCard({ card, index }) {
       ? '#4caf50'
       : client.color === 'red'
       ? '#ff7043'
+      : client.color === 'gray'
+      ? '#9ca3af'
       : 'transparent';
 
   return (
