@@ -89,6 +89,15 @@ function colLetter(n) {
   return s;
 }
 
+const normalizeKey = (v) => String(v ?? '').trim();
+const normalizeName = (v) =>
+  normalizeKey(v)
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^\p{L}\p{N} ]/gu, '')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
 // layout headers esperados
 const LAYOUT_HEADERS = [
   'Client_ID',
@@ -137,19 +146,15 @@ function extractDomain(email) {
   return domain;
 }
 
-function domainFromSheet1(rows, clientId) {
-  for (const r of rows) {
-    if (clean(r[KEY]) !== clean(clientId)) continue;
-    const emails = [
-      r['Pessoa - Email - Work'],
-      r['Pessoa - Email - Home'],
-      r['Pessoa - Email - Other'],
-    ];
-    for (const e of emails) {
-      const d = extractDomain(e);
-      if (d) return d;
-    }
-    break;
+function domainFromRow(r) {
+  const emails = [
+    r['Pessoa - Email - Work'],
+    r['Pessoa - Email - Home'],
+    r['Pessoa - Email - Other'],
+  ];
+  for (const e of emails) {
+    const d = extractDomain(e);
+    if (d) return d;
   }
   return '';
 }
@@ -160,7 +165,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { clienteId, nome, estado, cidade, cep, overwrite } = req.body || {};
+    const { nome, estado, cidade, cep, overwrite } = req.body || {};
     if (!nome) {
       return res.status(400).json({ ok: false, error: 'Nome é obrigatório' });
     }
@@ -189,22 +194,117 @@ export default async function handler(req, res) {
     const sheets = await getSheetsClient();
     const spreadsheetId = process.env.SPREADSHEET_ID;
 
-    // 2) ler todas as abas necessárias
-    const [sheet1Data, padroesData, leadsData, layoutData] = await Promise.all([
-      getSheetData(SHEET_SHEET1),
+    // leitura completa da Sheet1
+    const headerResp = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_SHEET1}!1:1`,
+    });
+    const sheet1Header = headerResp.data.values?.[0] || [];
+    const endColSheet1 = colLetter(sheet1Header.length - 1);
+    const valuesResp = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_SHEET1}!A2:${endColSheet1}`,
+    });
+    const sheet1Rows = (valuesResp.data.values || []).map((vals, idx) => {
+      const obj = { _rowNumber: idx + 2 };
+      sheet1Header.forEach((h, i) => {
+        obj[h] = vals[i] ?? '';
+      });
+      return obj;
+    });
+
+    // índices por Cliente_ID e Organização - Nome
+    const byId = new Map();
+    const byName = new Map();
+    for (const r of sheet1Rows) {
+      const id = normalizeKey(r['Cliente_ID'] || r['Client_ID']);
+      const org = normalizeName(
+        r['Organização - Nome'] ||
+          r['Organizacao - Nome'] ||
+          r['Organização- Nome']
+      );
+      if (id) byId.set(id, r);
+      if (org) byName.set(org, r);
+    }
+
+    const idFromPayload = normalizeKey(
+      req.body?.Cliente_ID || req.body?.Client_ID || req.body?.clienteId || req.body?.id
+    );
+    const idFromQuery = normalizeKey(
+      req.query?.Cliente_ID || req.query?.Client_ID || req.query?.clienteId || req.query?.id
+    );
+    const nameFromRequest = normalizeName(
+      req.body?.nome ||
+        req.body?.OrganizacaoNome ||
+        req.body?.orgName ||
+        req.query?.nome ||
+        req.query?.OrganizacaoNome ||
+        req.query?.orgName
+    );
+
+    let clienteId = idFromPayload || idFromQuery;
+    let base = null,
+      foundById = false,
+      foundByName = false;
+    if (clienteId && byId.has(clienteId)) {
+      base = byId.get(clienteId);
+      foundById = true;
+    } else if (nameFromRequest && byName.has(nameFromRequest)) {
+      base = byName.get(nameFromRequest);
+      foundByName = true;
+      clienteId = normalizeKey(base['Cliente_ID'] || base['Client_ID']);
+    }
+
+    const debug = req.query?.debug === '1';
+    const headerSample = sheet1Header
+      .map((h, i) => ({ index: i, header: h }))
+      .slice(0, 20);
+
+    if (!base) {
+      if (debug) {
+        return res.status(404).json({
+          error: 'Cliente não encontrado na Sheet1',
+          tried: { id: clienteId || idFromPayload || idFromQuery, name: nameFromRequest },
+          sheet1Headers: headerSample,
+          debug: true,
+        });
+      }
+      return res
+        .status(404)
+        .json({ ok: false, error: 'Cliente não encontrado em Sheet1' });
+    }
+
+    if (debug) {
+      return res.status(200).json({
+        foundById,
+        foundByName,
+        keysTried: {
+          idFromRequest: idFromQuery,
+          idFromPayload,
+          nameFromRequest,
+        },
+        sheet1Headers: headerSample,
+        cliente: {
+          Cliente_ID: base['Cliente_ID'] || base['Client_ID'],
+          'Organização - Nome':
+            base['Organização - Nome'] ||
+            base['Organizacao - Nome'] ||
+            base['Organização- Nome'],
+          'Telefone Normalizado': base['Telefone Normalizado'] || '',
+        },
+      });
+    }
+
+    // ler demais abas
+    const [padroesData, leadsData, layoutData] = await Promise.all([
       getSheetData(SHEET_PADROES),
       getSheetData(SHEET_LEADS),
       getSheetData(SHEET_LAYOUT),
     ]);
 
-    const base = sheet1Data.rows.find((r) => clean(r[KEY]) === clean(clienteId));
-    if (!base) {
-      return res.status(404).json({ ok: false, error: 'Cliente não encontrado em Sheet1' });
-    }
-
     // se site ausente, tenta derivar de e-mail
     if (!enriched.site) {
-      const domain = domainFromSheet1(sheet1Data.rows, clienteId);
+      const domain = domainFromRow(base);
       if (domain) enriched.site = `www.${domain}`;
     }
 
