@@ -6,7 +6,7 @@ const SHEET_LAYOUT = 'layout_importacao_empresas';
 const SHEET_LEADS = 'Leads Exact Spotter';
 const SHEET_SHEET1 = 'Sheet1';
 const SHEET_PADROES = 'Padroes';
-const KEY = 'Client_ID';
+const KEY = 'Cliente_ID';
 
 // ---- Utils ---------------------------------------------------------------
 const clean = (v) => (v ?? '').toString().trim();
@@ -98,7 +98,7 @@ const normalizeName = (v) =>
 
 // cabeçalho canônico e aliases para layout_importacao_empresas
 const CANON = [
-  'Client_ID',
+  'Cliente_ID',
   'Nome da Empresa',
   'Site Empresa',
   'País Empresa',
@@ -116,7 +116,6 @@ const CANON = [
 ];
 
 const ALIASES = {
-  'cliente_id': 'Client_ID',
   'pais empresa': 'País Empresa',
   'país empresa': 'País Empresa',
   'numero empresa': 'Numero Empresa',
@@ -230,7 +229,7 @@ export default async function handler(req, res) {
     const byId = new Map();
     const byName = new Map();
     for (const r of sheet1Rows) {
-      const id = normalizeKey(r['Cliente_ID'] || r['Client_ID']);
+      const id = normalizeKey(r['Cliente_ID']);
       const org = normalizeName(
         r['Organização - Nome'] ||
           r['Organizacao - Nome'] ||
@@ -241,10 +240,10 @@ export default async function handler(req, res) {
     }
 
     const idFromPayload = normalizeKey(
-      req.body?.Cliente_ID || req.body?.Client_ID || req.body?.clienteId || req.body?.id
+      req.body?.Cliente_ID || req.body?.clienteId || req.body?.id
     );
     const idFromQuery = normalizeKey(
-      req.query?.Cliente_ID || req.query?.Client_ID || req.query?.clienteId || req.query?.id
+      req.query?.Cliente_ID || req.query?.clienteId || req.query?.id
     );
     const nameFromRequest = normalizeName(
       req.body?.nome ||
@@ -265,7 +264,7 @@ export default async function handler(req, res) {
     } else if (nameFromRequest && byName.has(nameFromRequest)) {
       base = byName.get(nameFromRequest);
       foundByName = true;
-      clienteId = normalizeKey(base['Cliente_ID'] || base['Client_ID']);
+      clienteId = normalizeKey(base['Cliente_ID']);
     }
 
     const debug = req.query?.debug === '1';
@@ -298,7 +297,7 @@ export default async function handler(req, res) {
         },
         sheet1Headers: headerSample,
         cliente: {
-          Cliente_ID: base['Cliente_ID'] || base['Client_ID'],
+          Cliente_ID: base['Cliente_ID'],
           'Organização - Nome':
             base['Organização - Nome'] ||
             base['Organizacao - Nome'] ||
@@ -360,14 +359,14 @@ export default async function handler(req, res) {
       return obj;
     });
 
-    // contagens de colunas opcionais vazias e índices por Client_ID
-    const optionalCols = CANON.filter((c) => c !== 'Client_ID' && c !== 'Nome da Empresa');
+    // contagens de colunas opcionais vazias e índices por Cliente_ID
+    const optionalCols = CANON.filter((c) => c !== 'Cliente_ID' && c !== 'Nome da Empresa');
     const missingOptional = {};
     let ignoradasSemId = 0,
       ignoradasSemNome = 0;
     const layoutMap = new Map();
     for (const r of layoutRows) {
-      const id = clean(r['Client_ID'] || r['Cliente_ID']);
+      const id = clean(r['Cliente_ID']);
       const nomeEmp = clean(r['Nome da Empresa']);
       if (!id) {
         ignoradasSemId++;
@@ -524,7 +523,7 @@ export default async function handler(req, res) {
     const paisLayout = enriched.pais ||
       ((enriched.cidade && enriched.estado) ? 'Brasil' : '');
     const layoutObj = {
-      Client_ID: clienteId,
+      Cliente_ID: clienteId,
       'Nome da Empresa': enriched.nome,
       'Site Empresa': enriched.site,
       'País Empresa': paisLayout,

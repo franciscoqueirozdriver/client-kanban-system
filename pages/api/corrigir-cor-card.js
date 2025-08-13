@@ -1,7 +1,7 @@
 import { getSheetsClient, getSheetData } from '../../lib/googleSheets';
 
 const SHEET_NAME = 'Sheet1';
-const KEY = 'Client_ID';
+const KEY = 'Cliente_ID';
 const COLOR_COLUMN = 'Cor_Card';
 
 const clean = (v) => (v ?? '').toString().trim();
