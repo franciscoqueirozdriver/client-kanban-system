@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { FaChartBar, FaUsers, FaColumns, FaCog, FaHome } from 'react-icons/fa';
+import { FaChartBar, FaUsers, FaColumns, FaCog, FaHome, FaSearchDollar } from 'react-icons/fa';
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
@@ -12,6 +12,7 @@ export default function Sidebar() {
     { href: '/clientes', label: 'Clients', icon: <FaUsers /> },
     { href: '/kanban', label: 'Kanban', icon: <FaColumns /> },
     { href: '/reports', label: 'Reports', icon: <FaChartBar /> },
+    { href: '/consultas/perdecomp-comparativo', label: 'PER/DCOMP (Comparativo)', icon: <FaSearchDollar /> },
     { href: '#', label: 'Settings', icon: <FaCog /> },
   ];
 
