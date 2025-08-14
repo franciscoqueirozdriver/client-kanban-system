@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../lib/googleSheets.js';
-import { consultarPerdcomp } from '../../../lib/infosimples';
+import { getSheetData } from '../../../../lib/googleSheets.js';
+import { consultarPerdcomp } from '../../../../lib/infosimples';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
