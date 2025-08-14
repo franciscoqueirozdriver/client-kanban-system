@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCompanySheetCached, getCompanyHeaderInfoCached, COMPANY_COLUMN_MAP } from '../../../lib/googleSheets';
+import { getCompanySheetCached, getCompanyHeaderInfoCached, COMPANY_COLUMN_MAP } from '../../../../lib/googleSheets';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
