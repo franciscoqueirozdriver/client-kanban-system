@@ -2,11 +2,18 @@
 
 import { useState, useEffect } from 'react';
 
+type ValorPorTipo = Record<string, number>;
+
 interface Empresa {
   nome: string;
   cnpj: string;
   linhas: any[];
-  stats?: any;
+  stats?: {
+    quantidade: number;
+    valorTotal: number;
+    valorPorTipo: ValorPorTipo;
+    comprovantes: { html: string; pdf: string }[];
+  };
   ultima?: string;
 }
 
@@ -21,7 +28,7 @@ const HEADER_INDEX = {
 function computeStats(linhas: any[]) {
   const quantidade = linhas.length;
   let valorTotal = 0;
-  const valorPorTipo: Record<string, number> = {};
+  const valorPorTipo: ValorPorTipo = {};
   const comprovantes: { html: string; pdf: string }[] = [];
   let ultima = '';
   linhas.forEach((l) => {
@@ -118,8 +125,12 @@ export default function Page() {
           <p>Quantidade: {emp.stats.quantidade}</p>
           <p>Valor Total: {emp.stats.valorTotal.toFixed(2)}</p>
           <div>
-            {Object.entries(emp.stats.valorPorTipo).map(([tipo, val]) => (
-              <p key={tipo}>{tipo}: {val.toFixed(2)}</p>
+            {(
+              Object.entries((emp.stats.valorPorTipo ?? {}) as ValorPorTipo) as [string, number][]
+            ).map(([tipo, val]) => (
+              <p key={tipo}>
+                {tipo}: {(typeof val === "number" ? val : Number(val) || 0).toFixed(2)}
+              </p>
             ))}
           </div>
           <div>
