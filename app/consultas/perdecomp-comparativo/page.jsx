@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Autocomplete from '../../../../components/Perdecomp/Autocomplete';
+import Autocomplete from '../../../components/Perdecomp/Autocomplete';
 import { FaSync, FaFilePdf, FaFileCode } from 'react-icons/fa';
 
 // --- Sub-components ---
