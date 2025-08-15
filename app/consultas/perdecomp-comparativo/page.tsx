@@ -139,15 +139,19 @@ interface AutocompleteProps {
   selectedCompany: Company | null;
   onSelect: (company: Company) => void;
   onClear: () => void;
+  onForceChange: (isForced: boolean) => void;
+  onRegisterNew: () => void;
   placeholder?: string;
 }
 
-const Autocomplete = ({ selectedCompany, onSelect, onClear, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
+const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onRegisterNew, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastConsultation, setLastConsultation] = useState<string | null>(null);
+  const [forceNew, setForceNew] = useState(false);
 
   useEffect(() => {
     const isCnpjLike = /^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/.test(query);
@@ -181,6 +185,34 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, placeholder = "Digit
     return () => clearTimeout(debounce);
   }, [query]);
 
+  useEffect(() => {
+    if (selectedCompany && isValidCnpj(selectedCompany.CNPJ_Empresa)) {
+      const checkConsultation = async () => {
+        const res = await fetch(`/api/perdecomp/verificar?cnpj=${selectedCompany.CNPJ_Empresa}`);
+        if (res.ok) {
+          const data = await res.json();
+          setLastConsultation(data.lastConsultation);
+        }
+      };
+      checkConsultation();
+    } else {
+      setLastConsultation(null);
+    }
+  }, [selectedCompany]);
+
+  const handleForceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    setForceNew(isChecked);
+    onForceChange(isChecked);
+  };
+
+  const extendedOnClear = () => {
+    setLastConsultation(null);
+    setForceNew(false);
+    onForceChange(false); // Notify parent that force is off
+    onClear();
+  };
+
   const handleSelect = (company: Company) => {
     setQuery('');
     setResults([]);
@@ -190,12 +222,23 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, placeholder = "Digit
 
   if (selectedCompany) {
     return (
-      <div className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded h-12">
-        <div className="flex-grow truncate">
-            <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{selectedCompany.CNPJ_Empresa}</p>
+      <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded">
+        <div className="flex items-start justify-between">
+            <div className="flex-grow truncate">
+                <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{selectedCompany.CNPJ_Empresa}</p>
+            </div>
+            <button onClick={extendedOnClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
         </div>
-        <button onClick={onClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
+        {lastConsultation && (
+            <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
+                <p className="text-xs text-yellow-600 dark:text-yellow-400">Consulta recente em: {new Date(lastConsultation).toLocaleDateString()}</p>
+                <label className="flex items-center mt-1 text-xs">
+                    <input type="checkbox" checked={forceNew} onChange={handleForceChange} className="mr-2 h-4 w-4" />
+                    Forçar nova consulta
+                </label>
+            </div>
+        )}
       </div>
     );
   }
@@ -215,7 +258,14 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, placeholder = "Digit
       {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
         <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border rounded-md shadow-lg max-h-60 overflow-y-auto">
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
-          {!isLoading && results.length === 0 && <li className="p-2 text-gray-500">Nenhum resultado.</li>}
+          {!isLoading && results.length === 0 && (
+            <li className="p-2 text-center">
+              <p className="text-gray-500 text-sm mb-2">Nenhum resultado.</p>
+              <button onClick={onRegisterNew} className="w-full px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700">
+                Cadastrar Nova Empresa
+              </button>
+            </li>
+          )}
           {results.map((company) => (
             <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
               {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{company.CNPJ_Empresa}</span>
@@ -226,6 +276,121 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, placeholder = "Digit
     </div>
   );
 };
+
+// --- New Company Modal Component ---
+const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess }: { isOpen: boolean, onClose: () => void, onSaveSuccess: (company: Company) => void }) => {
+  const [formData, setFormData] = useState<Partial<Company>>({});
+  const [isEnriching, setIsEnriching] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleEnrich = async () => {
+    if (!formData['Nome da Empresa']) {
+      alert('Por favor, insira o Nome da Empresa para enriquecer os dados.');
+      return;
+    }
+    setIsEnriching(true);
+    try {
+      // This API route seems to be in the `pages` dir based on the initial file listing
+      const res = await fetch('/api/enriquecer-empresa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empresa: { nome: formData['Nome da Empresa'] } }),
+      });
+      if (res.ok) {
+        const enrichedData = await res.json();
+        // The API returns fields with different keys, need to map them
+        setFormData(prev => ({
+          ...prev,
+          'Site Empresa': enrichedData.site,
+          'País Empresa': enrichedData.pais,
+          'Estado Empresa': enrichedData.estado,
+          'Cidade Empresa': enrichedData.cidade,
+          'Logradouro Empresa': enrichedData.logradouro,
+          'Numero Empresa': enrichedData.numero,
+          'Bairro Empresa': enrichedData.bairro,
+          'Complemento Empresa': enrichedData.complemento,
+          'CEP Empresa': enrichedData.cep,
+          'CNPJ Empresa': enrichedData.cnpj,
+          'DDI Empresa': enrichedData.ddi,
+          'Telefones Empresa': enrichedData.telefone,
+          'Observação Empresa': enrichedData.observacao,
+        }));
+      } else {
+        alert('Falha ao enriquecer dados.');
+      }
+    } catch (error) {
+      alert('Erro ao conectar com o serviço de enriquecimento.');
+    }
+    setIsEnriching(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/clientes/salvar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      if (res.ok) {
+        const savedCompany = await res.json();
+        onSaveSuccess(savedCompany.data);
+        setFormData({}); // Reset form
+        onClose();
+      } else {
+        alert('Falha ao salvar a empresa.');
+      }
+    } catch (error) {
+      alert('Erro ao salvar a empresa.');
+    }
+    setIsSaving(false);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <h2 className="text-2xl font-bold mb-4">Cadastrar Nova Empresa</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input name="Nome da Empresa" value={formData['Nome da Empresa'] || ''} onChange={handleInputChange} placeholder="Nome da Empresa *" required className="p-2 border rounded" />
+            <input name="CNPJ Empresa" value={formData['CNPJ Empresa'] || ''} onChange={handleInputChange} placeholder="CNPJ Empresa *" required className="p-2 border rounded" />
+            <input name="Site Empresa" value={formData['Site Empresa'] || ''} onChange={handleInputChange} placeholder="Site" className="p-2 border rounded" />
+            <input name="Telefones Empresa" value={formData['Telefones Empresa'] || ''} onChange={handleInputChange} placeholder="Telefones" className="p-2 border rounded" />
+            <input name="Logradouro Empresa" value={formData['Logradouro Empresa'] || ''} onChange={handleInputChange} placeholder="Logradouro" className="p-2 border rounded" />
+            <input name="Numero Empresa" value={formData['Numero Empresa'] || ''} onChange={handleInputChange} placeholder="Número" className="p-2 border rounded" />
+            <input name="Bairro Empresa" value={formData['Bairro Empresa'] || ''} onChange={handleInputChange} placeholder="Bairro" className="p-2 border rounded" />
+            <input name="Cidade Empresa" value={formData['Cidade Empresa'] || ''} onChange={handleInputChange} placeholder="Cidade" className="p-2 border rounded" />
+            <input name="Estado Empresa" value={formData['Estado Empresa'] || ''} onChange={handleInputChange} placeholder="Estado" className="p-2 border rounded" />
+            <input name="CEP Empresa" value={formData['CEP Empresa'] || ''} onChange={handleInputChange} placeholder="CEP" className="p-2 border rounded" />
+            <input name="País Empresa" value={formData['País Empresa'] || ''} onChange={handleInputChange} placeholder="País" className="p-2 border rounded" />
+            <input name="Complemento Empresa" value={formData['Complemento Empresa'] || ''} onChange={handleInputChange} placeholder="Complemento" className="p-2 border rounded md:col-span-2" />
+            <input name="Observação Empresa" value={formData['Observação Empresa'] || ''} onChange={handleInputChange} placeholder="Observação" className="p-2 border rounded md:col-span-2" />
+          </div>
+          <div className="mt-6 flex justify-between">
+            <button type="button" onClick={handleEnrich} disabled={isEnriching || isSaving} className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:bg-gray-400">
+              {isEnriching ? 'Enriquecendo...' : 'Enriquecer Dados'}
+            </button>
+            <div>
+              <button type="button" onClick={onClose} className="px-4 py-2 mr-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
+              <button type="submit" disabled={isSaving || isEnriching} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400">
+                {isSaving ? 'Salvando...' : 'Salvar Empresa'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 
 // --- Main Page Component ---
 export default function PerdecompComparativoPage() {
@@ -239,6 +404,13 @@ export default function PerdecompComparativoPage() {
   });
   const [results, setResults] = useState<ComparisonResult[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
+  const [forceStatus, setForceStatus] = useState<{ [cnpj: string]: boolean }>({});
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeModalTarget, setActiveModalTarget] = useState<'client' | number | null>(null);
+
+  const handleForceStatusChange = (cnpj: string, isForced: boolean) => {
+    setForceStatus(prev => ({ ...prev, [cnpj]: isForced }));
+  };
 
   useEffect(() => {
     const end = new Date(endDate);
@@ -295,13 +467,22 @@ export default function PerdecompComparativoPage() {
   };
 
   const handleConsult = async () => {
+    if (!client) {
+      alert('Por favor, selecione um Cliente Principal antes de consultar.');
+      return;
+    }
     const allCompanies = [client, ...competitors].filter((c): c is Company => c !== null);
     if (allCompanies.length === 0) return;
 
     setGlobalLoading(true);
     setResults(allCompanies.map(c => ({ company: c, data: null, status: 'idle' })));
 
-    await Promise.all(allCompanies.map(c => runConsultation(c, false)));
+    const consultations = allCompanies.map(c => {
+        const isForced = forceStatus[c.CNPJ_Empresa] || false;
+        return runConsultation(c, isForced);
+    });
+
+    await Promise.all(consultations);
 
     setGlobalLoading(false);
   };
@@ -320,15 +501,48 @@ export default function PerdecompComparativoPage() {
     setCompetitors(competitors.filter((_, i) => i !== index));
   };
 
+  const openModal = (target: 'client' | number) => {
+    setActiveModalTarget(target);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveNewCompany = (newCompany: Company) => {
+    if (activeModalTarget === 'client') {
+      setClient(newCompany);
+    } else if (typeof activeModalTarget === 'number') {
+      const newCompetitors = [...competitors];
+      newCompetitors[activeModalTarget] = newCompany;
+      setCompetitors(newCompetitors);
+    }
+    // Close modal is handled by the modal itself, but good to reset target
+    setActiveModalTarget(null);
+  };
+
   return (
     <div className="container mx-auto p-4 text-gray-900 dark:text-gray-100">
+      <NewCompanyModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSaveSuccess={handleSaveNewCompany}
+      />
       <h1 className="text-3xl font-bold mb-6">Comparativo PER/DCOMP</h1>
 
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="font-semibold block mb-2">Cliente Principal</label>
-            <Autocomplete selectedCompany={client} onSelect={setClient} onClear={() => setClient(null)} />
+            <Autocomplete
+              selectedCompany={client}
+              onSelect={setClient}
+              onClear={() => {
+                if (client) handleForceStatusChange(client.CNPJ_Empresa, false);
+                setClient(null);
+              }}
+              onForceChange={(isForced) => {
+                if (client) handleForceStatusChange(client.CNPJ_Empresa, isForced);
+              }}
+              onRegisterNew={() => openModal('client')}
+            />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -346,7 +560,25 @@ export default function PerdecompComparativoPage() {
           {competitors.map((comp, index) => (
             <div key={index} className="flex items-center gap-2 mb-2">
               <div className="flex-grow">
-                <Autocomplete selectedCompany={comp} onSelect={(s) => setCompetitors(c => c.map((i, idx) => idx === index ? s : i))} onClear={() => setCompetitors(c => c.map((i, idx) => idx === index ? null : i))} />
+                <Autocomplete
+                  selectedCompany={comp}
+                  onSelect={(s) => {
+                    const newCompetitors = [...competitors];
+                    newCompetitors[index] = s;
+                    setCompetitors(newCompetitors);
+                  }}
+                  onClear={() => {
+                    const compToClear = competitors[index];
+                    if (compToClear) handleForceStatusChange(compToClear.CNPJ_Empresa, false);
+                    const newCompetitors = [...competitors];
+                    newCompetitors[index] = null;
+                    setCompetitors(newCompetitors);
+                  }}
+                  onForceChange={(isForced) => {
+                    if (comp) handleForceStatusChange(comp.CNPJ_Empresa, isForced);
+                  }}
+                  onRegisterNew={() => openModal(index)}
+                />
               </div>
               <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
             </div>
@@ -360,7 +592,7 @@ export default function PerdecompComparativoPage() {
           </button>
         </div>
         <div className="mt-8 text-center">
-            <button onClick={handleConsult} disabled={globalLoading || !client} className="px-8 py-3 bg-violet-600 text-white font-bold rounded-lg hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center mx-auto">
+            <button onClick={handleConsult} disabled={globalLoading} className="px-8 py-3 bg-violet-600 text-white font-bold rounded-lg hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center mx-auto">
               {globalLoading && <FaSpinner className="animate-spin mr-2" />}
               {globalLoading ? 'Consultando...' : 'Consultar / Atualizar Comparação'}
             </button>
