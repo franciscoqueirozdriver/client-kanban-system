@@ -226,7 +226,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
       <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded">
         <div className="flex items-start justify-between">
             <div className="flex-grow truncate">
-                <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
+                <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{selectedCompany.CNPJ_Empresa}</p>
             </div>
             <button onClick={extendedOnClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
@@ -260,7 +260,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
         onFocus={() => setShowSuggestions(true)}
         onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
         placeholder={placeholder}
-        className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-800 dark:text-white border-gray-300 dark:border-gray-600"
+        className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400"
       />
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
       {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
@@ -275,7 +275,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
             </li>
           )}
           {results.map((company) => (
-            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer dark:text-gray-200">
+            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-gray-900 dark:text-gray-200">
               {company.Nome_da_Empresa} <span className="text-sm text-gray-500 dark:text-gray-400">{company.CNPJ_Empresa}</span>
             </li>
           ))}
