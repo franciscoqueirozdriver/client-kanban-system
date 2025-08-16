@@ -226,7 +226,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
       <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded">
         <div className="flex items-start justify-between">
             <div className="flex-grow truncate">
-                <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
+                <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{selectedCompany.CNPJ_Empresa}</p>
             </div>
             <button onClick={extendedOnClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
