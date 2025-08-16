@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { FaDownload, FaSpinner } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaSpinner } from 'react-icons/fa';
 
 // --- Helper Types ---
 interface Company {
@@ -33,11 +33,9 @@ interface PerdcompRow {
   Data_Consulta: string;
 }
 
-type ContagemPorTipo = Record<string, number>;
-
 interface AggregatedData {
   totalCount: number;
-  contagemPorTipo: ContagemPorTipo;
+  countByType: Record<string, number>;
   comprovantes: { html: string; pdf: string; id: string }[];
   lastConsultation: string | null;
 }
@@ -48,6 +46,16 @@ interface ComparisonResult {
   status: 'idle' | 'loading' | 'loaded' | 'error';
   error?: string;
 }
+
+type ApiInfo = {
+  fonte?: 'planilha' | 'api';
+  status?: 'ok' | 'erro';
+  code?: number;
+  code_message?: string;
+  nomeDetectado?: string;
+  quantidadePerdcomp?: number;
+  elapsed_ms?: number;
+};
 
 // --- Helper Functions ---
 const isValidCnpj = (cnpj: string | null | undefined): boolean => {
@@ -100,17 +108,17 @@ const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: 
     const lastConsultation = rows.length > 0 ? rows.sort((a, b) => new Date(b.Data_Consulta).getTime() - new Date(a.Data_Consulta).getTime())[0].Data_Consulta : null;
     return {
       totalCount: 0,
-      contagemPorTipo: {},
+      countByType: {},
       comprovantes: [],
       lastConsultation
     };
   }
 
-  const contagemPorTipo = filteredRows.reduce((acc, row) => {
-    const tipo = row.Tipo_Pedido || '—';
+  const countByType = filteredRows.reduce((acc, row) => {
+    const tipo = (row.Tipo_Pedido || '—').toString().trim() || '—';
     acc[tipo] = (acc[tipo] || 0) + 1;
     return acc;
-  }, {} as ContagemPorTipo);
+  }, {} as Record<string, number>);
 
   const comprovantes = filteredRows
     .filter(row => row.URL_Comprovante_HTML || row.URL_Comprovante_PDF)
@@ -124,7 +132,7 @@ const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: 
 
   return {
     totalCount: filteredRows.length,
-    contagemPorTipo,
+    countByType,
     comprovantes,
     lastConsultation
   };
@@ -500,7 +508,7 @@ export default function PerdecompComparativoPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeModalTarget, setActiveModalTarget] = useState<'client' | number | null>(null);
   const [modalInitialData, setModalInitialData] = useState<Partial<Company> | null>(null);
-  const [bannerInfo, setBannerInfo] = useState<{ fonte: string; code?: string; code_message?: string; nomeDetectado?: string; quantidadePerdcomp?: number } | null>(null);
+  const [apiInfo, setApiInfo] = useState<ApiInfo | null>(null);
 
   const handleForceStatusChange = (cnpj: string, isForced: boolean) => {
     setForceStatus(prev => ({ ...prev, [cnpj]: isForced }));
@@ -516,7 +524,7 @@ export default function PerdecompComparativoPage() {
     setResults(prev => prev.map(r => r.company.CNPJ_Empresa === cnpj ? { ...r, ...data } : r));
   };
 
-  const runConsultation = async (company: Company, force = false, isMain = false) => {
+  const runConsultation = async (company: Company, force = false) => {
     updateResult(company.CNPJ_Empresa, { status: 'loading' });
     try {
       const res = await fetch('/api/infosimples/perdcomp', {
@@ -532,16 +540,15 @@ export default function PerdecompComparativoPage() {
 
       if (!res.ok) throw new Error(`API error: ${res.statusText}`);
       const data = await res.json();
-
-      if (isMain) {
-        setBannerInfo({
-          fonte: data.fonte,
-          code: data.code,
-          code_message: data.code_message,
-          nomeDetectado: data.nomeDetectado,
-          quantidadePerdcomp: data.quantidadePerdcomp,
-        });
-      }
+      setApiInfo({
+        fonte: data?.fonte,
+        status: 'ok',
+        code: data?.code,
+        code_message: data?.code_message,
+        nomeDetectado: data?.nomeDetectado,
+        quantidadePerdcomp: data?.quantidadePerdcomp,
+        elapsed_ms: data?.header?.elapsed_time_in_milliseconds,
+      });
 
       let finalData: PerdcompRow[] = [];
       if (data.fonte === 'api') {
@@ -549,7 +556,7 @@ export default function PerdecompComparativoPage() {
           const preparedForSave = data.linhasParaSalvar.map((item: any) => ({
             ...item,
             Cliente_ID: company.Cliente_ID,
-            'Nome da Empresa': item['Nome da Empresa'] || company.Nome_da_Empresa,
+            'Nome da Empresa': (data?.nomeDetectado || company.Nome_da_Empresa) as string,
           }));
           await fetch('/api/perdecomp/salvar', {
             method: 'POST',
@@ -566,6 +573,7 @@ export default function PerdecompComparativoPage() {
       updateResult(company.CNPJ_Empresa, { status: 'loaded', data: aggregated });
 
     } catch (e: any) {
+      setApiInfo({ status: 'erro' });
       updateResult(company.CNPJ_Empresa, { status: 'error', error: e.message });
     }
   };
@@ -578,13 +586,13 @@ export default function PerdecompComparativoPage() {
     const allCompanies = [client, ...competitors].filter((c): c is Company => c !== null);
     if (allCompanies.length === 0) return;
 
-    setBannerInfo(null);
+    setApiInfo(null);
     setGlobalLoading(true);
     setResults(allCompanies.map(c => ({ company: c, data: null, status: 'idle' })));
 
-    const consultations = allCompanies.map((c, idx) => {
+    const consultations = allCompanies.map((c) => {
         const isForced = forceStatus[c.CNPJ_Empresa] || false;
-        return runConsultation(c, isForced, idx === 0);
+        return runConsultation(c, isForced);
     });
 
     await Promise.all(consultations);
@@ -594,7 +602,7 @@ export default function PerdecompComparativoPage() {
 
   const handleForceConsult = async (company: Company) => {
     setGlobalLoading(true);
-    await runConsultation(company, true, company.CNPJ_Empresa === client?.CNPJ_Empresa);
+    await runConsultation(company, true);
     setGlobalLoading(false);
   };
 
@@ -639,6 +647,9 @@ export default function PerdecompComparativoPage() {
         initialData={modalInitialData}
       />
       <h1 className="text-3xl font-bold mb-6">Comparativo PER/DCOMP</h1>
+      <p className="mb-4 text-sm text-gray-700 dark:text-gray-300">
+        Compare até 4 CNPJs (Cliente + 3 concorrentes) nos últimos 5 anos. Usamos a planilha quando houver dados; você pode forçar nova consulta na API.
+      </p>
 
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -714,12 +725,18 @@ export default function PerdecompComparativoPage() {
       </div>
     </div>
 
-    {bannerInfo && (
-      <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
-        <p>Fonte: {bannerInfo.fonte}</p>
-        {bannerInfo.code && <p>{bannerInfo.code}: {bannerInfo.code_message}</p>}
-        {bannerInfo.nomeDetectado && <p>Solicitante: {bannerInfo.nomeDetectado}</p>}
-        <p>Quantidade PER/DCOMP: {bannerInfo.quantidadePerdcomp}</p>
+    {apiInfo && (
+      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+        <h3 className="text-sm font-semibold">Resposta da {apiInfo.fonte === 'api' ? 'API' : 'Planilha'}</h3>
+        <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+          {apiInfo.status === 'ok' ? 'Consulta realizada com sucesso.' : 'Houve um problema na consulta.'}
+        </p>
+        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+          {typeof apiInfo.code !== 'undefined' && <>Código: {apiInfo.code} — {apiInfo.code_message || '—'}</>}
+          {apiInfo.elapsed_ms ? <> · Tempo: {apiInfo.elapsed_ms} ms</> : null}
+          {apiInfo.nomeDetectado ? <> · Nome detectado: <b>{apiInfo.nomeDetectado}</b></> : null}
+          {typeof apiInfo.quantidadePerdcomp === 'number' ? <> · Quantidade: <b>{apiInfo.quantidadePerdcomp}</b></> : null}
+        </p>
       </div>
     )}
 
@@ -739,12 +756,15 @@ export default function PerdecompComparativoPage() {
                   <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.totalCount}</span></div>
                 </div>
 
-                {Object.keys(data.contagemPorTipo).length > 0 && (
+                {Object.keys(data.countByType).length > 0 && (
                   <div className="mb-4">
-                    <h4 className="font-semibold mb-1 text-sm">Por tipo:</h4>
+                    <h4 className="font-semibold mb-1 text-sm">Por tipo (documento):</h4>
                     <div className="text-xs space-y-1">
-                      {Object.entries(data.contagemPorTipo).map(([tipo, qtd]) => (
-                        <div key={tipo} className="flex justify-between"><span>{tipo}:</span> <span>{qtd}</span></div>
+                      {Object.entries(data.countByType).map(([tipo, qtd]) => (
+                        <div key={tipo} className="flex justify-between">
+                          <span>{tipo}:</span>
+                          <span className="font-semibold">{qtd}</span>
+                        </div>
                       ))}
                     </div>
                   </div>
