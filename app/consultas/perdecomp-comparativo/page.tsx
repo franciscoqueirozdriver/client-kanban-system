@@ -260,22 +260,12 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
         onFocus={() => setShowSuggestions(true)}
         onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-gray-300 bg-white px-3 py-2
-              text-gray-900 placeholder:text-gray-400
-              focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-300
-              dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500
-              dark:focus:border-violet-500 dark:focus:ring-violet-500/40"
+        className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
       />
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
       {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
-        <ul
-          role="listbox"
-          className="absolute z-50 mt-2 max-h-60 w-full overflow-auto rounded-2xl
-                border border-gray-200 bg-white p-1 shadow-lg
-                text-gray-900
-                dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-        >
-          {isLoading && <li className="p-2 text-sm text-gray-600 dark:text-gray-300">Buscando...</li>}
+        <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border rounded-md shadow-lg max-h-60 overflow-y-auto">
+          {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
           {!isLoading && results.length === 0 && (
             <li className="p-2 text-center">
               <p className="text-gray-500 text-sm mb-2">Nenhum resultado.</p>
@@ -285,18 +275,8 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
             </li>
           )}
           {results.map((company) => (
-            <li
-              key={company.Cliente_ID}
-              role="option"
-              onMouseDown={() => handleSelect(company)}
-              className="cursor-pointer select-none rounded-xl px-3 py-2 text-sm
-                  text-gray-900 hover:bg-violet-50
-                  dark:text-gray-100 dark:hover:bg-gray-800"
-            >
-              <span className="font-medium">{company.Nome_da_Empresa}</span>
-              {company.CNPJ_Empresa && (
-                <span className="ml-2 text-gray-500 dark:text-gray-400">{company.CNPJ_Empresa}</span>
-              )}
+            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
+              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{company.CNPJ_Empresa}</span>
             </li>
           ))}
         </ul>
