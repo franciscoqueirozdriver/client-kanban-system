@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets.js';
 import { consultarPerdcomp } from '../../../../lib/infosimples';
 
+type ContagemPorTipo = Record<string, number>;
+
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
 function generatePerdcompId() {
@@ -26,26 +28,28 @@ export async function POST(request: Request) {
     // 1. If not forcing, check the spreadsheet first
     if (!force) {
       const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
-      const reqStartDate = new Date(periodoInicio);
-      const reqEndDate = new Date(periodoFim);
-
       const existingData = rows.filter(row => {
         const rowCnpj = String(row.CNPJ || '').replace(/\D/g, '');
-        if (rowCnpj !== cleanCnpj) {
-          return false;
-        }
-        // Check if there's any data within the last 5 years as a quick check
-        const lastConsultation = new Date(row.Data_Consulta);
-        const fiveYearsAgo = new Date();
-        fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-        return lastConsultation > fiveYearsAgo;
+        if (rowCnpj !== cleanCnpj) return false;
+        const rowDate = row.Periodo_Fim || row.Data_Consulta?.slice(0, 10);
+        return rowDate >= periodoInicio && rowDate <= periodoFim;
       });
 
       if (existingData.length > 0) {
-        // Return all data for the CNPJ if recent data exists.
-        // The frontend will perform the strict filtering by period for display.
-        // This matches the UX of showing "Last consulted: ..."
-        return NextResponse.json({ ok: true, fonte: 'planilha', linhas: existingData });
+        const contagemPorTipoDocumento = existingData.reduce((acc, row) => {
+          const tipo = row.Tipo_Pedido || '—';
+          acc[tipo] = (acc[tipo] || 0) + 1;
+          return acc;
+        }, {} as ContagemPorTipo);
+        const nomeDetectado = existingData[0]?.Solicitante || existingData[0]?.['Nome da Empresa'] || '';
+        return NextResponse.json({
+          ok: true,
+          fonte: 'planilha',
+          nomeDetectado,
+          quantidadePerdcomp: existingData.length,
+          contagemPorTipoDocumento,
+          linhas: existingData,
+        });
       }
     }
 
@@ -54,21 +58,26 @@ export async function POST(request: Request) {
 
     // Assuming apiResponse.data contains the list of PER/DCOMPs
     const items = apiResponse?.data || [];
+    const nomeDetectado = items.find((i: any) => i.solicitante)?.solicitante || '';
+    const contagemPorTipoDocumento = items.reduce((acc: ContagemPorTipo, item: any) => {
+      const tipo = item.tipo_documento || '—';
+      acc[tipo] = (acc[tipo] || 0) + 1;
+      return acc;
+    }, {} as ContagemPorTipo);
 
     const dataConsulta = new Date().toISOString();
 
     // 3. Map the API response to the 18-column format
     const mappedItems = items.map((item: any) => ({
-      // Cliente_ID and Nome da Empresa will be added by the frontend before saving
       Cliente_ID: '',
-      Nome_da_Empresa: '',
+      'Nome da Empresa': nomeDetectado || '',
       Perdcomp_ID: generatePerdcompId(),
       CNPJ: cleanCnpj,
       Tipo_Pedido: item.tipo_pedido || 'N/A',
       Situacao: item.situacao || 'N/A',
       Periodo_Inicio: item.periodo_apuracao_inicio || '',
       Periodo_Fim: item.periodo_apuracao_fim || '',
-      Valor_Total: item.valor_credito_total || 0,
+      Valor_Total: '',
       Numero_Processo: item.numero_processo || '',
       Data_Protocolo: item.data_protocolo || '',
       Ultima_Atualizacao: item.ultima_atualizacao || '',
@@ -80,7 +89,16 @@ export async function POST(request: Request) {
       Data_Consulta: dataConsulta,
     }));
 
-    return NextResponse.json({ ok: true, fonte: 'api', itens: mappedItems });
+    return NextResponse.json({
+      ok: true,
+      fonte: 'api',
+      code: apiResponse.code,
+      code_message: apiResponse.code_message,
+      nomeDetectado,
+      quantidadePerdcomp: items.length,
+      contagemPorTipoDocumento,
+      linhasParaSalvar: mappedItems,
+    });
 
   } catch (error) {
     console.error('[API /infosimples/perdcomp]', error);

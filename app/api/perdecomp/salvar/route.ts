@@ -19,19 +19,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: 'Payload inválido: "linhas" deve ser um array não-vazio.' }, { status: 400 });
     }
 
-    const rowsToAppend = linhas.map((linha: any) => {
-      // Ensure the object has keys for all headers, even if they are empty
-      const fullLinha = PERDECOMP_HEADERS.reduce((acc, header) => {
-        acc[header] = linha[header] ?? '';
-        return acc;
-      }, {} as { [key: string]: any });
-
-      // Validate that the provided line is not malformed
-      if (Object.keys(linha).length > PERDECOMP_HEADERS.length) {
-          // This is a simple check. A more robust one would check for unexpected keys.
+    for (const linha of linhas) {
+      const keys = Object.keys(linha);
+      if (keys.length !== PERDECOMP_HEADERS.length || !PERDECOMP_HEADERS.every(h => keys.includes(h))) {
+        return NextResponse.json({ ok: false, message: 'Colunas inválidas na linha.' }, { status: 400 });
       }
+    }
 
-      return PERDECOMP_HEADERS.map(header => fullLinha[header]);
+    const rowsToAppend = linhas.map((linha: any) => {
+      const ordered = PERDECOMP_HEADERS.map(header => linha[header] ?? '');
+      return ordered;
     });
 
     // The appendSheetData function expects an array of arrays.

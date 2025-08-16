@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets.js';
 
+interface SheetRow { [key: string]: any; _rowNumber: number; }
+interface Company extends SheetRow { _sourceSheet: string; }
+
 const SHEET_NAME = 'layout_importacao_empresas';
 
 export async function GET(request: Request) {
@@ -12,12 +15,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { rows } = await getSheetData(SHEET_NAME);
+    const { rows } = await getSheetData(SHEET_NAME) as { rows: SheetRow[] };
 
     const normalizedQuery = query.toLowerCase();
     const cnpjQuery = query.replace(/\D/g, '');
 
-    const results = rows.filter(row => {
+    const results: Company[] = rows.filter(row => {
       if (cnpjQuery && row['CNPJ Empresa']?.replace(/\D/g, '') === cnpjQuery) {
         return true;
       }
@@ -26,12 +29,7 @@ export async function GET(request: Request) {
       }
       return false;
     }).map(row => {
-      // Return all fields from the sheet to be used in the enrichment form
-      const companyData: any = {
-        _sourceSheet: SHEET_NAME,
-        _rowNumber: row._rowNumber
-      };
-      // Dynamically add all columns from the row to the object
+      const companyData: Company = { _sourceSheet: SHEET_NAME, _rowNumber: row._rowNumber };
       Object.keys(row).forEach(key => {
         companyData[key] = row[key];
       });

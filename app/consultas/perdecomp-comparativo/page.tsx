@@ -33,10 +33,11 @@ interface PerdcompRow {
   Data_Consulta: string;
 }
 
+type ContagemPorTipo = Record<string, number>;
+
 interface AggregatedData {
   totalCount: number;
-  totalValue: number;
-  valueByType: { [key: string]: number };
+  contagemPorTipo: ContagemPorTipo;
   comprovantes: { html: string; pdf: string; id: string }[];
   lastConsultation: string | null;
 }
@@ -99,20 +100,17 @@ const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: 
     const lastConsultation = rows.length > 0 ? rows.sort((a, b) => new Date(b.Data_Consulta).getTime() - new Date(a.Data_Consulta).getTime())[0].Data_Consulta : null;
     return {
       totalCount: 0,
-      totalValue: 0,
-      valueByType: {},
+      contagemPorTipo: {},
       comprovantes: [],
       lastConsultation
     };
   }
 
-  const valueByType = filteredRows.reduce((acc, row) => {
-    const value = Number(row.Valor_Total) || 0;
-    acc[row.Tipo_Pedido] = (acc[row.Tipo_Pedido] || 0) + value;
+  const contagemPorTipo = filteredRows.reduce((acc, row) => {
+    const tipo = row.Tipo_Pedido || '—';
+    acc[tipo] = (acc[tipo] || 0) + 1;
     return acc;
-  }, {} as { [key: string]: number });
-
-  const totalValue = Object.values(valueByType).reduce((sum, v) => sum + v, 0);
+  }, {} as ContagemPorTipo);
 
   const comprovantes = filteredRows
     .filter(row => row.URL_Comprovante_HTML || row.URL_Comprovante_PDF)
@@ -126,8 +124,7 @@ const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: 
 
   return {
     totalCount: filteredRows.length,
-    totalValue,
-    valueByType,
+    contagemPorTipo,
     comprovantes,
     lastConsultation
   };
@@ -503,6 +500,7 @@ export default function PerdecompComparativoPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeModalTarget, setActiveModalTarget] = useState<'client' | number | null>(null);
   const [modalInitialData, setModalInitialData] = useState<Partial<Company> | null>(null);
+  const [bannerInfo, setBannerInfo] = useState<{ fonte: string; code?: string; code_message?: string; nomeDetectado?: string; quantidadePerdcomp?: number } | null>(null);
 
   const handleForceStatusChange = (cnpj: string, isForced: boolean) => {
     setForceStatus(prev => ({ ...prev, [cnpj]: isForced }));
@@ -518,7 +516,7 @@ export default function PerdecompComparativoPage() {
     setResults(prev => prev.map(r => r.company.CNPJ_Empresa === cnpj ? { ...r, ...data } : r));
   };
 
-  const runConsultation = async (company: Company, force = false) => {
+  const runConsultation = async (company: Company, force = false, isMain = false) => {
     updateResult(company.CNPJ_Empresa, { status: 'loading' });
     try {
       const res = await fetch('/api/infosimples/perdcomp', {
@@ -535,13 +533,23 @@ export default function PerdecompComparativoPage() {
       if (!res.ok) throw new Error(`API error: ${res.statusText}`);
       const data = await res.json();
 
+      if (isMain) {
+        setBannerInfo({
+          fonte: data.fonte,
+          code: data.code,
+          code_message: data.code_message,
+          nomeDetectado: data.nomeDetectado,
+          quantidadePerdcomp: data.quantidadePerdcomp,
+        });
+      }
+
       let finalData: PerdcompRow[] = [];
       if (data.fonte === 'api') {
-        if (data.itens && data.itens.length > 0) {
-          const preparedForSave = data.itens.map((item: Omit<PerdcompRow, 'Cliente_ID' | 'Nome da Empresa'>) => ({
+        if (Array.isArray(data.linhasParaSalvar) && data.linhasParaSalvar.length > 0) {
+          const preparedForSave = data.linhasParaSalvar.map((item: any) => ({
             ...item,
             Cliente_ID: company.Cliente_ID,
-            "Nome da Empresa": company.Nome_da_Empresa,
+            'Nome da Empresa': item['Nome da Empresa'] || company.Nome_da_Empresa,
           }));
           await fetch('/api/perdecomp/salvar', {
             method: 'POST',
@@ -551,7 +559,7 @@ export default function PerdecompComparativoPage() {
           finalData = preparedForSave;
         }
       } else {
-        finalData = data.linhas;
+        finalData = data.linhas || [];
       }
 
       const aggregated = aggregatePerdcompData(finalData, startDate, endDate);
@@ -570,12 +578,13 @@ export default function PerdecompComparativoPage() {
     const allCompanies = [client, ...competitors].filter((c): c is Company => c !== null);
     if (allCompanies.length === 0) return;
 
+    setBannerInfo(null);
     setGlobalLoading(true);
     setResults(allCompanies.map(c => ({ company: c, data: null, status: 'idle' })));
 
-    const consultations = allCompanies.map(c => {
+    const consultations = allCompanies.map((c, idx) => {
         const isForced = forceStatus[c.CNPJ_Empresa] || false;
-        return runConsultation(c, isForced);
+        return runConsultation(c, isForced, idx === 0);
     });
 
     await Promise.all(consultations);
@@ -585,7 +594,7 @@ export default function PerdecompComparativoPage() {
 
   const handleForceConsult = async (company: Company) => {
     setGlobalLoading(true);
-    await runConsultation(company, true);
+    await runConsultation(company, true, company.CNPJ_Empresa === client?.CNPJ_Empresa);
     setGlobalLoading(false);
   };
 
@@ -697,15 +706,24 @@ export default function PerdecompComparativoPage() {
             + Adicionar Concorrente
           </button>
         </div>
-        <div className="mt-8 text-center">
-            <button onClick={handleConsult} disabled={globalLoading} className="px-8 py-3 bg-violet-600 text-white font-bold rounded-lg hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center mx-auto">
-              {globalLoading && <FaSpinner className="animate-spin mr-2" />}
-              {globalLoading ? 'Consultando...' : 'Consultar / Atualizar Comparação'}
-            </button>
-        </div>
+      <div className="mt-8 text-center">
+          <button onClick={handleConsult} disabled={globalLoading} className="px-8 py-3 bg-violet-600 text-white font-bold rounded-lg hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center mx-auto">
+            {globalLoading && <FaSpinner className="animate-spin mr-2" />}
+            {globalLoading ? 'Consultando...' : 'Consultar / Atualizar Comparação'}
+          </button>
       </div>
+    </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    {bannerInfo && (
+      <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
+        <p>Fonte: {bannerInfo.fonte}</p>
+        {bannerInfo.code && <p>{bannerInfo.code}: {bannerInfo.code_message}</p>}
+        {bannerInfo.nomeDetectado && <p>Solicitante: {bannerInfo.nomeDetectado}</p>}
+        <p>Quantidade PER/DCOMP: {bannerInfo.quantidadePerdcomp}</p>
+      </div>
+    )}
+
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {results.map(({ company, data, status, error }) => (
           <div key={company.CNPJ_Empresa} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col">
             <h3 className="font-bold text-lg truncate mb-1" title={company.Nome_da_Empresa}>{company.Nome_da_Empresa}</h3>
@@ -719,15 +737,14 @@ export default function PerdecompComparativoPage() {
 
                 <div className="space-y-3 text-sm mb-4 flex-grow">
                   <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.totalCount}</span></div>
-                  <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">{data.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
                 </div>
 
-                {Object.keys(data.valueByType).length > 0 && (
+                {Object.keys(data.contagemPorTipo).length > 0 && (
                   <div className="mb-4">
-                    <h4 className="font-semibold mb-1 text-sm">Valor por Tipo:</h4>
+                    <h4 className="font-semibold mb-1 text-sm">Por tipo:</h4>
                     <div className="text-xs space-y-1">
-                      {Object.entries(data.valueByType).map(([tipo, valor]) => (
-                        <div key={tipo} className="flex justify-between"><span>{tipo}:</span> <span>{valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                      {Object.entries(data.contagemPorTipo).map(([tipo, qtd]) => (
+                        <div key={tipo} className="flex justify-between"><span>{tipo}:</span> <span>{qtd}</span></div>
                       ))}
                     </div>
                   </div>
