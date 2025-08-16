@@ -68,34 +68,36 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, placeho
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const isCnpjLike = /^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/.test(query);
-
-    if (isCnpjLike && !isValidCnpj(query)) {
-      setError("CNPJ inválido.");
+    // Clear results and error if query is too short
+    if (query.length < 3) {
       setResults([]);
+      setError(null);
       return;
     }
 
-    setError(null);
-    if (query.length < 3 && !isCnpjLike) {
-      setResults([]);
-      return;
-    }
-
+    // Debounce the API call
     const debounce = setTimeout(async () => {
       setIsLoading(true);
-      const searchQuery = isCnpjLike ? query.replace(/[^\d]/g, '') : query;
+      setError(null);
       try {
-        const response = await fetch(`/api/clientes/buscar?q=${searchQuery}`);
+        const response = await fetch(`/api/clientes/buscar?q=${query}`);
         if (response.ok) {
           const data = await response.json();
           setResults(data);
+          // Check for invalid CNPJ only if the query looks like a full CNPJ but returns no results
+          if (data.length === 0 && /^\d{14}$/.test(query.replace(/\D/g, '')) && !isValidCnpj(query)) {
+              setError("CNPJ inválido.");
+          }
+        } else {
+          setError("Falha ao buscar dados.");
         }
       } catch (error) {
+        setError("Erro de conexão.");
         console.error("Failed to fetch companies", error);
       }
       setIsLoading(false);
     }, 500);
+
     return () => clearTimeout(debounce);
   }, [query]);
 
