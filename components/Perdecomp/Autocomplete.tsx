@@ -56,10 +56,11 @@ interface AutocompleteProps {
   selectedCompany: Company | null;
   onSelect: (company: Company) => void;
   onClear: () => void;
+  onNoResults?: () => void;
   placeholder?: string;
 }
 
-const Autocomplete = ({ selectedCompany, onSelect, onClear, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
+const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -132,7 +133,16 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, placeholder = "Digit
       {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
         <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border rounded-md shadow-lg max-h-60 overflow-y-auto">
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
-          {!isLoading && results.length === 0 && <li className="p-2 text-gray-500">Nenhum resultado.</li>}
+          {!isLoading && results.length === 0 && (
+            <>
+              <li className="p-2 text-gray-500">Nenhum resultado.</li>
+              {onNoResults && (
+                <li onMouseDown={onNoResults} className="p-2 hover:bg-blue-100 dark:hover:bg-blue-800 cursor-pointer text-blue-600 font-semibold">
+                  + Cadastrar Nova Empresa
+                </li>
+              )}
+            </>
+          )}
           {results.map((company) => (
             <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
               {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{company.CNPJ_Empresa}</span>

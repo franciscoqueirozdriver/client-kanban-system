@@ -26,26 +26,17 @@ export async function POST(request: Request) {
     // 1. If not forcing, check the spreadsheet first
     if (!force) {
       const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
-      const reqStartDate = new Date(periodoInicio);
-      const reqEndDate = new Date(periodoFim);
 
-      const existingData = rows.filter(row => {
+      const dataForCnpj = rows.filter(row => {
         const rowCnpj = String(row.CNPJ || '').replace(/\D/g, '');
-        if (rowCnpj !== cleanCnpj) {
-          return false;
-        }
-        // Check if there's any data within the last 5 years as a quick check
-        const lastConsultation = new Date(row.Data_Consulta);
-        const fiveYearsAgo = new Date();
-        fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-        return lastConsultation > fiveYearsAgo;
+        return rowCnpj === cleanCnpj;
       });
 
-      if (existingData.length > 0) {
-        // Return all data for the CNPJ if recent data exists.
-        // The frontend will perform the strict filtering by period for display.
-        // This matches the UX of showing "Last consulted: ..."
-        return NextResponse.json({ ok: true, fonte: 'planilha', linhas: existingData });
+      if (dataForCnpj.length > 0) {
+        // If any data exists for this CNPJ, return it.
+        // The frontend will filter it by the selected date range for display.
+        // This allows the UI to show the most recent 'Data_Consulta' even if it's outside the user's range.
+        return NextResponse.json({ ok: true, fonte: 'planilha', linhas: dataForCnpj });
       }
     }
 

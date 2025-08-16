@@ -107,6 +107,23 @@ export default function PerdecompComparativoPage() {
   });
   const [results, setResults] = useState<ComparisonResult[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({
+    'Nome da Empresa': '',
+    'CNPJ Empresa': '',
+    'Site Empresa': '',
+    'País Empresa': 'Brasil',
+    'Estado Empresa': '',
+    'Cidade Empresa': '',
+    'Logradouro Empresa': '',
+    'Numero Empresa': '',
+    'Bairro Empresa': '',
+    'Complemento Empresa': '',
+    'CEP Empresa': '',
+    'DDI Empresa': '+55',
+    'Telefones Empresa': '',
+    'Observação Empresa': '',
+  });
 
   useEffect(() => {
     const end = new Date(endDate);
@@ -188,6 +205,66 @@ export default function PerdecompComparativoPage() {
     setCompetitors(competitors.filter((_, i) => i !== index));
   };
 
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setNewClientForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // TODO: Add validation
+    try {
+      const res = await fetch('/api/clientes/registrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newClientForm),
+      });
+      if (res.ok) {
+        const { newClient } = await res.json();
+        alert('Cliente cadastrado com sucesso!');
+        setShowRegisterModal(false);
+        // Select the new client automatically
+        setClient({
+            Cliente_ID: newClient.Cliente_ID,
+            Nome_da_Empresa: newClient['Nome da Empresa'],
+            CNPJ_Empresa: newClient['CNPJ Empresa'],
+        });
+      } else {
+        const { message } = await res.json();
+        alert(`Erro: ${message}`);
+      }
+    } catch (error) {
+      alert('Falha ao cadastrar cliente.');
+    }
+  };
+
+  const handleEnrich = async () => {
+    if (!client) return;
+
+    setGlobalLoading(true);
+    try {
+      const res = await fetch('/api/enriquecer-empresa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          Cliente_ID: client.Cliente_ID,
+          nome: client.Nome_da_Empresa,
+          overwrite: true,
+        }),
+      });
+
+      if (res.ok) {
+        alert('Dados enriquecidos com sucesso! A atualização pode levar alguns instantes para refletir na busca.');
+      } else {
+        const { error } = await res.json();
+        alert(`Erro ao enriquecer: ${error}`);
+      }
+    } catch (error) {
+      alert('Falha ao enriquecer dados.');
+    }
+    setGlobalLoading(false);
+  };
+
   return (
     <div className="container mx-auto p-4 text-gray-900 dark:text-gray-100">
       <h1 className="text-3xl font-bold mb-6">Comparativo PER/DCOMP</h1>
@@ -196,7 +273,19 @@ export default function PerdecompComparativoPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="font-semibold block mb-2">Cliente Principal</label>
-            <Autocomplete selectedCompany={client} onSelect={setClient} onClear={() => setClient(null)} />
+            <div className="flex items-center gap-2">
+              <div className="flex-grow">
+                <Autocomplete selectedCompany={client} onSelect={setClient} onClear={() => setClient(null)} onNoResults={() => setShowRegisterModal(true)}/>
+              </div>
+              <button
+                onClick={handleEnrich}
+                disabled={!client || globalLoading}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed h-10"
+                title="Enriquecer Dados do Cadastro"
+              >
+                Enriquecer
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -293,6 +382,37 @@ export default function PerdecompComparativoPage() {
           </div>
         ))}
       </div>
+
+      {showRegisterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-lg">
+            <h2 className="text-2xl font-bold mb-6">Cadastrar Nova Empresa</h2>
+            <p className="mb-4">Preencha os dados abaixo para cadastrar uma nova empresa.</p>
+            <form onSubmit={handleRegisterSubmit}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto pr-2">
+                    <input name="Nome da Empresa" placeholder="Nome da Empresa *" value={newClientForm['Nome da Empresa']} onChange={handleFormChange} required className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="CNPJ Empresa" placeholder="CNPJ Empresa *" value={newClientForm['CNPJ Empresa']} onChange={handleFormChange} required className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="Site Empresa" placeholder="Site Empresa" value={newClientForm['Site Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="País Empresa" placeholder="País Empresa" value={newClientForm['País Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="Estado Empresa" placeholder="Estado Empresa" value={newClientForm['Estado Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="Cidade Empresa" placeholder="Cidade Empresa" value={newClientForm['Cidade Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="Logradouro Empresa" placeholder="Logradouro Empresa" value={newClientForm['Logradouro Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="Numero Empresa" placeholder="Numero Empresa" value={newClientForm['Numero Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="Bairro Empresa" placeholder="Bairro Empresa" value={newClientForm['Bairro Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="Complemento Empresa" placeholder="Complemento Empresa" value={newClientForm['Complemento Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="CEP Empresa" placeholder="CEP Empresa" value={newClientForm['CEP Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="DDI Empresa" placeholder="DDI Empresa" value={newClientForm['DDI Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <input name="Telefones Empresa" placeholder="Telefones Empresa" value={newClientForm['Telefones Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
+                    <textarea name="Observação Empresa" placeholder="Observação Empresa" value={newClientForm['Observação Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full md:col-span-2" />
+                </div>
+                <div className="mt-6 flex justify-end gap-4">
+                    <button type="button" onClick={() => setShowRegisterModal(false)} className="px-4 py-2 bg-gray-300 dark:bg-gray-600 rounded hover:bg-gray-400">Cancelar</button>
+                    <button type="submit" className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700">Salvar</button>
+                </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
