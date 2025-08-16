@@ -7,7 +7,6 @@ const SHEET_SOURCES = [
   { name: 'Leads Exact Spotter', nameCols: ['Nome da Empresa'], cnpjCol: 'CNPJ' },
 ];
 
-// Finds the first non-empty value from a row given a list of possible column names
 const findFirstValue = (row: any, cols: string[]): string | null => {
   for (const col of cols) {
     if (row[col]) {
@@ -17,11 +16,10 @@ const findFirstValue = (row: any, cols: string[]): string | null => {
   return null;
 };
 
-// Standardizes a row from any source into a common Company format
 const standardizeCompany = (row: any, source: typeof SHEET_SOURCES[0]): any => {
   const companyName = findFirstValue(row, source.nameCols);
   if (!companyName) {
-    return null; // Cannot standardize without a name
+    return null;
   }
 
   const cnpj = source.cnpjCol ? row[source.cnpjCol] : null;
@@ -54,26 +52,33 @@ export async function GET(request: Request) {
   }
 
   try {
+    console.log(`[DEBUG] Iniciando busca com query: "${query}"`);
+    const normalizedQuery = query.toLowerCase();
+    const cnpjQuery = query.replace(/\D/g, '');
+    console.log(`[DEBUG] Query normalizada: "${normalizedQuery}", CNPJ Query: "${cnpjQuery}"`);
+
     const promises = SHEET_SOURCES.map(source => getSheetData(source.name));
     const results = await Promise.allSettled(promises);
 
     const allCompanies: any[] = [];
-    const normalizedQuery = query.toLowerCase();
-    const cnpjQuery = query.replace(/\D/g, '');
 
     results.forEach((result, index) => {
+      const source = SHEET_SOURCES[index];
+      console.log(`\n[DEBUG] Processando fonte: ${source.name}`);
+
       if (result.status === 'fulfilled') {
-        const source = SHEET_SOURCES[index];
-        const { rows } = result.value;
+        const { headers, rows } = result.value;
+        console.log(`[DEBUG] ${source.name} - Cabeçalhos:`, headers);
+        console.log(`[DEBUG] ${source.name} - Primeiras 2 linhas:`, rows.slice(0, 2));
 
         const matchingRows = rows.filter(row => {
-          // Search by CNPJ if possible
           if (cnpjQuery && source.cnpjCol && row[source.cnpjCol]?.replace(/\D/g, '') === cnpjQuery) {
             return true;
           }
-          // Search by any of the possible name columns
           return source.nameCols.some(nameCol => row[nameCol]?.toLowerCase().includes(normalizedQuery));
         });
+
+        console.log(`[DEBUG] ${source.name} - Linhas encontradas: ${matchingRows.length}`);
 
         matchingRows.forEach(row => {
           const company = standardizeCompany(row, source);
@@ -82,7 +87,7 @@ export async function GET(request: Request) {
           }
         });
       } else {
-        console.error(`Failed to fetch data from ${SHEET_SOURCES[index].name}:`, result.reason);
+        console.error(`[DEBUG] Falha ao ler a fonte ${source.name}:`, result.reason);
       }
     });
 
@@ -94,6 +99,8 @@ export async function GET(request: Request) {
         uniqueCompanies.set(key, company);
       }
     });
+
+    console.log(`[DEBUG] Total de empresas únicas encontradas: ${uniqueCompanies.size}`);
 
     return NextResponse.json(Array.from(uniqueCompanies.values()));
   } catch (error) {
