@@ -96,7 +96,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, placeho
         console.error("Failed to fetch companies", error);
       }
       setIsLoading(false);
-    }, 500);
+    }, 200);
 
     return () => clearTimeout(debounce);
   }, [query]);
