@@ -2,18 +2,33 @@ import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets.js';
 
 const SHEET_SOURCES = [
-  { name: 'layout_importacao_empresas', nameCol: 'Nome da Empresa', cnpjCol: 'CNPJ Empresa' },
-  { name: 'Sheet1', nameCol: 'Organização - Nome', cnpjCol: null },
-  { name: 'Leads Exact Spotter', nameCol: 'Nome da Empresa', cnpjCol: 'CNPJ' },
+  { name: 'layout_importacao_empresas', nameCols: ['Nome da Empresa'], cnpjCol: 'CNPJ Empresa' },
+  { name: 'Sheet1', nameCols: ['Organização - Nome', 'Nome da Empresa', 'Cliente'], cnpjCol: null },
+  { name: 'Leads Exact Spotter', nameCols: ['Nome da Empresa'], cnpjCol: 'CNPJ' },
 ];
+
+// Finds the first non-empty value from a row given a list of possible column names
+const findFirstValue = (row: any, cols: string[]): string | null => {
+  for (const col of cols) {
+    if (row[col]) {
+      return row[col];
+    }
+  }
+  return null;
+};
 
 // Standardizes a row from any source into a common Company format
 const standardizeCompany = (row: any, source: typeof SHEET_SOURCES[0]): any => {
+  const companyName = findFirstValue(row, source.nameCols);
+  if (!companyName) {
+    return null; // Cannot standardize without a name
+  }
+
   const cnpj = source.cnpjCol ? row[source.cnpjCol] : null;
-  // Map all possible fields to a standard set. The frontend expects these keys.
+
   return {
-    Cliente_ID: row['Cliente_ID'] || `temp-${cnpj || row[source.nameCol]}`,
-    Nome_da_Empresa: row[source.nameCol],
+    Cliente_ID: row['Cliente_ID'] || `temp-${cnpj || companyName}`,
+    Nome_da_Empresa: companyName,
     CNPJ_Empresa: cnpj,
     Site_Empresa: row['Site Empresa'] || row['Site'] || '',
     Pais_Empresa: row['País Empresa'] || row['País'] || '',
@@ -56,15 +71,15 @@ export async function GET(request: Request) {
           if (cnpjQuery && source.cnpjCol && row[source.cnpjCol]?.replace(/\D/g, '') === cnpjQuery) {
             return true;
           }
-          // Search by Name
-          if (row[source.nameCol]?.toLowerCase().includes(normalizedQuery)) {
-            return true;
-          }
-          return false;
+          // Search by any of the possible name columns
+          return source.nameCols.some(nameCol => row[nameCol]?.toLowerCase().includes(normalizedQuery));
         });
 
         matchingRows.forEach(row => {
-          allCompanies.push(standardizeCompany(row, source));
+          const company = standardizeCompany(row, source);
+          if (company) {
+            allCompanies.push(company);
+          }
         });
       } else {
         console.error(`Failed to fetch data from ${SHEET_SOURCES[index].name}:`, result.reason);
