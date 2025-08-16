@@ -49,6 +49,12 @@ interface ComparisonResult {
   error?: string;
 }
 
+interface CompanySelection {
+  company: Company;
+  lastConsultation: string | null;
+  forceRefresh: boolean;
+}
+
 // --- Helper Functions ---
 const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: string): AggregatedData => {
   const filteredRows = rows.filter(row => {
@@ -97,8 +103,8 @@ const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: 
 
 // --- Main Page Component ---
 export default function PerdecompComparativoPage() {
-  const [client, setClient] = useState<Company | null>(null);
-  const [competitors, setCompetitors] = useState<Array<Company | null>>([]);
+  const [client, setClient] = useState<CompanySelection | null>(null);
+  const [competitors, setCompetitors] = useState<Array<CompanySelection | null>>([]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -135,7 +141,8 @@ export default function PerdecompComparativoPage() {
     setResults(prev => prev.map(r => r.company.CNPJ_Empresa === cnpj ? { ...r, ...data } : r));
   };
 
-  const runConsultation = async (company: Company, force = false) => {
+  const runConsultation = async (selection: CompanySelection) => {
+    const { company, forceRefresh } = selection;
     updateResult(company.CNPJ_Empresa, { status: 'loading' });
     try {
       const res = await fetch('/api/infosimples/perdcomp', {
@@ -145,7 +152,7 @@ export default function PerdecompComparativoPage() {
           cnpj: company.CNPJ_Empresa,
           periodoInicio: startDate,
           periodoFim: endDate,
-          force,
+          force: forceRefresh,
         }),
       });
 
@@ -180,20 +187,14 @@ export default function PerdecompComparativoPage() {
   };
 
   const handleConsult = async () => {
-    const allCompanies = [client, ...competitors].filter((c): c is Company => c !== null);
-    if (allCompanies.length === 0) return;
+    const allSelections = [client, ...competitors].filter((c): c is CompanySelection => c !== null);
+    if (allSelections.length === 0) return;
 
     setGlobalLoading(true);
-    setResults(allCompanies.map(c => ({ company: c, data: null, status: 'idle' })));
+    setResults(allSelections.map(s => ({ company: s.company, data: null, status: 'idle' })));
 
-    await Promise.all(allCompanies.map(c => runConsultation(c, false)));
+    await Promise.all(allSelections.map(s => runConsultation(s)));
 
-    setGlobalLoading(false);
-  };
-
-  const handleForceConsult = async (company: Company) => {
-    setGlobalLoading(true);
-    await runConsultation(company, true);
     setGlobalLoading(false);
   };
 
@@ -203,6 +204,39 @@ export default function PerdecompComparativoPage() {
 
   const handleRemoveCompetitor = (index: number) => {
     setCompetitors(competitors.filter((_, i) => i !== index));
+  };
+
+  const handleCompetitorChange = (index: number, data: Partial<CompanySelection>) => {
+    setCompetitors(prev => prev.map((c, i) => i === index ? { ...c!, ...data } : c));
+  };
+
+  const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`/api/perdecomp/verificar?cnpj=${cnpj}`);
+      if (res.ok) {
+        const { lastConsultation } = await res.json();
+        return lastConsultation;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to check last consultation', error);
+      return null;
+    }
+  };
+
+  const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
+    const lastConsultation = await checkLastConsultation(company.CNPJ_Empresa);
+    const selection: CompanySelection = {
+      company,
+      lastConsultation,
+      forceRefresh: false,
+    };
+
+    if (type === 'client') {
+      setClient(selection);
+    } else if (type === 'competitor' && index !== undefined) {
+      setCompetitors(prev => prev.map((c, i) => i === index ? selection : c));
+    }
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -225,9 +259,13 @@ export default function PerdecompComparativoPage() {
         setShowRegisterModal(false);
         // Select the new client automatically
         setClient({
+          company: {
             Cliente_ID: newClient.Cliente_ID,
             Nome_da_Empresa: newClient['Nome da Empresa'],
             CNPJ_Empresa: newClient['CNPJ Empresa'],
+          },
+          lastConsultation: null,
+          forceRefresh: false,
         });
       } else {
         const { message } = await res.json();
@@ -247,8 +285,8 @@ export default function PerdecompComparativoPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          Cliente_ID: client.Cliente_ID,
-          nome: client.Nome_da_Empresa,
+          Cliente_ID: client.company.Cliente_ID,
+          nome: client.company.Nome_da_Empresa,
           overwrite: true,
         }),
       });
@@ -275,7 +313,7 @@ export default function PerdecompComparativoPage() {
             <label className="font-semibold block mb-2">Cliente Principal</label>
             <div className="flex items-center gap-2">
               <div className="flex-grow">
-                <Autocomplete selectedCompany={client} onSelect={setClient} onClear={() => setClient(null)} onNoResults={() => setShowRegisterModal(true)}/>
+                <Autocomplete selectedCompany={client?.company ?? null} onSelect={(company) => handleSelectCompany('client', company)} onClear={() => setClient(null)} onNoResults={() => setShowRegisterModal(true)}/>
               </div>
               <button
                 onClick={handleEnrich}
@@ -286,6 +324,14 @@ export default function PerdecompComparativoPage() {
                 Enriquecer
               </button>
             </div>
+            {client?.lastConsultation && (
+              <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={client.forceRefresh} onChange={(e) => setClient(c => c ? {...c, forceRefresh: e.target.checked} : null)} className="form-checkbox h-4 w-4 text-violet-600"/>
+                  <span>Refazer consulta (última em: {new Date(client.lastConsultation).toLocaleDateString()})</span>
+                </label>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -301,11 +347,21 @@ export default function PerdecompComparativoPage() {
         <div className="mt-6">
           <h3 className="font-semibold mb-2">Concorrentes (até 3)</h3>
           {competitors.map((comp, index) => (
-            <div key={index} className="flex items-center gap-2 mb-2">
-              <div className="flex-grow">
-                <Autocomplete selectedCompany={comp} onSelect={(s) => setCompetitors(c => c.map((i, idx) => idx === index ? s : i))} onClear={() => setCompetitors(c => c.map((i, idx) => idx === index ? null : i))} />
+            <div key={index} className="mb-4">
+              <div className="flex items-center gap-2">
+                <div className="flex-grow">
+                  <Autocomplete selectedCompany={comp?.company ?? null} onSelect={(company) => handleSelectCompany('competitor', company, index)} onClear={() => handleRemoveCompetitor(index)} />
+                </div>
+                <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
               </div>
-              <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
+              {comp?.lastConsultation && (
+                <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={comp.forceRefresh} onChange={(e) => handleCompetitorChange(index, { forceRefresh: e.target.checked })} className="form-checkbox h-4 w-4 text-violet-600"/>
+                    <span>Refazer consulta (última em: {new Date(comp.lastConsultation).toLocaleDateString()})</span>
+                  </label>
+                </div>
+              )}
             </div>
           ))}
           <button
@@ -366,17 +422,14 @@ export default function PerdecompComparativoPage() {
                   </div>
                 )}
 
-                <button onClick={() => handleForceConsult(company)} className="mt-auto w-full px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600">
-                  Fazer Nova Consulta
+                <button onClick={() => { /* This button is now handled by the checkbox in the input area */ }} className="mt-auto w-full px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600">
+                  Nova Consulta (via Checkbox)
                 </button>
               </div>
             )}
              {status === 'loaded' && !data?.totalCount && (
                 <div className="flex-grow flex flex-col items-center justify-center text-center">
                     <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
-                     <button onClick={() => handleForceConsult(company)} className="mt-4 w-full px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600">
-                      Tentar Nova Consulta
-                    </button>
                 </div>
             )}
           </div>
