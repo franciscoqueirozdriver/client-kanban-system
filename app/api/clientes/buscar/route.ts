@@ -25,6 +25,8 @@ const standardizeCompany = (row: any, source: typeof SHEET_SOURCES[0]): any => {
   const cnpj = source.cnpjCol ? row[source.cnpjCol] : null;
 
   return {
+    _sourceSheet: source.name, // Add source sheet for update logic
+    _rowNumber: row._rowNumber,   // Pass along the row number for updates
     Cliente_ID: row['Cliente_ID'] || `temp-${cnpj || companyName}`,
     Nome_da_Empresa: companyName,
     CNPJ_Empresa: cnpj,

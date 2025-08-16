@@ -141,10 +141,11 @@ interface AutocompleteProps {
   onClear: () => void;
   onForceChange: (isForced: boolean) => void;
   onRegisterNew: () => void;
+  onEnrichRequest: () => void;
   placeholder?: string;
 }
 
-const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onRegisterNew, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
+const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onRegisterNew, onEnrichRequest, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -230,13 +231,20 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
             </div>
             <button onClick={extendedOnClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
         </div>
-        {lastConsultation && (
+        {lastConsultation && isValidCnpj(selectedCompany.CNPJ_Empresa) && (
             <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
                 <p className="text-xs text-yellow-600 dark:text-yellow-400">Consulta recente em: {new Date(lastConsultation).toLocaleDateString()}</p>
                 <label className="flex items-center mt-1 text-xs">
                     <input type="checkbox" checked={forceNew} onChange={handleForceChange} className="mr-2 h-4 w-4" />
                     Forçar nova consulta
                 </label>
+            </div>
+        )}
+        {!isValidCnpj(selectedCompany.CNPJ_Empresa) && (
+            <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
+                 <button onClick={onEnrichRequest} className="w-full px-3 py-1.5 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600">
+                    Enriquecer Lead (sem CNPJ)
+                </button>
             </div>
         )}
       </div>
@@ -278,10 +286,26 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
 };
 
 // --- New Company Modal Component ---
-const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess }: { isOpen: boolean, onClose: () => void, onSaveSuccess: (company: Company) => void }) => {
+interface NewCompanyModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSaveSuccess: (company: Company) => void;
+  initialData?: Partial<Company> | null;
+}
+
+const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess, initialData }: NewCompanyModalProps) => {
   const [formData, setFormData] = useState<Partial<Company>>({});
   const [isEnriching, setIsEnriching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const isEditMode = !!initialData;
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData(initialData);
+    } else {
+      setFormData({}); // Reset for new entry
+    }
+  }, [initialData, isOpen]); // Depend on isOpen to reset when modal re-opens
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -333,21 +357,41 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess }: { isOpen: boolean, 
     e.preventDefault();
     setIsSaving(true);
     try {
-      const res = await fetch('/api/clientes/salvar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
+      let res;
+      if (isEditMode) {
+        // Update existing lead
+        res = await fetch('/api/clientes/atualizar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sheetName: initialData?._sourceSheet,
+            rowNumber: initialData?._rowNumber,
+            data: formData,
+          }),
+        });
+      } else {
+        // Create new company
+        res = await fetch('/api/clientes/salvar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
+      }
+
       if (res.ok) {
-        const savedCompany = await res.json();
-        onSaveSuccess(savedCompany.data);
+        const result = await res.json();
+        // For updates, the result is just a success message. For saves, it's the new company data.
+        // We pass the formData which is the most up-to-date version.
+        const finalCompanyData = isEditMode ? { ...initialData, ...formData } : result.data;
+        onSaveSuccess(finalCompanyData);
         setFormData({}); // Reset form
         onClose();
       } else {
-        alert('Falha ao salvar a empresa.');
+        const errorData = await res.json();
+        alert(`Falha ao salvar: ${errorData.message || 'Erro desconhecido'}`);
       }
     } catch (error) {
-      alert('Erro ao salvar a empresa.');
+      alert('Erro de conexão ao salvar a empresa.');
     }
     setIsSaving(false);
   };
@@ -357,7 +401,7 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess }: { isOpen: boolean, 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-4">Cadastrar Nova Empresa</h2>
+        <h2 className="text-2xl font-bold mb-4">{isEditMode ? 'Atualizar / Enriquecer Lead' : 'Cadastrar Nova Empresa'}</h2>
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input name="Nome da Empresa" value={formData['Nome da Empresa'] || ''} onChange={handleInputChange} placeholder="Nome da Empresa *" required className="p-2 border rounded" />
@@ -381,7 +425,7 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess }: { isOpen: boolean, 
             <div>
               <button type="button" onClick={onClose} className="px-4 py-2 mr-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
               <button type="submit" disabled={isSaving || isEnriching} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400">
-                {isSaving ? 'Salvando...' : 'Salvar Empresa'}
+                {isSaving ? 'Salvando...' : (isEditMode ? 'Atualizar Lead' : 'Salvar Empresa')}
               </button>
             </div>
           </div>
@@ -407,6 +451,7 @@ export default function PerdecompComparativoPage() {
   const [forceStatus, setForceStatus] = useState<{ [cnpj: string]: boolean }>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeModalTarget, setActiveModalTarget] = useState<'client' | number | null>(null);
+  const [modalInitialData, setModalInitialData] = useState<Partial<Company> | null>(null);
 
   const handleForceStatusChange = (cnpj: string, isForced: boolean) => {
     setForceStatus(prev => ({ ...prev, [cnpj]: isForced }));
@@ -501,8 +546,9 @@ export default function PerdecompComparativoPage() {
     setCompetitors(competitors.filter((_, i) => i !== index));
   };
 
-  const openModal = (target: 'client' | number) => {
+  const openModal = (target: 'client' | number, initialData: Partial<Company> | null = null) => {
     setActiveModalTarget(target);
+    setModalInitialData(initialData);
     setIsModalOpen(true);
   };
 
@@ -514,16 +560,23 @@ export default function PerdecompComparativoPage() {
       newCompetitors[activeModalTarget] = newCompany;
       setCompetitors(newCompetitors);
     }
-    // Close modal is handled by the modal itself, but good to reset target
     setActiveModalTarget(null);
+    setModalInitialData(null);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setActiveModalTarget(null);
+    setModalInitialData(null);
   };
 
   return (
     <div className="container mx-auto p-4 text-gray-900 dark:text-gray-100">
       <NewCompanyModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
         onSaveSuccess={handleSaveNewCompany}
+        initialData={modalInitialData}
       />
       <h1 className="text-3xl font-bold mb-6">Comparativo PER/DCOMP</h1>
 
@@ -541,7 +594,8 @@ export default function PerdecompComparativoPage() {
               onForceChange={(isForced) => {
                 if (client) handleForceStatusChange(client.CNPJ_Empresa, isForced);
               }}
-              onRegisterNew={() => openModal('client')}
+              onRegisterNew={() => openModal('client', null)}
+              onEnrichRequest={() => openModal('client', client)}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -577,7 +631,8 @@ export default function PerdecompComparativoPage() {
                   onForceChange={(isForced) => {
                     if (comp) handleForceStatusChange(comp.CNPJ_Empresa, isForced);
                   }}
-                  onRegisterNew={() => openModal(index)}
+                  onRegisterNew={() => openModal(index, null)}
+                  onEnrichRequest={() => openModal(index, comp)}
                 />
               </div>
               <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
