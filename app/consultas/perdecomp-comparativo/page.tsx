@@ -275,8 +275,8 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
             </li>
           )}
           {results.map((company) => (
-            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
-              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{company.CNPJ_Empresa}</span>
+            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer dark:text-gray-200">
+              {company.Nome_da_Empresa} <span className="text-sm text-gray-500 dark:text-gray-400">{company.CNPJ_Empresa}</span>
             </li>
           ))}
         </ul>
