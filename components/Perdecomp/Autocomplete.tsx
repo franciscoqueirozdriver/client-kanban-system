@@ -101,6 +101,12 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, placeho
     return () => clearTimeout(debounce);
   }, [query]);
 
+  useEffect(() => {
+    if (results.length > 0) {
+      setShowSuggestions(true);
+    }
+  }, [results]);
+
   const handleSelect = (company: Company) => {
     setQuery('');
     setResults([]);
