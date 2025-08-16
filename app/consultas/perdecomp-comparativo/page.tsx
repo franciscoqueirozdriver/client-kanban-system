@@ -242,7 +242,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
         )}
         {!isValidCnpj(selectedCompany.CNPJ_Empresa) && (
             <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
-                 <button onClick={onEnrichRequest} className="w-full px-3 py-1.5 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600">
+                 <button onClick={onEnrichRequest} className="w-full px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700">
                     Enriquecer Lead (sem CNPJ)
                 </button>
             </div>
@@ -328,22 +328,30 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess, initialData }: NewCom
       if (res.ok) {
         const enrichedData = await res.json();
         // The API returns fields with different keys, need to map them
-        setFormData(prev => ({
-          ...prev,
-          'Site Empresa': enrichedData.site,
-          'País Empresa': enrichedData.pais,
-          'Estado Empresa': enrichedData.estado,
-          'Cidade Empresa': enrichedData.cidade,
-          'Logradouro Empresa': enrichedData.logradouro,
-          'Numero Empresa': enrichedData.numero,
-          'Bairro Empresa': enrichedData.bairro,
-          'Complemento Empresa': enrichedData.complemento,
-          'CEP Empresa': enrichedData.cep,
-          'CNPJ Empresa': enrichedData.cnpj,
-          'DDI Empresa': enrichedData.ddi,
-          'Telefones Empresa': enrichedData.telefone,
-          'Observação Empresa': enrichedData.observacao,
-        }));
+        const newFormData = { ...prev };
+        const mapping = {
+            'Site': enrichedData.site,
+            'País': enrichedData.pais,
+            'Estado': enrichedData.estado,
+            'Cidade': enrichedData.cidade,
+            'Logradouro': enrichedData.logradouro,
+            'Número': enrichedData.numero,
+            'Bairro': enrichedData.bairro,
+            'Complemento': enrichedData.complemento,
+            'CEP': enrichedData.cep,
+            'CPF/CNPJ': enrichedData.cnpj,
+            'DDI': enrichedData.ddi,
+            'Telefones': enrichedData.telefone,
+            'Observação': enrichedData.observacao,
+            'Nome da Empresa': enrichedData.nome,
+        };
+        for (const [key, value] of Object.entries(mapping)) {
+            if (value) {
+                newFormData[key] = value;
+            }
+        }
+        return newFormData;
+    });
       } else {
         alert('Falha ao enriquecer dados.');
       }
@@ -403,23 +411,45 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess, initialData }: NewCom
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold mb-4">{isEditMode ? 'Atualizar / Enriquecer Lead' : 'Cadastrar Nova Empresa'}</h2>
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input name="Nome da Empresa" value={formData['Nome da Empresa'] || ''} onChange={handleInputChange} placeholder="Nome da Empresa *" required className="p-2 border rounded" />
-            <input name="CNPJ Empresa" value={formData['CNPJ Empresa'] || ''} onChange={handleInputChange} placeholder="CNPJ Empresa *" required className="p-2 border rounded" />
-            <input name="Site Empresa" value={formData['Site Empresa'] || ''} onChange={handleInputChange} placeholder="Site" className="p-2 border rounded" />
-            <input name="Telefones Empresa" value={formData['Telefones Empresa'] || ''} onChange={handleInputChange} placeholder="Telefones" className="p-2 border rounded" />
-            <input name="Logradouro Empresa" value={formData['Logradouro Empresa'] || ''} onChange={handleInputChange} placeholder="Logradouro" className="p-2 border rounded" />
-            <input name="Numero Empresa" value={formData['Numero Empresa'] || ''} onChange={handleInputChange} placeholder="Número" className="p-2 border rounded" />
-            <input name="Bairro Empresa" value={formData['Bairro Empresa'] || ''} onChange={handleInputChange} placeholder="Bairro" className="p-2 border rounded" />
-            <input name="Cidade Empresa" value={formData['Cidade Empresa'] || ''} onChange={handleInputChange} placeholder="Cidade" className="p-2 border rounded" />
-            <input name="Estado Empresa" value={formData['Estado Empresa'] || ''} onChange={handleInputChange} placeholder="Estado" className="p-2 border rounded" />
-            <input name="CEP Empresa" value={formData['CEP Empresa'] || ''} onChange={handleInputChange} placeholder="CEP" className="p-2 border rounded" />
-            <input name="País Empresa" value={formData['País Empresa'] || ''} onChange={handleInputChange} placeholder="País" className="p-2 border rounded" />
-            <input name="Complemento Empresa" value={formData['Complemento Empresa'] || ''} onChange={handleInputChange} placeholder="Complemento" className="p-2 border rounded md:col-span-2" />
-            <input name="Observação Empresa" value={formData['Observação Empresa'] || ''} onChange={handleInputChange} placeholder="Observação" className="p-2 border rounded md:col-span-2" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Column 1 */}
+            <input name="Cliente_ID" value={formData['Cliente_ID'] || ''} onChange={handleInputChange} placeholder="Cliente_ID" className="p-2 border rounded bg-gray-200" readOnly />
+            <input name="Nome do Lead" value={formData['Nome do Lead'] || ''} onChange={handleInputChange} placeholder="Nome do Lead *" required className="p-2 border rounded" />
+            <input name="Origem" value={formData['Origem'] || ''} onChange={handleInputChange} placeholder="Origem" className="p-2 border rounded" />
+            <input name="Sub-Origem" value={formData['Sub-Origem'] || ''} onChange={handleInputChange} placeholder="Sub-Origem" className="p-2 border rounded" />
+            <input name="Mercado" value={formData['Mercado'] || ''} onChange={handleInputChange} placeholder="Mercado" className="p-2 border rounded" />
+            <input name="Produto" value={formData['Produto'] || ''} onChange={handleInputChange} placeholder="Produto" className="p-2 border rounded" />
+            <input name="Site" value={formData['Site'] || ''} onChange={handleInputChange} placeholder="Site" className="p-2 border rounded" />
+            <input name="País" value={formData['País'] || ''} onChange={handleInputChange} placeholder="País" className="p-2 border rounded" />
+            <input name="Estado" value={formData['Estado'] || ''} onChange={handleInputChange} placeholder="Estado" className="p-2 border rounded" />
+            <input name="Cidade" value={formData['Cidade'] || ''} onChange={handleInputChange} placeholder="Cidade" className="p-2 border rounded" />
+
+            {/* Column 2 */}
+            <input name="Logradouro" value={formData['Logradouro'] || ''} onChange={handleInputChange} placeholder="Logradouro" className="p-2 border rounded" />
+            <input name="Número" value={formData['Número'] || ''} onChange={handleInputChange} placeholder="Número" className="p-2 border rounded" />
+            <input name="Bairro" value={formData['Bairro'] || ''} onChange={handleInputChange} placeholder="Bairro" className="p-2 border rounded" />
+            <input name="Complemento" value={formData['Complemento'] || ''} onChange={handleInputChange} placeholder="Complemento" className="p-2 border rounded" />
+            <input name="CEP" value={formData['CEP'] || ''} onChange={handleInputChange} placeholder="CEP" className="p-2 border rounded" />
+            <input name="DDI" value={formData['DDI'] || ''} onChange={handleInputChange} placeholder="DDI" className="p-2 border rounded" />
+            <input name="Telefones" value={formData['Telefones'] || ''} onChange={handleInputChange} placeholder="Telefones" className="p-2 border rounded" />
+            <input name="Observação" value={formData['Observação'] || ''} onChange={handleInputChange} placeholder="Observação" className="p-2 border rounded" />
+            <input name="CPF/CNPJ" value={formData['CPF/CNPJ'] || ''} onChange={handleInputChange} placeholder="CPF/CNPJ *" required className="p-2 border rounded" />
+            <input name="Nome Contato" value={formData['Nome Contato'] || ''} onChange={handleInputChange} placeholder="Nome Contato" className="p-2 border rounded" />
+
+            {/* Column 3 */}
+            <input name="E-mail Contato" value={formData['E-mail Contato'] || ''} onChange={handleInputChange} placeholder="E-mail Contato" className="p-2 border rounded" />
+            <input name="Cargo Contato" value={formData['Cargo Contato'] || ''} onChange={handleInputChange} placeholder="Cargo Contato" className="p-2 border rounded" />
+            <input name="DDI Contato" value={formData['DDI Contato'] || ''} onChange={handleInputChange} placeholder="DDI Contato" className="p-2 border rounded" />
+            <input name="Telefones Contato" value={formData['Telefones Contato'] || ''} onChange={handleInputChange} placeholder="Telefones Contato" className="p-2 border rounded" />
+            <input name="Tipo do Serv. Comunicação" value={formData['Tipo do Serv. Comunicação'] || ''} onChange={handleInputChange} placeholder="Tipo Serv. Comunicação" className="p-2 border rounded" />
+            <input name="ID do Serv. Comunicação" value={formData['ID do Serv. Comunicação'] || ''} onChange={handleInputChange} placeholder="ID Serv. Comunicação" className="p-2 border rounded" />
+            <input name="Área" value={formData['Área'] || ''} onChange={handleInputChange} placeholder="Área" className="p-2 border rounded" />
+            <input name="Nome da Empresa" value={formData['Nome da Empresa'] || ''} onChange={handleInputChange} placeholder="Nome da Empresa" className="p-2 border rounded" />
+            <input name="Etapa" value={formData['Etapa'] || ''} onChange={handleInputChange} placeholder="Etapa" className="p-2 border rounded" />
+            <input name="Funil" value={formData['Funil'] || ''} onChange={handleInputChange} placeholder="Funil" className="p-2 border rounded" />
           </div>
           <div className="mt-6 flex justify-between">
-            <button type="button" onClick={handleEnrich} disabled={isEnriching || isSaving} className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:bg-gray-400">
+            <button type="button" onClick={handleEnrich} disabled={isEnriching || isSaving} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400">
               {isEnriching ? 'Enriquecendo...' : 'Enriquecer Dados'}
             </button>
             <div>
