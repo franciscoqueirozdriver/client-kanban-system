@@ -201,6 +201,12 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
     }
   }, [selectedCompany]);
 
+  useEffect(() => {
+    if (showSuggestions) {
+      console.debug('[autocomplete] results=', results?.length, results?.slice?.(0, 3));
+    }
+  }, [showSuggestions, results]);
+
   const handleForceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const isChecked = e.target.checked;
     setForceNew(isChecked);
@@ -270,9 +276,8 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
       {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
         <ul
           role="listbox"
-          className="absolute z-50 mt-2 max-h-60 w-full overflow-auto rounded-2xl
-                border border-gray-200 bg-white p-1 shadow-lg
-                text-gray-900
+          className="autocomplete-panel absolute z-50 mt-2 max-h-60 w-full overflow-auto rounded-2xl
+                border border-gray-200 bg-white p-1 shadow-lg text-gray-900
                 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
         >
           {isLoading && <li className="p-2 text-sm text-gray-600 dark:text-gray-300">Buscando...</li>}
@@ -293,9 +298,13 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
                   text-gray-900 hover:bg-violet-50
                   dark:text-gray-100 dark:hover:bg-gray-800"
             >
-              <span className="font-medium">{company.Nome_da_Empresa}</span>
+              <span className="font-medium text-gray-900 dark:text-gray-100">
+                {company.Nome_da_Empresa}
+              </span>
               {company.CNPJ_Empresa && (
-                <span className="ml-2 text-gray-500 dark:text-gray-400">{company.CNPJ_Empresa}</span>
+                <span className="ml-2 text-gray-500 dark:text-gray-400">
+                  {company.CNPJ_Empresa}
+                </span>
               )}
             </li>
           ))}
