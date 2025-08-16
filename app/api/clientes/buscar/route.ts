@@ -18,14 +18,17 @@ export async function GET(request: Request) {
     const cnpjQuery = query.replace(/\D/g, '');
 
     const results = rows.filter(row => {
-      // Search by CNPJ
+      // Search by CNPJ (exact match on cleaned string)
       if (cnpjQuery && row['CPF/CNPJ']?.replace(/\D/g, '') === cnpjQuery) {
         return true;
       }
-      // Search by Company Name or Lead Name
-      if (row['Nome da Empresa']?.toLowerCase().includes(normalizedQuery) || row['Nome do Lead']?.toLowerCase().includes(normalizedQuery)) {
+
+      // Search by the effective display name
+      const displayName = (row['Nome da Empresa'] || row['Nome do Lead'] || '').toLowerCase();
+      if (displayName.includes(normalizedQuery)) {
         return true;
       }
+
       return false;
     }).map(row => ({
       // Map to the format expected by the frontend
