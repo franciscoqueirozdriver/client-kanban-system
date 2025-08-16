@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets.js';
 
-const SHEET_NAME = 'layout_importacao_empresas';
+const SHEET_NAME = 'Leads Exact Spotter';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -18,31 +18,33 @@ export async function GET(request: Request) {
     const cnpjQuery = query.replace(/\D/g, '');
 
     const results = rows.filter(row => {
-      if (cnpjQuery && row['CNPJ Empresa']?.replace(/\D/g, '') === cnpjQuery) {
+      // Search by CNPJ
+      if (cnpjQuery && row['CPF/CNPJ']?.replace(/\D/g, '') === cnpjQuery) {
         return true;
       }
-      if (row['Nome da Empresa']?.toLowerCase().includes(normalizedQuery)) {
+      // Search by Company Name or Lead Name
+      if (row['Nome da Empresa']?.toLowerCase().includes(normalizedQuery) || row['Nome do Lead']?.toLowerCase().includes(normalizedQuery)) {
         return true;
       }
       return false;
     }).map(row => ({
-      // Return only the necessary fields for the autocomplete
+      // Map to the format expected by the frontend
       Cliente_ID: row['Cliente_ID'],
-      Nome_da_Empresa: row['Nome da Empresa'],
-      CNPJ_Empresa: row['CNPJ Empresa'],
+      Nome_da_Empresa: row['Nome da Empresa'] || row['Nome do Lead'],
+      CNPJ_Empresa: row['CPF/CNPJ'],
       // Include other fields from the sheet as needed by the frontend form
-      Site_Empresa: row['Site Empresa'],
-      Pais_Empresa: row['País Empresa'],
-      Estado_Empresa: row['Estado Empresa'],
-      Cidade_Empresa: row['Cidade Empresa'],
-      Logradouro_Empresa: row['Logradouro Empresa'],
-      Numero_Empresa: row['Numero Empresa'],
-      Bairro_Empresa: row['Bairro Empresa'],
-      Complemento_Empresa: row['Complemento Empresa'],
-      CEP_Empresa: row['CEP Empresa'],
-      DDI_Empresa: row['DDI Empresa'],
-      Telefones_Empresa: row['Telefones Empresa'],
-      Observacao_Empresa: row['Observação Empresa'],
+      Site_Empresa: row['Site'],
+      Pais_Empresa: row['País'],
+      Estado_Empresa: row['Estado'],
+      Cidade_Empresa: row['Cidade'],
+      Logradouro_Empresa: row['Logradouro'],
+      Numero_Empresa: row['Número'],
+      Bairro_Empresa: row['Bairro'],
+      Complemento_Empresa: row['Complemento'],
+      CEP_Empresa: row['CEP'],
+      DDI_Empresa: row['DDI'],
+      Telefones_Empresa: row['Telefones'],
+      Observacao_Empresa: row['Observação'],
     }));
 
     return NextResponse.json(results);
