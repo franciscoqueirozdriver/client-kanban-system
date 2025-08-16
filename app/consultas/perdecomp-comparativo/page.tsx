@@ -114,6 +114,7 @@ export default function PerdecompComparativoPage() {
   const [results, setResults] = useState<ComparisonResult[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
   const [newClientForm, setNewClientForm] = useState({
     'Nome da Empresa': '',
     'CNPJ Empresa': '',
@@ -132,10 +133,47 @@ export default function PerdecompComparativoPage() {
   });
 
   useEffect(() => {
-    const end = new Date(endDate);
-    end.setFullYear(end.getFullYear() - 5);
-    setStartDate(end.toISOString().split('T')[0]);
-  }, [endDate]);
+    if (isDateAutomationEnabled) {
+      const end = new Date(endDate);
+      end.setFullYear(end.getFullYear() - 5);
+      setStartDate(end.toISOString().split('T')[0]);
+    }
+  }, [endDate, isDateAutomationEnabled]);
+
+  const handleDateChange = (field: 'start' | 'end', value: string) => {
+    let newStartDate = startDate;
+    let newEndDate = endDate;
+
+    if (field === 'start') {
+      newStartDate = value;
+    } else {
+      newEndDate = value;
+    }
+
+    const start = new Date(newStartDate);
+    const end = new Date(newEndDate);
+
+    // Calculate difference in milliseconds and convert to years
+    const diffYears = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+
+    if (diffYears < 5) {
+      const userConfirmed = window.confirm("Deseja realmente investigar um período menor que 05 anos?");
+      if (userConfirmed) {
+        // User wants to proceed with custom range, so disable automation
+        setIsDateAutomationEnabled(false);
+        setStartDate(newStartDate);
+        setEndDate(newEndDate);
+      } else {
+        // User cancelled, do not apply the change (the state remains as it was)
+        return;
+      }
+    } else {
+      // If range is 5 years or more, keep automation enabled or re-enable it
+      setIsDateAutomationEnabled(true);
+      setStartDate(newStartDate);
+      setEndDate(newEndDate);
+    }
+  };
 
   const updateResult = (cnpj: string, data: Partial<ComparisonResult>) => {
     setResults(prev => prev.map(r => r.company.CNPJ_Empresa === cnpj ? { ...r, ...data } : r));
@@ -336,11 +374,11 @@ export default function PerdecompComparativoPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor="endDate" className="font-semibold block mb-2">Período Fim</label>
-              <input type="date" id="endDate" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600" />
+              <input type="date" id="endDate" value={endDate} onChange={(e) => handleDateChange('end', e.target.value)} className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600" />
             </div>
             <div>
-              <label htmlFor="startDate" className="font-semibold block mb-2">Período Início (auto)</label>
-              <input type="date" id="startDate" value={startDate} readOnly className="w-full p-2 border rounded bg-gray-200 dark:bg-gray-600 border-gray-300 dark:border-gray-600 cursor-not-allowed" />
+              <label htmlFor="startDate" className="font-semibold block mb-2">Período Início</label>
+              <input type="date" id="startDate" value={startDate} onChange={(e) => handleDateChange('start', e.target.value)} className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600" />
             </div>
           </div>
         </div>
