@@ -201,11 +201,6 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
     }
   }, [selectedCompany]);
 
-  useEffect(() => {
-    if (showSuggestions) {
-      console.debug('[autocomplete] results=', results?.length, results?.slice?.(0, 3));
-    }
-  }, [showSuggestions, results]);
 
   const handleForceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const isChecked = e.target.checked;
@@ -277,11 +272,13 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
         <ul
           role="listbox"
           className="autocomplete-panel absolute z-50 mt-2 max-h-60 w-full overflow-auto rounded-2xl
-                border border-gray-200 bg-white p-1 shadow-lg text-gray-900
-                dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                border border-gray-200 bg-white p-1 shadow-lg
+                text-gray-900
+                dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100
+                [&_*]:text-gray-900 dark:[&_*]:text-gray-100"
         >
           {isLoading && <li className="p-2 text-sm text-gray-600 dark:text-gray-300">Buscando...</li>}
-          {!isLoading && results.length === 0 && (
+          {!isLoading && Array.isArray(results) && results.length === 0 && (
             <li className="p-2 text-center">
               <p className="text-gray-500 text-sm mb-2">Nenhum resultado.</p>
               <button onClick={onRegisterNew} className="w-full px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700">
@@ -289,18 +286,15 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
               </button>
             </li>
           )}
-          {results.map((company) => (
+          {Array.isArray(results) && results.map((company) => (
             <li
               key={company.Cliente_ID}
               role="option"
               onMouseDown={() => handleSelect(company)}
               className="cursor-pointer select-none rounded-xl px-3 py-2 text-sm
-                  text-gray-900 hover:bg-violet-50
-                  dark:text-gray-100 dark:hover:bg-gray-800"
+                  hover:bg-violet-50 dark:hover:bg-gray-800"
             >
-              <span className="font-medium text-gray-900 dark:text-gray-100">
-                {company.Nome_da_Empresa}
-              </span>
+              <span className="font-medium">{company.Nome_da_Empresa}</span>
               {company.CNPJ_Empresa && (
                 <span className="ml-2 text-gray-500 dark:text-gray-400">
                   {company.CNPJ_Empresa}
