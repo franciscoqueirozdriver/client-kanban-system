@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     const promises = SHEET_SOURCES.map(source => getSheetData(source.name));
     const results = await Promise.allSettled(promises);
 
-    const allCompanies = [];
+    const allCompanies: any[] = [];
     const normalizedQuery = query.toLowerCase();
     const cnpjQuery = query.replace(/\D/g, '');
 
