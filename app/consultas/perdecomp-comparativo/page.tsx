@@ -260,7 +260,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onForceChange, onReg
         onFocus={() => setShowSuggestions(true)}
         onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
         placeholder={placeholder}
-        className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+        className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-800 dark:text-white border-gray-300 dark:border-gray-600"
       />
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
       {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
@@ -412,41 +412,39 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess, initialData }: NewCom
         <h2 className="text-2xl font-bold mb-4">{isEditMode ? 'Atualizar / Enriquecer Lead' : 'Cadastrar Nova Empresa'}</h2>
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Column 1 */}
-            <input name="Cliente_ID" value={formData['Cliente_ID'] || ''} onChange={handleInputChange} placeholder="Cliente_ID" className="p-2 border rounded bg-gray-200" readOnly />
-            <input name="Nome do Lead" value={formData['Nome do Lead'] || ''} onChange={handleInputChange} placeholder="Nome do Lead *" required className="p-2 border rounded" />
-            <input name="Origem" value={formData['Origem'] || ''} onChange={handleInputChange} placeholder="Origem" className="p-2 border rounded" />
-            <input name="Sub-Origem" value={formData['Sub-Origem'] || ''} onChange={handleInputChange} placeholder="Sub-Origem" className="p-2 border rounded" />
-            <input name="Mercado" value={formData['Mercado'] || ''} onChange={handleInputChange} placeholder="Mercado" className="p-2 border rounded" />
-            <input name="Produto" value={formData['Produto'] || ''} onChange={handleInputChange} placeholder="Produto" className="p-2 border rounded" />
-            <input name="Site" value={formData['Site'] || ''} onChange={handleInputChange} placeholder="Site" className="p-2 border rounded" />
-            <input name="País" value={formData['País'] || ''} onChange={handleInputChange} placeholder="País" className="p-2 border rounded" />
-            <input name="Estado" value={formData['Estado'] || ''} onChange={handleInputChange} placeholder="Estado" className="p-2 border rounded" />
-            <input name="Cidade" value={formData['Cidade'] || ''} onChange={handleInputChange} placeholder="Cidade" className="p-2 border rounded" />
+            {/* Define a base style for inputs to avoid repetition */}
+            <input name="Cliente_ID" value={formData['Cliente_ID'] || ''} onChange={handleInputChange} placeholder="Cliente_ID" className="p-2 border rounded bg-gray-200 dark:bg-gray-700 dark:text-gray-400" readOnly />
+            <input name="Nome do Lead" value={formData['Nome do Lead'] || ''} onChange={handleInputChange} placeholder="Nome do Lead *" required className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Origem" value={formData['Origem'] || ''} onChange={handleInputChange} placeholder="Origem" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Sub-Origem" value={formData['Sub-Origem'] || ''} onChange={handleInputChange} placeholder="Sub-Origem" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Mercado" value={formData['Mercado'] || ''} onChange={handleInputChange} placeholder="Mercado" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Produto" value={formData['Produto'] || ''} onChange={handleInputChange} placeholder="Produto" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Site" value={formData['Site'] || ''} onChange={handleInputChange} placeholder="Site" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="País" value={formData['País'] || ''} onChange={handleInputChange} placeholder="País" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Estado" value={formData['Estado'] || ''} onChange={handleInputChange} placeholder="Estado" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Cidade" value={formData['Cidade'] || ''} onChange={handleInputChange} placeholder="Cidade" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
 
-            {/* Column 2 */}
-            <input name="Logradouro" value={formData['Logradouro'] || ''} onChange={handleInputChange} placeholder="Logradouro" className="p-2 border rounded" />
-            <input name="Número" value={formData['Número'] || ''} onChange={handleInputChange} placeholder="Número" className="p-2 border rounded" />
-            <input name="Bairro" value={formData['Bairro'] || ''} onChange={handleInputChange} placeholder="Bairro" className="p-2 border rounded" />
-            <input name="Complemento" value={formData['Complemento'] || ''} onChange={handleInputChange} placeholder="Complemento" className="p-2 border rounded" />
-            <input name="CEP" value={formData['CEP'] || ''} onChange={handleInputChange} placeholder="CEP" className="p-2 border rounded" />
-            <input name="DDI" value={formData['DDI'] || ''} onChange={handleInputChange} placeholder="DDI" className="p-2 border rounded" />
-            <input name="Telefones" value={formData['Telefones'] || ''} onChange={handleInputChange} placeholder="Telefones" className="p-2 border rounded" />
-            <input name="Observação" value={formData['Observação'] || ''} onChange={handleInputChange} placeholder="Observação" className="p-2 border rounded" />
-            <input name="CPF/CNPJ" value={formData['CPF/CNPJ'] || ''} onChange={handleInputChange} placeholder="CPF/CNPJ *" required className="p-2 border rounded" />
-            <input name="Nome Contato" value={formData['Nome Contato'] || ''} onChange={handleInputChange} placeholder="Nome Contato" className="p-2 border rounded" />
+            <input name="Logradouro" value={formData['Logradouro'] || ''} onChange={handleInputChange} placeholder="Logradouro" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Número" value={formData['Número'] || ''} onChange={handleInputChange} placeholder="Número" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Bairro" value={formData['Bairro'] || ''} onChange={handleInputChange} placeholder="Bairro" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Complemento" value={formData['Complemento'] || ''} onChange={handleInputChange} placeholder="Complemento" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="CEP" value={formData['CEP'] || ''} onChange={handleInputChange} placeholder="CEP" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="DDI" value={formData['DDI'] || ''} onChange={handleInputChange} placeholder="DDI" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Telefones" value={formData['Telefones'] || ''} onChange={handleInputChange} placeholder="Telefones" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Observação" value={formData['Observação'] || ''} onChange={handleInputChange} placeholder="Observação" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="CPF/CNPJ" value={formData['CPF/CNPJ'] || ''} onChange={handleInputChange} placeholder="CPF/CNPJ *" required className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Nome Contato" value={formData['Nome Contato'] || ''} onChange={handleInputChange} placeholder="Nome Contato" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
 
-            {/* Column 3 */}
-            <input name="E-mail Contato" value={formData['E-mail Contato'] || ''} onChange={handleInputChange} placeholder="E-mail Contato" className="p-2 border rounded" />
-            <input name="Cargo Contato" value={formData['Cargo Contato'] || ''} onChange={handleInputChange} placeholder="Cargo Contato" className="p-2 border rounded" />
-            <input name="DDI Contato" value={formData['DDI Contato'] || ''} onChange={handleInputChange} placeholder="DDI Contato" className="p-2 border rounded" />
-            <input name="Telefones Contato" value={formData['Telefones Contato'] || ''} onChange={handleInputChange} placeholder="Telefones Contato" className="p-2 border rounded" />
-            <input name="Tipo do Serv. Comunicação" value={formData['Tipo do Serv. Comunicação'] || ''} onChange={handleInputChange} placeholder="Tipo Serv. Comunicação" className="p-2 border rounded" />
-            <input name="ID do Serv. Comunicação" value={formData['ID do Serv. Comunicação'] || ''} onChange={handleInputChange} placeholder="ID Serv. Comunicação" className="p-2 border rounded" />
-            <input name="Área" value={formData['Área'] || ''} onChange={handleInputChange} placeholder="Área" className="p-2 border rounded" />
-            <input name="Nome da Empresa" value={formData['Nome da Empresa'] || ''} onChange={handleInputChange} placeholder="Nome da Empresa" className="p-2 border rounded" />
-            <input name="Etapa" value={formData['Etapa'] || ''} onChange={handleInputChange} placeholder="Etapa" className="p-2 border rounded" />
-            <input name="Funil" value={formData['Funil'] || ''} onChange={handleInputChange} placeholder="Funil" className="p-2 border rounded" />
+            <input name="E-mail Contato" value={formData['E-mail Contato'] || ''} onChange={handleInputChange} placeholder="E-mail Contato" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Cargo Contato" value={formData['Cargo Contato'] || ''} onChange={handleInputChange} placeholder="Cargo Contato" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="DDI Contato" value={formData['DDI Contato'] || ''} onChange={handleInputChange} placeholder="DDI Contato" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Telefones Contato" value={formData['Telefones Contato'] || ''} onChange={handleInputChange} placeholder="Telefones Contato" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Tipo do Serv. Comunicação" value={formData['Tipo do Serv. Comunicação'] || ''} onChange={handleInputChange} placeholder="Tipo Serv. Comunicação" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="ID do Serv. Comunicação" value={formData['ID do Serv. Comunicação'] || ''} onChange={handleInputChange} placeholder="ID Serv. Comunicação" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Área" value={formData['Área'] || ''} onChange={handleInputChange} placeholder="Área" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Nome da Empresa" value={formData['Nome da Empresa'] || ''} onChange={handleInputChange} placeholder="Nome da Empresa" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Etapa" value={formData['Etapa'] || ''} onChange={handleInputChange} placeholder="Etapa" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
+            <input name="Funil" value={formData['Funil'] || ''} onChange={handleInputChange} placeholder="Funil" className="p-2 border rounded dark:bg-gray-900 dark:text-white dark:border-gray-600" />
           </div>
           <div className="mt-6 flex justify-between">
             <button type="button" onClick={handleEnrich} disabled={isEnriching || isSaving} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400">
