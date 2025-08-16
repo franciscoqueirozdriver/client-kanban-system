@@ -327,31 +327,31 @@ const NewCompanyModal = ({ isOpen, onClose, onSaveSuccess, initialData }: NewCom
       });
       if (res.ok) {
         const enrichedData = await res.json();
-        // The API returns fields with different keys, need to map them
-        const newFormData = { ...prev };
-        const mapping = {
-            'Site': enrichedData.site,
-            'País': enrichedData.pais,
-            'Estado': enrichedData.estado,
-            'Cidade': enrichedData.cidade,
-            'Logradouro': enrichedData.logradouro,
-            'Número': enrichedData.numero,
-            'Bairro': enrichedData.bairro,
-            'Complemento': enrichedData.complemento,
-            'CEP': enrichedData.cep,
-            'CPF/CNPJ': enrichedData.cnpj,
-            'DDI': enrichedData.ddi,
-            'Telefones': enrichedData.telefone,
-            'Observação': enrichedData.observacao,
-            'Nome da Empresa': enrichedData.nome,
-        };
-        for (const [key, value] of Object.entries(mapping)) {
-            if (value) {
-                newFormData[key] = value;
+        setFormData(prev => {
+            const newFormData = { ...prev };
+            const mapping = {
+                'Site': enrichedData.site,
+                'País': enrichedData.pais,
+                'Estado': enrichedData.estado,
+                'Cidade': enrichedData.cidade,
+                'Logradouro': enrichedData.logradouro,
+                'Número': enrichedData.numero,
+                'Bairro': enrichedData.bairro,
+                'Complemento': enrichedData.complemento,
+                'CEP': enrichedData.cep,
+                'CPF/CNPJ': enrichedData.cnpj,
+                'DDI': enrichedData.ddi,
+                'Telefones': enrichedData.telefone,
+                'Observação': enrichedData.observacao,
+                'Nome da Empresa': enrichedData.nome,
+            };
+            for (const [key, value] of Object.entries(mapping)) {
+                if (value) {
+                    newFormData[key] = value;
+                }
             }
-        }
-        return newFormData;
-    });
+            return newFormData;
+        });
       } else {
         alert('Falha ao enriquecer dados.');
       }
