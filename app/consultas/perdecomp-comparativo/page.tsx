@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
+import NewCompanyModal from '../../../components/NewCompanyModal';
 
 // --- Helper Types ---
 interface Company {
@@ -114,23 +115,8 @@ export default function PerdecompComparativoPage() {
   const [results, setResults] = useState<ComparisonResult[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [modalInitialQuery, setModalInitialQuery] = useState('');
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
-  const [newClientForm, setNewClientForm] = useState({
-    'Nome da Empresa': '',
-    'CNPJ Empresa': '',
-    'Site Empresa': '',
-    'País Empresa': 'Brasil',
-    'Estado Empresa': '',
-    'Cidade Empresa': '',
-    'Logradouro Empresa': '',
-    'Numero Empresa': '',
-    'Bairro Empresa': '',
-    'Complemento Empresa': '',
-    'CEP Empresa': '',
-    'DDI Empresa': '+55',
-    'Telefones Empresa': '',
-    'Observação Empresa': '',
-  });
 
   useEffect(() => {
     if (isDateAutomationEnabled) {
@@ -277,41 +263,15 @@ export default function PerdecompComparativoPage() {
     }
   };
 
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setNewClientForm(prev => ({ ...prev, [name]: value }));
+  const handleOpenRegisterModal = (query: string) => {
+    setModalInitialQuery(query);
+    setShowRegisterModal(true);
   };
 
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: Add validation
-    try {
-      const res = await fetch('/api/clientes/registrar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newClientForm),
-      });
-      if (res.ok) {
-        const { newClient } = await res.json();
-        alert('Cliente cadastrado com sucesso!');
-        setShowRegisterModal(false);
-        // Select the new client automatically
-        setClient({
-          company: {
-            Cliente_ID: newClient.Cliente_ID,
-            Nome_da_Empresa: newClient['Nome da Empresa'],
-            CNPJ_Empresa: newClient['CNPJ Empresa'],
-          },
-          lastConsultation: null,
-          forceRefresh: false,
-        });
-      } else {
-        const { message } = await res.json();
-        alert(`Erro: ${message}`);
-      }
-    } catch (error) {
-      alert('Falha ao cadastrar cliente.');
-    }
+  const handleSaveNewCompany = (newCompany: Company) => {
+    // Automatically select the newly created company as the main client
+    handleSelectCompany('client', newCompany);
+    setShowRegisterModal(false); // Close the modal on success
   };
 
   const handleEnrich = async () => {
@@ -351,7 +311,12 @@ export default function PerdecompComparativoPage() {
             <label className="font-semibold block mb-2">Cliente Principal</label>
             <div className="flex items-center gap-2">
               <div className="flex-grow">
-                <Autocomplete selectedCompany={client?.company ?? null} onSelect={(company) => handleSelectCompany('client', company)} onClear={() => setClient(null)} onNoResults={() => setShowRegisterModal(true)}/>
+                <Autocomplete
+                  selectedCompany={client?.company ?? null}
+                  onSelect={(company) => handleSelectCompany('client', company)}
+                  onClear={() => setClient(null)}
+                  onNoResults={handleOpenRegisterModal}
+                />
               </div>
               <button
                 onClick={handleEnrich}
@@ -474,36 +439,12 @@ export default function PerdecompComparativoPage() {
         ))}
       </div>
 
-      {showRegisterModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-lg">
-            <h2 className="text-2xl font-bold mb-6">Cadastrar Nova Empresa</h2>
-            <p className="mb-4">Preencha os dados abaixo para cadastrar uma nova empresa.</p>
-            <form onSubmit={handleRegisterSubmit}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto pr-2">
-                    <input name="Nome da Empresa" placeholder="Nome da Empresa *" value={newClientForm['Nome da Empresa']} onChange={handleFormChange} required className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="CNPJ Empresa" placeholder="CNPJ Empresa *" value={newClientForm['CNPJ Empresa']} onChange={handleFormChange} required className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="Site Empresa" placeholder="Site Empresa" value={newClientForm['Site Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="País Empresa" placeholder="País Empresa" value={newClientForm['País Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="Estado Empresa" placeholder="Estado Empresa" value={newClientForm['Estado Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="Cidade Empresa" placeholder="Cidade Empresa" value={newClientForm['Cidade Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="Logradouro Empresa" placeholder="Logradouro Empresa" value={newClientForm['Logradouro Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="Numero Empresa" placeholder="Numero Empresa" value={newClientForm['Numero Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="Bairro Empresa" placeholder="Bairro Empresa" value={newClientForm['Bairro Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="Complemento Empresa" placeholder="Complemento Empresa" value={newClientForm['Complemento Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="CEP Empresa" placeholder="CEP Empresa" value={newClientForm['CEP Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="DDI Empresa" placeholder="DDI Empresa" value={newClientForm['DDI Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <input name="Telefones Empresa" placeholder="Telefones Empresa" value={newClientForm['Telefones Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
-                    <textarea name="Observação Empresa" placeholder="Observação Empresa" value={newClientForm['Observação Empresa']} onChange={handleFormChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full md:col-span-2" />
-                </div>
-                <div className="mt-6 flex justify-end gap-4">
-                    <button type="button" onClick={() => setShowRegisterModal(false)} className="px-4 py-2 bg-gray-300 dark:bg-gray-600 rounded hover:bg-gray-400">Cancelar</button>
-                    <button type="submit" className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700">Salvar</button>
-                </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <NewCompanyModal
+        isOpen={showRegisterModal}
+        initialQuery={modalInitialQuery}
+        onClose={() => setShowRegisterModal(false)}
+        onSaved={handleSaveNewCompany}
+      />
     </div>
   );
 }

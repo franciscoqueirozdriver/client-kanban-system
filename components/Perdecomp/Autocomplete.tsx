@@ -56,7 +56,7 @@ interface AutocompleteProps {
   selectedCompany: Company | null;
   onSelect: (company: Company) => void;
   onClear: () => void;
-  onNoResults?: () => void;
+  onNoResults?: (query: string) => void;
   placeholder?: string;
 }
 
@@ -145,7 +145,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, placeho
             <>
               <li className="p-2 text-gray-500">Nenhum resultado.</li>
               {onNoResults && (
-                <li onMouseDown={onNoResults} className="p-2 hover:bg-blue-100 dark:hover:bg-blue-800 cursor-pointer text-blue-600 font-semibold">
+                <li onMouseDown={() => onNoResults(query)} className="p-2 hover:bg-blue-100 dark:hover:bg-blue-800 cursor-pointer text-blue-600 font-semibold">
                   + Cadastrar Nova Empresa
                 </li>
               )}
