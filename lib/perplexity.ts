@@ -158,3 +158,79 @@ Sem comentários, sem Markdown, sem \`\`\`.
   };
 }
 
+export async function findCompetitors(input: { nome: string; max?: number }): Promise<{ items: Array<{ nome: string; cnpj: string }>, debug?: any }> {
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+  if (!apiKey) throw new Error('PERPLEXITY_API_KEY não configurada');
+
+  const endpoint = process.env.PERPLEXITY_ENDPOINT || 'https://api.perplexity.ai/chat/completions';
+  const model    = process.env.PERPLEXITY_MODEL   || 'sonar';
+  const temperature = 0.2;
+
+  const nome = (input?.nome || '').trim();
+  const max  = Math.min(Math.max(input?.max ?? 20, 1), 20);
+
+  const userPrompt = `
+Liste os ${max} principais concorrentes da empresa "${nome}" no Brasil.
+Retorne ESTRITAMENTE um array JSON de objetos no formato:
+[
+  {"nome": "<Nome da empresa>", "cnpj": "<apenas números, 14 dígitos; se desconhecido, string vazia>"}
+]
+
+Regras:
+- "cnpj" deve conter somente dígitos (0-9), com 14 dígitos. Se vier com menos de 14, complete com zeros à esquerda.
+- Se não souber o CNPJ, retorne "cnpj": "" (string vazia).
+- Não inclua comentários, Markdown ou texto fora do JSON.
+`.trim();
+
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      temperature,
+      messages: [
+        { role: 'system', content: 'Responda apenas com um JSON válido (array de objetos), sem texto adicional.' },
+        { role: 'user', content: userPrompt }
+      ]
+    })
+  });
+
+  const rawText = await resp.text().catch(() => '');
+  if (!resp.ok) throw new Error(`Perplexity falhou: ${resp.status} ${rawText.slice(0, 200)}`);
+
+  let apiJson: any = {};
+  try { apiJson = JSON.parse(rawText); } catch {}
+  const content: string = apiJson?.choices?.[0]?.message?.content ?? rawText;
+
+  let parsed: any = [];
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    const m = content.match(/```json\s*([\s\S]*?)```/i);
+    const js = m ? m[1] : content;
+    try { parsed = JSON.parse(js); } catch { parsed = []; }
+  }
+
+  const digits = (s?: string) => (s || '').replace(/\D/g, '');
+  const pad14  = (d: string) => (d.length === 0 ? '' : d.length <= 14 ? d.padStart(14, '0') : '');
+
+  const items = (Array.isArray(parsed) ? parsed : []).map((it: any) => {
+    const nome = String(it?.nome || '').trim();
+    const cnpj = pad14(digits(String(it?.cnpj || '')));
+    return { nome, cnpj };
+  })
+  // limpar vazios de nome e dedup por CNPJ/nome
+  .filter(x => x.nome)
+  .filter((x, idx, arr) => {
+    const key = (x.cnpj || '') + '|' + x.nome.toLowerCase();
+    return idx === arr.findIndex(y => ((y.cnpj || '') + '|' + y.nome.toLowerCase()) === key);
+  })
+  .slice(0, max);
+
+  return {
+    items,
+    debug: { promptPreview: userPrompt.slice(0, 800), rawContent: content }
+  };
+}
+
+

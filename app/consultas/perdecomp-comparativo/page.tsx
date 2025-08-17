@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
 import NewCompanyModal from '../../../components/NewCompanyModal';
+import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import type { CompanySuggestion } from '../../../lib/perplexity';
 
 // --- Helper Types ---
@@ -69,6 +70,10 @@ const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: 
 export default function PerdecompComparativoPage() {
   const [client, setClient] = useState<CompanySelection | null>(null);
   const [competitors, setCompetitors] = useState<Array<CompanySelection | null>>([]);
+  const MAX_COMPETITORS = 3;
+  const remainingSlots = MAX_COMPETITORS - competitors.filter(c => !!c).length;
+  const [compDialogOpen, setCompDialogOpen] = useState(false);
+  const [compFetch, setCompFetch] = useState<{loading: boolean; error: string|null; items: Array<{nome:string; cnpj:string}>}>({ loading: false, error: null, items: [] });
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -181,7 +186,7 @@ export default function PerdecompComparativoPage() {
   };
 
   const handleAddCompetitor = () => {
-    if (competitors.length < 3) setCompetitors([...competitors, null]);
+    if (competitors.length < MAX_COMPETITORS) setCompetitors([...competitors, null]);
   };
 
   const handleRemoveCompetitor = (index: number) => {
@@ -191,6 +196,72 @@ export default function PerdecompComparativoPage() {
   const handleCompetitorChange = (index: number, data: Partial<CompanySelection>) => {
     setCompetitors(prev => prev.map((c, i) => i === index ? { ...c!, ...data } : c));
   };
+
+  function openCompetitorDialog() {
+    if (!client || remainingSlots <= 0) return;
+    setCompDialogOpen(true);
+    setCompFetch({ loading: true, error: null, items: [] });
+
+    fetch('/api/empresas/concorrentes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: client.company.Nome_da_Empresa, max: 20 })
+    })
+    .then(async (r) => {
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || 'Falha na busca');
+      const selCnpjs = new Set(competitors.filter(Boolean).map(c => (c!.company.CNPJ_Empresa || '').replace(/\D/g, '')));
+      const clientCnpj = (client.company.CNPJ_Empresa || '').replace(/\D/g, '');
+
+      const items = (data.items || []).filter((it: any) => {
+        const c = (it?.cnpj || '').replace(/\D/g, '');
+        const isClient = c && clientCnpj && c === clientCnpj;
+        const already = c && selCnpjs.has(c);
+        const nameDup = competitors.filter(Boolean).some(cmp => cmp!.company.Nome_da_Empresa.toLowerCase() === String(it?.nome || '').toLowerCase());
+        return !isClient && !already && !nameDup;
+      });
+
+      setCompFetch({ loading: false, error: null, items });
+    })
+    .catch(err => setCompFetch({ loading: false, error: String(err?.message || err), items: [] }));
+  }
+
+  function closeCompetitorDialog() {
+    setCompDialogOpen(false);
+  }
+
+  function confirmCompetitors(selected: Array<{ nome:string; cnpj:string }>) {
+    const next = [...competitors];
+    let idx = 0;
+    for (let i = 0; i < next.length && idx < selected.length; i++) {
+      if (!next[i]) {
+        const s = selected[idx++];
+        next[i] = {
+          company: {
+            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+            Nome_da_Empresa: s.nome,
+            CNPJ_Empresa: s.cnpj || '',
+          },
+          lastConsultation: null,
+          forceRefresh: false,
+        };
+      }
+    }
+    while (next.length < MAX_COMPETITORS && idx < selected.length) {
+      const s = selected[idx++];
+      next.push({
+        company: {
+          Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+          Nome_da_Empresa: s.nome,
+          CNPJ_Empresa: s.cnpj || '',
+        },
+        lastConsultation: null,
+        forceRefresh: false,
+      });
+    }
+    setCompetitors(next.slice(0, MAX_COMPETITORS));
+    setCompDialogOpen(false);
+  }
 
   const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
     try {
@@ -357,13 +428,22 @@ export default function PerdecompComparativoPage() {
               )}
             </div>
           ))}
-          <button
-            onClick={handleAddCompetitor}
-            disabled={competitors.length >= 3}
-            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            + Adicionar Concorrente
-          </button>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={handleAddCompetitor}
+              disabled={remainingSlots === 0 || competitors.length >= MAX_COMPETITORS}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              + Adicionar Concorrente
+            </button>
+            <button
+              onClick={openCompetitorDialog}
+              disabled={!client || remainingSlots === 0}
+              className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              Pesquisar Concorrentes
+            </button>
+          </div>
         </div>
         <div className="mt-8 text-center">
             <button onClick={handleConsult} disabled={globalLoading || !client} className="px-8 py-3 bg-violet-600 text-white font-bold rounded-lg hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center mx-auto">
@@ -471,6 +551,15 @@ export default function PerdecompComparativoPage() {
           </div>
         </div>
       )}
+
+      <CompetitorSearchDialog
+        isOpen={compDialogOpen}
+        onClose={closeCompetitorDialog}
+        clientName={client?.company.Nome_da_Empresa || ''}
+        limitRemaining={remainingSlots}
+        fetchState={compFetch}
+        onConfirm={confirmCompetitors}
+      />
 
       <NewCompanyModal
         isOpen={newCompanyOpen}
