@@ -5,6 +5,7 @@ import { FaSpinner } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
 import NewCompanyModal from '../../../components/NewCompanyModal';
 import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
+import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import type { CompanySuggestion } from '../../../lib/perplexity';
 
 // --- Helper Types ---
@@ -30,9 +31,20 @@ interface AggregatedData {
   lastConsultation: string | null;
 }
 
+type ApiDebug = {
+  requestedAt?: string;
+  fonte?: 'api' | 'planilha';
+  apiRequest?: any;
+  apiResponse?: any;
+  mappedCount?: number;
+  siteReceipts?: string[];
+  header?: any;
+} | null;
+
 interface ComparisonResult {
   company: Company; data: AggregatedData | null;
   status: 'idle' | 'loading' | 'loaded' | 'error'; error?: string;
+  debug?: ApiDebug;
 }
 
 interface CompanySelection {
@@ -91,6 +103,8 @@ export default function PerdecompComparativoPage() {
   const [enrichPreview, setEnrichPreview] = useState<any>(null);
   const [showEnrichPreview, setShowEnrichPreview] = useState(false);
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPayload, setPreviewPayload] = useState<{ company: Company; debug: ApiDebug } | null>(null);
 
   useEffect(() => {
     if (isDateAutomationEnabled) {
@@ -144,6 +158,7 @@ export default function PerdecompComparativoPage() {
           periodoInicio: startDate,
           periodoFim: endDate,
           force: forceRefresh,
+          debug: true,
         }),
       });
 
@@ -168,7 +183,12 @@ export default function PerdecompComparativoPage() {
       }
 
       const aggregated = aggregatePerdcompData(finalData, startDate, endDate);
-      updateResult(company.CNPJ_Empresa, { status: 'loaded', data: aggregated });
+      updateResult(company.CNPJ_Empresa, { status: 'loaded', data: aggregated, debug: data.debug ?? null });
+
+      if (forceRefresh && (data.debug?.apiResponse?.data?.[0]?.perdcomp?.length === 0 || !data.debug?.apiResponse)) {
+        setPreviewPayload({ company, debug: data.debug ?? null });
+        setPreviewOpen(true);
+      }
 
     } catch (e: any) {
       updateResult(company.CNPJ_Empresa, { status: 'error', error: e.message });
@@ -180,7 +200,7 @@ export default function PerdecompComparativoPage() {
     if (allSelections.length === 0) return;
 
     setGlobalLoading(true);
-    setResults(allSelections.map(s => ({ company: s.company, data: null, status: 'idle' })));
+    setResults(allSelections.map(s => ({ company: s.company, data: null, status: 'idle', debug: null })));
     await Promise.all(allSelections.map(s => runConsultation(s)));
     setGlobalLoading(false);
   };
@@ -454,7 +474,7 @@ export default function PerdecompComparativoPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {results.map(({ company, data, status, error }) => (
+        {results.map(({ company, data, status, error, debug }) => (
           <div key={company.CNPJ_Empresa} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col">
             <h3 className="font-bold text-lg truncate mb-1" title={company.Nome_da_Empresa}>{company.Nome_da_Empresa}</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{company.CNPJ_Empresa}</p>
@@ -487,6 +507,14 @@ export default function PerdecompComparativoPage() {
                 <div className="flex-grow flex flex-col items-center justify-center text-center">
                     <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
                 </div>
+            )}
+            {status === 'loaded' && debug && (
+              <button
+                onClick={() => { setPreviewPayload({ company, debug }); setPreviewOpen(true); }}
+                className="mt-2 w-full px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Ver retorno da API
+              </button>
             )}
           </div>
         ))}
@@ -567,6 +595,13 @@ export default function PerdecompComparativoPage() {
         warning={modalWarning}
         onClose={() => setNewCompanyOpen(false)}
         onSaved={handleSaveNewCompany}
+      />
+
+      <PerdcompApiPreviewDialog
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        company={previewPayload?.company || null}
+        debug={previewPayload?.debug || null}
       />
     </div>
   );
