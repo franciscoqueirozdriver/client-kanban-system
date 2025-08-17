@@ -5,18 +5,18 @@ import { FaSpinner } from 'react-icons/fa';
 
 // --- Types (remain the same) ---
 interface CompanyData {
-  Nome_da_Empresa: string; Site_Empresa: string; País_Empresa: string; Estado_Empresa: string;
-  Cidade_Empresa: string; Logradouro_Empresa: string; Numero_Empresa: string; Bairro_Empresa: string;
-  Complemento_Empresa: string; CEP_Empresa: string; CNPJ_Empresa: string; DDI_Empresa: string;
-  Telefones_Empresa: string; Observacao_Empresa: string;
+  Nome_da_Empresa?: string; Site_Empresa?: string; País_Empresa?: string; Estado_Empresa?: string;
+  Cidade_Empresa?: string; Logradouro_Empresa?: string; Numero_Empresa?: string; Bairro_Empresa?: string;
+  Complemento_Empresa?: string; CEP_Empresa?: string; CNPJ_Empresa?: string; DDI_Empresa?: string;
+  Telefones_Empresa?: string; Observacao_Empresa?: string;
 }
 interface ContactData {
-  Nome_Contato: string; Email_Contato: string; Cargo_Contato: string;
-  DDI_Contato: string; Telefones_Contato: string;
+  Nome_Contato?: string; Email_Contato?: string; Cargo_Contato?: string;
+  DDI_Contato?: string; Telefones_Contato?: string;
 }
 interface CommercialData {
-  Origem: string; Sub_Origem: string; Mercado: string; Produto: string; Área: string;
-  Etapa: string; Funil: string; Tipo_do_Serv_Comunicacao: string; ID_do_Serv_Comunicacao: string;
+  Origem?: string; Sub_Origem?: string; Mercado?: string; Produto?: string; Área?: string;
+  Etapa?: string; Funil?: string; Tipo_do_Serv_Comunicacao?: string; ID_do_Serv_Comunicacao?: string;
 }
 export interface FullCompanyPayload {
   Cliente_ID?: string;
