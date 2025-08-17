@@ -211,10 +211,19 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
           {error && <div className="mt-4 text-red-500 text-sm">{error}</div>}
           {apiMessage && <div className="mt-4 text-blue-500 text-sm">{apiMessage}</div>}
           <div className="mt-6 flex justify-between items-center pt-4 border-t">
-             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-300 dark:bg-gray-600 rounded hover:bg-gray-400">Cancelar</button>
+             <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 rounded-md bg-gray-200 text-gray-900 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 dark:focus:ring-gray-500"
+              >
+                Cancelar
+              </button>
             <div className="flex gap-4">
-              {/* Removed Enrich button from modal */}
-              <button type="submit" disabled={isLoading} className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-400 flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-400 flex items-center gap-2"
+              >
                 {isLoading && <FaSpinner className="animate-spin" />}
                 {isUpdateMode ? 'Atualizar' : 'Cadastrar'}
               </button>

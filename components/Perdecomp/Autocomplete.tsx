@@ -145,8 +145,14 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, placeho
             <>
               <li className="p-2 text-gray-500">Nenhum resultado.</li>
               {onNoResults && (
-                <li onMouseDown={() => onNoResults(query)} className="p-2 hover:bg-blue-100 dark:hover:bg-blue-800 cursor-pointer text-blue-600 font-semibold">
-                  + Cadastrar Nova Empresa
+                <li className="p-2">
+                  <button
+                    type="button"
+                    onClick={() => onNoResults(query)}
+                    className="w-full px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-400"
+                  >
+                    + Cadastrar Nova Empresa
+                  </button>
                 </li>
               )}
             </>
