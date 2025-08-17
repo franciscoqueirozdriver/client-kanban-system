@@ -89,6 +89,10 @@ function applySuggestionToForm(current: CompanyForm, suggestion: Partial<Company
   return next;
 }
 
+function computeApplyDiff(form: Record<string, any>, flat: Record<string, any>) {
+  return Object.keys(flat).filter(k => !String(form[k] ?? '').trim() && String(flat[k] ?? '').trim());
+}
+
 // --- Initial State ---
 const initialForm: CompanyForm = {
   Nome_da_Empresa: '',
@@ -127,6 +131,9 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
   const [isLoading, setIsLoading] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [enrichDebug, setEnrichDebug] = useState<any>(null);
+  const [debugTab, setDebugTab] = useState<'raw' | 'parsed' | 'flat' | 'diff'>('raw');
 
   const isUpdateMode = !!form.Cliente_ID;
 
@@ -166,10 +173,12 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
         body: JSON.stringify({
           nome: form.Nome_da_Empresa,
           cnpj: form.CNPJ_Empresa,
+          debug: process.env.NEXT_PUBLIC_SHOW_ENRICH_DEBUG === '1',
         }),
       });
       if (!resp.ok) throw new Error(await resp.text());
-      const { suggestion } = await resp.json();
+      const { suggestion, debug } = await resp.json();
+      setEnrichDebug(debug || null);
       setFormData((prev) => applySuggestionToForm(prev, suggestion));
     } catch (e) {
       console.error('Erro ao enriquecer:', e);
@@ -241,9 +250,18 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
     }
   };
 
+  const tabContent = debugTab === 'raw'
+    ? enrichDebug?.rawContent || ''
+    : debugTab === 'parsed'
+      ? JSON.stringify(enrichDebug?.parsedJson, null, 2)
+      : debugTab === 'flat'
+        ? JSON.stringify(enrichDebug?.flattened, null, 2)
+        : computeApplyDiff(form, enrichDebug?.flattened || {}).join('\n');
+
   if (!isOpen) return null;
 
   return (
+    <>
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" role="dialog" aria-labelledby="modal-title">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
         <header className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -276,6 +294,15 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
                         {isEnriching && <FaSpinner className="animate-spin" />}
                         Enriquecer
                       </button>
+                      {process.env.NEXT_PUBLIC_SHOW_ENRICH_DEBUG === '1' && enrichDebug && (
+                        <button
+                          type="button"
+                          onClick={() => { setDebugTab('raw'); setDebugOpen(true); }}
+                          className="ml-2 text-xs underline text-gray-600 hover:text-gray-900"
+                        >
+                          Ver resposta da API (debug)
+                        </button>
+                      )}
                     </div>
                     <div>
                       <label htmlFor="site-empresa" className="block text-sm font-medium mb-1">Site Empresa</label>
@@ -408,6 +435,26 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
         </form>
       </div>
     </div>
+    {debugOpen && enrichDebug && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl p-4">
+          <div className="flex justify-between mb-4">
+            <div className="space-x-2">
+              <button type="button" onClick={() => setDebugTab('raw')} className={`text-xs px-2 py-1 rounded ${debugTab==='raw'?'bg-violet-600 text-white':'bg-gray-200 text-gray-700'}`}>Bruto</button>
+              <button type="button" onClick={() => setDebugTab('parsed')} className={`text-xs px-2 py-1 rounded ${debugTab==='parsed'?'bg-violet-600 text-white':'bg-gray-200 text-gray-700'}`}>JSON parseado</button>
+              <button type="button" onClick={() => setDebugTab('flat')} className={`text-xs px-2 py-1 rounded ${debugTab==='flat'?'bg-violet-600 text-white':'bg-gray-200 text-gray-700'}`}>Flattened</button>
+              <button type="button" onClick={() => setDebugTab('diff')} className={`text-xs px-2 py-1 rounded ${debugTab==='diff'?'bg-violet-600 text-white':'bg-gray-200 text-gray-700'}`}>Diff</button>
+            </div>
+            <div className="space-x-2">
+              <button type="button" onClick={() => navigator.clipboard.writeText(tabContent)} className="text-xs underline text-gray-600 hover:text-gray-900">Copiar JSON</button>
+              <button type="button" onClick={() => setDebugOpen(false)} className="text-xs underline text-gray-600 hover:text-gray-900">Fechar</button>
+            </div>
+          </div>
+          <pre className="text-xs whitespace-pre-wrap break-all bg-gray-50 p-3 rounded border max-h-80 overflow-auto">{tabContent}</pre>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

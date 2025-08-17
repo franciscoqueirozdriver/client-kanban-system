@@ -44,8 +44,13 @@ function digits(s?: string) {
 
 export async function enrichCompanyData(
   input: { nome?: string; cnpj?: string },
-  hints?: SheetHints
-): Promise<Partial<CompanySuggestion>> {
+  hints?: SheetHints,
+  opts?: { debug?: boolean }
+): Promise<{ suggestion: Partial<CompanySuggestion>; debug?: {
+  endpoint: string; model: string; temperature: number;
+  promptPreview: string;
+  rawContent?: string; parsedJson?: any; flattened?: Partial<CompanySuggestion>;
+} }> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey) throw new Error('PERPLEXITY_API_KEY não configurada');
 
@@ -124,6 +129,8 @@ Responda **apenas** com um objeto JSON válido, **sem** texto adicional.
 }
 `;
 
+  const promptPreview = prompt.slice(0, 1500);
+
   const endpoint = process.env.PERPLEXITY_ENDPOINT || 'https://api.perplexity.ai/chat/completions';
   const model    = process.env.PERPLEXITY_MODEL    || 'sonar'; // <— modelo permitido
   const temperature = 0.2;
@@ -151,7 +158,6 @@ Responda **apenas** com um objeto JSON válido, **sem** texto adicional.
   try {
     parsed = JSON.parse(content.trim());
   } catch {
-    // fallback: tentar extrair JSON se vier com ruído
     const m = content.match(/\{[\s\S]*\}/);
     parsed = m ? JSON.parse(m[0]) : {};
   }
@@ -175,5 +181,20 @@ Responda **apenas** com um objeto JSON válido, **sem** texto adicional.
     if (v == null || String(v).trim() === '') delete (out as any)[k];
   });
 
-  return out;
+  if (opts?.debug) {
+    return {
+      suggestion: out,
+      debug: {
+        endpoint,
+        model,
+        temperature,
+        promptPreview,
+        rawContent: content,
+        parsedJson: parsed,
+        flattened: out,
+      }
+    };
+  }
+
+  return { suggestion: out };
 }
