@@ -1,30 +1,21 @@
 import { NextResponse } from 'next/server';
 import { enrichCompanyData } from '@/lib/perplexity';
 
+export const runtime = 'nodejs';
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { nome } = body;
+    const body = await req.json().catch(() => ({}));
+    const nome = body?.nome ?? '';
+    const cnpj = body?.cnpj ?? '';
 
-    if (!nome) {
-      return NextResponse.json({ message: 'O nome da empresa é obrigatório.' }, { status: 400 });
-    }
+    const { suggestion, debug } = await enrichCompanyData({ nome, cnpj });
 
-    const suggestions = await enrichCompanyData({ nome });
-
-    if (Object.keys(suggestions).length === 0) {
-        return NextResponse.json({ message: 'Não foi possível encontrar dados para a empresa informada.' }, { status: 404 });
-    }
-
-    return NextResponse.json({ suggestion: suggestions });
-
-  } catch (error: any) {
-    console.error('[API /empresas/enriquecer]', error);
-    // Mascarar a chave da API em mensagens de erro
-    const message = error.message.includes('PERPLEXITY_API_KEY')
-      ? 'Erro de configuração no servidor.'
-      : error.message;
-
-    return NextResponse.json({ message: `Erro ao enriquecer dados: ${message}` }, { status: 500 });
+    const payload: any = { suggestion };
+    if (debug) payload.debug = debug;
+    return NextResponse.json(payload, { status: 200 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || 'Erro ao enriquecer' }, { status: 400 });
   }
 }
+

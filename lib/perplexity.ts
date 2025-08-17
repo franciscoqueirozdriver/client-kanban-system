@@ -1,8 +1,5 @@
 // lib/perplexity.ts
-
-// Mantém a estrutura “achatada” que o modal espera
 export type CompanySuggestion = {
-  // Empresa
   Nome_da_Empresa?: string;
   Site_Empresa?: string;
   Pais_Empresa?: string;
@@ -13,153 +10,151 @@ export type CompanySuggestion = {
   Bairro_Empresa?: string;
   Complemento_Empresa?: string;
   CEP_Empresa?: string;
-  CNPJ_Empresa?: string;      // somente dígitos
-  DDI_Empresa?: string;       // ex: +55
-  Telefones_Empresa?: string; // separados por ;
+  CNPJ_Empresa?: string;
+  DDI_Empresa?: string;
+  Telefones_Empresa?: string;
   Observacao_Empresa?: string;
-  // Contato
   Nome_Contato?: string;
   Email_Contato?: string;
   Cargo_Contato?: string;
   DDI_Contato?: string;
-  Telefones_Contato?: string; // separados por ;
-  // Comercial
+  Telefones_Contato?: string;
   Mercado?: string;
   Produto?: string;
-  Area?: string; // JSON keys sem acento
+  Area?: string;
 };
 
-function digits(s?: string) {
-  return (s || '').replace(/\D/g, '');
+const digits = (s?: string) => (s || '').replace(/\D/g, '');
+
+function normalizeUF(uf?: string) {
+  const u = (uf || '').trim().toUpperCase();
+  return u.length === 2 ? u : '';
+}
+function normalizePhones(s?: string) {
+  const raw = (s || '')
+    .replace(/['"]/g, '')
+    .split(/[;,/]| ou /i)
+    .map(t => t.trim())
+    .filter(Boolean);
+  const uniq = Array.from(new Set(raw)).map(t => {
+    const d = digits(t);
+    if (!d) return '';
+    return d.startsWith('55') ? `+${d}` : `+55${d}`;
+  }).filter(Boolean);
+  return uniq.join('; ');
 }
 
-function withAbortTimeout(ms: number) {
-  const ctrl = new AbortController();
-  const id = setTimeout(() => ctrl.abort(), ms);
-  return { signal: ctrl.signal, clear: () => clearTimeout(id) };
+function flatten(parsed: any): Partial<CompanySuggestion> {
+  const Empresa   = parsed?.Empresa   || {};
+  const Contato   = parsed?.Contato   || {};
+  const Comercial = parsed?.Comercial || {};
+  const out: Partial<CompanySuggestion> = {
+    ...Empresa, ...Contato, ...Comercial,
+  };
+  if (out.CNPJ_Empresa) out.CNPJ_Empresa = digits(out.CNPJ_Empresa);
+  if (out.Estado_Empresa) out.Estado_Empresa = normalizeUF(out.Estado_Empresa);
+  if (out.Telefones_Empresa) out.Telefones_Empresa = normalizePhones(out.Telefones_Empresa);
+  if (out.Telefones_Contato) out.Telefones_Contato = normalizePhones(out.Telefones_Contato);
+  if (out.DDI_Empresa && !out.DDI_Empresa.startsWith('+')) out.DDI_Empresa = `+${digits(out.DDI_Empresa) || '55'}`;
+  if (out.DDI_Contato && !out.DDI_Contato.startsWith('+')) out.DDI_Contato = `+${digits(out.DDI_Contato) || '55'}`;
+  if (!out.Pais_Empresa) out.Pais_Empresa = 'Brasil';
+  return out;
 }
 
-function safeParse(s: string) {
-  try { return JSON.parse(s); } catch { return {}; }
-}
-
-export async function enrichCompanyData(input: { nome: string }): Promise<Partial<CompanySuggestion>> {
+export async function enrichCompanyData(
+  input: { nome?: string; cnpj?: string }
+): Promise<{ suggestion: Partial<CompanySuggestion>, debug: any }> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey) throw new Error('PERPLEXITY_API_KEY não configurada');
 
-  const nome = (input.nome || '').trim();
-  if (!nome) throw new Error('O nome da empresa é obrigatório para o enriquecimento.');
+  const endpoint = process.env.PERPLEXITY_ENDPOINT || 'https://api.perplexity.ai/chat/completions';
+  const model    = process.env.PERPLEXITY_MODEL   || 'sonar';
+  const temperature = 0.2;
 
-  // Prompt enxuto: pedimos APENAS JSON na estrutura esperada
-  const system = 'Você responde SOMENTE com um objeto JSON válido, sem texto extra.';
-  const user = `
-    Extraia dados da empresa brasileira "${nome}".
-    Retorne APENAS um JSON com esta estrutura e chaves exatas:
+  const nome = (input?.nome || '').trim();
+  const cnpj = digits(input?.cnpj);
 
-    {
-      "Empresa": {
-        "Nome_da_Empresa": "Nome Oficial Completo",
-        "Site_Empresa": "https://site.com.br",
-        "Pais_Empresa": "Brasil",
-        "Estado_Empresa": "SP",
-        "Cidade_Empresa": "São Paulo",
-        "Logradouro_Empresa": "Av. Exemplo",
-        "Numero_Empresa": "123",
-        "Bairro_Empresa": "Centro",
-        "Complemento_Empresa": "Andar 10",
-        "CEP_Empresa": "01000-000",
-        "CNPJ_Empresa": "12345678000199",
-        "DDI_Empresa": "+55",
-        "Telefones_Empresa": "+55 11 3333-4444; +55 11 98888-7777",
-        "Observacao_Empresa": "Breve resumo (≤280 chars)."
-      },
-      "Contato": {
-        "Nome_Contato": "Nome do Contato Principal",
-        "Email_Contato": "contato@site.com.br",
-        "Cargo_Contato": "Cargo do Contato",
-        "DDI_Contato": "+55",
-        "Telefones_Contato": "+55 11 99999-0000"
-      },
-      "Comercial": {
-        "Mercado": "Mercado de Atuação",
-        "Produto": "Principal Produto/Serviço",
-        "Area": "Área (ex: Saúde, Varejo)"
-      }
-    }
+  const prompt = `
+Você é um assistente de extração de dados. Busque informações sobre a empresa brasileira com o nome "${nome}"${cnpj ? ` e CNPJ "${cnpj}"` : ''}.
+Responda ESTRITAMENTE com um único objeto JSON no formato:
+
+{
+  "Empresa": {
+    "Nome_da_Empresa": "Nome Oficial Completo",
+    "Site_Empresa": "https://site.com.br",
+    "Pais_Empresa": "Brasil",
+    "Estado_Empresa": "SP",
+    "Cidade_Empresa": "São Paulo",
+    "Logradouro_Empresa": "Av. Exemplo",
+    "Numero_Empresa": "123",
+    "Bairro_Empresa": "Centro",
+    "Complemento_Empresa": "",
+    "CEP_Empresa": "01000-000",
+    "CNPJ_Empresa": "12345678000199",
+    "DDI_Empresa": "+55",
+    "Telefones_Empresa": "+55 11 3333-4444; +55 11 98888-7777",
+    "Observacao_Empresa": "Breve resumo (≤280 chars)."
+  },
+  "Contato": {
+    "Nome_Contato": "Nome do Contato Principal",
+    "Email_Contato": "contato@site.com.br",
+    "Cargo_Contato": "Cargo do Contato",
+    "DDI_Contato": "+55",
+    "Telefones_Contato": "+55 11 99999-0000"
+  },
+  "Comercial": {
+    "Mercado": "Mercado de Atuação",
+    "Produto": "Principal Produto/Serviço",
+    "Area": "Área (ex: Saúde, Varejo)"
+  }
+}
+Sem comentários, sem Markdown, sem \`\`\`.
   `.trim();
 
-  const endpoint = process.env.PERPLEXITY_ENDPOINT || 'https://api.perplexity.ai/chat/completions';
-  const preferred = process.env.PERPLEXITY_MODEL || 'sonar-pro';
-  const models = [preferred, 'sonar']; // fallback automático
-  const timeoutMs = Number(process.env.PERPLEXITY_TIMEOUT_MS || 10000);
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      temperature,
+      messages: [
+        { role: 'system', content: 'Responda apenas com um JSON válido único. Sem texto adicional.' },
+        { role: 'user', content: prompt }
+      ]
+    })
+  });
 
-  let lastErr: any;
-
-  for (const model of models) {
-    const { signal, clear } = withAbortTimeout(timeoutMs);
-    try {
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        signal,
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0.2,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-        }),
-      });
-      clear();
-
-      const data = await resp.json().catch(() => ({} as any));
-
-      if (!resp.ok) {
-        const msg = String(data?.error?.message || '');
-        // Se o modelo for inválido, tentar o próximo
-        if (resp.status === 400 && /invalid model/i.test(msg)) {
-          lastErr = data;
-          continue;
-        }
-        throw new Error(`Perplexity falhou: ${resp.status} ${msg || JSON.stringify(data).slice(0, 180)}`);
-      }
-
-      // A resposta pode vir em um bloco de código markdown, então extraímos o JSON de dentro.
-      const content = data?.choices?.[0]?.message?.content || '{}';
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/);
-      const jsonString = jsonMatch ? jsonMatch[1] : content;
-      const parsed = safeParse(jsonString);
-      const empresa = parsed?.Empresa || {};
-      const contato = parsed?.Contato || {};
-      const comercial = parsed?.Comercial || {};
-
-      const out: Partial<CompanySuggestion> = {
-        ...empresa,
-        ...contato,
-        ...comercial,
-        // Garante CNPJ somente dígitos e preserva nome se não vier
-        CNPJ_Empresa: digits(empresa?.CNPJ_Empresa),
-        Nome_da_Empresa: empresa?.Nome_da_Empresa || nome || undefined,
-      };
-
-      // Remove chaves vazias/null/undefined
-      Object.keys(out).forEach((k) => {
-        const v = (out as any)[k];
-        if (v == null || String(v).trim() === '') delete (out as any)[k];
-      });
-
-      return out;
-    } catch (e: any) {
-      clear();
-      lastErr = e;
-    }
+  const rawText = await resp.text().catch(() => '');
+  if (!resp.ok) {
+    throw new Error(`Perplexity falhou: ${resp.status} ${rawText.slice(0, 200)}`);
   }
 
-  throw new Error(
-    `Perplexity falhou: ${typeof lastErr === 'string' ? lastErr : (lastErr?.message || JSON.stringify(lastErr)).slice(0, 200)}`
-  );
+  let apiJson: any = {};
+  try { apiJson = JSON.parse(rawText); } catch {}
+  const content: string =
+    apiJson?.choices?.[0]?.message?.content ??
+    rawText;
+
+  let parsed: any = {};
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    const m = content.match(/```json\s*([\s\S]*?)```/i);
+    const js = m ? m[1] : content;
+    try { parsed = JSON.parse(js); } catch { parsed = {}; }
+  }
+
+  const suggestion = flatten(parsed);
+
+  return {
+    suggestion,
+    debug: {
+      endpoint, model, temperature,
+      promptPreview: prompt.slice(0, 1000),
+      rawContent: content,
+      parsedJson: parsed,
+      flattened: suggestion,
+    }
+  };
 }
+
