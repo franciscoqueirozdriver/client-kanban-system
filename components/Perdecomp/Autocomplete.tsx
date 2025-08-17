@@ -143,14 +143,22 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
       />
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
       {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
-        <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border rounded-md shadow-lg max-h-60 overflow-y-auto">
+        <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
-          {!isLoading && (
-            <div className="p-2">
-              {results.length === 0 && (
-                <>
-                  <p className="text-gray-500 text-sm mb-2">Nenhum resultado.</p>
-                  {onNoResults && (
+
+          {!isLoading && results.map((company) => (
+            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
+              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{company.CNPJ_Empresa}</span>
+            </li>
+          ))}
+
+          {!isLoading && (results.length === 0 || shouldShowEnrichButton) && (
+            <li className="p-2 border-t border-gray-100 dark:border-gray-800 mt-1">
+              {results.length === 0 ? (
+                // Show "Cadastrar" only when there are no results
+                onNoResults && (
+                  <>
+                    <p className="text-gray-500 text-sm mb-2 text-center">Nenhum resultado.</p>
                     <button
                       type="button"
                       onClick={() => onNoResults(query)}
@@ -158,25 +166,22 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
                     >
                       + Cadastrar Nova Empresa
                     </button>
-                  )}
-                </>
+                  </>
+                )
+              ) : (
+                // Show "Enriquecer" only when there are results and at least one is missing a CNPJ
+                shouldShowEnrichButton && onEnrichRequest && companyToEnrich && (
+                  <button
+                     type="button"
+                     onClick={() => onEnrichRequest(companyToEnrich)}
+                     className="w-full px-3 py-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:bg-violet-600 dark:hover:bg-violet-700 dark:focus:ring-violet-400"
+                   >
+                     + Enriquecer Cadastro Existente
+                   </button>
+                )
               )}
-              {shouldShowEnrichButton && onEnrichRequest && companyToEnrich && (
-                 <button
-                    type="button"
-                    onClick={() => onEnrichRequest(companyToEnrich)}
-                    className="w-full px-3 py-2 mt-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed dark:bg-violet-600 dark:hover:bg-violet-700 dark:focus:ring-violet-400"
-                  >
-                    + Enriquecer Cadastro Existente
-                  </button>
-              )}
-            </div>
-          )}
-          {results.map((company) => (
-            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
-              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{company.CNPJ_Empresa}</span>
             </li>
-          ))}
+          )}
         </ul>
       )}
     </div>

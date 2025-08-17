@@ -293,15 +293,6 @@ export default function PerdecompComparativoPage() {
                   onEnrichRequest={handleEnrich}
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => client && handleEnrich(client.company)}
-                disabled={!client || !!client.company.CNPJ_Empresa || globalLoading}
-                className="px-3 py-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed dark:bg-violet-600 dark:hover:bg-violet-700 dark:focus:ring-violet-400"
-                title="Enriquecer dados do cliente (apenas para cadastros sem CNPJ)"
-              >
-                {globalLoading ? <FaSpinner className="animate-spin" /> : 'Enriquecer'}
-              </button>
             </div>
             {client?.lastConsultation && (
               <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
