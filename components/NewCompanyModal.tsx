@@ -67,7 +67,7 @@ function normalizePhones(s?: string) {
   return uniq.join('; ');
 }
 
-function applySuggestionToForm(current: CompanyForm, suggestion: Partial<CompanyForm>): CompanyForm {
+function applySuggestionToForm(current: CompanyForm, suggestion: Partial<CompanyForm>, onlyEmpty = true): CompanyForm {
   const s: Partial<CompanyForm> = { ...suggestion };
 
   if (s.CNPJ_Empresa) s.CNPJ_Empresa = digits(s.CNPJ_Empresa);
@@ -83,14 +83,10 @@ function applySuggestionToForm(current: CompanyForm, suggestion: Partial<Company
   (Object.keys(s) as (keyof CompanyForm)[]).forEach((key) => {
     const cur = (next[key] ?? '').toString().trim();
     const val = (s[key] ?? '').toString().trim();
-    if (!cur && val) next[key] = val as any;
+    if ((onlyEmpty && !cur && val) || (!onlyEmpty && val)) next[key] = val as any;
   });
 
   return next;
-}
-
-function computeApplyDiff(form: Record<string, any>, flat: Record<string, any>) {
-  return Object.keys(flat).filter(k => !String(form[k] ?? '').trim() && String(flat[k] ?? '').trim());
 }
 
 // --- Initial State ---
@@ -133,7 +129,6 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
   const [error, setError] = useState<string | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
   const [enrichDebug, setEnrichDebug] = useState<any>(null);
-  const [debugTab, setDebugTab] = useState<'raw' | 'parsed' | 'flat' | 'diff'>('raw');
 
   const isUpdateMode = !!form.Cliente_ID;
 
@@ -165,23 +160,22 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
   };
 
   async function handleEnrich() {
+    if (!form.Nome_da_Empresa && !form.CNPJ_Empresa) return;
     setIsEnriching(true);
     try {
       const resp = await fetch('/api/empresas/enriquecer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome: form.Nome_da_Empresa,
-          cnpj: form.CNPJ_Empresa,
-          debug: process.env.NEXT_PUBLIC_SHOW_ENRICH_DEBUG === '1',
-        }),
+        body: JSON.stringify({ nome: form.Nome_da_Empresa, cnpj: form.CNPJ_Empresa })
       });
-      if (!resp.ok) throw new Error(await resp.text());
-      const { suggestion, debug } = await resp.json();
-      setEnrichDebug(debug || null);
-      setFormData((prev) => applySuggestionToForm(prev, suggestion));
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json?.error || 'Falha ao enriquecer');
+      setEnrichDebug(json.debug || null);
+      if (json.debug) setDebugOpen(true);
+      setFormData(prev => applySuggestionToForm(prev, json.suggestion));
     } catch (e) {
-      console.error('Erro ao enriquecer:', e);
+      console.error(e);
+      alert(`Erro ao enriquecer: ${e}`);
     } finally {
       setIsEnriching(false);
     }
@@ -250,14 +244,6 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
     }
   };
 
-  const tabContent = debugTab === 'raw'
-    ? enrichDebug?.rawContent || ''
-    : debugTab === 'parsed'
-      ? JSON.stringify(enrichDebug?.parsedJson, null, 2)
-      : debugTab === 'flat'
-        ? JSON.stringify(enrichDebug?.flattened, null, 2)
-        : computeApplyDiff(form, enrichDebug?.flattened || {}).join('\n');
-
   if (!isOpen) return null;
 
   return (
@@ -289,16 +275,15 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
                         type="button"
                         onClick={handleEnrich}
                         disabled={isEnriching}
-                        className="mt-2 px-3 py-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-60 flex items-center gap-2"
+                        className="mt-2 px-4 py-2 rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
                       >
-                        {isEnriching && <FaSpinner className="animate-spin" />}
-                        Enriquecer
+                        {isEnriching ? 'Enriquecendo...' : 'Enriquecer'}
                       </button>
-                      {process.env.NEXT_PUBLIC_SHOW_ENRICH_DEBUG === '1' && enrichDebug && (
+                      {enrichDebug && (
                         <button
                           type="button"
-                          onClick={() => { setDebugTab('raw'); setDebugOpen(true); }}
-                          className="ml-2 text-xs underline text-gray-600 hover:text-gray-900"
+                          onClick={() => setDebugOpen(true)}
+                          className="ml-3 text-xs underline text-gray-600 hover:text-gray-900"
                         >
                           Ver resposta da API (debug)
                         </button>
@@ -435,22 +420,28 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
         </form>
       </div>
     </div>
-    {debugOpen && enrichDebug && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl p-4">
-          <div className="flex justify-between mb-4">
-            <div className="space-x-2">
-              <button type="button" onClick={() => setDebugTab('raw')} className={`text-xs px-2 py-1 rounded ${debugTab==='raw'?'bg-violet-600 text-white':'bg-gray-200 text-gray-700'}`}>Bruto</button>
-              <button type="button" onClick={() => setDebugTab('parsed')} className={`text-xs px-2 py-1 rounded ${debugTab==='parsed'?'bg-violet-600 text-white':'bg-gray-200 text-gray-700'}`}>JSON parseado</button>
-              <button type="button" onClick={() => setDebugTab('flat')} className={`text-xs px-2 py-1 rounded ${debugTab==='flat'?'bg-violet-600 text-white':'bg-gray-200 text-gray-700'}`}>Flattened</button>
-              <button type="button" onClick={() => setDebugTab('diff')} className={`text-xs px-2 py-1 rounded ${debugTab==='diff'?'bg-violet-600 text-white':'bg-gray-200 text-gray-700'}`}>Diff</button>
+    {debugOpen && (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setDebugOpen(false)}>
+        <div className="bg-white dark:bg-gray-900 rounded-lg w-full max-w-3xl p-4 shadow-lg" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold">Debug – Perplexity</h3>
+            <button onClick={() => setDebugOpen(false)} className="text-gray-500 hover:text-gray-800">Fechar</button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <p className="text-sm font-semibold mb-1">Flattened (usado no form)</p>
+              <pre className="text-xs bg-gray-50 dark:bg-gray-800 p-2 rounded max-h-64 overflow-auto">{JSON.stringify(enrichDebug?.flattened, null, 2)}</pre>
             </div>
-            <div className="space-x-2">
-              <button type="button" onClick={() => navigator.clipboard.writeText(tabContent)} className="text-xs underline text-gray-600 hover:text-gray-900">Copiar JSON</button>
-              <button type="button" onClick={() => setDebugOpen(false)} className="text-xs underline text-gray-600 hover:text-gray-900">Fechar</button>
+            <div>
+              <p className="text-sm font-semibold mb-1">JSON Parseado</p>
+              <pre className="text-xs bg-gray-50 dark:bg-gray-800 p-2 rounded max-h-64 overflow-auto">{JSON.stringify(enrichDebug?.parsedJson, null, 2)}</pre>
+            </div>
+            <div className="md:col-span-2">
+              <p className="text-sm font-semibold mb-1">Raw (conteúdo bruto)</p>
+              <pre className="text-xs bg-gray-50 dark:bg-gray-800 p-2 rounded max-h-64 overflow-auto">{enrichDebug?.rawContent}</pre>
             </div>
           </div>
-          <pre className="text-xs whitespace-pre-wrap break-all bg-gray-50 p-3 rounded border max-h-80 overflow-auto">{tabContent}</pre>
         </div>
       </div>
     )}
