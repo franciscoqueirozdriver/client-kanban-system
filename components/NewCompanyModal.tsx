@@ -49,6 +49,10 @@ type CompanyForm = CompanySuggestion & {
 
 // --- Normalization Utilities ---
 const digits = (s?: string) => (s || '').replace(/\D/g, '');
+const cnpjOrEmpty = (s?: string) => {
+  const d = digits(s);
+  return d.length === 14 ? d : '';
+};
 
 function normalizeUF(uf?: string) {
   const u = (uf || '').trim().toUpperCase();
@@ -72,7 +76,7 @@ function normalizePhones(s?: string) {
 function applySuggestionToForm(current: CompanyForm, suggestion: Partial<CompanyForm>, onlyEmpty = true): CompanyForm {
   const s: Partial<CompanyForm> = { ...suggestion };
 
-  if (s.CNPJ_Empresa) s.CNPJ_Empresa = digits(s.CNPJ_Empresa);
+  if (s.CNPJ_Empresa) s.CNPJ_Empresa = cnpjOrEmpty(s.CNPJ_Empresa);
   if (s.Estado_Empresa) s.Estado_Empresa = normalizeUF(s.Estado_Empresa);
   if (s.Telefones_Empresa) s.Telefones_Empresa = normalizePhones(s.Telefones_Empresa);
   if (s.Telefones_Contato) s.Telefones_Contato = normalizePhones(s.Telefones_Contato);
@@ -125,22 +129,20 @@ const initialForm: CompanyForm = {
 
 // --- Component ---
 export default function NewCompanyModal({ isOpen, initialData, warning, enrichDebug: initialDebug, onClose, onSaved }: NewCompanyModalProps) {
-  const [form, setFormData] = useState<CompanyForm>(initialForm);
+  const [formData, setFormData] = useState<CompanyForm>(initialForm);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
   const [enrichDebug, setEnrichDebug] = useState<any>(null);
 
-  const isUpdateMode = !!form.Cliente_ID;
+  const isUpdateMode = !!formData.Cliente_ID;
 
   useEffect(() => {
     if (isOpen) {
       setError(null);
       setEnrichDebug(initialDebug || null);
       if (initialData) {
-        setFormData(applySuggestionToForm(initialForm, initialData, false));
-      } else {
-        setFormData(initialForm);
+        setFormData(prev => applySuggestionToForm(prev, initialData, false));
       }
     }
   }, [isOpen, initialData, initialDebug]);
@@ -150,9 +152,14 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleClose = () => {
+    onClose();
+    setFormData(initialForm);
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.Nome_da_Empresa) {
+    if (!formData.Nome_da_Empresa) {
       setError('O "Nome da Empresa" é obrigatório.');
       return;
     }
@@ -160,40 +167,40 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
     setError(null);
     try {
       const payload: FullCompanyPayload = {
-        Cliente_ID: form.Cliente_ID,
+        Cliente_ID: formData.Cliente_ID,
         Empresa: {
-          Nome_da_Empresa: form.Nome_da_Empresa,
-          Site_Empresa: form.Site_Empresa,
-          País_Empresa: form.Pais_Empresa,
-          Estado_Empresa: form.Estado_Empresa,
-          Cidade_Empresa: form.Cidade_Empresa,
-          Logradouro_Empresa: form.Logradouro_Empresa,
-          Numero_Empresa: form.Numero_Empresa,
-          Bairro_Empresa: form.Bairro_Empresa,
-          Complemento_Empresa: form.Complemento_Empresa,
-          CEP_Empresa: form.CEP_Empresa,
-          CNPJ_Empresa: form.CNPJ_Empresa,
-          DDI_Empresa: form.DDI_Empresa,
-          Telefones_Empresa: form.Telefones_Empresa,
-          Observacao_Empresa: form.Observacao_Empresa,
+          Nome_da_Empresa: formData.Nome_da_Empresa,
+          Site_Empresa: formData.Site_Empresa,
+          País_Empresa: formData.Pais_Empresa,
+          Estado_Empresa: formData.Estado_Empresa,
+          Cidade_Empresa: formData.Cidade_Empresa,
+          Logradouro_Empresa: formData.Logradouro_Empresa,
+          Numero_Empresa: formData.Numero_Empresa,
+          Bairro_Empresa: formData.Bairro_Empresa,
+          Complemento_Empresa: formData.Complemento_Empresa,
+          CEP_Empresa: formData.CEP_Empresa,
+          CNPJ_Empresa: cnpjOrEmpty(formData.CNPJ_Empresa),
+          DDI_Empresa: formData.DDI_Empresa,
+          Telefones_Empresa: formData.Telefones_Empresa,
+          Observacao_Empresa: formData.Observacao_Empresa,
         },
         Contato: {
-          Nome_Contato: form.Nome_Contato,
-          Email_Contato: form.Email_Contato,
-          Cargo_Contato: form.Cargo_Contato,
-          DDI_Contato: form.DDI_Contato,
-          Telefones_Contato: form.Telefones_Contato,
+          Nome_Contato: formData.Nome_Contato,
+          Email_Contato: formData.Email_Contato,
+          Cargo_Contato: formData.Cargo_Contato,
+          DDI_Contato: formData.DDI_Contato,
+          Telefones_Contato: formData.Telefones_Contato,
         },
         Comercial: {
-          Origem: form.Origem,
-          Sub_Origem: form.Sub_Origem,
-          Mercado: form.Mercado,
-          Produto: form.Produto,
-          Área: form.Area,
-          Etapa: form.Etapa,
-          Funil: form.Funil,
-          Tipo_do_Serv_Comunicacao: form.Tipo_do_Serv_Comunicacao,
-          ID_do_Serv_Comunicacao: form.ID_do_Serv_Comunicacao,
+          Origem: formData.Origem,
+          Sub_Origem: formData.Sub_Origem,
+          Mercado: formData.Mercado,
+          Produto: formData.Produto,
+          Área: formData.Area,
+          Etapa: formData.Etapa,
+          Funil: formData.Funil,
+          Tipo_do_Serv_Comunicacao: formData.Tipo_do_Serv_Comunicacao,
+          ID_do_Serv_Comunicacao: formData.ID_do_Serv_Comunicacao,
         },
       };
 
@@ -205,7 +212,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
         throw new Error(data.message || 'Erro ao salvar empresa.');
       }
       onSaved(data.company);
-      onClose();
+      handleClose();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -250,61 +257,61 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
                     <div className="md:col-span-2">
                       <label htmlFor="nome-empresa" className="block text-sm font-medium mb-1">Nome da Empresa *</label>
-                      <input id="nome-empresa" type="text" name="Nome_da_Empresa" value={form.Nome_da_Empresa || ''} onChange={handleChange} required aria-required="true" className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="nome-empresa" type="text" name="Nome_da_Empresa" value={formData.Nome_da_Empresa || ''} onChange={handleChange} required aria-required="true" className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div>
                       <label htmlFor="cnpj-empresa" className="block text-sm font-medium mb-1">CNPJ Empresa</label>
-                      <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={form.CNPJ_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={formData.CNPJ_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: cnpjOrEmpty(e.target.value) }))} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Apenas dígitos; validado no envio.</p>
                     </div>
                     <div>
                       <label htmlFor="site-empresa" className="block text-sm font-medium mb-1">Site Empresa</label>
-                      <input id="site-empresa" type="url" name="Site_Empresa" placeholder="https://..." value={form.Site_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="site-empresa" type="url" name="Site_Empresa" placeholder="https://..." value={formData.Site_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label htmlFor="logradouro-empresa" className="block text-sm font-medium mb-1">Logradouro</label>
-                            <input id="logradouro-empresa" type="text" name="Logradouro_Empresa" value={form.Logradouro_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                            <input id="logradouro-empresa" type="text" name="Logradouro_Empresa" value={formData.Logradouro_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                         </div>
                         <div>
                             <label htmlFor="numero-empresa" className="block text-sm font-medium mb-1">Número</label>
-                            <input id="numero-empresa" type="text" name="Numero_Empresa" value={form.Numero_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                            <input id="numero-empresa" type="text" name="Numero_Empresa" value={formData.Numero_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                         </div>
                         <div>
                             <label htmlFor="bairro-empresa" className="block text-sm font-medium mb-1">Bairro</label>
-                            <input id="bairro-empresa" type="text" name="Bairro_Empresa" value={form.Bairro_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                            <input id="bairro-empresa" type="text" name="Bairro_Empresa" value={formData.Bairro_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                         </div>
                     </div>
                     <div>
                       <label htmlFor="cidade-empresa" className="block text-sm font-medium mb-1">Cidade</label>
-                      <input id="cidade-empresa" type="text" name="Cidade_Empresa" value={form.Cidade_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="cidade-empresa" type="text" name="Cidade_Empresa" value={formData.Cidade_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div>
                       <label htmlFor="estado-empresa" className="block text-sm font-medium mb-1">Estado (UF)</label>
-                      <input id="estado-empresa" type="text" name="Estado_Empresa" value={form.Estado_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, Estado_Empresa: e.target.value.toUpperCase() }))} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="estado-empresa" type="text" name="Estado_Empresa" value={formData.Estado_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, Estado_Empresa: e.target.value.toUpperCase() }))} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Use a sigla, ex.: SP</p>
                     </div>
                     <div>
                       <label htmlFor="cep-empresa" className="block text-sm font-medium mb-1">CEP</label>
-                      <input id="cep-empresa" type="text" name="CEP_Empresa" value={form.CEP_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="cep-empresa" type="text" name="CEP_Empresa" value={formData.CEP_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Formato 00000-000</p>
                     </div>
                     <div>
                       <label htmlFor="pais-empresa" className="block text-sm font-medium mb-1">País</label>
-                      <input id="pais-empresa" type="text" name="Pais_Empresa" value={form.Pais_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="pais-empresa" type="text" name="Pais_Empresa" value={formData.Pais_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div>
                       <label htmlFor="ddi-empresa" className="block text-sm font-medium mb-1">DDI Empresa</label>
-                      <input id="ddi-empresa" type="text" name="DDI_Empresa" value={form.DDI_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="ddi-empresa" type="text" name="DDI_Empresa" value={formData.DDI_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div>
                       <label htmlFor="telefones-empresa" className="block text-sm font-medium mb-1">Telefones Empresa</label>
-                      <input id="telefones-empresa" type="text" name="Telefones_Empresa" value={form.Telefones_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="telefones-empresa" type="text" name="Telefones_Empresa" value={formData.Telefones_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Separe múltiplos por ;</p>
                     </div>
                     <div className="md:col-span-2">
                       <label htmlFor="obs-empresa" className="block text-sm font-medium mb-1">Observação</label>
-                      <textarea id="obs-empresa" name="Observacao_Empresa" value={form.Observacao_Empresa || ''} onChange={handleChange} rows={3} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <textarea id="obs-empresa" name="Observacao_Empresa" value={formData.Observacao_Empresa || ''} onChange={handleChange} rows={3} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                   </div>
                 </section>
@@ -314,23 +321,23 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="nome-contato" className="block text-sm font-medium mb-1">Nome Contato</label>
-                      <input id="nome-contato" type="text" name="Nome_Contato" value={form.Nome_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="nome-contato" type="text" name="Nome_Contato" value={formData.Nome_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div>
                       <label htmlFor="cargo-contato" className="block text-sm font-medium mb-1">Cargo Contato</label>
-                      <input id="cargo-contato" type="text" name="Cargo_Contato" value={form.Cargo_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="cargo-contato" type="text" name="Cargo_Contato" value={formData.Cargo_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div className="md:col-span-2">
                       <label htmlFor="email-contato" className="block text-sm font-medium mb-1">E-mail Contato</label>
-                      <input id="email-contato" type="email" name="Email_Contato" value={form.Email_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="email-contato" type="email" name="Email_Contato" value={formData.Email_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div>
                       <label htmlFor="ddi-contato" className="block text-sm font-medium mb-1">DDI Contato</label>
-                      <input id="ddi-contato" type="text" name="DDI_Contato" value={form.DDI_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="ddi-contato" type="text" name="DDI_Contato" value={formData.DDI_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div>
                       <label htmlFor="telefones-contato" className="block text-sm font-medium mb-1">Telefones Contato</label>
-                      <input id="telefones-contato" type="text" name="Telefones_Contato" value={form.Telefones_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="telefones-contato" type="text" name="Telefones_Contato" value={formData.Telefones_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Separe múltiplos por ;</p>
                     </div>
                   </div>
@@ -341,27 +348,27 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                      <div>
                       <label htmlFor="origem" className="block text-sm font-medium mb-1">Origem</label>
-                      <input id="origem" type="text" name="Origem" value={form.Origem || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="origem" type="text" name="Origem" value={formData.Origem || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div>
                       <label htmlFor="sub-origem" className="block text-sm font-medium mb-1">Sub-Origem</label>
-                      <input id="sub-origem" type="text" name="Sub_Origem" value={form.Sub_Origem || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="sub-origem" type="text" name="Sub_Origem" value={formData.Sub_Origem || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                      <div>
                       <label htmlFor="etapa" className="block text-sm font-medium mb-1">Etapa</label>
-                      <input id="etapa" type="text" name="Etapa" value={form.Etapa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="etapa" type="text" name="Etapa" value={formData.Etapa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                     <div>
                       <label htmlFor="mercado" className="block text-sm font-medium mb-1">Mercado</label>
-                      <input id="mercado" type="text" name="Mercado" value={form.Mercado || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="mercado" type="text" name="Mercado" value={formData.Mercado || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                      <div>
                       <label htmlFor="produto" className="block text-sm font-medium mb-1">Produto</label>
-                      <input id="produto" type="text" name="Produto" value={form.Produto || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="produto" type="text" name="Produto" value={formData.Produto || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                      <div>
                       <label htmlFor="area" className="block text-sm font-medium mb-1">Área</label>
-                      <input id="area" type="text" name="Area" value={form.Area || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="area" type="text" name="Area" value={formData.Area || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                     </div>
                   </div>
                 </section>
@@ -371,7 +378,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
               {error && <p className="text-red-500 text-sm self-center mr-auto" role="alert">{error}</p>}
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-3 py-2 rounded-md bg-gray-200 text-gray-900 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 dark:focus:ring-gray-500"
               >
                 Cancelar
@@ -398,7 +405,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <p className="text-sm font-semibold mb-1">Flattened (usado no form)</p>
+              <p className="text-sm font-semibold mb-1">Flattened (usado no formData)</p>
               <pre className="text-xs bg-gray-50 dark:bg-gray-800 p-2 rounded max-h-64 overflow-auto">{JSON.stringify(enrichDebug?.flattened, null, 2)}</pre>
             </div>
             <div>
