@@ -264,10 +264,58 @@ export default function PerdecompComparativoPage() {
     if (!companyToEnrich) return;
     setGlobalLoading(true);
     try {
-        const enrichedData = await fetchEnrichmentData(companyToEnrich.Nome_da_Empresa);
-        // Add the existing Cliente_ID to trigger update mode in the modal
-        enrichedData.Cliente_ID = companyToEnrich.Cliente_ID;
-        setModalData(enrichedData);
+        // 1. Fetch new data suggestions from Perplexity
+        const newSuggestions = await fetchEnrichmentData(companyToEnrich.Nome_da_Empresa);
+
+        // 2. Create a base object from the existing company data, mapping to the nested structure
+        const existingData: Partial<FullCompanyPayload> = {
+            Cliente_ID: companyToEnrich.Cliente_ID,
+            Empresa: {
+                Nome_da_Empresa: companyToEnrich['Nome da Empresa'] || companyToEnrich.Nome_da_Empresa,
+                Site_Empresa: companyToEnrich['Site Empresa'],
+                País_Empresa: companyToEnrich['País Empresa'],
+                Estado_Empresa: companyToEnrich['Estado Empresa'],
+                Cidade_Empresa: companyToEnrich['Cidade Empresa'],
+                Logradouro_Empresa: companyToEnrich['Logradouro Empresa'],
+                Numero_Empresa: companyToEnrich['Numero Empresa'],
+                Bairro_Empresa: companyToEnrich['Bairro Empresa'],
+                Complemento_Empresa: companyToEnrich['Complemento Empresa'],
+                CEP_Empresa: companyToEnrich['CEP Empresa'],
+                CNPJ_Empresa: companyToEnrich['CNPJ Empresa'],
+                DDI_Empresa: companyToEnrich['DDI Empresa'],
+                Telefones_Empresa: companyToEnrich['Telefones Empresa'],
+                Observacao_Empresa: companyToEnrich['Observação Empresa'],
+            },
+            Contato: {
+                Nome_Contato: companyToEnrich['Nome Contato'],
+                Email_Contato: companyToEnrich['E-mail Contato'],
+                Cargo_Contato: companyToEnrich['Cargo Contato'],
+                DDI_Contato: companyToEnrich['DDI Contato'],
+                Telefones_Contato: companyToEnrich['Telefones Contato'],
+            },
+            Comercial: {
+                Origem: companyToEnrich['Origem'],
+                Sub_Origem: companyToEnrich['Sub-Origem'],
+                Mercado: companyToEnrich['Mercado'],
+                Produto: companyToEnrich['Produto'],
+                Área: companyToEnrich['Área'],
+                Etapa: companyToEnrich['Etapa'],
+                Funil: companyToEnrich['Funil'],
+                Tipo_do_Serv_Comunicacao: companyToEnrich['Tipo do Serv. Comunicação'],
+                ID_do_Serv_Comunicacao: companyToEnrich['ID do Serv. Comunicação'],
+            }
+        };
+
+        // 3. Deep merge, with new suggestions only filling in empty spots in existing data
+        const finalData = {
+            ...newSuggestions,
+            ...existingData,
+            Empresa: { ...newSuggestions.Empresa, ...existingData.Empresa },
+            Contato: { ...newSuggestions.Contato, ...existingData.Contato },
+            Comercial: { ...newSuggestions.Comercial, ...existingData.Comercial },
+        };
+
+        setModalData(finalData);
         setShowRegisterModal(true);
     } catch (error: any) {
         alert(`Erro ao enriquecer dados do cliente: ${error.message}`);
