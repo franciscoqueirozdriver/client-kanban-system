@@ -226,13 +226,27 @@ export default function PerdecompComparativoPage() {
     }
   };
 
+  function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   const handleConsult = async () => {
     const allSelections = [client, ...competitors].filter((c): c is CompanySelection => c !== null);
     if (allSelections.length === 0) return;
 
     setGlobalLoading(true);
     setResults(allSelections.map(s => ({ company: s.company, data: null, status: 'idle', debug: null })));
-    await Promise.all(allSelections.map(s => runConsultation(s)));
+
+    for (const sel of allSelections) {
+      try {
+        await runConsultation(sel);
+        await sleep(600);
+      } catch (e) {
+        console.error('Falha ao consultar CNPJ', sel.company.CNPJ_Empresa, e);
+        await sleep(600);
+      }
+    }
+
     setGlobalLoading(false);
   };
 
