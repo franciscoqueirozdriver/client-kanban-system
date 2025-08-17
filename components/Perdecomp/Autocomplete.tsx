@@ -130,7 +130,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
             <button
               type="button"
               onClick={() => onEnrichRequest(selectedCompany)}
-              className="w-full px-3 py-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed dark:bg-violet-600 dark:hover:bg-violet-700 dark:focus:ring-violet-400"
+              className="w-full px-3 py-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:bg-violet-600 dark:hover:bg-violet-700 dark:focus:ring-violet-400"
               aria-label="Enriquecer Lead (sem CNPJ)"
             >
               Enriquecer Lead (sem CNPJ)
@@ -154,7 +154,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
       />
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
       {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
-        <ul className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
+        <ul className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto text-gray-900 dark:text-gray-100">
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
 
           {!isLoading && results.map((company) => (
@@ -165,7 +165,6 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
 
           {!isLoading && results.length === 0 && onNoResults && (
             <li className="p-2">
-              <p className="text-gray-500 text-sm mb-2 text-center">Nenhum resultado.</p>
               <button
                 type="button"
                 onMouseDown={(e) => { e.preventDefault(); onNoResults(query); }}
