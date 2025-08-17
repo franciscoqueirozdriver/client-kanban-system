@@ -214,7 +214,7 @@ export default function PerdecompComparativoPage() {
     setShowRegisterModal(false);
   };
 
-  async function fetchEnrichmentData(nome: string): Promise<Partial<FullCompanyPayload>> {
+  async function fetchEnrichmentData(nome: string): Promise<any> {
     const res = await fetch('/api/empresas/enriquecer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -225,31 +225,33 @@ export default function PerdecompComparativoPage() {
         throw new Error(errData.message || 'Falha ao enriquecer dados.');
     }
     const data = await res.json();
-    const suggestion = data.suggestion || {};
-    return {
-        Empresa: {
-            Nome_da_Empresa: suggestion.Nome_da_Empresa || nome, Site_Empresa: suggestion.Site_Empresa || '', País_Empresa: suggestion.Pais_Empresa || 'Brasil',
-            Estado_Empresa: suggestion.Estado_Empresa || '', Cidade_Empresa: suggestion.Cidade_Empresa || '', Logradouro_Empresa: suggestion.Logradouro_Empresa || '',
-            Numero_Empresa: suggestion.Numero_Empresa || '', Bairro_Empresa: suggestion.Bairro_Empresa || '', Complemento_Empresa: suggestion.Complemento_Empresa || '',
-            CEP_Empresa: suggestion.CEP_Empresa || '', CNPJ_Empresa: suggestion.CNPJ_Empresa || '', DDI_Empresa: suggestion.DDI_Empresa || '+55',
-            Telefones_Empresa: suggestion.Telefones_Empresa || '', Observacao_Empresa: suggestion.Observacao_Empresa || '',
-        },
-        Contato: {
-            Nome_Contato: suggestion.Nome_Contato || '', Email_Contato: suggestion.Email_Contato || '', Cargo_Contato: suggestion.Cargo_Contato || '',
-            DDI_Contato: suggestion.DDI_Contato || '+55', Telefones_Contato: suggestion.Telefones_Contato || '',
-        },
-        Comercial: {
-            Mercado: suggestion.Mercado || '', Produto: suggestion.Produto || '', Área: suggestion.Area || '',
-            Origem: 'Cadastro Manual', Sub_Origem: 'Modal PER/DCOMP', Etapa: 'Novo', Funil: 'Padrão', Tipo_do_Serv_Comunicacao: '', ID_do_Serv_Comunicacao: '',
-        }
-    };
+    return data.suggestion || {};
   }
 
   const handleOpenRegisterModal = async (query: string) => {
     setGlobalLoading(true);
     try {
-        const enrichedData = await fetchEnrichmentData(query);
-        setModalData(enrichedData);
+        const suggestions = await fetchEnrichmentData(query);
+        const initialData = {
+            Empresa: {
+                Nome_da_Empresa: suggestions.Nome_da_Empresa || query,
+                Site_Empresa: suggestions.Site_Empresa,
+                // ... map other flat suggestions to nested structure
+            },
+            Contato: {
+                Nome_Contato: suggestions.Nome_Contato,
+                // ...
+            },
+            Comercial: {
+                Mercado: suggestions.Mercado,
+                //...
+            }
+        };
+        setModalData({
+            Empresa: { ...suggestions, Nome_da_Empresa: suggestions.Nome_da_Empresa || query },
+            Contato: { ...suggestions },
+            Comercial: { ...suggestions, Área: suggestions.Area }
+        });
         setShowRegisterModal(true);
     } catch (error: any) {
         alert(`Erro ao buscar dados para nova empresa: ${error.message}`);
@@ -264,11 +266,10 @@ export default function PerdecompComparativoPage() {
     if (!companyToEnrich) return;
     setGlobalLoading(true);
     try {
-        // 1. Fetch new data suggestions from Perplexity
         const newSuggestions = await fetchEnrichmentData(companyToEnrich.Nome_da_Empresa);
 
-        // 2. Create a base object from the existing company data, mapping to the nested structure
-        const existingData: Partial<FullCompanyPayload> = {
+        // Start with the existing data from the sheet
+        const finalData = {
             Cliente_ID: companyToEnrich.Cliente_ID,
             Empresa: {
                 Nome_da_Empresa: companyToEnrich['Nome da Empresa'] || companyToEnrich.Nome_da_Empresa,
@@ -301,19 +302,24 @@ export default function PerdecompComparativoPage() {
                 Área: companyToEnrich['Área'],
                 Etapa: companyToEnrich['Etapa'],
                 Funil: companyToEnrich['Funil'],
-                Tipo_do_Serv_Comunicacao: companyToEnrich['Tipo do Serv. Comunicação'],
-                ID_do_Serv_Comunicacao: companyToEnrich['ID do Serv. Comunicação'],
             }
         };
 
-        // 3. Deep merge, with new suggestions only filling in empty spots in existing data
-        const finalData = {
-            ...newSuggestions,
-            ...existingData,
-            Empresa: { ...newSuggestions.Empresa, ...existingData.Empresa },
-            Contato: { ...newSuggestions.Contato, ...existingData.Contato },
-            Comercial: { ...newSuggestions.Comercial, ...existingData.Comercial },
-        };
+        // Merge suggestions, filling only empty fields
+        Object.keys(newSuggestions).forEach(key => {
+            if (key in finalData.Empresa && !finalData.Empresa[key]) {
+                finalData.Empresa[key] = newSuggestions[key];
+            }
+            if (key in finalData.Contato && !finalData.Contato[key]) {
+                finalData.Contato[key] = newSuggestions[key];
+            }
+            if (key in finalData.Comercial && !finalData.Comercial[key]) {
+                finalData.Comercial[key] = newSuggestions[key];
+            }
+            if (key === 'Area' && !finalData.Comercial['Área']) {
+                finalData.Comercial['Área'] = newSuggestions[key];
+            }
+        });
 
         setModalData(finalData);
         setShowRegisterModal(true);

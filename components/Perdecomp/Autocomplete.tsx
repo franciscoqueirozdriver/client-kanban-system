@@ -174,7 +174,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
                   <button
                      type="button"
                      onClick={() => onEnrichRequest(companyToEnrich)}
-                     className="w-full px-3 py-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:bg-violet-600 dark:hover:bg-violet-700 dark:focus:ring-violet-400"
+                     className="w-full px-3 py-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:bg-violet-600 dark:hover:bg-violet-700 dark:focus:ring-violet-400 border border-violet-400"
                    >
                      + Enriquecer Cadastro Existente
                    </button>
