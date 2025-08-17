@@ -108,7 +108,6 @@ export async function enrichCompanyData(input: { nome?: string; cnpj?: string })
         body: JSON.stringify({
           model,
           temperature: 0.2,
-          response_format: { type: 'json_object' }, // garante JSON puro (sem ```json)
           messages: [
             { role: 'system', content: system },
             { role: 'user', content: user },
@@ -129,9 +128,11 @@ export async function enrichCompanyData(input: { nome?: string; cnpj?: string })
         throw new Error(`Perplexity falhou: ${resp.status} ${msg || JSON.stringify(data).slice(0, 180)}`);
       }
 
-      // Com response_format=json_object, content já é JSON (string JSON ou objeto)
-      const content = data?.choices?.[0]?.message?.content;
-      const parsed = typeof content === 'string' ? safeParse(content) : content || {};
+      // A resposta pode vir em um bloco de código markdown, então extraímos o JSON de dentro.
+      const content = data?.choices?.[0]?.message?.content || '{}';
+      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/);
+      const jsonString = jsonMatch ? jsonMatch[1] : content;
+      const parsed = safeParse(jsonString);
       const empresa = parsed?.Empresa || {};
       const contato = parsed?.Contato || {};
       const comercial = parsed?.Comercial || {};
