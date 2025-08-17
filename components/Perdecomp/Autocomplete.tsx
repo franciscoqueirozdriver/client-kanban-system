@@ -57,15 +57,19 @@ interface AutocompleteProps {
   onSelect: (company: Company) => void;
   onClear: () => void;
   onNoResults?: (query: string) => void;
+  onEnrichRequest?: (company: Company) => void;
   placeholder?: string;
 }
 
-const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
+const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnrichRequest, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const shouldShowEnrichButton = results.length > 0 && results.some(c => !c.CNPJ_Empresa);
+  const companyToEnrich = shouldShowEnrichButton ? results.find(c => !c.CNPJ_Empresa) : null;
 
   useEffect(() => {
     // Clear results and error if query is too short
@@ -141,21 +145,32 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, placeho
       {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
         <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border rounded-md shadow-lg max-h-60 overflow-y-auto">
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
-          {!isLoading && results.length === 0 && (
-            <>
-              <li className="p-2 text-gray-500">Nenhum resultado.</li>
-              {onNoResults && (
-                <li className="p-2">
-                  <button
-                    type="button"
-                    onClick={() => onNoResults(query)}
-                    className="w-full px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-400"
-                  >
-                    + Cadastrar Nova Empresa
-                  </button>
-                </li>
+          {!isLoading && (
+            <div className="p-2">
+              {results.length === 0 && (
+                <>
+                  <p className="text-gray-500 text-sm mb-2">Nenhum resultado.</p>
+                  {onNoResults && (
+                    <button
+                      type="button"
+                      onClick={() => onNoResults(query)}
+                      className="w-full px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-400"
+                    >
+                      + Cadastrar Nova Empresa
+                    </button>
+                  )}
+                </>
               )}
-            </>
+              {shouldShowEnrichButton && onEnrichRequest && companyToEnrich && (
+                 <button
+                    type="button"
+                    onClick={() => onEnrichRequest(companyToEnrich)}
+                    className="w-full px-3 py-2 mt-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed dark:bg-violet-600 dark:hover:bg-violet-700 dark:focus:ring-violet-400"
+                  >
+                    + Enriquecer Cadastro Existente
+                  </button>
+              )}
+            </div>
           )}
           {results.map((company) => (
             <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
