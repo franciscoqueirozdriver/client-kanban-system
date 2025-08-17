@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { enrichCompanyData } from '../../../../lib/perplexity';
+import { enrichCompanyData } from '@/lib/perplexity';
 
 export async function POST(req: Request) {
   try {
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: 'Não foi possível encontrar dados para a empresa informada.' }, { status: 404 });
     }
 
-    return NextResponse.json(suggestions);
+    return NextResponse.json({ suggestion: suggestions });
 
   } catch (error: any) {
     console.error('[API /empresas/enriquecer]', error);

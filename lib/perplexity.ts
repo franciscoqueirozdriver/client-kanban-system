@@ -1,6 +1,6 @@
 // lib/perplexity.ts
 
-// This represents the flattened structure the modal expects for suggestions
+// Mantém a estrutura “achatada” que o modal espera
 export type CompanySuggestion = {
   // Empresa
   Nome_da_Empresa?: string;
@@ -13,8 +13,8 @@ export type CompanySuggestion = {
   Bairro_Empresa?: string;
   Complemento_Empresa?: string;
   CEP_Empresa?: string;
-  CNPJ_Empresa?: string;  // somente dígitos
-  DDI_Empresa?: string;   // ex: +55
+  CNPJ_Empresa?: string;      // somente dígitos
+  DDI_Empresa?: string;       // ex: +55
   Telefones_Empresa?: string; // separados por ;
   Observacao_Empresa?: string;
   // Contato
@@ -26,10 +26,22 @@ export type CompanySuggestion = {
   // Comercial
   Mercado?: string;
   Produto?: string;
-  Area?: string; // Note: In the modal, this is "Área", but JSON keys shouldn't have accents.
+  Area?: string; // JSON keys sem acento
 };
 
-function digits(s?: string) { return (s || '').replace(/\D/g, ''); }
+function digits(s?: string) {
+  return (s || '').replace(/\D/g, '');
+}
+
+function withAbortTimeout(ms: number) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  return { signal: ctrl.signal, clear: () => clearTimeout(id) };
+}
+
+function safeParse(s: string) {
+  try { return JSON.parse(s); } catch { return {}; }
+}
 
 export async function enrichCompanyData(input: { nome?: string; cnpj?: string }): Promise<Partial<CompanySuggestion>> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
@@ -38,12 +50,12 @@ export async function enrichCompanyData(input: { nome?: string; cnpj?: string })
   const nome = (input.nome || '').trim();
   const cnpj = digits(input.cnpj);
 
-  const prompt = `
-    Você é um assistente de extração de dados. Busque informações sobre a empresa brasileira com o nome "${nome}"${cnpj ? ` e CNPJ "${cnpj}"` : ''}.
-    Retorne a resposta estritamente como um objeto JSON com a seguinte estrutura, sem nenhum texto ou formatação adicional.
-    Preencha o máximo de campos que puder encontrar.
+  // Prompt enxuto: pedimos APENAS JSON na estrutura esperada
+  const system = 'Você responde SOMENTE com um objeto JSON válido, sem texto extra.';
+  const user = `
+    Extraia dados da empresa brasileira "${nome}"${cnpj ? ` (CNPJ: ${cnpj})` : ''}.
+    Retorne APENAS um JSON com esta estrutura e chaves exatas:
 
-    \`\`\`json
     {
       "Empresa": {
         "Nome_da_Empresa": "Nome Oficial Completo",
@@ -59,7 +71,7 @@ export async function enrichCompanyData(input: { nome?: string; cnpj?: string })
         "CNPJ_Empresa": "12345678000199",
         "DDI_Empresa": "+55",
         "Telefones_Empresa": "+55 11 3333-4444; +55 11 98888-7777",
-        "Observacao_Empresa": "Breve resumo sobre a empresa (max 280 chars)."
+        "Observacao_Empresa": "Breve resumo (≤280 chars)."
       },
       "Contato": {
         "Nome_Contato": "Nome do Contato Principal",
@@ -71,58 +83,82 @@ export async function enrichCompanyData(input: { nome?: string; cnpj?: string })
       "Comercial": {
         "Mercado": "Mercado de Atuação",
         "Produto": "Principal Produto/Serviço",
-        "Area": "Área de Atuação (ex: Saúde, Varejo)"
+        "Area": "Área (ex: Saúde, Varejo)"
       }
     }
-    \`\`\`
-  `;
+  `.trim();
 
-  const resp = await fetch('https://api.perplexity.ai/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'llama-3-sonar-large-32k-online',
-      temperature: 0.2,
-      messages: [
-        { role: 'system', content: 'Você responde somente com um objeto JSON válido, sem nenhum texto ou explicação adicional.' },
-        { role: 'user', content: prompt }
-      ]
-    })
-  });
+  const endpoint = process.env.PERPLEXITY_ENDPOINT || 'https://api.perplexity.ai/chat/completions';
+  const preferred = process.env.PERPLEXITY_MODEL || 'sonar-pro';
+  const models = [preferred, 'sonar']; // fallback automático
+  const timeoutMs = Number(process.env.PERPLEXITY_TIMEOUT_MS || 10000);
 
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Perplexity falhou: ${resp.status} ${text}`.slice(0, 200));
+  let lastErr: any;
+
+  for (const model of models) {
+    const { signal, clear } = withAbortTimeout(timeoutMs);
+    try {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        signal,
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.2,
+          response_format: { type: 'json_object' }, // garante JSON puro (sem ```json)
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user },
+          ],
+        }),
+      });
+      clear();
+
+      const data = await resp.json().catch(() => ({} as any));
+
+      if (!resp.ok) {
+        const msg = String(data?.error?.message || '');
+        // Se o modelo for inválido, tentar o próximo
+        if (resp.status === 400 && /invalid model/i.test(msg)) {
+          lastErr = data;
+          continue;
+        }
+        throw new Error(`Perplexity falhou: ${resp.status} ${msg || JSON.stringify(data).slice(0, 180)}`);
+      }
+
+      // Com response_format=json_object, content já é JSON (string JSON ou objeto)
+      const content = data?.choices?.[0]?.message?.content;
+      const parsed = typeof content === 'string' ? safeParse(content) : content || {};
+      const empresa = parsed?.Empresa || {};
+      const contato = parsed?.Contato || {};
+      const comercial = parsed?.Comercial || {};
+
+      const out: Partial<CompanySuggestion> = {
+        ...empresa,
+        ...contato,
+        ...comercial,
+        // Garante CNPJ somente dígitos e preserva nome se não vier
+        CNPJ_Empresa: digits(empresa?.CNPJ_Empresa || cnpj),
+        Nome_da_Empresa: empresa?.Nome_da_Empresa || nome || undefined,
+      };
+
+      // Remove chaves vazias/null/undefined
+      Object.keys(out).forEach((k) => {
+        const v = (out as any)[k];
+        if (v == null || String(v).trim() === '') delete (out as any)[k];
+      });
+
+      return out;
+    } catch (e: any) {
+      clear();
+      lastErr = e;
+    }
   }
 
-  const json = await resp.json().catch(() => ({} as any));
-  const content: string = json?.choices?.[0]?.message?.content ?? '{}';
-
-  let parsed: any = {};
-  try {
-    const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/);
-    const jsonString = jsonMatch ? jsonMatch[1] : content;
-    parsed = JSON.parse(jsonString);
-  } catch {
-    parsed = {};
-  }
-
-  // Flatten the response to match the modal's expectation
-  const out: Partial<CompanySuggestion> = {
-    ...parsed.Empresa,
-    ...parsed.Contato,
-    ...parsed.Comercial,
-    // Ensure CNPJ is just digits
-    CNPJ_Empresa: digits(parsed.Empresa?.CNPJ_Empresa || cnpj),
-    // Ensure original name is kept if not found
-    Nome_da_Empresa: parsed.Empresa?.Nome_da_Empresa || nome || undefined,
-  };
-
-  // Remove any keys with undefined/null values
-  Object.keys(out).forEach(key => (out[key] == null) && delete out[key]);
-
-  return out;
+  throw new Error(
+    `Perplexity falhou: ${typeof lastErr === 'string' ? lastErr : (lastErr?.message || JSON.stringify(lastErr)).slice(0, 200)}`
+  );
 }

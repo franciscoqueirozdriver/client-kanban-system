@@ -160,30 +160,29 @@ export default function NewCompanyModal({ isOpen, initialQuery, onClose, onSaved
       const suggestions = data.suggestion || {};
 
       setFormData((prev) => {
-        const newFormData = JSON.parse(JSON.stringify(prev)); // Deep copy to avoid mutation issues
+        const newForm = JSON.parse(JSON.stringify(prev)); // Deep copy
 
-        const empresaMap = {
-            Nome_da_Empresa: suggestions.Nome_da_Empresa, Site_Empresa: suggestions.Site_Empresa, País_Empresa: suggestions.Pais_Empresa, Estado_Empresa: suggestions.Estado_Empresa, Cidade_Empresa: suggestions.Cidade_Empresa, Logradouro_Empresa: suggestions.Logradouro_Empresa, Numero_Empresa: suggestions.Numero_Empresa, Bairro_Empresa: suggestions.Bairro_Empresa, Complemento_Empresa: suggestions.Complemento_Empresa, CEP_Empresa: suggestions.CEP_Empresa, CNPJ_Empresa: suggestions.CNPJ_Empresa, DDI_Empresa: suggestions.DDI_Empresa, Telefones_Empresa: suggestions.Telefones_Empresa, Observacao_Empresa: suggestions.Observacao_Empresa
-        };
-        const contatoMap = {
-            Nome_Contato: suggestions.Nome_Contato, Email_Contato: suggestions.Email_Contato, Cargo_Contato: suggestions.Cargo_Contato, DDI_Contato: suggestions.DDI_Contato, Telefones_Contato: suggestions.Telefones_Contato
-        };
-        const comercialMap = {
-            Mercado: suggestions.Mercado, Produto: suggestions.Produto, Área: suggestions.Area
+        // Helper to check if a value is empty or matches the initial default
+        const isFieldEmpty = (section, key) => {
+            const value = newForm[section][key];
+            const defaultValue = initialFormData[section][key];
+            return value == null || String(value).trim() === '' || value === defaultValue;
         };
 
-        // Fill only empty fields
-        Object.keys(empresaMap).forEach(key => {
-            if (!newFormData.Empresa[key] && empresaMap[key]) newFormData.Empresa[key] = empresaMap[key];
-        });
-        Object.keys(contatoMap).forEach(key => {
-            if (!newFormData.Contato[key] && contatoMap[key]) newFormData.Contato[key] = contatoMap[key];
-        });
-        Object.keys(comercialMap).forEach(key => {
-            if (!newFormData.Comercial[key] && comercialMap[key]) newFormData.Comercial[key] = comercialMap[key];
-        });
-
-        return newFormData;
+        // Map suggestions to the nested state structure
+        for (const key in suggestions) {
+            const value = suggestions[key];
+            if (key in newForm.Empresa && isFieldEmpty('Empresa', key)) {
+                newForm.Empresa[key] = value;
+            } else if (key in newForm.Contato && isFieldEmpty('Contato', key)) {
+                newForm.Contato[key] = value;
+            } else if (key in newForm.Comercial && isFieldEmpty('Comercial', key)) {
+                newForm.Comercial[key] = value;
+            } else if (key === 'Area' && isFieldEmpty('Comercial', 'Área')) { // Handle accent difference
+                 newForm.Comercial['Área'] = value;
+            }
+        }
+        return newForm;
       });
 
       setApiMessage('Dados sugeridos foram preenchidos. Você pode editá-los antes de salvar.');
