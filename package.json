@@ -12,6 +12,7 @@
     "@hello-pangea/dnd": "16.5.0",
     "chart.js": "^4.5.0",
     "clipboardy": "^4.0.0",
+    "clsx": "^2.1.1",
     "googleapis": "^150.0.1",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",

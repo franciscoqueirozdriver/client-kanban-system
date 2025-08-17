@@ -68,9 +68,6 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const shouldShowEnrichButton = results.length > 0 && results.some(c => !c.CNPJ_Empresa);
-  const companyToEnrich = shouldShowEnrichButton ? results.find(c => !c.CNPJ_Empresa) : null;
-
   useEffect(() => {
     // Clear results and error if query is too short
     if (query.length < 3) {
@@ -120,12 +117,26 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
 
   if (selectedCompany) {
     return (
-      <div className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded h-12">
-        <div className="flex-grow truncate">
-            <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{selectedCompany.CNPJ_Empresa}</p>
+      <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded">
+        <div className="flex items-center justify-between">
+            <div className="flex-grow truncate">
+                <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{selectedCompany.CNPJ_Empresa || 'CNPJ não informado'}</p>
+            </div>
+            <button type="button" onClick={onClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
         </div>
-        <button onClick={onClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
+        {!isValidCnpj(selectedCompany.CNPJ_Empresa) && onEnrichRequest && (
+          <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
+            <button
+              type="button"
+              onClick={() => onEnrichRequest(selectedCompany)}
+              className="w-full px-3 py-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed dark:bg-violet-600 dark:hover:bg-violet-700 dark:focus:ring-violet-400"
+              aria-label="Enriquecer Lead (sem CNPJ)"
+            >
+              Enriquecer Lead (sem CNPJ)
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -143,7 +154,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
       />
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
       {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
-        <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
+        <ul className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
 
           {!isLoading && results.map((company) => (
@@ -152,34 +163,17 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
             </li>
           ))}
 
-          {!isLoading && (results.length === 0 || shouldShowEnrichButton) && (
-            <li className="p-2 border-t border-gray-100 dark:border-gray-800 mt-1">
-              {results.length === 0 ? (
-                // Show "Cadastrar" only when there are no results
-                onNoResults && (
-                  <>
-                    <p className="text-gray-500 text-sm mb-2 text-center">Nenhum resultado.</p>
-                    <button
-                      type="button"
-                      onClick={() => onNoResults(query)}
-                      className="w-full px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-400"
-                    >
-                      + Cadastrar Nova Empresa
-                    </button>
-                  </>
-                )
-              ) : (
-                // Show "Enriquecer" only when there are results and at least one is missing a CNPJ
-                shouldShowEnrichButton && onEnrichRequest && companyToEnrich && (
-                  <button
-                     type="button"
-                     onClick={() => onEnrichRequest(companyToEnrich)}
-                     className="w-full px-3 py-2 rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:bg-violet-600 dark:hover:bg-violet-700 dark:focus:ring-violet-400 border border-violet-400"
-                   >
-                     + Enriquecer Cadastro Existente
-                   </button>
-                )
-              )}
+          {!isLoading && results.length === 0 && onNoResults && (
+            <li className="p-2">
+              <p className="text-gray-500 text-sm mb-2 text-center">Nenhum resultado.</p>
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); onNoResults(query); }}
+                className="w-full px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-400"
+                aria-label="Cadastrar Nova Empresa"
+              >
+                + Cadastrar Nova Empresa
+              </button>
             </li>
           )}
         </ul>
