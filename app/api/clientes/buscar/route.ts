@@ -8,6 +8,14 @@ const RESULT_LIMIT = 20;
 const norm = (s: string) =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g,' ').trim();
 
+interface ScoredCompany {
+    Cliente_ID: string;
+    Nome_da_Empresa: string;
+    CNPJ_Empresa: string;
+    score: number;
+    nomeLength: number;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q')?.trim() || '';
@@ -59,32 +67,32 @@ export async function GET(request: Request) {
     }).filter(Boolean);
 
     // Deduplicate results, keeping the one with the highest score
-    const deduplicated = Array.from(
-      scoredResults.reduce((map, item) => {
-        const key = item!.CNPJ_Empresa || item!.Nome_da_Empresa; // Use CNPJ or Name as key
-        if (!map.has(key) || item!.score > map.get(key)!.score) {
+    const deduplicated: ScoredCompany[] = Array.from(
+      (scoredResults as ScoredCompany[]).reduce((map, item) => {
+        const key = item.CNPJ_Empresa || item.Nome_da_Empresa; // Use CNPJ or Name as key
+        if (!map.has(key) || item.score > map.get(key)!.score) {
           map.set(key, item);
         }
         return map;
-      }, new Map()).values()
+      }, new Map<string, ScoredCompany>()).values()
     );
 
     // Sort the results
     deduplicated.sort((a, b) => {
-      if (b!.score !== a!.score) {
-        return b!.score - a!.score;
+      if (b.score !== a.score) {
+        return b.score - a.score;
       }
-      if (a!.nomeLength !== b!.nomeLength) {
-        return a!.nomeLength - b!.nomeLength;
+      if (a.nomeLength !== b.nomeLength) {
+        return a.nomeLength - b.nomeLength;
       }
-      return a!.Nome_da_Empresa.localeCompare(b!.Nome_da_Empresa);
+      return a.Nome_da_Empresa.localeCompare(b.Nome_da_Empresa);
     });
 
     // Limit and map to final structure
     const finalResults = deduplicated.slice(0, RESULT_LIMIT).map(item => ({
-      Cliente_ID: item!.Cliente_ID,
-      Nome_da_Empresa: item!.Nome_da_Empresa,
-      CNPJ_Empresa: item!.CNPJ_Empresa,
+      Cliente_ID: item.Cliente_ID,
+      Nome_da_Empresa: item.Nome_da_Empresa,
+      CNPJ_Empresa: item.CNPJ_Empresa,
     }));
 
     return NextResponse.json(finalResults);

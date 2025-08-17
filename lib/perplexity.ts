@@ -1,5 +1,8 @@
 // lib/perplexity.ts
+
+// This represents the flattened structure the modal expects for suggestions
 export type CompanySuggestion = {
+  // Empresa
   Nome_da_Empresa?: string;
   Site_Empresa?: string;
   Pais_Empresa?: string;
@@ -14,6 +17,16 @@ export type CompanySuggestion = {
   DDI_Empresa?: string;   // ex: +55
   Telefones_Empresa?: string; // separados por ;
   Observacao_Empresa?: string;
+  // Contato
+  Nome_Contato?: string;
+  Email_Contato?: string;
+  Cargo_Contato?: string;
+  DDI_Contato?: string;
+  Telefones_Contato?: string; // separados por ;
+  // Comercial
+  Mercado?: string;
+  Produto?: string;
+  Area?: string; // Note: In the modal, this is "Área", but JSON keys shouldn't have accents.
 };
 
 function digits(s?: string) { return (s || '').replace(/\D/g, ''); }
@@ -25,16 +38,45 @@ export async function enrichCompanyData(input: { nome?: string; cnpj?: string })
   const nome = (input.nome || '').trim();
   const cnpj = digits(input.cnpj);
 
-  const prompt = [
-    'Você é um extrator de dados de empresas. Responda em JSON.',
-    'Campos: Nome_da_Empresa, Site_Empresa, Pais_Empresa, Estado_Empresa, Cidade_Empresa,',
-    'Logradouro_Empresa, Numero_Empresa, Bairro_Empresa, Complemento_Empresa, CEP_Empresa,',
-    'CNPJ_Empresa (somente dígitos), DDI_Empresa (ex: +55), Telefones_Empresa (separe por ";"),',
-    'Observacao_Empresa (até 280 chars).',
-    `Empresa: ${nome || '(desconhecida)'}${cnpj ? ` | CNPJ: ${cnpj}` : ''}`
-  ].join('\n');
+  const prompt = `
+    Você é um assistente de extração de dados. Busque informações sobre a empresa brasileira com o nome "${nome}"${cnpj ? ` e CNPJ "${cnpj}"` : ''}.
+    Retorne a resposta estritamente como um objeto JSON com a seguinte estrutura, sem nenhum texto ou formatação adicional.
+    Preencha o máximo de campos que puder encontrar.
 
-  // Endpoint comum da Perplexity (mantém leve e compilável)
+    \`\`\`json
+    {
+      "Empresa": {
+        "Nome_da_Empresa": "Nome Oficial Completo",
+        "Site_Empresa": "https://site.com.br",
+        "Pais_Empresa": "Brasil",
+        "Estado_Empresa": "SP",
+        "Cidade_Empresa": "São Paulo",
+        "Logradouro_Empresa": "Av. Exemplo",
+        "Numero_Empresa": "123",
+        "Bairro_Empresa": "Centro",
+        "Complemento_Empresa": "Andar 10",
+        "CEP_Empresa": "01000-000",
+        "CNPJ_Empresa": "12345678000199",
+        "DDI_Empresa": "+55",
+        "Telefones_Empresa": "+55 11 3333-4444; +55 11 98888-7777",
+        "Observacao_Empresa": "Breve resumo sobre a empresa (max 280 chars)."
+      },
+      "Contato": {
+        "Nome_Contato": "Nome do Contato Principal",
+        "Email_Contato": "contato@site.com.br",
+        "Cargo_Contato": "Cargo do Contato",
+        "DDI_Contato": "+55",
+        "Telefones_Contato": "+55 11 99999-0000"
+      },
+      "Comercial": {
+        "Mercado": "Mercado de Atuação",
+        "Produto": "Principal Produto/Serviço",
+        "Area": "Área de Atuação (ex: Saúde, Varejo)"
+      }
+    }
+    \`\`\`
+  `;
+
   const resp = await fetch('https://api.perplexity.ai/chat/completions', {
     method: 'POST',
     headers: {
@@ -42,10 +84,10 @@ export async function enrichCompanyData(input: { nome?: string; cnpj?: string })
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'sonar',
+      model: 'llama-3-sonar-large-32k-online',
       temperature: 0.2,
       messages: [
-        { role: 'system', content: 'Você responde somente JSON válido.' },
+        { role: 'system', content: 'Você responde somente com um objeto JSON válido, sem nenhum texto ou explicação adicional.' },
         { role: 'user', content: prompt }
       ]
     })
@@ -60,24 +102,27 @@ export async function enrichCompanyData(input: { nome?: string; cnpj?: string })
   const content: string = json?.choices?.[0]?.message?.content ?? '{}';
 
   let parsed: any = {};
-  try { parsed = JSON.parse(content); } catch { parsed = {}; }
+  try {
+    const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/);
+    const jsonString = jsonMatch ? jsonMatch[1] : content;
+    parsed = JSON.parse(jsonString);
+  } catch {
+    parsed = {};
+  }
 
+  // Flatten the response to match the modal's expectation
   const out: Partial<CompanySuggestion> = {
-    Nome_da_Empresa: parsed.Nome_da_Empresa || nome || undefined,
-    Site_Empresa: parsed.Site_Empresa,
-    Pais_Empresa: parsed.Pais_Empresa,
-    Estado_Empresa: parsed.Estado_Empresa,
-    Cidade_Empresa: parsed.Cidade_Empresa,
-    Logradouro_Empresa: parsed.Logradouro_Empresa,
-    Numero_Empresa: parsed.Numero_Empresa,
-    Bairro_Empresa: parsed.Bairro_Empresa,
-    Complemento_Empresa: parsed.Complemento_Empresa,
-    CEP_Empresa: parsed.CEP_Empresa,
-    CNPJ_Empresa: digits(parsed.CNPJ_Empresa || cnpj),
-    DDI_Empresa: parsed.DDI_Empresa,
-    Telefones_Empresa: parsed.Telefones_Empresa,
-    Observacao_Empresa: parsed.Observacao_Empresa
+    ...parsed.Empresa,
+    ...parsed.Contato,
+    ...parsed.Comercial,
+    // Ensure CNPJ is just digits
+    CNPJ_Empresa: digits(parsed.Empresa?.CNPJ_Empresa || cnpj),
+    // Ensure original name is kept if not found
+    Nome_da_Empresa: parsed.Empresa?.Nome_da_Empresa || nome || undefined,
   };
+
+  // Remove any keys with undefined/null values
+  Object.keys(out).forEach(key => (out[key] == null) && delete out[key]);
 
   return out;
 }
