@@ -30,7 +30,9 @@ interface SavedCompany {
 }
 export interface NewCompanyModalProps {
   isOpen: boolean;
-  initialData?: Partial<FullCompanyPayload>;
+  initialData?: Partial<CompanyForm>;
+  warning?: boolean;
+  enrichDebug?: any;
   onClose: () => void;
   onSaved: (company: SavedCompany) => void;
 }
@@ -122,10 +124,9 @@ const initialForm: CompanyForm = {
 };
 
 // --- Component ---
-export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved }: NewCompanyModalProps) {
+export default function NewCompanyModal({ isOpen, initialData, warning, enrichDebug: initialDebug, onClose, onSaved }: NewCompanyModalProps) {
   const [form, setFormData] = useState<CompanyForm>(initialForm);
   const [isLoading, setIsLoading] = useState(false);
-  const [isEnriching, setIsEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
   const [enrichDebug, setEnrichDebug] = useState<any>(null);
@@ -135,51 +136,19 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
   useEffect(() => {
     if (isOpen) {
       setError(null);
+      setEnrichDebug(initialDebug || null);
       if (initialData) {
-        const flat: CompanyForm = {
-          ...initialForm,
-          ...(initialData.Empresa || {}),
-          ...(initialData.Contato || {}),
-          ...(initialData.Comercial || {}),
-          Pais_Empresa: initialData.Empresa?.País_Empresa ?? initialForm.Pais_Empresa,
-          Area: (initialData.Comercial as any)?.Área ?? initialForm.Area,
-          Cliente_ID: initialData.Cliente_ID,
-        };
-        delete (flat as any)['País_Empresa'];
-        delete (flat as any)['Área'];
-        setFormData(flat);
+        setFormData(applySuggestionToForm(initialForm, initialData, false));
       } else {
         setFormData(initialForm);
       }
     }
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData, initialDebug]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-
-  async function handleEnrich() {
-    if (!form.Nome_da_Empresa && !form.CNPJ_Empresa) return;
-    setIsEnriching(true);
-    try {
-      const resp = await fetch('/api/empresas/enriquecer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: form.Nome_da_Empresa, cnpj: form.CNPJ_Empresa })
-      });
-      const json = await resp.json();
-      if (!resp.ok) throw new Error(json?.error || 'Falha ao enriquecer');
-      setEnrichDebug(json.debug || null);
-      if (json.debug) setDebugOpen(true);
-      setFormData(prev => applySuggestionToForm(prev, json.suggestion));
-    } catch (e) {
-      console.error(e);
-      alert(`Erro ao enriquecer: ${e}`);
-    } finally {
-      setIsEnriching(false);
-    }
-  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -259,6 +228,22 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
 
         <form onSubmit={handleSubmit} className="flex-grow contents">
             <div className="flex-grow p-6 space-y-6 overflow-y-auto">
+                {warning && (
+                  <div className="bg-yellow-50 text-yellow-800 border border-yellow-200 rounded p-2 text-sm">
+                    Não foi possível enriquecer automaticamente. Você pode preencher manualmente.
+                  </div>
+                )}
+                {process.env.NEXT_PUBLIC_SHOW_ENRICH_DEBUG === '1' && enrichDebug && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setDebugOpen(true)}
+                      className="text-xs underline text-gray-600 hover:text-gray-900"
+                    >
+                      Ver resposta da API (debug)
+                    </button>
+                  </div>
+                )}
                 {/* --- Dados da Empresa --- */}
                 <section>
                   <h3 className="text-lg font-semibold border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">Dados da Empresa</h3>
@@ -271,23 +256,6 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
                       <label htmlFor="cnpj-empresa" className="block text-sm font-medium mb-1">CNPJ Empresa</label>
                       <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={form.CNPJ_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Apenas dígitos; validado no envio.</p>
-                      <button
-                        type="button"
-                        onClick={handleEnrich}
-                        disabled={isEnriching}
-                        className="mt-2 px-4 py-2 rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
-                      >
-                        {isEnriching ? 'Enriquecendo...' : 'Enriquecer'}
-                      </button>
-                      {enrichDebug && (
-                        <button
-                          type="button"
-                          onClick={() => setDebugOpen(true)}
-                          className="ml-3 text-xs underline text-gray-600 hover:text-gray-900"
-                        >
-                          Ver resposta da API (debug)
-                        </button>
-                      )}
                     </div>
                     <div>
                       <label htmlFor="site-empresa" className="block text-sm font-medium mb-1">Site Empresa</label>
@@ -411,7 +379,7 @@ export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-400 flex items-center gap-2"
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isLoading && <FaSpinner className="animate-spin" />}
                 {isUpdateMode ? 'Atualizar' : 'Cadastrar'}

@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
-import NewCompanyModal, { FullCompanyPayload } from '../../../components/NewCompanyModal';
+import NewCompanyModal from '../../../components/NewCompanyModal';
+import type { CompanySuggestion } from '../../../lib/perplexity';
 
 // --- Helper Types ---
 interface Company {
@@ -77,7 +78,12 @@ export default function PerdecompComparativoPage() {
   const [results, setResults] = useState<ComparisonResult[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [modalData, setModalData] = useState<Partial<FullCompanyPayload> | undefined>();
+  const [modalData, setModalData] = useState<Partial<CompanySuggestion> | undefined>();
+  const [modalWarning, setModalWarning] = useState(false);
+  const [modalDebug, setModalDebug] = useState<any>(null);
+  const [modalTarget, setModalTarget] = useState<{ type: 'client' | 'competitor'; index?: number } | null>(null);
+  const [isEnriching, setIsEnriching] = useState(false);
+  const [enrichTarget, setEnrichTarget] = useState<string | null>(null);
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
 
   useEffect(() => {
@@ -199,7 +205,79 @@ export default function PerdecompComparativoPage() {
     }
   };
 
+  const isValidCnpj = (cnpj: string | null | undefined): boolean => {
+    if (!cnpj) return false;
+    const cnpjClean = cnpj.replace(/[^\d]/g, '');
+    if (cnpjClean.length !== 14 || /(\d)\1{13}/.test(cnpjClean)) return false;
+    let size = 12, sum = 0, pos = 5;
+    for (let i = 0; i < size; i++) { sum += parseInt(cnpjClean[i]) * pos--; if (pos < 2) pos = 9; }
+    let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+    if (result !== parseInt(cnpjClean[12])) return false;
+    size = 13; sum = 0; pos = 6;
+    for (let i = 0; i < size; i++) { sum += parseInt(cnpjClean[i]) * pos--; if (pos < 2) pos = 9; }
+    result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+    return result === parseInt(cnpjClean[13]);
+  };
+
+  function mergeEmptyFields(base: any, sug: any) {
+    const out = { ...base };
+    Object.keys(sug || {}).forEach(k => {
+      const cur = String(out[k] ?? '').trim();
+      const val = String(sug[k] ?? '').trim();
+      if (!cur && val) out[k] = val;
+    });
+    return out;
+  }
+
+  function openNewCompanyModal(opts: { initialData: any; warning?: boolean; debug?: any; target: { type: 'client' | 'competitor'; index?: number } }) {
+    setModalData(opts.initialData);
+    setModalWarning(!!opts.warning);
+    setModalDebug(opts.debug || null);
+    setModalTarget(opts.target);
+    setShowRegisterModal(true);
+  }
+
+  async function handleRegisterNewFromQuery(query: string) {
+    setIsEnriching(true);
+    setEnrichTarget('client');
+    try {
+      const r = await fetch('/api/empresas/enriquecer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: query })
+      });
+      const { suggestion, debug } = await r.json();
+      openNewCompanyModal({ initialData: suggestion ?? { Nome_da_Empresa: query }, warning: !suggestion, debug, target: { type: 'client' } });
+    } catch {
+      openNewCompanyModal({ initialData: { Nome_da_Empresa: query }, warning: true, target: { type: 'client' } });
+    } finally {
+      setIsEnriching(false);
+      setEnrichTarget(null);
+    }
+  }
+
   const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
+    if (!isValidCnpj(company.CNPJ_Empresa)) {
+      setIsEnriching(true);
+      setEnrichTarget(type === 'client' ? 'client' : `competitor-${index}`);
+      try {
+        const r = await fetch('/api/empresas/enriquecer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome: company.Nome_da_Empresa, cnpj: company.CNPJ_Empresa })
+        });
+        const { suggestion, debug } = await r.json();
+        const enriched = suggestion ? mergeEmptyFields(company, suggestion) : company;
+        openNewCompanyModal({ initialData: enriched, warning: !suggestion, debug, target: { type, index } });
+      } catch {
+        openNewCompanyModal({ initialData: company, warning: true, target: { type, index } });
+      } finally {
+        setIsEnriching(false);
+        setEnrichTarget(null);
+      }
+      return;
+    }
+
     const lastConsultation = await checkLastConsultation(company.CNPJ_Empresa);
     const selection: CompanySelection = { company, lastConsultation, forceRefresh: false };
     if (type === 'client') {
@@ -210,124 +288,12 @@ export default function PerdecompComparativoPage() {
   };
 
   const handleSaveNewCompany = (newCompany: Company) => {
-    handleSelectCompany('client', newCompany);
+    if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
+      handleSelectCompany('competitor', newCompany, modalTarget.index);
+    } else {
+      handleSelectCompany('client', newCompany);
+    }
     setShowRegisterModal(false);
-  };
-
-  async function fetchEnrichmentData(nome: string): Promise<any> {
-    const res = await fetch('/api/empresas/enriquecer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome }),
-    });
-    if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || 'Falha ao enriquecer dados.');
-    }
-    const data = await res.json();
-    return data.suggestion || {};
-  }
-
-  const handleOpenRegisterModal = async (query: string) => {
-    setGlobalLoading(true);
-    try {
-        const suggestions = await fetchEnrichmentData(query);
-        const initialData = {
-            Empresa: {
-                Nome_da_Empresa: suggestions.Nome_da_Empresa || query,
-                Site_Empresa: suggestions.Site_Empresa,
-                // ... map other flat suggestions to nested structure
-            },
-            Contato: {
-                Nome_Contato: suggestions.Nome_Contato,
-                // ...
-            },
-            Comercial: {
-                Mercado: suggestions.Mercado,
-                //...
-            }
-        };
-        setModalData({
-            Empresa: { ...suggestions, Nome_da_Empresa: suggestions.Nome_da_Empresa || query },
-            Contato: { ...suggestions },
-            Comercial: { ...suggestions, Área: suggestions.Area }
-        });
-        setShowRegisterModal(true);
-    } catch (error: any) {
-        alert(`Erro ao buscar dados para nova empresa: ${error.message}`);
-        setModalData({ Empresa: { Nome_da_Empresa: query } as any });
-        setShowRegisterModal(true);
-    } finally {
-        setGlobalLoading(false);
-    }
-  };
-
-  const handleEnrich = async (companyToEnrich: Company) => {
-    if (!companyToEnrich) return;
-    setGlobalLoading(true);
-    try {
-        const newSuggestions = await fetchEnrichmentData(companyToEnrich.Nome_da_Empresa);
-
-        // Start with the existing data from the sheet
-        const finalData = {
-            Cliente_ID: companyToEnrich.Cliente_ID,
-            Empresa: {
-                Nome_da_Empresa: companyToEnrich['Nome da Empresa'] || companyToEnrich.Nome_da_Empresa,
-                Site_Empresa: companyToEnrich['Site Empresa'],
-                País_Empresa: companyToEnrich['País Empresa'],
-                Estado_Empresa: companyToEnrich['Estado Empresa'],
-                Cidade_Empresa: companyToEnrich['Cidade Empresa'],
-                Logradouro_Empresa: companyToEnrich['Logradouro Empresa'],
-                Numero_Empresa: companyToEnrich['Numero Empresa'],
-                Bairro_Empresa: companyToEnrich['Bairro Empresa'],
-                Complemento_Empresa: companyToEnrich['Complemento Empresa'],
-                CEP_Empresa: companyToEnrich['CEP Empresa'],
-                CNPJ_Empresa: companyToEnrich['CNPJ Empresa'],
-                DDI_Empresa: companyToEnrich['DDI Empresa'],
-                Telefones_Empresa: companyToEnrich['Telefones Empresa'],
-                Observacao_Empresa: companyToEnrich['Observação Empresa'],
-            },
-            Contato: {
-                Nome_Contato: companyToEnrich['Nome Contato'],
-                Email_Contato: companyToEnrich['E-mail Contato'],
-                Cargo_Contato: companyToEnrich['Cargo Contato'],
-                DDI_Contato: companyToEnrich['DDI Contato'],
-                Telefones_Contato: companyToEnrich['Telefones Contato'],
-            },
-            Comercial: {
-                Origem: companyToEnrich['Origem'],
-                Sub_Origem: companyToEnrich['Sub-Origem'],
-                Mercado: companyToEnrich['Mercado'],
-                Produto: companyToEnrich['Produto'],
-                Área: companyToEnrich['Área'],
-                Etapa: companyToEnrich['Etapa'],
-                Funil: companyToEnrich['Funil'],
-            }
-        };
-
-        // Merge suggestions, filling only empty fields
-        Object.keys(newSuggestions).forEach(key => {
-            if (key in finalData.Empresa && !finalData.Empresa[key]) {
-                finalData.Empresa[key] = newSuggestions[key];
-            }
-            if (key in finalData.Contato && !finalData.Contato[key]) {
-                finalData.Contato[key] = newSuggestions[key];
-            }
-            if (key in finalData.Comercial && !finalData.Comercial[key]) {
-                finalData.Comercial[key] = newSuggestions[key];
-            }
-            if (key === 'Area' && !finalData.Comercial['Área']) {
-                finalData.Comercial['Área'] = newSuggestions[key];
-            }
-        });
-
-        setModalData(finalData);
-        setShowRegisterModal(true);
-    } catch (error: any) {
-        alert(`Erro ao enriquecer dados do cliente: ${error.message}`);
-    } finally {
-        setGlobalLoading(false);
-    }
   };
 
   return (
@@ -343,8 +309,8 @@ export default function PerdecompComparativoPage() {
                   selectedCompany={client?.company ?? null}
                   onSelect={(company) => handleSelectCompany('client', company)}
                   onClear={() => setClient(null)}
-                  onNoResults={handleOpenRegisterModal}
-                  onEnrichRequest={handleEnrich}
+                  onNoResults={handleRegisterNewFromQuery}
+                  isEnriching={isEnriching && enrichTarget === 'client'}
                 />
               </div>
             </div>
@@ -374,7 +340,7 @@ export default function PerdecompComparativoPage() {
             <div key={index} className="mb-4">
               <div className="flex items-center gap-2">
                 <div className="flex-grow">
-                  <Autocomplete selectedCompany={comp?.company ?? null} onSelect={(company) => handleSelectCompany('competitor', company, index)} onClear={() => handleRemoveCompetitor(index)} />
+                  <Autocomplete selectedCompany={comp?.company ?? null} onSelect={(company) => handleSelectCompany('competitor', company, index)} onClear={() => handleRemoveCompetitor(index)} isEnriching={isEnriching && enrichTarget === `competitor-${index}`} />
                 </div>
                 <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
               </div>
@@ -446,6 +412,8 @@ export default function PerdecompComparativoPage() {
       <NewCompanyModal
         isOpen={showRegisterModal}
         initialData={modalData}
+        warning={modalWarning}
+        enrichDebug={modalDebug}
         onClose={() => setShowRegisterModal(false)}
         onSaved={handleSaveNewCompany}
       />
