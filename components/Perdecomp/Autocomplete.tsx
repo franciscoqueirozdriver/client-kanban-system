@@ -57,11 +57,13 @@ interface AutocompleteProps {
   onSelect: (company: Company) => void;
   onClear: () => void;
   onNoResults?: (query: string) => void;
+  onEnrichSelected?: (company: Company) => void;
+  onEnrichQuery?: (query: string) => void;
   isEnriching?: boolean;
   placeholder?: string;
 }
 
-const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, isEnriching, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
+const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnrichSelected, onEnrichQuery, isEnriching, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -125,6 +127,17 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, isEnric
           </div>
           <button type="button" onClick={onClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
         </div>
+        {onEnrichSelected && !isValidCnpj(selectedCompany.CNPJ_Empresa) && (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={() => onEnrichSelected(selectedCompany)}
+              disabled={isEnriching}
+              className="px-3 py-1.5 bg-violet-600 text-white text-xs rounded hover:bg-violet-700 disabled:opacity-50">
+              {isEnriching ? 'Enriquecendo…' : 'Enriquecer dados'}
+            </button>
+          </div>
+        )}
         {isEnriching && (
           <div className="absolute inset-0 bg-white/70 dark:bg-gray-900/70 flex items-center justify-center rounded">
             <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
@@ -158,20 +171,30 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, isEnric
               {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{company.CNPJ_Empresa}</span>
             </li>
           ))}
-
-          {!isLoading && results.length === 0 && onNoResults && (
-            <li className="p-2">
-              <button
-                type="button"
-                onMouseDown={(e) => { e.preventDefault(); onNoResults(query); }}
-                className="w-full px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                aria-label="Cadastrar Nova Empresa"
-              >
-                + Cadastrar Nova Empresa
-              </button>
-            </li>
-          )}
         </ul>
+      )}
+      {!selectedCompany && !isLoading && results.length === 0 && query.trim().length >= 3 && (
+        <div className="mt-2 flex gap-2">
+          {onEnrichQuery && (
+            <button
+              type="button"
+              onClick={() => onEnrichQuery(query)}
+              disabled={isEnriching}
+              className="px-3 py-1.5 bg-violet-600 text-white text-sm rounded hover:bg-violet-700 disabled:opacity-50"
+            >
+              {isEnriching ? 'Enriquecendo…' : 'Enriquecer dados'}
+            </button>
+          )}
+          {onNoResults && (
+            <button
+              type="button"
+              onClick={() => onNoResults(query)}
+              className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+            >
+              Cadastrar Nova Empresa
+            </button>
+          )}
+        </div>
       )}
       {isEnriching && (
         <div className="absolute inset-0 bg-white/70 dark:bg-gray-900/70 flex items-center justify-center rounded">

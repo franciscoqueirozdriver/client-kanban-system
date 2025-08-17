@@ -11,7 +11,9 @@ export async function POST(req: Request) {
 
     const { suggestion, debug } = await enrichCompanyData({ nome, cnpj });
 
-    return NextResponse.json({ suggestion, debug }, { status: 200 });
+    const payload: any = { suggestion };
+    if (debug) payload.debug = debug;
+    return NextResponse.json(payload, { status: 200 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'Erro ao enriquecer' }, { status: 400 });
   }
