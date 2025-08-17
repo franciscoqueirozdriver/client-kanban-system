@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
-import NewCompanyModal from '../../../components/NewCompanyModal';
+import NewCompanyModal, { FullCompanyPayload } from '../../../components/NewCompanyModal';
 
 // --- Helper Types ---
 interface Company {
@@ -14,65 +14,39 @@ interface Company {
 }
 
 interface PerdcompRow {
-  // Mirrors the 18-column structure
-  Cliente_ID: string;
-  'Nome da Empresa': string;
-  Perdcomp_ID: string;
-  CNPJ: string;
-  Tipo_Pedido: string;
-  Situacao: string;
-  Periodo_Inicio: string;
-  Periodo_Fim: string;
-  Valor_Total: number;
-  Numero_Processo: string;
-  Data_Protocolo: string;
-  Ultima_Atualizacao: string;
-  Quantidade_Receitas: number;
-  Quantidade_Origens: number;
-  Quantidade_DARFs: number;
-  URL_Comprovante_HTML: string;
-  URL_Comprovante_PDF: string;
-  Data_Consulta: string;
+  Cliente_ID: string; 'Nome da Empresa': string; Perdcomp_ID: string; CNPJ: string;
+  Tipo_Pedido: string; Situacao: string; Periodo_Inicio: string; Periodo_Fim: string;
+  Valor_Total: number; Numero_Processo: string; Data_Protocolo: string; Ultima_Atualizacao: string;
+  Quantidade_Receitas: number; Quantidade_Origens: number; Quantidade_DARFs: number;
+  URL_Comprovante_HTML: string; URL_Comprovante_PDF: string; Data_Consulta: string;
 }
 
 interface AggregatedData {
-  totalCount: number;
-  totalValue: number;
+  totalCount: number; totalValue: number;
   valueByType: { [key: string]: number };
   comprovantes: { html: string; pdf: string; id: string }[];
   lastConsultation: string | null;
 }
 
 interface ComparisonResult {
-  company: Company;
-  data: AggregatedData | null;
-  status: 'idle' | 'loading' | 'loaded' | 'error';
-  error?: string;
+  company: Company; data: AggregatedData | null;
+  status: 'idle' | 'loading' | 'loaded' | 'error'; error?: string;
 }
 
 interface CompanySelection {
-  company: Company;
-  lastConsultation: string | null;
-  forceRefresh: boolean;
+  company: Company; lastConsultation: string | null; forceRefresh: boolean;
 }
 
 // --- Helper Functions ---
 const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: string): AggregatedData => {
   const filteredRows = rows.filter(row => {
-    // This basic filter assumes YYYY-MM-DD format.
     const rowDate = row.Periodo_Fim || row.Data_Consulta.split('T')[0];
     return rowDate >= startDate && rowDate <= endDate;
   });
 
   if (filteredRows.length === 0) {
     const lastConsultation = rows.length > 0 ? rows.sort((a, b) => new Date(b.Data_Consulta).getTime() - new Date(a.Data_Consulta).getTime())[0].Data_Consulta : null;
-    return {
-      totalCount: 0,
-      totalValue: 0,
-      valueByType: {},
-      comprovantes: [],
-      lastConsultation
-    };
+    return { totalCount: 0, totalValue: 0, valueByType: {}, comprovantes: [], lastConsultation };
   }
 
   const valueByType = filteredRows.reduce((acc, row) => {
@@ -82,24 +56,12 @@ const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: 
   }, {} as { [key: string]: number });
 
   const totalValue = Object.values(valueByType).reduce((sum, v) => sum + v, 0);
-
-  const comprovantes = filteredRows
-    .filter(row => row.URL_Comprovante_HTML || row.URL_Comprovante_PDF)
-    .map(row => ({
-      html: row.URL_Comprovante_HTML,
-      pdf: row.URL_Comprovante_PDF,
-      id: row.Perdcomp_ID,
-    }));
-
+  const comprovantes = filteredRows.filter(row => row.URL_Comprovante_HTML || row.URL_Comprovante_PDF).map(row => ({
+    html: row.URL_Comprovante_HTML, pdf: row.URL_Comprovante_PDF, id: row.Perdcomp_ID,
+  }));
   const lastConsultation = filteredRows.sort((a, b) => new Date(b.Data_Consulta).getTime() - new Date(a.Data_Consulta).getTime())[0].Data_Consulta;
 
-  return {
-    totalCount: filteredRows.length,
-    totalValue,
-    valueByType,
-    comprovantes,
-    lastConsultation
-  };
+  return { totalCount: filteredRows.length, totalValue, valueByType, comprovantes, lastConsultation };
 };
 
 // --- Main Page Component ---
@@ -115,7 +77,7 @@ export default function PerdecompComparativoPage() {
   const [results, setResults] = useState<ComparisonResult[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [modalInitialQuery, setModalInitialQuery] = useState('');
+  const [modalData, setModalData] = useState<Partial<FullCompanyPayload> | undefined>();
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
 
   useEffect(() => {
@@ -130,31 +92,24 @@ export default function PerdecompComparativoPage() {
     let newStartDate = startDate;
     let newEndDate = endDate;
 
-    if (field === 'start') {
-      newStartDate = value;
-    } else {
-      newEndDate = value;
-    }
+    if (field === 'start') newStartDate = value;
+    else newEndDate = value;
 
     const start = new Date(newStartDate);
     const end = new Date(newEndDate);
 
-    // Calculate difference in milliseconds and convert to years
     const diffYears = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
 
     if (diffYears < 5) {
       const userConfirmed = window.confirm("Deseja realmente investigar um período menor que 05 anos?");
       if (userConfirmed) {
-        // User wants to proceed with custom range, so disable automation
         setIsDateAutomationEnabled(false);
         setStartDate(newStartDate);
         setEndDate(newEndDate);
       } else {
-        // User cancelled, do not apply the change (the state remains as it was)
         return;
       }
     } else {
-      // If range is 5 years or more, keep automation enabled or re-enable it
       setIsDateAutomationEnabled(true);
       setStartDate(newStartDate);
       setEndDate(newEndDate);
@@ -184,8 +139,7 @@ export default function PerdecompComparativoPage() {
       const data = await res.json();
 
       let finalData: PerdcompRow[] = [];
-      if (data.fonte === 'api') {
-        if (data.itens && data.itens.length > 0) {
+      if (data.fonte === 'api' && data.itens?.length > 0) {
           const preparedForSave = data.itens.map((item: Omit<PerdcompRow, 'Cliente_ID' | 'Nome da Empresa'>) => ({
             ...item,
             Cliente_ID: company.Cliente_ID,
@@ -197,9 +151,8 @@ export default function PerdecompComparativoPage() {
             body: JSON.stringify({ linhas: preparedForSave }),
           });
           finalData = preparedForSave;
-        }
       } else {
-        finalData = data.linhas;
+        finalData = data.linhas || [];
       }
 
       const aggregated = aggregatePerdcompData(finalData, startDate, endDate);
@@ -216,9 +169,7 @@ export default function PerdecompComparativoPage() {
 
     setGlobalLoading(true);
     setResults(allSelections.map(s => ({ company: s.company, data: null, status: 'idle' })));
-
     await Promise.all(allSelections.map(s => runConsultation(s)));
-
     setGlobalLoading(false);
   };
 
@@ -250,12 +201,7 @@ export default function PerdecompComparativoPage() {
 
   const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
     const lastConsultation = await checkLastConsultation(company.CNPJ_Empresa);
-    const selection: CompanySelection = {
-      company,
-      lastConsultation,
-      forceRefresh: false,
-    };
-
+    const selection: CompanySelection = { company, lastConsultation, forceRefresh: false };
     if (type === 'client') {
       setClient(selection);
     } else if (type === 'competitor' && index !== undefined) {
@@ -263,48 +209,75 @@ export default function PerdecompComparativoPage() {
     }
   };
 
-  const handleOpenRegisterModal = (query: string) => {
-    setModalInitialQuery(query);
-    setShowRegisterModal(true);
+  const handleSaveNewCompany = (newCompany: Company) => {
+    handleSelectCompany('client', newCompany);
+    setShowRegisterModal(false);
   };
 
-  const handleSaveNewCompany = (newCompany: Company) => {
-    // Automatically select the newly created company as the main client
-    handleSelectCompany('client', newCompany);
-    setShowRegisterModal(false); // Close the modal on success
+  async function fetchEnrichmentData(nome: string): Promise<Partial<FullCompanyPayload>> {
+    const res = await fetch('/api/empresas/enriquecer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome }),
+    });
+    if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Falha ao enriquecer dados.');
+    }
+    const data = await res.json();
+    const suggestion = data.suggestion || {};
+    return {
+        Empresa: {
+            Nome_da_Empresa: suggestion.Nome_da_Empresa || nome, Site_Empresa: suggestion.Site_Empresa || '', País_Empresa: suggestion.Pais_Empresa || 'Brasil',
+            Estado_Empresa: suggestion.Estado_Empresa || '', Cidade_Empresa: suggestion.Cidade_Empresa || '', Logradouro_Empresa: suggestion.Logradouro_Empresa || '',
+            Numero_Empresa: suggestion.Numero_Empresa || '', Bairro_Empresa: suggestion.Bairro_Empresa || '', Complemento_Empresa: suggestion.Complemento_Empresa || '',
+            CEP_Empresa: suggestion.CEP_Empresa || '', CNPJ_Empresa: suggestion.CNPJ_Empresa || '', DDI_Empresa: suggestion.DDI_Empresa || '+55',
+            Telefones_Empresa: suggestion.Telefones_Empresa || '', Observacao_Empresa: suggestion.Observacao_Empresa || '',
+        },
+        Contato: {
+            Nome_Contato: suggestion.Nome_Contato || '', Email_Contato: suggestion.Email_Contato || '', Cargo_Contato: suggestion.Cargo_Contato || '',
+            DDI_Contato: suggestion.DDI_Contato || '+55', Telefones_Contato: suggestion.Telefones_Contato || '',
+        },
+        Comercial: {
+            Mercado: suggestion.Mercado || '', Produto: suggestion.Produto || '', Área: suggestion.Area || '',
+            Origem: 'Cadastro Manual', Sub_Origem: 'Modal PER/DCOMP', Etapa: 'Novo', Funil: 'Padrão', Tipo_do_Serv_Comunicacao: '', ID_do_Serv_Comunicacao: '',
+        }
+    };
+  }
+
+  const handleOpenRegisterModal = async (query: string) => {
+    setGlobalLoading(true);
+    try {
+        const enrichedData = await fetchEnrichmentData(query);
+        setModalData(enrichedData);
+        setShowRegisterModal(true);
+    } catch (error: any) {
+        alert(`Erro ao buscar dados para nova empresa: ${error.message}`);
+        setModalData({ Empresa: { Nome_da_Empresa: query } as any });
+        setShowRegisterModal(true);
+    } finally {
+        setGlobalLoading(false);
+    }
   };
 
   const handleEnrich = async () => {
     if (!client) return;
-
     setGlobalLoading(true);
     try {
-      const res = await fetch('/api/enriquecer-empresa', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          Cliente_ID: client.company.Cliente_ID,
-          nome: client.company.Nome_da_Empresa,
-          overwrite: true,
-        }),
-      });
-
-      if (res.ok) {
-        alert('Dados enriquecidos com sucesso! A atualização pode levar alguns instantes para refletir na busca.');
-      } else {
-        const { error } = await res.json();
-        alert(`Erro ao enriquecer: ${error}`);
-      }
-    } catch (error) {
-      alert('Falha ao enriquecer dados.');
+        const enrichedData = await fetchEnrichmentData(client.company.Nome_da_Empresa);
+        enrichedData.Cliente_ID = client.company.Cliente_ID;
+        setModalData(enrichedData);
+        setShowRegisterModal(true);
+    } catch (error: any) {
+        alert(`Erro ao enriquecer dados do cliente: ${error.message}`);
+    } finally {
+        setGlobalLoading(false);
     }
-    setGlobalLoading(false);
   };
 
   return (
     <div className="container mx-auto p-4 text-gray-900 dark:text-gray-100">
       <h1 className="text-3xl font-bold mb-6">Comparativo PER/DCOMP</h1>
-
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -320,11 +293,11 @@ export default function PerdecompComparativoPage() {
               </div>
               <button
                 onClick={handleEnrich}
-                disabled={!client || globalLoading}
-                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed h-10"
-                title="Enriquecer Dados do Cadastro"
+                disabled={!client || !!client.company.CNPJ_Empresa || globalLoading}
+                className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed h-10"
+                title="Enriquecer dados do cliente (apenas para cadastros sem CNPJ)"
               >
-                Enriquecer
+                {globalLoading ? <FaSpinner className="animate-spin" /> : 'Enriquecer'}
               </button>
             </div>
             {client?.lastConsultation && (
@@ -394,23 +367,10 @@ export default function PerdecompComparativoPage() {
             {status === 'loaded' && data && (
               <div className="flex-grow flex flex-col">
                 {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
-
                 <div className="space-y-3 text-sm mb-4 flex-grow">
                   <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.totalCount}</span></div>
                   <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">{data.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
                 </div>
-
-                {Object.keys(data.valueByType).length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="font-semibold mb-1 text-sm">Valor por Tipo:</h4>
-                    <div className="text-xs space-y-1">
-                      {Object.entries(data.valueByType).map(([tipo, valor]) => (
-                        <div key={tipo} className="flex justify-between"><span>{tipo}:</span> <span>{valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {data.comprovantes.length > 0 && (
                   <div className="mb-4">
                     <h4 className="font-semibold mb-1 text-sm">Comprovantes:</h4>
@@ -424,10 +384,6 @@ export default function PerdecompComparativoPage() {
                     </div>
                   </div>
                 )}
-
-                <button onClick={() => { /* This button is now handled by the checkbox in the input area */ }} className="mt-auto w-full px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600">
-                  Nova Consulta (via Checkbox)
-                </button>
               </div>
             )}
              {status === 'loaded' && !data?.totalCount && (
@@ -441,7 +397,7 @@ export default function PerdecompComparativoPage() {
 
       <NewCompanyModal
         isOpen={showRegisterModal}
-        initialQuery={modalInitialQuery}
+        initialData={modalData}
         onClose={() => setShowRegisterModal(false)}
         onSaved={handleSaveNewCompany}
       />

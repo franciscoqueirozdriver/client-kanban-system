@@ -42,7 +42,7 @@ interface CommercialData {
   ID_do_Serv_Comunicacao: string;
 }
 
-interface FullCompanyPayload {
+export interface FullCompanyPayload {
   Cliente_ID?: string; // Used for updates
   Empresa: CompanyData;
   Contato: ContactData;
@@ -58,54 +58,31 @@ interface SavedCompany {
 
 export interface NewCompanyModalProps {
   isOpen: boolean;
-  initialQuery?: string;
+  initialData?: Partial<FullCompanyPayload>; // Changed from initialQuery
   onClose: () => void;
   onSaved: (company: SavedCompany) => void;
 }
 
 const initialFormData: FullCompanyPayload = {
   Empresa: {
-    Nome_da_Empresa: '',
-    Site_Empresa: '',
-    País_Empresa: 'Brasil',
-    Estado_Empresa: '',
-    Cidade_Empresa: '',
-    Logradouro_Empresa: '',
-    Numero_Empresa: '',
-    Bairro_Empresa: '',
-    Complemento_Empresa: '',
-    CEP_Empresa: '',
-    CNPJ_Empresa: '',
-    DDI_Empresa: '+55',
-    Telefones_Empresa: '',
-    Observacao_Empresa: '',
+    Nome_da_Empresa: '', Site_Empresa: '', País_Empresa: 'Brasil', Estado_Empresa: '', Cidade_Empresa: '',
+    Logradouro_Empresa: '', Numero_Empresa: '', Bairro_Empresa: '', Complemento_Empresa: '', CEP_Empresa: '',
+    CNPJ_Empresa: '', DDI_Empresa: '+55', Telefones_Empresa: '', Observacao_Empresa: '',
   },
   Contato: {
-    Nome_Contato: '',
-    Email_Contato: '',
-    Cargo_Contato: '',
-    DDI_Contato: '+55',
-    Telefones_Contato: '',
+    Nome_Contato: '', Email_Contato: '', Cargo_Contato: '', DDI_Contato: '+55', Telefones_Contato: '',
   },
   Comercial: {
-    Origem: 'Cadastro Manual',
-    Sub_Origem: 'Modal PER/DCOMP',
-    Mercado: '',
-    Produto: '',
-    Área: '',
-    Etapa: 'Novo',
-    Funil: 'Padrão',
-    Tipo_do_Serv_Comunicacao: '',
-    ID_do_Serv_Comunicacao: '',
+    Origem: 'Cadastro Manual', Sub_Origem: 'Modal PER/DCOMP', Mercado: '', Produto: '', Área: '',
+    Etapa: 'Novo', Funil: 'Padrão', Tipo_do_Serv_Comunicacao: '', ID_do_Serv_Comunicacao: '',
   },
 };
 
 // --- Component ---
 
-export default function NewCompanyModal({ isOpen, initialQuery, onClose, onSaved }: NewCompanyModalProps) {
+export default function NewCompanyModal({ isOpen, initialData, onClose, onSaved }: NewCompanyModalProps) {
   const [formData, setFormData] = useState<FullCompanyPayload>(initialFormData);
   const [isLoading, setIsLoading] = useState(false);
-  const [isEnriching, setIsEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiMessage, setApiMessage] = useState<string | null>(null);
 
@@ -113,14 +90,25 @@ export default function NewCompanyModal({ isOpen, initialQuery, onClose, onSaved
 
   useEffect(() => {
     if (isOpen) {
-      // Reset form state on open, pre-filling with initial query
-      const newFormState = JSON.parse(JSON.stringify(initialFormData)); // Deep copy
-      newFormState.Empresa.Nome_da_Empresa = initialQuery || '';
-      setFormData(newFormState);
       setError(null);
       setApiMessage(null);
+      // If initialData is provided, use it to populate the form
+      if (initialData) {
+          // Deep merge initialData with defaults to ensure all keys are present
+          const mergedData = {
+              ...JSON.parse(JSON.stringify(initialFormData)),
+              ...initialData,
+              Empresa: { ...initialFormData.Empresa, ...initialData.Empresa },
+              Contato: { ...initialFormData.Contato, ...initialData.Contato },
+              Comercial: { ...initialFormData.Comercial, ...initialData.Comercial },
+          };
+          setFormData(mergedData);
+      } else {
+          // Otherwise, reset to the default blank state
+          setFormData(initialFormData);
+      }
     }
-  }, [isOpen, initialQuery]);
+  }, [isOpen, initialData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -133,65 +121,6 @@ export default function NewCompanyModal({ isOpen, initialQuery, onClose, onSaved
         [field]: value,
       },
     }));
-  };
-
-  const handleEnrich = async () => {
-    if (!formData.Empresa.Nome_da_Empresa) {
-      setError('O "Nome da Empresa" é necessário para enriquecer.');
-      return;
-    }
-    setIsEnriching(true);
-    setError(null);
-    setApiMessage(null);
-    try {
-      const res = await fetch('/api/empresas/enriquecer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome: formData.Empresa.Nome_da_Empresa,
-          cnpj: formData.Empresa.CNPJ_Empresa,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || 'Falha ao buscar dados de enriquecimento.');
-      }
-
-      const suggestions = data.suggestion || {};
-
-      setFormData((prev) => {
-        const newForm = JSON.parse(JSON.stringify(prev)); // Deep copy
-
-        // Helper to check if a value is empty or matches the initial default
-        const isFieldEmpty = (section, key) => {
-            const value = newForm[section][key];
-            const defaultValue = initialFormData[section][key];
-            return value == null || String(value).trim() === '' || value === defaultValue;
-        };
-
-        // Map suggestions to the nested state structure
-        for (const key in suggestions) {
-            const value = suggestions[key];
-            if (key in newForm.Empresa && isFieldEmpty('Empresa', key)) {
-                newForm.Empresa[key] = value;
-            } else if (key in newForm.Contato && isFieldEmpty('Contato', key)) {
-                newForm.Contato[key] = value;
-            } else if (key in newForm.Comercial && isFieldEmpty('Comercial', key)) {
-                newForm.Comercial[key] = value;
-            } else if (key === 'Area' && isFieldEmpty('Comercial', 'Área')) { // Handle accent difference
-                 newForm.Comercial['Área'] = value;
-            }
-        }
-        return newForm;
-      });
-
-      setApiMessage('Dados sugeridos foram preenchidos. Você pode editá-los antes de salvar.');
-
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsEnriching(false);
-    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -219,52 +148,10 @@ export default function NewCompanyModal({ isOpen, initialQuery, onClose, onSaved
             throw new Error(data.message || 'Erro ao salvar empresa.');
         }
       } else {
-        if (data.mode === 'enrich-existing') {
-            setApiMessage(data.message);
-            const existing = data.company;
-            // Pre-fill the entire form for update
-            setFormData({
-                Cliente_ID: existing.Cliente_ID,
-                Empresa: {
-                    Nome_da_Empresa: existing['Nome da Empresa'] || '',
-                    Site_Empresa: existing['Site Empresa'] || '',
-                    País_Empresa: existing['País Empresa'] || 'Brasil',
-                    Estado_Empresa: existing['Estado Empresa'] || '',
-                    Cidade_Empresa: existing['Cidade Empresa'] || '',
-                    Logradouro_Empresa: existing['Logradouro Empresa'] || '',
-                    Numero_Empresa: existing['Numero Empresa'] || '',
-                    Bairro_Empresa: existing['Bairro Empresa'] || '',
-                    Complemento_Empresa: existing['Complemento Empresa'] || '',
-                    CEP_Empresa: existing['CEP Empresa'] || '',
-                    CNPJ_Empresa: existing['CNPJ Empresa'] || '',
-                    DDI_Empresa: existing['DDI Empresa'] || '+55',
-                    Telefones_Empresa: existing['Telefones Empresa'] || '',
-                    Observacao_Empresa: existing['Observação Empresa'] || '',
-                },
-                Contato: {
-                    Nome_Contato: existing['Nome Contato'] || '',
-                    Email_Contato: existing['E-mail Contato'] || '',
-                    Cargo_Contato: existing['Cargo Contato'] || '',
-                    DDI_Contato: existing['DDI Contato'] || '+55',
-                    Telefones_Contato: existing['Telefones Contato'] || '',
-                },
-                Comercial: {
-                    Origem: existing['Origem'] || 'Cadastro Manual',
-                    Sub_Origem: existing['Sub-Origem'] || 'Modal PER/DCOMP',
-                    Mercado: existing['Mercado'] || '',
-                    Produto: existing['Produto'] || '',
-                    Área: existing['Área'] || '',
-                    Etapa: existing['Etapa'] || 'Novo',
-                    Funil: existing['Funil'] || 'Padrão',
-                    Tipo_do_Serv_Comunicacao: existing['Tipo do Serv. Comunicação'] || '',
-                    ID_do_Serv_Comunicacao: existing['ID do Serv. Comunicação'] || '',
-                }
-            });
-            setError("Os dados acima foram pré-preenchidos. Complete ou corrija as informações e clique em 'Atualizar' para salvar.");
-        } else {
-            onSaved(data.company);
-            onClose();
-        }
+        // The 'enrich-existing' mode is now handled before the modal opens.
+        // A successful response here always means the data was saved.
+        onSaved(data.company);
+        onClose();
       }
     } catch (err: any) {
       setError(err.message);
@@ -281,7 +168,7 @@ export default function NewCompanyModal({ isOpen, initialQuery, onClose, onSaved
         <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">{isUpdateMode ? 'Atualizar Empresa' : 'Cadastrar Nova Empresa'}</h2>
 
         <form onSubmit={handleSubmit} className="max-h-[80vh] overflow-y-auto pr-3">
-          {/* Empresa Section */}
+          {/* Sections... */}
           <h3 className="text-lg font-semibold mt-4 mb-2 border-b pb-1">Dados da Empresa</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input type="text" name="Empresa.Nome_da_Empresa" placeholder="Nome da Empresa *" value={formData.Empresa.Nome_da_Empresa} onChange={handleChange} required className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full md:col-span-2" />
@@ -299,7 +186,6 @@ export default function NewCompanyModal({ isOpen, initialQuery, onClose, onSaved
             <textarea name="Empresa.Observacao_Empresa" placeholder="Observação da Empresa" value={formData.Empresa.Observacao_Empresa} onChange={handleChange} maxLength={280} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full md:col-span-3 h-20" />
           </div>
 
-          {/* Contato Section */}
           <h3 className="text-lg font-semibold mt-6 mb-2 border-b pb-1">Dados de Contato</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input type="text" name="Contato.Nome_Contato" placeholder="Nome do Contato" value={formData.Contato.Nome_Contato} onChange={handleChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
@@ -309,7 +195,6 @@ export default function NewCompanyModal({ isOpen, initialQuery, onClose, onSaved
             <input type="text" name="Contato.Telefones_Contato" placeholder="Telefones do Contato (por ;)" value={formData.Contato.Telefones_Contato} onChange={handleChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
           </div>
 
-          {/* Comercial/Pipeline Section */}
           <h3 className="text-lg font-semibold mt-6 mb-2 border-b pb-1">Comercial / Pipeline</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input type="text" name="Comercial.Origem" value={formData.Comercial.Origem} onChange={handleChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
@@ -323,17 +208,13 @@ export default function NewCompanyModal({ isOpen, initialQuery, onClose, onSaved
             <input type="text" name="Comercial.ID_do_Serv_Comunicacao" placeholder="ID Serviço Comunicação" value={formData.Comercial.ID_do_Serv_Comunicacao} onChange={handleChange} className="p-2 border rounded bg-gray-50 dark:bg-gray-700 w-full" />
           </div>
 
-          {/* Messages and Buttons */}
           {error && <div className="mt-4 text-red-500 text-sm">{error}</div>}
           {apiMessage && <div className="mt-4 text-blue-500 text-sm">{apiMessage}</div>}
           <div className="mt-6 flex justify-between items-center pt-4 border-t">
              <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-300 dark:bg-gray-600 rounded hover:bg-gray-400">Cancelar</button>
             <div className="flex gap-4">
-              <button type="button" onClick={handleEnrich} disabled={isEnriching || isLoading} className="px-3 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 disabled:bg-violet-400 flex items-center gap-2">
-                {isEnriching && <FaSpinner className="animate-spin" />}
-                Enriquecer
-              </button>
-              <button type="submit" disabled={isLoading || isEnriching} className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-400 flex items-center gap-2">
+              {/* Removed Enrich button from modal */}
+              <button type="submit" disabled={isLoading} className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-400 flex items-center gap-2">
                 {isLoading && <FaSpinner className="animate-spin" />}
                 {isUpdateMode ? 'Atualizar' : 'Cadastrar'}
               </button>

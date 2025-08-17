@@ -4,13 +4,13 @@ import { enrichCompanyData } from '@/lib/perplexity';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { nome, cnpj } = body;
+    const { nome } = body;
 
     if (!nome) {
       return NextResponse.json({ message: 'O nome da empresa é obrigatório.' }, { status: 400 });
     }
 
-    const suggestions = await enrichCompanyData({ nome, cnpj });
+    const suggestions = await enrichCompanyData({ nome });
 
     if (Object.keys(suggestions).length === 0) {
         return NextResponse.json({ message: 'Não foi possível encontrar dados para a empresa informada.' }, { status: 404 });

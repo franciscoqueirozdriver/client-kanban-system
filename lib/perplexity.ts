@@ -43,17 +43,17 @@ function safeParse(s: string) {
   try { return JSON.parse(s); } catch { return {}; }
 }
 
-export async function enrichCompanyData(input: { nome?: string; cnpj?: string }): Promise<Partial<CompanySuggestion>> {
+export async function enrichCompanyData(input: { nome: string }): Promise<Partial<CompanySuggestion>> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey) throw new Error('PERPLEXITY_API_KEY não configurada');
 
   const nome = (input.nome || '').trim();
-  const cnpj = digits(input.cnpj);
+  if (!nome) throw new Error('O nome da empresa é obrigatório para o enriquecimento.');
 
   // Prompt enxuto: pedimos APENAS JSON na estrutura esperada
   const system = 'Você responde SOMENTE com um objeto JSON válido, sem texto extra.';
   const user = `
-    Extraia dados da empresa brasileira "${nome}"${cnpj ? ` (CNPJ: ${cnpj})` : ''}.
+    Extraia dados da empresa brasileira "${nome}".
     Retorne APENAS um JSON com esta estrutura e chaves exatas:
 
     {
@@ -142,7 +142,7 @@ export async function enrichCompanyData(input: { nome?: string; cnpj?: string })
         ...contato,
         ...comercial,
         // Garante CNPJ somente dígitos e preserva nome se não vier
-        CNPJ_Empresa: digits(empresa?.CNPJ_Empresa || cnpj),
+        CNPJ_Empresa: digits(empresa?.CNPJ_Empresa),
         Nome_da_Empresa: empresa?.Nome_da_Empresa || nome || undefined,
       };
 
