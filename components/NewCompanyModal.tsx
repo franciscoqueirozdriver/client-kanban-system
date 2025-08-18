@@ -3,6 +3,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import type { CompanySuggestion } from '../lib/perplexity';
+import { onlyDigits, padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 // --- Types ---
 interface CompanyData {
@@ -48,11 +49,6 @@ type CompanyForm = CompanySuggestion & {
 };
 
 // --- Normalization Utilities ---
-const digits = (s?: string) => (s || '').replace(/\D/g, '');
-const cnpjOrEmpty = (s?: string) => {
-  const d = digits(s);
-  return d.length === 14 ? d : '';
-};
 
 function normalizeUF(uf?: string) {
   const u = (uf || '').trim().toUpperCase();
@@ -66,7 +62,7 @@ function normalizePhones(s?: string) {
     .map(t => t.trim())
     .filter(Boolean);
   const uniq = Array.from(new Set(raw)).map(t => {
-    const d = digits(t);
+    const d = onlyDigits(t);
     if (!d) return '';
     return d.startsWith('55') ? `+${d}` : `+55${d}`;
   }).filter(Boolean);
@@ -76,12 +72,12 @@ function normalizePhones(s?: string) {
 function applySuggestionToForm(current: CompanyForm, suggestion: Partial<CompanyForm>, onlyEmpty = true): CompanyForm {
   const s: Partial<CompanyForm> = { ...suggestion };
 
-  if (s.CNPJ_Empresa) s.CNPJ_Empresa = cnpjOrEmpty(s.CNPJ_Empresa);
+  if (s.CNPJ_Empresa) s.CNPJ_Empresa = padCNPJ14(s.CNPJ_Empresa);
   if (s.Estado_Empresa) s.Estado_Empresa = normalizeUF(s.Estado_Empresa);
   if (s.Telefones_Empresa) s.Telefones_Empresa = normalizePhones(s.Telefones_Empresa);
   if (s.Telefones_Contato) s.Telefones_Contato = normalizePhones(s.Telefones_Contato);
-  if (s.DDI_Empresa && !s.DDI_Empresa.startsWith('+')) s.DDI_Empresa = `+${digits(s.DDI_Empresa) || '55'}`;
-  if (s.DDI_Contato && !s.DDI_Contato.startsWith('+')) s.DDI_Contato = `+${digits(s.DDI_Contato) || '55'}`;
+  if (s.DDI_Empresa && !s.DDI_Empresa.startsWith('+')) s.DDI_Empresa = `+${onlyDigits(s.DDI_Empresa) || '55'}`;
+  if (s.DDI_Contato && !s.DDI_Contato.startsWith('+')) s.DDI_Contato = `+${onlyDigits(s.DDI_Contato) || '55'}`;
   if (s.Pais_Empresa === undefined) s.Pais_Empresa = 'Brasil';
 
   const next: CompanyForm = { ...current };
@@ -166,6 +162,12 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
     setIsLoading(true);
     setError(null);
     try {
+      const cnpj = padCNPJ14(formData.CNPJ_Empresa);
+      if (formData.CNPJ_Empresa && !isValidCNPJ(cnpj)) {
+        setIsLoading(false);
+        setError('CNPJ inválido. Verifique e tente novamente.');
+        return;
+      }
       const payload: FullCompanyPayload = {
         Cliente_ID: formData.Cliente_ID,
         Empresa: {
@@ -179,7 +181,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
           Bairro_Empresa: formData.Bairro_Empresa,
           Complemento_Empresa: formData.Complemento_Empresa,
           CEP_Empresa: formData.CEP_Empresa,
-          CNPJ_Empresa: cnpjOrEmpty(formData.CNPJ_Empresa),
+          CNPJ_Empresa: formData.CNPJ_Empresa ? cnpj : '',
           DDI_Empresa: formData.DDI_Empresa,
           Telefones_Empresa: formData.Telefones_Empresa,
           Observacao_Empresa: formData.Observacao_Empresa,
@@ -261,7 +263,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                     </div>
                     <div>
                       <label htmlFor="cnpj-empresa" className="block text-sm font-medium mb-1">CNPJ Empresa</label>
-                      <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={formData.CNPJ_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: cnpjOrEmpty(e.target.value) }))} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={formData.CNPJ_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: onlyDigits(e.target.value) }))} onBlur={() => setFormData(prev => ({ ...prev, CNPJ_Empresa: padCNPJ14(prev.CNPJ_Empresa) }))} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Apenas dígitos; validado no envio.</p>
                     </div>
                     <div>

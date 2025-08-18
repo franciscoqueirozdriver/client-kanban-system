@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { padCNPJ14, isValidCNPJ, onlyDigits } from '@/utils/cnpj';
 
 // --- Helper Types ---
 interface Company {
@@ -9,47 +10,6 @@ interface Company {
   CNPJ_Empresa: string;
   [key: string]: any;
 }
-
-// --- Helper Functions ---
-const isValidCnpj = (cnpj: string | null | undefined): boolean => {
-  if (!cnpj) return false;
-
-  const cnpjClean = cnpj.replace(/[^\d]/g, '');
-
-  if (cnpjClean.length !== 14 || /^(\d)\1+$/.test(cnpjClean)) {
-    return false;
-  }
-
-  let size = 12;
-  let sum = 0;
-  let pos = 5;
-
-  for (let i = 0; i < size; i++) {
-    sum += parseInt(cnpjClean[i]) * pos--;
-    if (pos < 2) pos = 9;
-  }
-
-  let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
-  if (result !== parseInt(cnpjClean[12])) {
-    return false;
-  }
-
-  size = 13;
-  sum = 0;
-  pos = 6;
-  for (let i = 0; i < size; i++) {
-    sum += parseInt(cnpjClean[i]) * pos--;
-    if (pos < 2) pos = 9;
-  }
-
-  result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
-  if (result !== parseInt(cnpjClean[13])) {
-    return false;
-  }
-
-  return true;
-};
-
 
 // --- Autocomplete Component ---
 interface AutocompleteProps {
@@ -88,7 +48,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
           const data = await response.json();
           setResults(data);
           // Check for invalid CNPJ only if the query looks like a full CNPJ but returns no results
-          if (data.length === 0 && /^\d{14}$/.test(query.replace(/\D/g, '')) && !isValidCnpj(query)) {
+          if (data.length === 0 && /^\d{14}$/.test(onlyDigits(query)) && !isValidCNPJ(query)) {
               setError("CNPJ inválido.");
           }
         } else {
@@ -114,7 +74,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
     setQuery('');
     setResults([]);
     setShowSuggestions(false);
-    onSelect(company);
+    onSelect({ ...company, CNPJ_Empresa: padCNPJ14(company.CNPJ_Empresa) });
   };
 
   if (selectedCompany) {
@@ -123,11 +83,11 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
         <div className="flex items-center justify-between">
           <div className="flex-grow truncate">
             <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{selectedCompany.CNPJ_Empresa || 'CNPJ não informado'}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{padCNPJ14(selectedCompany.CNPJ_Empresa) || 'CNPJ não informado'}</p>
           </div>
           <button type="button" onClick={onClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
         </div>
-        {onEnrichSelected && !isValidCnpj(selectedCompany.CNPJ_Empresa) && (
+        {onEnrichSelected && !isValidCNPJ(selectedCompany.CNPJ_Empresa) && (
           <div className="mt-2">
             <button
               type="button"
@@ -162,13 +122,13 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
         className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
       />
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-      {showSuggestions && !error && (query.length >= 3 || isValidCnpj(query)) && (
+      {showSuggestions && !error && (query.length >= 3 || isValidCNPJ(query)) && (
         <ul className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto text-gray-900 dark:text-gray-100">
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
 
           {!isLoading && results.map((company) => (
             <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
-              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{company.CNPJ_Empresa}</span>
+              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{padCNPJ14(company.CNPJ_Empresa)}</span>
             </li>
           ))}
         </ul>

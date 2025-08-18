@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
 import { consultarPerdcomp } from '../../../../lib/infosimples';
-import { isValidCNPJ } from '../../../../lib/isValidCNPJ';
+import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 export const runtime = 'nodejs';
 
@@ -48,9 +48,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
-    const cleanCnpj = String(cnpj).replace(/\D/g, '');
+    const cleanCnpj = padCNPJ14(cnpj);
     if (!isValidCNPJ(cleanCnpj)) {
-      return NextResponse.json({ error: 'CNPJ inválido' }, { status: 400 });
+      return NextResponse.json({ error: true, code: 400, message: 'CNPJ inválido' }, { status: 400 });
     }
 
     const requestedAt = new Date().toISOString();
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       const { rows, headers } = await getSheetData(PERDECOMP_SHEET_NAME);
 
       const dataForCnpj = rows.filter(row => {
-        const rowCnpj = String(row.CNPJ || '').replace(/\D/g, '');
+        const rowCnpj = padCNPJ14(row.CNPJ);
         return row.Cliente_ID === clienteId || rowCnpj === cleanCnpj;
       });
 
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
     }
 
     if (apiResponse.code !== 200) {
-      throw new Error(`Infosimples code ${apiResponse.code}: ${apiResponse.code_message}`);
+      return NextResponse.json({ error: true, code: apiResponse.code, message: apiResponse.code_message || 'Erro na API' });
     }
 
     const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
@@ -183,7 +183,7 @@ export async function POST(request: Request) {
       finalHeaders.forEach(h => (row[h] = ''));
       row['Cliente_ID'] = clienteId;
       row['Nome da Empresa'] = nomeEmpresa;
-      row['CNPJ'] = cleanCnpj;
+      row['CNPJ'] = `'${cleanCnpj}`;
       for (const [k, v] of Object.entries(writes)) {
         if (v !== undefined) row[k] = v;
       }
@@ -197,7 +197,23 @@ export async function POST(request: Request) {
       });
     }
 
-    const resp: any = { ok: true, fonte: 'api' };
+    const resp: any = {
+      ok: true,
+      header: { requested_at: headerRequestedAt },
+      mappedCount,
+      total_perdcomp: totalPerdcomp,
+      site_receipt: siteReceipt,
+      primeiro: {
+        perdcomp: first?.perdcomp,
+        solicitante: first?.solicitante,
+        tipo_documento: first?.tipo_documento,
+        tipo_credito: first?.tipo_credito,
+        data_transmissao: first?.data_transmissao,
+        situacao: first?.situacao,
+        situacao_detalhamento: first?.situacao_detalhamento,
+      },
+      cnpj: cleanCnpj,
+    };
     if (debugMode) {
       resp.debug = {
         requestedAt,
@@ -215,7 +231,8 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error('[API /infosimples/perdcomp]', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ ok: false, message: errorMessage }, { status: 500 });
+    const status = (error as any)?.response?.status || 'ERR';
+    const message = (error as any)?.response?.statusText || (error as any)?.message || 'API error';
+    return NextResponse.json({ error: true, code: status, message });
   }
 }

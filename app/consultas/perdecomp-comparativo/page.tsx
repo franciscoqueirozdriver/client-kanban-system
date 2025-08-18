@@ -7,7 +7,7 @@ import NewCompanyModal from '../../../components/NewCompanyModal';
 import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
-import { isValidCNPJ } from '../../../lib/isValidCNPJ';
+import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 // --- Helper Types ---
 interface Company {
@@ -140,22 +140,24 @@ export default function PerdecompComparativoPage() {
   };
 
   const updateResult = (cnpj: string, data: Partial<ComparisonResult>) => {
-    setResults(prev => prev.map(r => r.company.CNPJ_Empresa === cnpj ? { ...r, ...data } : r));
+    const c14 = padCNPJ14(cnpj);
+    setResults(prev => prev.map(r => padCNPJ14(r.company.CNPJ_Empresa) === c14 ? { ...r, ...data } : r));
   };
 
   const runConsultation = async (selection: CompanySelection) => {
     const { company, forceRefresh } = selection;
-    if (!isValidCNPJ(company.CNPJ_Empresa)) {
-      updateResult(company.CNPJ_Empresa, { status: 'error', error: 'CNPJ inválido. Verifique e tente novamente.' });
+    const cnpj = padCNPJ14(company.CNPJ_Empresa);
+    if (!isValidCNPJ(cnpj)) {
+      updateResult(cnpj, { status: 'error', error: 'CNPJ inválido. Verifique e tente novamente.' });
       return;
     }
-    updateResult(company.CNPJ_Empresa, { status: 'loading' });
+    updateResult(cnpj, { status: 'loading' });
     try {
       const res = await fetch('/api/infosimples/perdcomp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cnpj: company.CNPJ_Empresa,
+          cnpj,
           periodoInicio: startDate,
           periodoFim: endDate,
           force: forceRefresh,
@@ -166,20 +168,22 @@ export default function PerdecompComparativoPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || `API error: ${res.statusText}`);
+      if (!res.ok || data.error) {
+        const code = data.code || res.status || 'desconhecido';
+        const message = data.message || res.statusText || 'API error';
+        throw new Error(`API error: ${code} ${message}`);
       }
 
-      const mappedCount = data.debug?.mappedCount || (data.linhas ? data.linhas.length : 0);
-      const totalPerdcomp = data.debug?.total_perdcomp || 0;
-      const siteReceipt = data.debug?.siteReceipts?.[0] || data.linhas?.[0]?.URL_Comprovante_HTML || null;
-      const lastConsultation = data.debug?.header?.requested_at || data.linhas?.[0]?.Data_Consulta || null;
+      const mappedCount = data.mappedCount ?? data.debug?.mappedCount ?? (data.linhas ? data.linhas.length : 0);
+      const totalPerdcomp = data.total_perdcomp ?? data.debug?.total_perdcomp ?? 0;
+      const siteReceipt = data.site_receipt ?? data.debug?.siteReceipts?.[0] ?? data.linhas?.[0]?.URL_Comprovante_HTML || null;
+      const lastConsultation = data.header?.requested_at || data.debug?.header?.requested_at || data.linhas?.[0]?.Data_Consulta || null;
       const cardData: CardData = {
         quantity: Math.max(totalPerdcomp, mappedCount),
         lastConsultation,
         siteReceipt,
       };
-      updateResult(company.CNPJ_Empresa, { status: 'loaded', data: cardData, debug: data.debug ?? null });
+      updateResult(cnpj, { status: 'loaded', data: cardData, debug: data.debug ?? null });
 
       if (forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
         setPreviewPayload({ company, debug: data.debug ?? null });
@@ -187,7 +191,7 @@ export default function PerdecompComparativoPage() {
       }
 
     } catch (e: any) {
-      updateResult(company.CNPJ_Empresa, { status: 'error', error: e.message });
+      updateResult(cnpj, { status: 'error', error: e.message });
     }
   };
 
@@ -200,7 +204,7 @@ export default function PerdecompComparativoPage() {
     if (allSelections.length === 0) return;
 
     setGlobalLoading(true);
-    setResults(allSelections.map(s => ({ company: s.company, data: null, status: 'idle', debug: null })));
+    setResults(allSelections.map(s => ({ company: { ...s.company, CNPJ_Empresa: padCNPJ14(s.company.CNPJ_Empresa) }, data: null, status: 'idle', debug: null })));
 
     for (const sel of allSelections) {
       try {
@@ -240,11 +244,11 @@ export default function PerdecompComparativoPage() {
     .then(async (r) => {
       const data = await r.json();
       if (!r.ok) throw new Error(data?.error || 'Falha na busca');
-      const selCnpjs = new Set(competitors.filter(Boolean).map(c => (c!.company.CNPJ_Empresa || '').replace(/\D/g, '')));
-      const clientCnpj = (client.company.CNPJ_Empresa || '').replace(/\D/g, '');
+      const selCnpjs = new Set(competitors.filter(Boolean).map(c => padCNPJ14(c!.company.CNPJ_Empresa)));
+      const clientCnpj = padCNPJ14(client.company.CNPJ_Empresa);
 
       const items = (data.items || []).filter((it: any) => {
-        const c = (it?.cnpj || '').replace(/\D/g, '');
+        const c = padCNPJ14(it?.cnpj);
         const isClient = c && clientCnpj && c === clientCnpj;
         const already = c && selCnpjs.has(c);
         const nameDup = competitors.filter(Boolean).some(cmp => cmp!.company.Nome_da_Empresa.toLowerCase() === String(it?.nome || '').toLowerCase());
@@ -270,7 +274,7 @@ export default function PerdecompComparativoPage() {
           company: {
             Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
             Nome_da_Empresa: s.nome,
-            CNPJ_Empresa: s.cnpj || '',
+            CNPJ_Empresa: padCNPJ14(s.cnpj),
           },
           lastConsultation: null,
           forceRefresh: false,
@@ -283,7 +287,7 @@ export default function PerdecompComparativoPage() {
         company: {
           Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
           Nome_da_Empresa: s.nome,
-          CNPJ_Empresa: s.cnpj || '',
+          CNPJ_Empresa: padCNPJ14(s.cnpj),
         },
         lastConsultation: null,
         forceRefresh: false,
@@ -295,7 +299,8 @@ export default function PerdecompComparativoPage() {
 
   const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
     try {
-      const res = await fetch(`/api/perdecomp/verificar?cnpj=${cnpj}`);
+      const c = padCNPJ14(cnpj);
+      const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
       if (res.ok) {
         const { lastConsultation } = await res.json();
         return lastConsultation;
@@ -348,7 +353,7 @@ export default function PerdecompComparativoPage() {
     let cnpj = '';
     if (source === 'selected' && selectedCompany) {
       nome = selectedCompany.Nome_da_Empresa || '';
-      cnpj = (selectedCompany.CNPJ_Empresa || '').replace(/\D/g, '');
+      cnpj = padCNPJ14(selectedCompany.CNPJ_Empresa);
     } else if (source === 'query' && rawQuery) {
       nome = rawQuery.trim();
     }
@@ -379,8 +384,10 @@ export default function PerdecompComparativoPage() {
   }
 
   const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
-    const lastConsultation = await checkLastConsultation(company.CNPJ_Empresa);
-    const selection: CompanySelection = { company, lastConsultation, forceRefresh: false };
+    const cnpj = padCNPJ14(company.CNPJ_Empresa);
+    const normalized = { ...company, CNPJ_Empresa: cnpj };
+    const lastConsultation = await checkLastConsultation(cnpj);
+    const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
     if (type === 'client') {
       setClient(selection);
     } else if (type === 'competitor' && index !== undefined) {
@@ -488,7 +495,7 @@ export default function PerdecompComparativoPage() {
         {results.map(({ company, data, status, error, debug }) => (
           <div key={company.CNPJ_Empresa} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col">
             <h3 className="font-bold text-lg truncate mb-1" title={company.Nome_da_Empresa}>{company.Nome_da_Empresa}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{company.CNPJ_Empresa}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{padCNPJ14(company.CNPJ_Empresa)}</p>
 
             {status === 'loading' && <div className="flex-grow flex items-center justify-center"><FaSpinner className="animate-spin text-4xl text-violet-500"/></div>}
             {status === 'error' && <div className="flex-grow flex items-center justify-center text-red-500">{error}</div>}
