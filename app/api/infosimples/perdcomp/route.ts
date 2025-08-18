@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
-import { consultarPerdcomp } from '../../../../lib/infosimples';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 export const runtime = 'nodejs';
@@ -31,38 +30,63 @@ function columnNumberToLetter(columnNumber: number) {
   return letter;
 }
 
+function todayISO() {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
+}
+
+function addYears(dateISO: string, years: number) {
+  const d = new Date(dateISO);
+  d.setFullYear(d.getFullYear() + years);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const {
-      cnpj,
-      periodoInicio,
-      periodoFim,
-      force = false,
-      debug: debugMode = false,
-      clienteId,
-      nomeEmpresa,
-    } = body;
+    const body = await request.json().catch(() => ({}));
+    const url = new URL(request.url);
 
-    if (!cnpj || !periodoInicio || !periodoFim || !clienteId || !nomeEmpresa) {
+    const rawCnpj = body?.cnpj ?? url.searchParams.get('cnpj') ?? '';
+    const cnpj = padCNPJ14(rawCnpj);
+    if (!isValidCNPJ(cnpj)) {
+      return NextResponse.json(
+        { error: true, httpStatus: 400, httpStatusText: 'Bad Request', message: 'CNPJ inválido' },
+        { status: 400 }
+      );
+    }
+
+    let data_fim = (body?.data_fim ?? url.searchParams.get('data_fim') ?? '').toString().slice(0, 10);
+    let data_inicio = (body?.data_inicio ?? url.searchParams.get('data_inicio') ?? '').toString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data_fim)) data_fim = todayISO();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data_inicio)) data_inicio = addYears(data_fim, -5);
+    if (new Date(data_inicio) > new Date(data_fim)) {
+      data_inicio = addYears(data_fim, -5);
+    }
+
+    const force = body?.force ?? false;
+    const debugMode = body?.debug ?? false;
+    const clienteId = body?.clienteId;
+    const nomeEmpresa = body?.nomeEmpresa;
+    if (!clienteId || !nomeEmpresa) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
-    const cleanCnpj = padCNPJ14(cnpj);
-    if (!isValidCNPJ(cleanCnpj)) {
-      return NextResponse.json({ error: true, code: 400, message: 'CNPJ inválido' }, { status: 400 });
-    }
-
     const requestedAt = new Date().toISOString();
-    const apiRequest = { cnpj: cleanCnpj, timeout: 600, endpoint: 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp' };
+    const apiRequest = {
+      cnpj,
+      data_inicio,
+      data_fim,
+      timeout: 600,
+      endpoint: 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp',
+    };
 
     // 1. If not forcing, check the spreadsheet first
     if (!force) {
-      const { rows, headers } = await getSheetData(PERDECOMP_SHEET_NAME);
+      const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
 
       const dataForCnpj = rows.filter(row => {
         const rowCnpj = padCNPJ14(row.CNPJ);
-        return row.Cliente_ID === clienteId || rowCnpj === cleanCnpj;
+        return row.Cliente_ID === clienteId || rowCnpj === cnpj;
       });
 
       if (dataForCnpj.length > 0) {
@@ -88,18 +112,58 @@ export async function POST(request: Request) {
     }
 
     // 2. If forced or no data found, call the Infosimples API
-    const apiResponse = await consultarPerdcomp({
-      cnpj: cleanCnpj,
-      data_inicio: periodoInicio,
-      data_fim: periodoFim,
-      timeout: 600,
-    });
-    if (debugMode && apiResponse?.header?.parameters?.token) {
-      delete apiResponse.header.parameters.token;
+    const token = process.env.INFOSIMPLES_TOKEN;
+    if (!token) {
+      throw new Error('INFOSIMPLES_TOKEN is not set in .env.local');
     }
 
-    if (apiResponse.code !== 200) {
-      return NextResponse.json({ error: true, code: apiResponse.code, message: apiResponse.code_message || 'Erro na API' });
+    const params = new URLSearchParams();
+    params.append('token', token);
+    params.append('cnpj', cnpj);
+    params.append('data_inicio', data_inicio);
+    params.append('data_fim', data_fim);
+    params.append('timeout', '600');
+
+    const apiRes = await fetch(apiRequest.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+
+    const text = await apiRes.text();
+    const maybeJson = (() => {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return null;
+      }
+    })();
+
+    if (!apiRes.ok || (maybeJson && typeof maybeJson.code === 'number' && maybeJson.code !== 200)) {
+      const httpStatus = apiRes.status || 500;
+      const httpStatusText = apiRes.statusText || 'Error';
+      const providerCode = maybeJson?.code;
+      const providerMessage =
+        maybeJson?.code_message ||
+        maybeJson?.message ||
+        maybeJson?.errors?.[0]?.message ||
+        null;
+      return NextResponse.json(
+        {
+          error: true,
+          httpStatus,
+          httpStatusText,
+          providerCode,
+          providerMessage,
+          params: { cnpj, data_inicio, data_fim },
+        },
+        { status: httpStatus }
+      );
+    }
+
+    const apiResponse = maybeJson || {};
+    if (debugMode && apiResponse?.header?.parameters?.token) {
+      delete apiResponse.header.parameters.token;
     }
 
     const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
@@ -134,7 +198,6 @@ export async function POST(request: Request) {
         headerUpdated = true;
       }
     }
-    const hasJson = finalHeaders.includes('JSON_Bruto');
     if (headerUpdated) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.SPREADSHEET_ID!,
@@ -147,7 +210,7 @@ export async function POST(request: Request) {
     const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
     let rowNumber = -1;
     for (const r of rows) {
-      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cleanCnpj) {
+      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
         rowNumber = r._rowNumber;
         break;
       }
@@ -165,13 +228,6 @@ export async function POST(request: Request) {
           values: [[value]],
         });
       }
-      if (hasJson) {
-        const colIndex = finalHeaders.indexOf('JSON_Bruto');
-        if (colIndex !== -1) {
-          const colLetter = columnNumberToLetter(colIndex + 1);
-          data.push({ range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`, values: [[JSON.stringify(apiResponse)]] });
-        }
-      }
       if (data.length) {
         await sheets.spreadsheets.values.batchUpdate({
           spreadsheetId: process.env.SPREADSHEET_ID!,
@@ -183,11 +239,10 @@ export async function POST(request: Request) {
       finalHeaders.forEach(h => (row[h] = ''));
       row['Cliente_ID'] = clienteId;
       row['Nome da Empresa'] = nomeEmpresa;
-      row['CNPJ'] = `'${cleanCnpj}`;
+      row['CNPJ'] = `'${cnpj}`;
       for (const [k, v] of Object.entries(writes)) {
         if (v !== undefined) row[k] = v;
       }
-      if (hasJson) row['JSON_Bruto'] = JSON.stringify(apiResponse);
       const values = finalHeaders.map(h => row[h]);
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.SPREADSHEET_ID!,
@@ -212,7 +267,7 @@ export async function POST(request: Request) {
         situacao: first?.situacao,
         situacao_detalhamento: first?.situacao_detalhamento,
       },
-      cnpj: cleanCnpj,
+      cnpj,
     };
     if (debugMode) {
       resp.debug = {
@@ -229,10 +284,17 @@ export async function POST(request: Request) {
 
     return NextResponse.json(resp);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[API /infosimples/perdcomp]', error);
-    const status = (error as any)?.response?.status || 'ERR';
-    const message = (error as any)?.response?.statusText || (error as any)?.message || 'API error';
-    return NextResponse.json({ error: true, code: status, message });
+    return NextResponse.json(
+      {
+        error: true,
+        httpStatus: 502,
+        httpStatusText: 'Bad Gateway',
+        providerCode: null,
+        providerMessage: error?.message || 'API error',
+      },
+      { status: 502 }
+    );
   }
 }

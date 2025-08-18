@@ -36,7 +36,7 @@ type ApiDebug = {
 
 interface ComparisonResult {
   company: Company; data: CardData | null;
-  status: 'idle' | 'loading' | 'loaded' | 'error'; error?: string;
+  status: 'idle' | 'loading' | 'loaded' | 'error'; error?: any;
   debug?: ApiDebug;
 }
 
@@ -69,6 +69,25 @@ type Prefill = {
   Produto?: string;
   Area?: string;
 };
+
+function buildApiErrorLabel(e: any) {
+  const parts: string[] = [];
+  if (e?.httpStatus) {
+    parts.push(
+      `API error: ${e.httpStatus}${e.httpStatusText ? ' ' + e.httpStatusText : ''}`,
+    );
+  } else {
+    parts.push('API error:');
+  }
+  if (e?.providerCode) {
+    parts.push(
+      `– ${e.providerCode}${e?.providerMessage ? ' ' + e.providerMessage : ''}`,
+    );
+  } else if (e?.message) {
+    parts.push(`– ${e.message}`);
+  }
+  return parts.join(' ');
+}
 // --- Main Page Component ---
 export default function PerdecompComparativoPage() {
   const [client, setClient] = useState<CompanySelection | null>(null);
@@ -148,7 +167,7 @@ export default function PerdecompComparativoPage() {
     const { company, forceRefresh } = selection;
     const cnpj = padCNPJ14(company.CNPJ_Empresa);
     if (!isValidCNPJ(cnpj)) {
-      updateResult(cnpj, { status: 'error', error: 'CNPJ inválido. Verifique e tente novamente.' });
+      updateResult(cnpj, { status: 'error', error: { message: 'CNPJ inválido. Verifique e tente novamente.' } });
       return;
     }
     updateResult(cnpj, { status: 'loading' });
@@ -158,20 +177,18 @@ export default function PerdecompComparativoPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cnpj,
-          periodoInicio: startDate,
-          periodoFim: endDate,
+          data_inicio: startDate,
+          data_fim: endDate,
           force: forceRefresh,
           debug: true,
           clienteId: company.Cliente_ID,
           nomeEmpresa: company.Nome_da_Empresa,
         }),
       });
-
       const data = await res.json();
       if (!res.ok || data.error) {
-        const code = data.code || res.status || 'desconhecido';
-        const message = data.message || res.statusText || 'API error';
-        throw new Error(`API error: ${code} ${message}`);
+        updateResult(cnpj, { status: 'error', error: data });
+        return;
       }
 
       const firstLinha = Array.isArray(data.linhas) ? data.linhas[0] : undefined;
@@ -205,7 +222,7 @@ export default function PerdecompComparativoPage() {
       }
 
     } catch (e: any) {
-      updateResult(cnpj, { status: 'error', error: e.message });
+      updateResult(cnpj, { status: 'error', error: { message: e.message } });
     }
   };
 
@@ -512,7 +529,11 @@ export default function PerdecompComparativoPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{padCNPJ14(company.CNPJ_Empresa)}</p>
 
             {status === 'loading' && <div className="flex-grow flex items-center justify-center"><FaSpinner className="animate-spin text-4xl text-violet-500"/></div>}
-            {status === 'error' && <div className="flex-grow flex items-center justify-center text-red-500">{error}</div>}
+            {status === 'error' && (
+              <div className="flex-grow flex items-center justify-center text-red-500 text-sm text-center whitespace-pre-line">
+                {buildApiErrorLabel(error)}
+              </div>
+            )}
             {status === 'loaded' && data && (
               <div className="flex-grow flex flex-col">
                 {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
