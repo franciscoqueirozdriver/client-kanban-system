@@ -7,6 +7,7 @@ import NewCompanyModal from '../../../components/NewCompanyModal';
 import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
+import { isValidCNPJ } from '../../../lib/isValidCNPJ';
 
 // --- Helper Types ---
 interface Company {
@@ -16,19 +17,10 @@ interface Company {
   [key: string]: any;
 }
 
-interface PerdcompRow {
-  Cliente_ID: string; 'Nome da Empresa': string; Perdcomp_ID: string; CNPJ: string;
-  Tipo_Pedido: string; Situacao: string; Periodo_Inicio: string; Periodo_Fim: string;
-  Valor_Total: number; Numero_Processo: string; Data_Protocolo: string; Ultima_Atualizacao: string;
-  Quantidade_Receitas: number; Quantidade_Origens: number; Quantidade_DARFs: number;
-  URL_Comprovante_HTML: string; URL_Comprovante_PDF: string; Data_Consulta: string;
-}
-
-interface AggregatedData {
-  totalCount: number; totalValue: number;
-  valueByType: { [key: string]: number };
-  comprovantes: { html: string; pdf: string; id: string }[];
+interface CardData {
   lastConsultation: string | null;
+  quantity: number;
+  siteReceipt?: string | null;
 }
 
 type ApiDebug = {
@@ -39,10 +31,11 @@ type ApiDebug = {
   mappedCount?: number;
   siteReceipts?: string[];
   header?: any;
+  total_perdcomp?: number;
 } | null;
 
 interface ComparisonResult {
-  company: Company; data: AggregatedData | null;
+  company: Company; data: CardData | null;
   status: 'idle' | 'loading' | 'loaded' | 'error'; error?: string;
   debug?: ApiDebug;
 }
@@ -76,33 +69,6 @@ type Prefill = {
   Produto?: string;
   Area?: string;
 };
-// --- Helper Functions ---
-const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: string): AggregatedData => {
-  const filteredRows = rows.filter(row => {
-    const rowDate = row.Periodo_Fim || row.Data_Consulta.split('T')[0];
-    return rowDate >= startDate && rowDate <= endDate;
-  });
-
-  if (filteredRows.length === 0) {
-    const lastConsultation = rows.length > 0 ? rows.sort((a, b) => new Date(b.Data_Consulta).getTime() - new Date(a.Data_Consulta).getTime())[0].Data_Consulta : null;
-    return { totalCount: 0, totalValue: 0, valueByType: {}, comprovantes: [], lastConsultation };
-  }
-
-  const valueByType = filteredRows.reduce((acc, row) => {
-    const value = Number(row.Valor_Total) || 0;
-    acc[row.Tipo_Pedido] = (acc[row.Tipo_Pedido] || 0) + value;
-    return acc;
-  }, {} as { [key: string]: number });
-
-  const totalValue = Object.values(valueByType).reduce((sum, v) => sum + v, 0);
-  const comprovantes = filteredRows.filter(row => row.URL_Comprovante_HTML || row.URL_Comprovante_PDF).map(row => ({
-    html: row.URL_Comprovante_HTML, pdf: row.URL_Comprovante_PDF, id: row.Perdcomp_ID,
-  }));
-  const lastConsultation = filteredRows.sort((a, b) => new Date(b.Data_Consulta).getTime() - new Date(a.Data_Consulta).getTime())[0].Data_Consulta;
-
-  return { totalCount: filteredRows.length, totalValue, valueByType, comprovantes, lastConsultation };
-};
-
 // --- Main Page Component ---
 export default function PerdecompComparativoPage() {
   const [client, setClient] = useState<CompanySelection | null>(null);
@@ -179,6 +145,10 @@ export default function PerdecompComparativoPage() {
 
   const runConsultation = async (selection: CompanySelection) => {
     const { company, forceRefresh } = selection;
+    if (!isValidCNPJ(company.CNPJ_Empresa)) {
+      updateResult(company.CNPJ_Empresa, { status: 'error', error: 'CNPJ inválido. Verifique e tente novamente.' });
+      return;
+    }
     updateResult(company.CNPJ_Empresa, { status: 'loading' });
     try {
       const res = await fetch('/api/infosimples/perdcomp', {
@@ -190,33 +160,28 @@ export default function PerdecompComparativoPage() {
           periodoFim: endDate,
           force: forceRefresh,
           debug: true,
+          clienteId: company.Cliente_ID,
+          nomeEmpresa: company.Nome_da_Empresa,
         }),
       });
 
-      if (!res.ok) throw new Error(`API error: ${res.statusText}`);
       const data = await res.json();
-
-      let finalData: PerdcompRow[] = [];
-      if (data.fonte === 'api' && data.itens?.length > 0) {
-          const preparedForSave = data.itens.map((item: Omit<PerdcompRow, 'Cliente_ID' | 'Nome da Empresa'>) => ({
-            ...item,
-            Cliente_ID: company.Cliente_ID,
-            "Nome da Empresa": company.Nome_da_Empresa,
-          }));
-          await fetch('/api/perdecomp/salvar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ linhas: preparedForSave }),
-          });
-          finalData = preparedForSave;
-      } else {
-        finalData = data.linhas || [];
+      if (!res.ok) {
+        throw new Error(data?.error || `API error: ${res.statusText}`);
       }
 
-      const aggregated = aggregatePerdcompData(finalData, startDate, endDate);
-      updateResult(company.CNPJ_Empresa, { status: 'loaded', data: aggregated, debug: data.debug ?? null });
+      const mappedCount = data.debug?.mappedCount || (data.linhas ? data.linhas.length : 0);
+      const totalPerdcomp = data.debug?.total_perdcomp || 0;
+      const siteReceipt = data.debug?.siteReceipts?.[0] || data.linhas?.[0]?.URL_Comprovante_HTML || null;
+      const lastConsultation = data.debug?.header?.requested_at || data.linhas?.[0]?.Data_Consulta || null;
+      const cardData: CardData = {
+        quantity: Math.max(totalPerdcomp, mappedCount),
+        lastConsultation,
+        siteReceipt,
+      };
+      updateResult(company.CNPJ_Empresa, { status: 'loaded', data: cardData, debug: data.debug ?? null });
 
-      if (forceRefresh && (data.debug?.apiResponse?.data?.[0]?.perdcomp?.length === 0 || !data.debug?.apiResponse)) {
+      if (forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
         setPreviewPayload({ company, debug: data.debug ?? null });
         setPreviewOpen(true);
       }
@@ -531,25 +496,20 @@ export default function PerdecompComparativoPage() {
               <div className="flex-grow flex flex-col">
                 {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
                 <div className="space-y-3 text-sm mb-4 flex-grow">
-                  <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.totalCount}</span></div>
-                  <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">{data.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                  <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.quantity}</span></div>
+                  <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
                 </div>
-                {data.comprovantes.length > 0 && (
+                {data.siteReceipt && (
                   <div className="mb-4">
                     <h4 className="font-semibold mb-1 text-sm">Comprovantes:</h4>
-                    <div className="text-xs space-y-1 max-h-24 overflow-y-auto">
-                      {data.comprovantes.map(c => (
-                        <div key={c.id} className="flex gap-2">
-                           {c.html && <a href={c.html} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">HTML</a>}
-                           {c.pdf && <a href={c.pdf} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">PDF</a>}
-                        </div>
-                      ))}
+                    <div className="text-xs">
+                      <a href={data.siteReceipt} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">HTML</a>
                     </div>
                   </div>
                 )}
               </div>
             )}
-             {status === 'loaded' && !data?.totalCount && (
+             {status === 'loaded' && !data?.quantity && (
                 <div className="flex-grow flex flex-col items-center justify-center text-center">
                     <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
                 </div>

@@ -1,45 +1,76 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets.js';
+import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
 import { consultarPerdcomp } from '../../../../lib/infosimples';
+import { isValidCNPJ } from '../../../../lib/isValidCNPJ';
 
 export const runtime = 'nodejs';
 
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
+const PERDECOMP_SHEET_NAME = 'PEREDCOMP';
 
-function generatePerdcompId() {
-  const now = new Date();
-  const datePart = now.toISOString().slice(0, 10).replace(/-/g, '');
-  const timePart = now.toTimeString().slice(0, 8).replace(/:/g, '');
-  const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `PDC-${datePart}-${timePart}-${randomPart}`;
+const REQUIRED_HEADERS = [
+  'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
+  'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Quantidade_PERDCOMP',
+  'Numero_Processo', 'Data_Protocolo', 'Ultima_Atualizacao',
+  'Quantidade_Receitas', 'Quantidade_Origens', 'Quantidade_DARFs',
+  'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta',
+  'Tipo_Empresa', 'Concorrentes',
+  'Code', 'Code_Message', 'MappedCount', 'Perdcomp_Principal_ID',
+  'Perdcomp_Solicitante', 'Perdcomp_Tipo_Documento',
+  'Perdcomp_Tipo_Credito', 'Perdcomp_Data_Transmissao',
+  'Perdcomp_Situacao', 'Perdcomp_Situacao_Detalhamento'
+];
+
+function columnNumberToLetter(columnNumber: number) {
+  let temp;
+  let letter = '';
+  while (columnNumber > 0) {
+    temp = (columnNumber - 1) % 26;
+    letter = String.fromCharCode(temp + 65) + letter;
+    columnNumber = (columnNumber - temp - 1) / 26;
+  }
+  return letter;
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { cnpj, periodoInicio, periodoFim, force = false, debug: debugMode = false } = body;
+    const {
+      cnpj,
+      periodoInicio,
+      periodoFim,
+      force = false,
+      debug: debugMode = false,
+      clienteId,
+      nomeEmpresa,
+    } = body;
 
-    if (!cnpj || !periodoInicio || !periodoFim) {
-      return NextResponse.json({ message: 'Missing required fields: cnpj, periodoInicio, periodoFim' }, { status: 400 });
+    if (!cnpj || !periodoInicio || !periodoFim || !clienteId || !nomeEmpresa) {
+      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
     const cleanCnpj = String(cnpj).replace(/\D/g, '');
+    if (!isValidCNPJ(cleanCnpj)) {
+      return NextResponse.json({ error: 'CNPJ inválido' }, { status: 400 });
+    }
+
     const requestedAt = new Date().toISOString();
     const apiRequest = { cnpj: cleanCnpj, timeout: 600, endpoint: 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp' };
 
     // 1. If not forcing, check the spreadsheet first
     if (!force) {
-      const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+      const { rows, headers } = await getSheetData(PERDECOMP_SHEET_NAME);
 
       const dataForCnpj = rows.filter(row => {
         const rowCnpj = String(row.CNPJ || '').replace(/\D/g, '');
-        return rowCnpj === cleanCnpj;
+        return row.Cliente_ID === clienteId || rowCnpj === cleanCnpj;
       });
 
       if (dataForCnpj.length > 0) {
-        // If any data exists for this CNPJ, return it.
-        // The frontend will filter it by the selected date range for display.
-        // This allows the UI to show the most recent 'Data_Consulta' even if it's outside the user's range.
+        const lastConsulta = dataForCnpj.reduce((acc, r) => {
+          const dc = r.Data_Consulta || '';
+          return !acc || new Date(dc) > new Date(acc) ? dc : acc;
+        }, '');
+        const totalPerdcomp = Number(dataForCnpj[0]?.Quantidade_PERDCOMP || 0);
         const resp: any = { ok: true, fonte: 'planilha', linhas: dataForCnpj };
         if (debugMode) {
           resp.debug = {
@@ -48,6 +79,8 @@ export async function POST(request: Request) {
             apiRequest,
             apiResponse: null,
             mappedCount: dataForCnpj.length,
+            header: { requested_at: lastConsulta },
+            total_perdcomp: totalPerdcomp,
           };
         }
         return NextResponse.json(resp);
@@ -69,45 +102,112 @@ export async function POST(request: Request) {
       throw new Error(`Infosimples code ${apiResponse.code}: ${apiResponse.code_message}`);
     }
 
-    const dataConsulta = new Date().toISOString();
-    const mappedItems: any[] = [];
-    for (const d of apiResponse.data || []) {
-      const receipt = d.site_receipt || '';
-      for (const p of d.perdcomp || []) {
-        const isPdf = receipt.toLowerCase().endsWith('.pdf');
-        mappedItems.push({
-          Cliente_ID: '',
-          Nome_da_Empresa: p.solicitante || '',
-          Perdcomp_ID: generatePerdcompId(),
-          CNPJ: cleanCnpj,
-          Tipo_Pedido: p.tipo_documento || '',
-          Situacao: p.situacao || '',
-          Periodo_Inicio: p.periodo_apuracao_inicio || '',
-          Periodo_Fim: p.periodo_apuracao_fim || '',
-          Valor_Total: 0,
-          Numero_Processo: p.numero_processo || '',
-          Data_Protocolo: p.data_transmissao || '',
-          Ultima_Atualizacao: p.ultima_atualizacao || '',
-          Quantidade_Receitas: 0,
-          Quantidade_Origens: 0,
-          Quantidade_DARFs: 0,
-          URL_Comprovante_HTML: !isPdf ? receipt : '',
-          URL_Comprovante_PDF: isPdf ? receipt : '',
-          Data_Consulta: dataConsulta,
-        });
+    const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
+    const first = apiResponse?.data?.[0]?.perdcomp?.[0] || {};
+    const totalPerdcomp = apiResponse?.data?.[0]?.perdcomp?.length || 0;
+    const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
+    const siteReceipt = apiResponse?.site_receipts?.[0] || '';
+
+    const writes: Record<string, any> = {
+      Code: apiResponse.code,
+      Code_Message: apiResponse.code_message || '',
+      MappedCount: mappedCount,
+      Quantidade_PERDCOMP: totalPerdcomp,
+      URL_Comprovante_HTML: siteReceipt,
+      Data_Consulta: headerRequestedAt,
+      Perdcomp_Principal_ID: first?.perdcomp || '',
+      Perdcomp_Solicitante: first?.solicitante || '',
+      Perdcomp_Tipo_Documento: first?.tipo_documento || '',
+      Perdcomp_Tipo_Credito: first?.tipo_credito || '',
+      Perdcomp_Data_Transmissao: first?.data_transmissao || '',
+      Perdcomp_Situacao: first?.situacao || '',
+      Perdcomp_Situacao_Detalhamento: first?.situacao_detalhamento || '',
+    };
+
+    const sheets = await getSheetsClient();
+    const { headers } = await getSheetData(PERDECOMP_SHEET_NAME);
+    const finalHeaders = [...headers];
+    let headerUpdated = false;
+    for (const h of REQUIRED_HEADERS) {
+      if (!finalHeaders.includes(h)) {
+        finalHeaders.push(h);
+        headerUpdated = true;
+      }
+    }
+    const hasJson = finalHeaders.includes('JSON_Bruto');
+    if (headerUpdated) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.SPREADSHEET_ID!,
+        range: `${PERDECOMP_SHEET_NAME}!1:1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [finalHeaders] },
+      });
+    }
+
+    const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    let rowNumber = -1;
+    for (const r of rows) {
+      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cleanCnpj) {
+        rowNumber = r._rowNumber;
+        break;
       }
     }
 
-    const resp: any = { ok: true, fonte: 'api', itens: mappedItems };
+    if (rowNumber !== -1) {
+      const data = [] as any[];
+      for (const [key, value] of Object.entries(writes)) {
+        if (value === undefined || value === '') continue;
+        const colIndex = finalHeaders.indexOf(key);
+        if (colIndex === -1) continue;
+        const colLetter = columnNumberToLetter(colIndex + 1);
+        data.push({
+          range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
+          values: [[value]],
+        });
+      }
+      if (hasJson) {
+        const colIndex = finalHeaders.indexOf('JSON_Bruto');
+        if (colIndex !== -1) {
+          const colLetter = columnNumberToLetter(colIndex + 1);
+          data.push({ range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`, values: [[JSON.stringify(apiResponse)]] });
+        }
+      }
+      if (data.length) {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: process.env.SPREADSHEET_ID!,
+          requestBody: { valueInputOption: 'RAW', data },
+        });
+      }
+    } else {
+      const row: Record<string, any> = {};
+      finalHeaders.forEach(h => (row[h] = ''));
+      row['Cliente_ID'] = clienteId;
+      row['Nome da Empresa'] = nomeEmpresa;
+      row['CNPJ'] = cleanCnpj;
+      for (const [k, v] of Object.entries(writes)) {
+        if (v !== undefined) row[k] = v;
+      }
+      if (hasJson) row['JSON_Bruto'] = JSON.stringify(apiResponse);
+      const values = finalHeaders.map(h => row[h]);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: process.env.SPREADSHEET_ID!,
+        range: PERDECOMP_SHEET_NAME,
+        valueInputOption: 'RAW',
+        requestBody: { values: [values] },
+      });
+    }
+
+    const resp: any = { ok: true, fonte: 'api' };
     if (debugMode) {
       resp.debug = {
         requestedAt,
         fonte: 'api',
         apiRequest,
         apiResponse,
-        mappedCount: mappedItems.length,
+        mappedCount,
         siteReceipts: apiResponse?.site_receipts,
         header: apiResponse?.header,
+        total_perdcomp: totalPerdcomp,
       };
     }
 
