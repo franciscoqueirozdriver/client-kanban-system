@@ -174,10 +174,24 @@ export default function PerdecompComparativoPage() {
         throw new Error(`API error: ${code} ${message}`);
       }
 
-      const mappedCount = data.mappedCount ?? data.debug?.mappedCount ?? (data.linhas ? data.linhas.length : 0);
-      const totalPerdcomp = data.total_perdcomp ?? data.debug?.total_perdcomp ?? 0;
-      const siteReceipt = data.site_receipt ?? data.debug?.siteReceipts?.[0] ?? data.linhas?.[0]?.URL_Comprovante_HTML || null;
-      const lastConsultation = data.header?.requested_at || data.debug?.header?.requested_at || data.linhas?.[0]?.Data_Consulta || null;
+      const firstLinha = Array.isArray(data.linhas) ? data.linhas[0] : undefined;
+      const mappedCount =
+        data.mappedCount ??
+        data.debug?.mappedCount ??
+        (Array.isArray(data.linhas) ? data.linhas.length : 0);
+      const totalPerdcomp =
+        data.total_perdcomp ??
+        data.debug?.total_perdcomp ??
+        0;
+      const siteReceipt =
+        (data.site_receipt ??
+          data.debug?.siteReceipts?.[0] ??
+          firstLinha?.URL_Comprovante_HTML) || null;
+      const lastConsultation =
+        data.header?.requested_at ||
+        data.debug?.header?.requested_at ||
+        firstLinha?.Data_Consulta ||
+        null;
       const cardData: CardData = {
         quantity: Math.max(totalPerdcomp, mappedCount),
         lastConsultation,

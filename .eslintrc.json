@@ -1,0 +1,6 @@
+{
+  "extends": "next",
+  "rules": {
+    "no-mixed-operators": ["error", { "groups": [["??", "&&", "||"]] }]
+  }
+}
