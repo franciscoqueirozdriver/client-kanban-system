@@ -282,7 +282,8 @@ export async function POST(request: Request) {
     };
 
     const sheets = await getSheetsClient();
-    const { headers } = await getSheetData(PERDECOMP_SHEET_NAME);
+    // Call getSheetData ONCE and get both headers and rows
+    const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
     const finalHeaders = [...headers];
     let headerUpdated = false;
     for (const h of REQUIRED_HEADERS) {
@@ -300,7 +301,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    // Use the 'rows' we already fetched instead of calling getSheetData again
     let rowNumber = -1;
     for (const r of rows) {
       if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
