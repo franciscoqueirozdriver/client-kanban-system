@@ -13,7 +13,7 @@ export async function consultarPerdcomp({
   cnpj,
   data_inicio,
   data_fim,
-  timeout = 600,
+  timeout = 25,
 }: PerdcompParams) {
   const token = process.env.INFOSIMPLES_TOKEN;
   if (!token) {
@@ -27,14 +27,29 @@ export async function consultarPerdcomp({
   if (data_inicio) params.append('data_inicio', data_inicio);
   if (data_fim) params.append('data_fim', data_fim);
 
-  const response = await fetch(
-    'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-    },
-  );
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const timeoutId = setTimeout(() => controller.abort(), timeout * 1000);
+
+  let response: Response;
+  try {
+    response = await fetch(
+      'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+        signal,
+      },
+    );
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      throw new Error(`A consulta à Infosimples excedeu o tempo limite de ${timeout} segundos.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     const text = await response.text();
