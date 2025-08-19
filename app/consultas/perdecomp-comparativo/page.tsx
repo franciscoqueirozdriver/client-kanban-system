@@ -25,10 +25,13 @@ interface PerdcompRow {
 }
 
 interface AggregatedData {
-  totalCount: number; totalValue: number;
+  totalCount: number;
+  totalValue: number;
   valueByType: { [key: string]: number };
   comprovantes: { html: string; pdf: string; id: string }[];
   lastConsultation: string | null;
+  header?: { requested_at?: string | null };
+  fromCache?: boolean;
 }
 
 type ApiDebug = {
@@ -42,8 +45,10 @@ type ApiDebug = {
 } | null;
 
 interface ComparisonResult {
-  company: Company; data: AggregatedData | null;
-  status: 'idle' | 'loading' | 'loaded' | 'error'; error?: string;
+  company: Company;
+  data: AggregatedData | null;
+  status: 'idle' | 'loading' | 'loaded' | 'error';
+  error?: any;
   debug?: ApiDebug;
 }
 
@@ -177,52 +182,70 @@ export default function PerdecompComparativoPage() {
     setResults(prev => prev.map(r => r.company.CNPJ_Empresa === cnpj ? { ...r, ...data } : r));
   };
 
+  function buildApiErrorLabel(e:any){
+    const a = e?.httpStatus ? `API error: ${e.httpStatus}${e.httpStatusText ? ' ' + e.httpStatusText : ''}` : 'API error:';
+    const b = e?.providerCode ? `– ${e.providerCode}${e?.providerMessage ? ' ' + e.providerMessage : ''}` : (e?.providerMessage ? `– ${e.providerMessage}` : '');
+    return [a,b].filter(Boolean).join(' ');
+  }
+
+  const formatDateBR = (iso:string) => iso ? new Date(iso).toLocaleDateString('pt-BR') : '';
+
   const runConsultation = async (selection: CompanySelection) => {
     const { company, forceRefresh } = selection;
     updateResult(company.CNPJ_Empresa, { status: 'loading' });
     try {
-      const res = await fetch('/api/infosimples/perdcomp', {
+      const res = await fetch('/api/perdecomp-consultar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          Cliente_ID: company.Cliente_ID,
           cnpj: company.CNPJ_Empresa,
-          periodoInicio: startDate,
-          periodoFim: endDate,
+          data_inicio: startDate,
+          data_fim: endDate,
           force: forceRefresh,
-          debug: true,
         }),
       });
-
-      if (!res.ok) throw new Error(`API error: ${res.statusText}`);
       const data = await res.json();
 
-      let finalData: PerdcompRow[] = [];
-      if (data.fonte === 'api' && data.itens?.length > 0) {
-          const preparedForSave = data.itens.map((item: Omit<PerdcompRow, 'Cliente_ID' | 'Nome da Empresa'>) => ({
-            ...item,
-            Cliente_ID: company.Cliente_ID,
-            "Nome da Empresa": company.Nome_da_Empresa,
-          }));
-          await fetch('/api/perdecomp/salvar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ linhas: preparedForSave }),
-          });
-          finalData = preparedForSave;
-      } else {
-        finalData = data.linhas || [];
+      if (!res.ok || data.error) {
+        const fallback = data.fallback;
+        const aggregated = fallback ? {
+          totalCount: Number(fallback.quantidade) || 0,
+          totalValue: 0,
+          valueByType: {},
+          comprovantes: fallback.site_receipt ? [{ html: fallback.site_receipt, pdf: '', id: '' }] : [],
+          lastConsultation: fallback.requested_at || null,
+          header: { requested_at: fallback.requested_at || null },
+          fromCache: true,
+        } : null;
+        updateResult(company.CNPJ_Empresa, { status: aggregated ? 'loaded' : 'error', data: aggregated, error: data });
+        return;
       }
 
-      const aggregated = aggregatePerdcompData(finalData, startDate, endDate);
+      const mappedCount = data.mappedCount ?? data.debug?.mappedCount ?? (Array.isArray(data.linhas) ? data.linhas.length : 0);
+      const totalPerdcomp = data.total_perdcomp ?? data.debug?.total_perdcomp ?? 0;
+
+      const firstLinha = Array.isArray(data.linhas) ? data.linhas[0] : undefined;
+      const siteReceipt = data.site_receipt ?? data.debug?.siteReceipts?.[0] ?? firstLinha?.URL_Comprovante_HTML ?? null;
+      const lastConsultation = data.header?.requested_at ?? data.debug?.header?.requested_at ?? firstLinha?.Data_Consulta ?? null;
+
+      const aggregated: AggregatedData = {
+        totalCount: totalPerdcomp,
+        totalValue: 0,
+        valueByType: {},
+        comprovantes: siteReceipt ? [{ html: siteReceipt, pdf: '', id: data.primeiro?.perdcomp || firstLinha?.Perdcomp_ID || '' }] : [],
+        lastConsultation,
+        header: { requested_at: lastConsultation },
+        fromCache: data.mode === 'cache',
+      };
       updateResult(company.CNPJ_Empresa, { status: 'loaded', data: aggregated, debug: data.debug ?? null });
 
       if (forceRefresh && (data.debug?.apiResponse?.data?.[0]?.perdcomp?.length === 0 || !data.debug?.apiResponse)) {
         setPreviewPayload({ company, debug: data.debug ?? null });
         setPreviewOpen(true);
       }
-
     } catch (e: any) {
-      updateResult(company.CNPJ_Empresa, { status: 'error', error: e.message });
+      updateResult(company.CNPJ_Empresa, { status: 'error', error: { message: e.message } });
     }
   };
 
@@ -526,9 +549,15 @@ export default function PerdecompComparativoPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{company.CNPJ_Empresa}</p>
 
             {status === 'loading' && <div className="flex-grow flex items-center justify-center"><FaSpinner className="animate-spin text-4xl text-violet-500"/></div>}
-            {status === 'error' && <div className="flex-grow flex items-center justify-center text-red-500">{error}</div>}
+            {status === 'error' && !data && <div className="flex-grow flex items-center justify-center text-red-500">{buildApiErrorLabel(error)}</div>}
             {status === 'loaded' && data && (
               <div className="flex-grow flex flex-col">
+                {error && <p className="text-red-500 text-sm whitespace-pre-line">{buildApiErrorLabel(error)}</p>}
+                {data.fromCache && data.header?.requested_at && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Mostrando dados da última consulta em {formatDateBR(data.header.requested_at)} (falha {error?.httpStatus} hoje)
+                  </p>
+                )}
                 {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
                 <div className="space-y-3 text-sm mb-4 flex-grow">
                   <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.totalCount}</span></div>
@@ -549,7 +578,7 @@ export default function PerdecompComparativoPage() {
                 )}
               </div>
             )}
-             {status === 'loaded' && !data?.totalCount && (
+            {status === 'loaded' && !data?.totalCount && (
                 <div className="flex-grow flex flex-col items-center justify-center text-center">
                     <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
                 </div>
