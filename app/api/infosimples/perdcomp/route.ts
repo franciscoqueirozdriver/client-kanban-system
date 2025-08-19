@@ -1,10 +1,22 @@
 import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets.js';
 import { consultarPerdcomp } from '../../../../lib/infosimples';
+import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 export const runtime = 'nodejs';
 
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
+const PERDECOMP_SHEET_NAME = 'PEREDCOMP';
+
+function todayISO() {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
+}
+
+function addYears(dateISO: string, years: number) {
+  const d = new Date(dateISO);
+  d.setFullYear(d.getFullYear() + years);
+  return d.toISOString().slice(0, 10);
+}
 
 function generatePerdcompId() {
   const now = new Date();
@@ -16,14 +28,22 @@ function generatePerdcompId() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { cnpj, periodoInicio, periodoFim, force = false, debug: debugMode = false } = body;
+    const body = await request.json().catch(() => ({}));
+    const url = new URL(request.url);
 
-    if (!cnpj || !periodoInicio || !periodoFim) {
-      return NextResponse.json({ message: 'Missing required fields: cnpj, periodoInicio, periodoFim' }, { status: 400 });
+    const rawCnpj = body?.cnpj ?? url.searchParams.get('cnpj') ?? '';
+    const cnpj = padCNPJ14(rawCnpj);
+
+    if (!isValidCNPJ(cnpj)) {
+      return NextResponse.json({ message: 'CNPJ inválido' }, { status: 400 });
     }
 
-    const cleanCnpj = String(cnpj).replace(/\D/g, '');
+    // Define variables the rest of the "good" code expects.
+    // This makes the change incremental. We are just fixing the validation for now.
+    const { force = false, debug: debugMode = false } = body;
+    const periodoInicio = (body?.periodoInicio ?? body?.data_inicio ?? addYears(todayISO(), -5)).toString().slice(0, 10);
+    const periodoFim = (body?.periodoFim ?? body?.data_fim ?? todayISO()).toString().slice(0, 10);
+    const cleanCnpj = cnpj;
     const requestedAt = new Date().toISOString();
     const apiRequest = { cnpj: cleanCnpj, timeout: 600, endpoint: 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp' };
 
