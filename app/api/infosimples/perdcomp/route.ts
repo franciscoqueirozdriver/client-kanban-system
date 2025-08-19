@@ -1,45 +1,170 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets.js';
-import { consultarPerdcomp } from '../../../../lib/infosimples';
+import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
+import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 export const runtime = 'nodejs';
 
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
+const PERDECOMP_SHEET_NAME = 'PEREDCOMP';
 
-function generatePerdcompId() {
-  const now = new Date();
-  const datePart = now.toISOString().slice(0, 10).replace(/-/g, '');
-  const timePart = now.toTimeString().slice(0, 8).replace(/:/g, '');
-  const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `PDC-${datePart}-${timePart}-${randomPart}`;
+const REQUIRED_HEADERS = [
+  'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
+  'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Quantidade_PERDCOMP',
+  'Numero_Processo', 'Data_Protocolo', 'Ultima_Atualizacao',
+  'Quantidade_Receitas', 'Quantidade_Origens', 'Quantidade_DARFs',
+  'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta',
+  'Tipo_Empresa', 'Concorrentes',
+  'Code', 'Code_Message', 'MappedCount', 'Perdcomp_Principal_ID',
+  'Perdcomp_Solicitante', 'Perdcomp_Tipo_Documento',
+  'Perdcomp_Tipo_Credito', 'Perdcomp_Data_Transmissao',
+  'Perdcomp_Situacao', 'Perdcomp_Situacao_Detalhamento'
+];
+
+function columnNumberToLetter(columnNumber: number) {
+  let temp;
+  let letter = '';
+  while (columnNumber > 0) {
+    temp = (columnNumber - 1) % 26;
+    letter = String.fromCharCode(temp + 65) + letter;
+    columnNumber = (columnNumber - temp - 1) / 26;
+  }
+  return letter;
+}
+
+function todayISO() {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
+}
+
+function addYears(dateISO: string, years: number) {
+  const d = new Date(dateISO);
+  d.setFullYear(d.getFullYear() + years);
+  return d.toISOString().slice(0, 10);
+}
+
+function sleep(ms: number) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function jitter(base: number) {
+  return Math.round(base * (0.8 + Math.random() * 0.4));
+}
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delays = [1500, 3000, 5000]): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      const status = err?.response?.status ?? err?.status ?? 0;
+      const shouldRetry = status >= 500 || status === 0;
+      if (!shouldRetry || i === attempts - 1) throw err;
+      await sleep(jitter(delays[i] ?? 2000));
+    }
+  }
+  throw lastErr;
+}
+
+async function getLastPerdcompFromSheet({
+  cnpj,
+  clienteId,
+}: {
+  cnpj?: string;
+  clienteId?: string;
+}) {
+  const sheets = await getSheetsClient();
+  const head = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SPREADSHEET_ID,
+    range: 'PEREDCOMP!1:1',
+  });
+  const headers = head.data.values?.[0] || [];
+  const col = (name: string) => headers.indexOf(name);
+  const resp = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SPREADSHEET_ID,
+    range: 'PEREDCOMP!A2:Z',
+  });
+  const rows = resp.data.values || [];
+  const idxCliente = col('Cliente_ID');
+  const idxCnpj = col('CNPJ');
+  const idxQtd = col('Quantidade_PERDCOMP');
+  const idxHtml = col('URL_Comprovante_HTML');
+  const idxData = col('Data_Consulta');
+  const match = rows.find(
+    r =>
+      (clienteId && r[idxCliente] === clienteId) ||
+      (cnpj && (r[idxCnpj] || '').replace(/\D/g, '') === cnpj)
+  );
+  if (!match) return null;
+  const qtd = Number(match[idxQtd] ?? 0);
+  return {
+    quantidade: qtd || 0,
+    site_receipt: match[idxHtml] || null,
+    requested_at: match[idxData] || null,
+  };
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { cnpj, periodoInicio, periodoFim, force = false, debug: debugMode = false } = body;
+    const body = await request.json().catch(() => ({}));
+    const url = new URL(request.url);
 
-    if (!cnpj || !periodoInicio || !periodoFim) {
-      return NextResponse.json({ message: 'Missing required fields: cnpj, periodoInicio, periodoFim' }, { status: 400 });
+    const rawCnpj = body?.cnpj ?? url.searchParams.get('cnpj') ?? '';
+    const cnpj = padCNPJ14(rawCnpj);
+    if (!isValidCNPJ(cnpj)) {
+      return NextResponse.json(
+        { error: true, httpStatus: 400, httpStatusText: 'Bad Request', message: 'CNPJ inválido' },
+        { status: 400 }
+      );
     }
 
-    const cleanCnpj = String(cnpj).replace(/\D/g, '');
+    let data_fim = (body?.data_fim ?? url.searchParams.get('data_fim') ?? '').toString().slice(0, 10);
+    let data_inicio = (body?.data_inicio ?? url.searchParams.get('data_inicio') ?? '').toString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data_fim)) data_fim = todayISO();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data_inicio)) data_inicio = addYears(data_fim, -5);
+    if (new Date(data_inicio) > new Date(data_fim)) {
+      data_inicio = addYears(data_fim, -5);
+    }
+
+    const force = body?.force ?? false;
+    const debugMode = body?.debug ?? false;
+    const clienteId =
+      body?.Cliente_ID ??
+      body?.clienteId ??
+      url.searchParams.get('Cliente_ID') ??
+      url.searchParams.get('clienteId');
+    const nomeEmpresa =
+      body?.Nome_da_Empresa ??
+      body?.nomeEmpresa ??
+      url.searchParams.get('Nome_da_Empresa') ??
+      url.searchParams.get('nomeEmpresa');
+    if (!clienteId || !nomeEmpresa) {
+      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    }
+
     const requestedAt = new Date().toISOString();
-    const apiRequest = { cnpj: cleanCnpj, timeout: 600, endpoint: 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp' };
+    const apiRequest = {
+      cnpj,
+      data_inicio,
+      data_fim,
+      timeout: 600,
+      endpoint: 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp',
+    };
 
     // 1. If not forcing, check the spreadsheet first
     if (!force) {
       const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
 
       const dataForCnpj = rows.filter(row => {
-        const rowCnpj = String(row.CNPJ || '').replace(/\D/g, '');
-        return rowCnpj === cleanCnpj;
+        const rowCnpj = padCNPJ14(row.CNPJ);
+        return row.Cliente_ID === clienteId || rowCnpj === cnpj;
       });
 
       if (dataForCnpj.length > 0) {
-        // If any data exists for this CNPJ, return it.
-        // The frontend will filter it by the selected date range for display.
-        // This allows the UI to show the most recent 'Data_Consulta' even if it's outside the user's range.
+        const lastConsulta = dataForCnpj.reduce((acc, r) => {
+          const dc = r.Data_Consulta || '';
+          return !acc || new Date(dc) > new Date(acc) ? dc : acc;
+        }, '');
+        const totalPerdcomp = Number(dataForCnpj[0]?.Quantidade_PERDCOMP || 0);
         const resp: any = { ok: true, fonte: 'planilha', linhas: dataForCnpj };
         if (debugMode) {
           resp.debug = {
@@ -48,6 +173,8 @@ export async function POST(request: Request) {
             apiRequest,
             apiResponse: null,
             mappedCount: dataForCnpj.length,
+            header: { requested_at: lastConsulta },
+            total_perdcomp: totalPerdcomp,
           };
         }
         return NextResponse.json(resp);
@@ -55,67 +182,194 @@ export async function POST(request: Request) {
     }
 
     // 2. If forced or no data found, call the Infosimples API
-    const apiResponse = await consultarPerdcomp({
-      cnpj: cleanCnpj,
-      data_inicio: periodoInicio,
-      data_fim: periodoFim,
-      timeout: 600,
-    });
+    const token = process.env.INFOSIMPLES_TOKEN;
+    if (!token) {
+      throw new Error('INFOSIMPLES_TOKEN is not set in .env.local');
+    }
+
+    const payload = { cnpj, data_inicio, data_fim, timeout: 600 };
+
+    const doCall = async () => {
+      const resp = await fetch(apiRequest.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const text = await resp.text();
+      const json = (() => {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      })();
+      if (!resp.ok || (json && typeof json.code === 'number' && json.code !== 200)) {
+        const err: any = new Error('provider_error');
+        err.status = resp.status || 502;
+        err.statusText = resp.statusText || 'Bad Gateway';
+        err.providerCode = json?.code;
+        err.providerMessage =
+          json?.code_message || json?.message || json?.errors?.[0]?.message || null;
+        throw err;
+      }
+      return json;
+    };
+
+    let apiResponse: any;
+    try {
+      apiResponse = await withRetry(doCall, 3, [1500, 3000, 5000]);
+    } catch (err: any) {
+      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
+      return NextResponse.json(
+        {
+          error: true,
+          httpStatus: err?.status || 502,
+          httpStatusText: err?.statusText || 'Bad Gateway',
+          providerCode: err?.providerCode ?? null,
+          providerMessage: err?.providerMessage ?? err?.message ?? 'API error',
+          fallback,
+        },
+        { status: err?.status || 502 }
+      );
+    }
+
     if (debugMode && apiResponse?.header?.parameters?.token) {
       delete apiResponse.header.parameters.token;
     }
 
-    if (apiResponse.code !== 200) {
-      throw new Error(`Infosimples code ${apiResponse.code}: ${apiResponse.code_message}`);
+    const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
+    const first = apiResponse?.data?.[0]?.perdcomp?.[0] || {};
+    const totalPerdcomp = apiResponse?.data?.[0]?.perdcomp?.length || 0;
+    const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
+    const siteReceipt = apiResponse?.site_receipts?.[0] || '';
+
+    const writes: Record<string, any> = {
+      Code: apiResponse.code,
+      Code_Message: apiResponse.code_message || '',
+      MappedCount: mappedCount,
+      Quantidade_PERDCOMP: totalPerdcomp,
+      URL_Comprovante_HTML: siteReceipt,
+      Data_Consulta: headerRequestedAt,
+      Perdcomp_Principal_ID: first?.perdcomp || '',
+      Perdcomp_Solicitante: first?.solicitante || '',
+      Perdcomp_Tipo_Documento: first?.tipo_documento || '',
+      Perdcomp_Tipo_Credito: first?.tipo_credito || '',
+      Perdcomp_Data_Transmissao: first?.data_transmissao || '',
+      Perdcomp_Situacao: first?.situacao || '',
+      Perdcomp_Situacao_Detalhamento: first?.situacao_detalhamento || '',
+    };
+
+    const sheets = await getSheetsClient();
+    const { headers } = await getSheetData(PERDECOMP_SHEET_NAME);
+    const finalHeaders = [...headers];
+    let headerUpdated = false;
+    for (const h of REQUIRED_HEADERS) {
+      if (!finalHeaders.includes(h)) {
+        finalHeaders.push(h);
+        headerUpdated = true;
+      }
+    }
+    if (headerUpdated) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.SPREADSHEET_ID!,
+        range: `${PERDECOMP_SHEET_NAME}!1:1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [finalHeaders] },
+      });
     }
 
-    const dataConsulta = new Date().toISOString();
-    const mappedItems: any[] = [];
-    for (const d of apiResponse.data || []) {
-      const receipt = d.site_receipt || '';
-      for (const p of d.perdcomp || []) {
-        const isPdf = receipt.toLowerCase().endsWith('.pdf');
-        mappedItems.push({
-          Cliente_ID: '',
-          Nome_da_Empresa: p.solicitante || '',
-          Perdcomp_ID: generatePerdcompId(),
-          CNPJ: cleanCnpj,
-          Tipo_Pedido: p.tipo_documento || '',
-          Situacao: p.situacao || '',
-          Periodo_Inicio: p.periodo_apuracao_inicio || '',
-          Periodo_Fim: p.periodo_apuracao_fim || '',
-          Valor_Total: 0,
-          Numero_Processo: p.numero_processo || '',
-          Data_Protocolo: p.data_transmissao || '',
-          Ultima_Atualizacao: p.ultima_atualizacao || '',
-          Quantidade_Receitas: 0,
-          Quantidade_Origens: 0,
-          Quantidade_DARFs: 0,
-          URL_Comprovante_HTML: !isPdf ? receipt : '',
-          URL_Comprovante_PDF: isPdf ? receipt : '',
-          Data_Consulta: dataConsulta,
-        });
+    const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    let rowNumber = -1;
+    for (const r of rows) {
+      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
+        rowNumber = r._rowNumber;
+        break;
       }
     }
 
-    const resp: any = { ok: true, fonte: 'api', itens: mappedItems };
+    if (rowNumber !== -1) {
+      const data = [] as any[];
+      for (const [key, value] of Object.entries(writes)) {
+        if (value === undefined || value === '') continue;
+        const colIndex = finalHeaders.indexOf(key);
+        if (colIndex === -1) continue;
+        const colLetter = columnNumberToLetter(colIndex + 1);
+        data.push({
+          range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
+          values: [[value]],
+        });
+      }
+      if (data.length) {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: process.env.SPREADSHEET_ID!,
+          requestBody: { valueInputOption: 'RAW', data },
+        });
+      }
+    } else {
+      const row: Record<string, any> = {};
+      finalHeaders.forEach(h => (row[h] = ''));
+      row['Cliente_ID'] = clienteId;
+      row['Nome da Empresa'] = nomeEmpresa;
+      row['CNPJ'] = `'${cnpj}`;
+      for (const [k, v] of Object.entries(writes)) {
+        if (v !== undefined) row[k] = v;
+      }
+      const values = finalHeaders.map(h => row[h]);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: process.env.SPREADSHEET_ID!,
+        range: PERDECOMP_SHEET_NAME,
+        valueInputOption: 'RAW',
+        requestBody: { values: [values] },
+      });
+    }
+
+    const resp: any = {
+      ok: true,
+      header: { requested_at: headerRequestedAt },
+      mappedCount,
+      total_perdcomp: totalPerdcomp,
+      site_receipt: siteReceipt,
+      primeiro: {
+        perdcomp: first?.perdcomp,
+        solicitante: first?.solicitante,
+        tipo_documento: first?.tipo_documento,
+        tipo_credito: first?.tipo_credito,
+        data_transmissao: first?.data_transmissao,
+        situacao: first?.situacao,
+        situacao_detalhamento: first?.situacao_detalhamento,
+      },
+      cnpj,
+    };
     if (debugMode) {
       resp.debug = {
         requestedAt,
         fonte: 'api',
         apiRequest,
         apiResponse,
-        mappedCount: mappedItems.length,
+        mappedCount,
         siteReceipts: apiResponse?.site_receipts,
         header: apiResponse?.header,
+        total_perdcomp: totalPerdcomp,
       };
     }
 
     return NextResponse.json(resp);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[API /infosimples/perdcomp]', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ ok: false, message: errorMessage }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: true,
+        httpStatus: 502,
+        httpStatusText: 'Bad Gateway',
+        providerCode: null,
+        providerMessage: error?.message || 'API error',
+      },
+      { status: 502 }
+    );
   }
 }

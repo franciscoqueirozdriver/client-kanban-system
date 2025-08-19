@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { padCNPJ14 } from '@/utils/cnpj';
 
 export type CompetitorItem = { nome: string; cnpj: string };
 
@@ -98,7 +99,7 @@ export default function CompetitorSearchDialog({
                   />
                   <div className="flex flex-col">
                     <span className="font-semibold">{it.nome}</span>
-                    <span className="text-xs font-mono text-gray-500">{it.cnpj || '(sem CNPJ)'}</span>
+                    <span className="text-xs font-mono text-gray-500">{it.cnpj ? padCNPJ14(it.cnpj) : '(sem CNPJ)'}</span>
                   </div>
                 </li>
               );

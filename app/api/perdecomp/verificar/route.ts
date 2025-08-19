@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets.js';
+import { padCNPJ14 } from '@/utils/cnpj';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
@@ -11,13 +12,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: 'Query parameter "cnpj" is required' }, { status: 400 });
   }
 
-  const cleanCnpj = cnpj.replace(/\D/g, '');
+  const cleanCnpj = padCNPJ14(cnpj);
 
   try {
     const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
 
     const dataForCnpj = rows.filter(row => {
-      const rowCnpj = String(row.CNPJ || '').replace(/\D/g, '');
+      const rowCnpj = padCNPJ14(row.CNPJ);
       return rowCnpj === cleanCnpj;
     });
 

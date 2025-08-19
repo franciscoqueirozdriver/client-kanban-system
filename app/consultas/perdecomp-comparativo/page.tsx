@@ -7,6 +7,7 @@ import NewCompanyModal from '../../../components/NewCompanyModal';
 import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
+import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 // --- Helper Types ---
 interface Company {
@@ -16,19 +17,11 @@ interface Company {
   [key: string]: any;
 }
 
-interface PerdcompRow {
-  Cliente_ID: string; 'Nome da Empresa': string; Perdcomp_ID: string; CNPJ: string;
-  Tipo_Pedido: string; Situacao: string; Periodo_Inicio: string; Periodo_Fim: string;
-  Valor_Total: number; Numero_Processo: string; Data_Protocolo: string; Ultima_Atualizacao: string;
-  Quantidade_Receitas: number; Quantidade_Origens: number; Quantidade_DARFs: number;
-  URL_Comprovante_HTML: string; URL_Comprovante_PDF: string; Data_Consulta: string;
-}
-
-interface AggregatedData {
-  totalCount: number; totalValue: number;
-  valueByType: { [key: string]: number };
-  comprovantes: { html: string; pdf: string; id: string }[];
+interface CardData {
   lastConsultation: string | null;
+  quantity: number;
+  siteReceipt?: string | null;
+  fromCache?: boolean;
 }
 
 type ApiDebug = {
@@ -39,11 +32,12 @@ type ApiDebug = {
   mappedCount?: number;
   siteReceipts?: string[];
   header?: any;
+  total_perdcomp?: number;
 } | null;
 
 interface ComparisonResult {
-  company: Company; data: AggregatedData | null;
-  status: 'idle' | 'loading' | 'loaded' | 'error'; error?: string;
+  company: Company; data: CardData | null;
+  status: 'idle' | 'loading' | 'loaded' | 'error'; error?: any;
   debug?: ApiDebug;
 }
 
@@ -76,33 +70,25 @@ type Prefill = {
   Produto?: string;
   Area?: string;
 };
-// --- Helper Functions ---
-const aggregatePerdcompData = (rows: PerdcompRow[], startDate: string, endDate: string): AggregatedData => {
-  const filteredRows = rows.filter(row => {
-    const rowDate = row.Periodo_Fim || row.Data_Consulta.split('T')[0];
-    return rowDate >= startDate && rowDate <= endDate;
-  });
 
-  if (filteredRows.length === 0) {
-    const lastConsultation = rows.length > 0 ? rows.sort((a, b) => new Date(b.Data_Consulta).getTime() - new Date(a.Data_Consulta).getTime())[0].Data_Consulta : null;
-    return { totalCount: 0, totalValue: 0, valueByType: {}, comprovantes: [], lastConsultation };
+function buildApiErrorLabel(e: any) {
+  const parts: string[] = [];
+  if (e?.httpStatus) {
+    parts.push(
+      `API error: ${e.httpStatus}${e.httpStatusText ? ' ' + e.httpStatusText : ''}`,
+    );
+  } else {
+    parts.push('API error:');
   }
-
-  const valueByType = filteredRows.reduce((acc, row) => {
-    const value = Number(row.Valor_Total) || 0;
-    acc[row.Tipo_Pedido] = (acc[row.Tipo_Pedido] || 0) + value;
-    return acc;
-  }, {} as { [key: string]: number });
-
-  const totalValue = Object.values(valueByType).reduce((sum, v) => sum + v, 0);
-  const comprovantes = filteredRows.filter(row => row.URL_Comprovante_HTML || row.URL_Comprovante_PDF).map(row => ({
-    html: row.URL_Comprovante_HTML, pdf: row.URL_Comprovante_PDF, id: row.Perdcomp_ID,
-  }));
-  const lastConsultation = filteredRows.sort((a, b) => new Date(b.Data_Consulta).getTime() - new Date(a.Data_Consulta).getTime())[0].Data_Consulta;
-
-  return { totalCount: filteredRows.length, totalValue, valueByType, comprovantes, lastConsultation };
-};
-
+  if (e?.providerCode) {
+    parts.push(
+      `– ${e.providerCode}${e?.providerMessage ? ' ' + e.providerMessage : ''}`,
+    );
+  } else if (e?.message) {
+    parts.push(`– ${e.message}`);
+  }
+  return parts.join(' ');
+}
 // --- Main Page Component ---
 export default function PerdecompComparativoPage() {
   const [client, setClient] = useState<CompanySelection | null>(null);
@@ -174,55 +160,87 @@ export default function PerdecompComparativoPage() {
   };
 
   const updateResult = (cnpj: string, data: Partial<ComparisonResult>) => {
-    setResults(prev => prev.map(r => r.company.CNPJ_Empresa === cnpj ? { ...r, ...data } : r));
+    const c14 = padCNPJ14(cnpj);
+    setResults(prev => prev.map(r => padCNPJ14(r.company.CNPJ_Empresa) === c14 ? { ...r, ...data } : r));
   };
 
   const runConsultation = async (selection: CompanySelection) => {
     const { company, forceRefresh } = selection;
-    updateResult(company.CNPJ_Empresa, { status: 'loading' });
+    const cnpj = padCNPJ14(company.CNPJ_Empresa);
+    if (!isValidCNPJ(cnpj)) {
+      updateResult(cnpj, { status: 'error', error: { message: 'CNPJ inválido. Verifique e tente novamente.' } });
+      return;
+    }
+    updateResult(cnpj, { status: 'loading' });
     try {
       const res = await fetch('/api/infosimples/perdcomp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cnpj: company.CNPJ_Empresa,
-          periodoInicio: startDate,
-          periodoFim: endDate,
+          cnpj,
+          data_inicio: startDate,
+          data_fim: endDate,
           force: forceRefresh,
           debug: true,
+          Cliente_ID: company.Cliente_ID,
+          nomeEmpresa: company.Nome_da_Empresa,
         }),
       });
-
-      if (!res.ok) throw new Error(`API error: ${res.statusText}`);
       const data = await res.json();
-
-      let finalData: PerdcompRow[] = [];
-      if (data.fonte === 'api' && data.itens?.length > 0) {
-          const preparedForSave = data.itens.map((item: Omit<PerdcompRow, 'Cliente_ID' | 'Nome da Empresa'>) => ({
-            ...item,
-            Cliente_ID: company.Cliente_ID,
-            "Nome da Empresa": company.Nome_da_Empresa,
-          }));
-          await fetch('/api/perdecomp/salvar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ linhas: preparedForSave }),
-          });
-          finalData = preparedForSave;
-      } else {
-        finalData = data.linhas || [];
+      if (!res.ok || data.error) {
+        const errorObj = {
+          httpStatus: data?.httpStatus,
+          httpStatusText: data?.httpStatusText,
+          providerCode: data?.providerCode,
+          providerMessage: data?.providerMessage,
+          message: data?.message,
+        };
+        if (data.fallback) {
+          const cardData: CardData = {
+            quantity: data.fallback.quantidade ?? 0,
+            lastConsultation: data.fallback.requested_at ?? null,
+            siteReceipt: data.fallback.site_receipt ?? null,
+            fromCache: true,
+          };
+          updateResult(cnpj, { status: 'loaded', data: cardData, error: errorObj });
+        } else {
+          updateResult(cnpj, { status: 'error', error: errorObj });
+        }
+        return;
       }
 
-      const aggregated = aggregatePerdcompData(finalData, startDate, endDate);
-      updateResult(company.CNPJ_Empresa, { status: 'loaded', data: aggregated, debug: data.debug ?? null });
+      const firstLinha = Array.isArray(data.linhas) ? data.linhas[0] : undefined;
+      const mappedCount =
+        data.mappedCount ??
+        data.debug?.mappedCount ??
+        (Array.isArray(data.linhas) ? data.linhas.length : 0);
+      const totalPerdcomp =
+        data.total_perdcomp ??
+        data.debug?.total_perdcomp ??
+        0;
+      const siteReceipt =
+        (data.site_receipt ??
+          data.debug?.siteReceipts?.[0] ??
+          firstLinha?.URL_Comprovante_HTML) || null;
+      const lastConsultation =
+        data.header?.requested_at ||
+        data.debug?.header?.requested_at ||
+        firstLinha?.Data_Consulta ||
+        null;
+      const cardData: CardData = {
+        quantity: Math.max(totalPerdcomp, mappedCount),
+        lastConsultation,
+        siteReceipt,
+      };
+      updateResult(cnpj, { status: 'loaded', data: cardData, debug: data.debug ?? null });
 
-      if (forceRefresh && (data.debug?.apiResponse?.data?.[0]?.perdcomp?.length === 0 || !data.debug?.apiResponse)) {
+      if (forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
         setPreviewPayload({ company, debug: data.debug ?? null });
         setPreviewOpen(true);
       }
 
     } catch (e: any) {
-      updateResult(company.CNPJ_Empresa, { status: 'error', error: e.message });
+      updateResult(cnpj, { status: 'error', error: { message: e.message } });
     }
   };
 
@@ -235,7 +253,7 @@ export default function PerdecompComparativoPage() {
     if (allSelections.length === 0) return;
 
     setGlobalLoading(true);
-    setResults(allSelections.map(s => ({ company: s.company, data: null, status: 'idle', debug: null })));
+    setResults(allSelections.map(s => ({ company: { ...s.company, CNPJ_Empresa: padCNPJ14(s.company.CNPJ_Empresa) }, data: null, status: 'idle', debug: null })));
 
     for (const sel of allSelections) {
       try {
@@ -275,11 +293,11 @@ export default function PerdecompComparativoPage() {
     .then(async (r) => {
       const data = await r.json();
       if (!r.ok) throw new Error(data?.error || 'Falha na busca');
-      const selCnpjs = new Set(competitors.filter(Boolean).map(c => (c!.company.CNPJ_Empresa || '').replace(/\D/g, '')));
-      const clientCnpj = (client.company.CNPJ_Empresa || '').replace(/\D/g, '');
+      const selCnpjs = new Set(competitors.filter(Boolean).map(c => padCNPJ14(c!.company.CNPJ_Empresa)));
+      const clientCnpj = padCNPJ14(client.company.CNPJ_Empresa);
 
       const items = (data.items || []).filter((it: any) => {
-        const c = (it?.cnpj || '').replace(/\D/g, '');
+        const c = padCNPJ14(it?.cnpj);
         const isClient = c && clientCnpj && c === clientCnpj;
         const already = c && selCnpjs.has(c);
         const nameDup = competitors.filter(Boolean).some(cmp => cmp!.company.Nome_da_Empresa.toLowerCase() === String(it?.nome || '').toLowerCase());
@@ -305,7 +323,7 @@ export default function PerdecompComparativoPage() {
           company: {
             Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
             Nome_da_Empresa: s.nome,
-            CNPJ_Empresa: s.cnpj || '',
+            CNPJ_Empresa: padCNPJ14(s.cnpj),
           },
           lastConsultation: null,
           forceRefresh: false,
@@ -318,7 +336,7 @@ export default function PerdecompComparativoPage() {
         company: {
           Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
           Nome_da_Empresa: s.nome,
-          CNPJ_Empresa: s.cnpj || '',
+          CNPJ_Empresa: padCNPJ14(s.cnpj),
         },
         lastConsultation: null,
         forceRefresh: false,
@@ -330,7 +348,8 @@ export default function PerdecompComparativoPage() {
 
   const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
     try {
-      const res = await fetch(`/api/perdecomp/verificar?cnpj=${cnpj}`);
+      const c = padCNPJ14(cnpj);
+      const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
       if (res.ok) {
         const { lastConsultation } = await res.json();
         return lastConsultation;
@@ -383,7 +402,7 @@ export default function PerdecompComparativoPage() {
     let cnpj = '';
     if (source === 'selected' && selectedCompany) {
       nome = selectedCompany.Nome_da_Empresa || '';
-      cnpj = (selectedCompany.CNPJ_Empresa || '').replace(/\D/g, '');
+      cnpj = padCNPJ14(selectedCompany.CNPJ_Empresa);
     } else if (source === 'query' && rawQuery) {
       nome = rawQuery.trim();
     }
@@ -414,8 +433,10 @@ export default function PerdecompComparativoPage() {
   }
 
   const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
-    const lastConsultation = await checkLastConsultation(company.CNPJ_Empresa);
-    const selection: CompanySelection = { company, lastConsultation, forceRefresh: false };
+    const cnpj = padCNPJ14(company.CNPJ_Empresa);
+    const normalized = { ...company, CNPJ_Empresa: cnpj };
+    const lastConsultation = await checkLastConsultation(cnpj);
+    const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
     if (type === 'client') {
       setClient(selection);
     } else if (type === 'competitor' && index !== undefined) {
@@ -523,36 +544,43 @@ export default function PerdecompComparativoPage() {
         {results.map(({ company, data, status, error, debug }) => (
           <div key={company.CNPJ_Empresa} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col">
             <h3 className="font-bold text-lg truncate mb-1" title={company.Nome_da_Empresa}>{company.Nome_da_Empresa}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{company.CNPJ_Empresa}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{padCNPJ14(company.CNPJ_Empresa)}</p>
 
             {status === 'loading' && <div className="flex-grow flex items-center justify-center"><FaSpinner className="animate-spin text-4xl text-violet-500"/></div>}
-            {status === 'error' && <div className="flex-grow flex items-center justify-center text-red-500">{error}</div>}
+            {status === 'error' && (
+              <div className="flex-grow flex items-center justify-center text-red-500 text-sm text-center whitespace-pre-line">
+                {buildApiErrorLabel(error)}
+              </div>
+            )}
             {status === 'loaded' && data && (
               <div className="flex-grow flex flex-col">
+                {error && (
+                  <p className="text-red-500 text-sm whitespace-pre-line mb-2">{buildApiErrorLabel(error)}</p>
+                )}
+                {data.fromCache && (
+                  <p className="text-xs text-yellow-600 mb-2">
+                    Mostrando dados da última consulta em {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : ''} (falha {error?.httpStatus} hoje)
+                  </p>
+                )}
                 {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
                 <div className="space-y-3 text-sm mb-4 flex-grow">
-                  <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.totalCount}</span></div>
-                  <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">{data.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                  <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.quantity}</span></div>
+                  <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
                 </div>
-                {data.comprovantes.length > 0 && (
+                {data.siteReceipt && (
                   <div className="mb-4">
                     <h4 className="font-semibold mb-1 text-sm">Comprovantes:</h4>
-                    <div className="text-xs space-y-1 max-h-24 overflow-y-auto">
-                      {data.comprovantes.map(c => (
-                        <div key={c.id} className="flex gap-2">
-                           {c.html && <a href={c.html} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">HTML</a>}
-                           {c.pdf && <a href={c.pdf} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">PDF</a>}
-                        </div>
-                      ))}
+                    <div className="text-xs">
+                      <a href={data.siteReceipt} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">HTML</a>
                     </div>
                   </div>
                 )}
               </div>
             )}
-             {status === 'loaded' && !data?.totalCount && (
-                <div className="flex-grow flex flex-col items-center justify-center text-center">
-                    <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
-                </div>
+            {status === 'loaded' && !data?.quantity && (
+              <div className="flex-grow flex flex-col items-center justify-center text-center">
+                <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
+              </div>
             )}
             {status === 'loaded' && debug && (
               <button
