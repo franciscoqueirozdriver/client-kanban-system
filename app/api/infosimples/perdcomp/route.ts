@@ -161,10 +161,25 @@ export async function POST(request: Request) {
 
       if (dataForCnpj.length > 0) {
         const lastConsulta = dataForCnpj.reduce((acc, r) => {
-          const dc = r.Data_Consulta || '';
-          return !acc || new Date(dc) > new Date(acc) ? dc : acc;
+          const dc = r.Data_Consulta;
+          // Only consider valid-looking dates (basic ISO format check)
+          if (!dc || typeof dc !== 'string' || !dc.startsWith('20')) return acc;
+          try {
+            // Check if dates are valid before comparing
+            const d1 = new Date(dc);
+            if (isNaN(d1.getTime())) return acc;
+            if (!acc) return dc;
+            const d2 = new Date(acc);
+            if (isNaN(d2.getTime())) return dc;
+            return d1 > d2 ? dc : acc;
+          } catch {
+            return acc;
+          }
         }, '');
-        const totalPerdcomp = Number(dataForCnpj[0]?.Quantidade_PERDCOMP || 0);
+
+        const rawQtd = dataForCnpj[0]?.Quantidade_PERDCOMP ?? '0';
+        const totalPerdcomp = parseInt(String(rawQtd).replace(/\D/g, ''), 10) || 0;
+
         const resp: any = { ok: true, fonte: 'planilha', linhas: dataForCnpj };
         if (debugMode) {
           resp.debug = {
