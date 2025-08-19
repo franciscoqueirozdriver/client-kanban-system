@@ -41,6 +41,68 @@ function addYears(dateISO: string, years: number) {
   return d.toISOString().slice(0, 10);
 }
 
+function sleep(ms: number) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function jitter(base: number) {
+  return Math.round(base * (0.8 + Math.random() * 0.4));
+}
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delays = [1500, 3000, 5000]): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      const status = err?.response?.status ?? err?.status ?? 0;
+      const shouldRetry = status >= 500 || status === 0;
+      if (!shouldRetry || i === attempts - 1) throw err;
+      await sleep(jitter(delays[i] ?? 2000));
+    }
+  }
+  throw lastErr;
+}
+
+async function getLastPerdcompFromSheet({
+  cnpj,
+  clienteId,
+}: {
+  cnpj?: string;
+  clienteId?: string;
+}) {
+  const sheets = await getSheetsClient();
+  const head = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SPREADSHEET_ID,
+    range: 'PEREDCOMP!1:1',
+  });
+  const headers = head.data.values?.[0] || [];
+  const col = (name: string) => headers.indexOf(name);
+  const resp = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SPREADSHEET_ID,
+    range: 'PEREDCOMP!A2:Z',
+  });
+  const rows = resp.data.values || [];
+  const idxCliente = col('Cliente_ID');
+  const idxCnpj = col('CNPJ');
+  const idxQtd = col('Quantidade_PERDCOMP');
+  const idxHtml = col('URL_Comprovante_HTML');
+  const idxData = col('Data_Consulta');
+  const match = rows.find(
+    r =>
+      (clienteId && r[idxCliente] === clienteId) ||
+      (cnpj && (r[idxCnpj] || '').replace(/\D/g, '') === cnpj)
+  );
+  if (!match) return null;
+  const qtd = Number(match[idxQtd] ?? 0);
+  return {
+    quantidade: qtd || 0,
+    site_receipt: match[idxHtml] || null,
+    requested_at: match[idxData] || null,
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -65,8 +127,16 @@ export async function POST(request: Request) {
 
     const force = body?.force ?? false;
     const debugMode = body?.debug ?? false;
-    const clienteId = body?.clienteId;
-    const nomeEmpresa = body?.nomeEmpresa;
+    const clienteId =
+      body?.Cliente_ID ??
+      body?.clienteId ??
+      url.searchParams.get('Cliente_ID') ??
+      url.searchParams.get('clienteId');
+    const nomeEmpresa =
+      body?.Nome_da_Empresa ??
+      body?.nomeEmpresa ??
+      url.searchParams.get('Nome_da_Empresa') ??
+      url.searchParams.get('nomeEmpresa');
     if (!clienteId || !nomeEmpresa) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
@@ -117,51 +187,56 @@ export async function POST(request: Request) {
       throw new Error('INFOSIMPLES_TOKEN is not set in .env.local');
     }
 
-    const params = new URLSearchParams();
-    params.append('token', token);
-    params.append('cnpj', cnpj);
-    params.append('data_inicio', data_inicio);
-    params.append('data_fim', data_fim);
-    params.append('timeout', '600');
+    const payload = { cnpj, data_inicio, data_fim, timeout: 600 };
 
-    const apiRes = await fetch(apiRequest.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-    });
-
-    const text = await apiRes.text();
-    const maybeJson = (() => {
-      try {
-        return JSON.parse(text);
-      } catch {
-        return null;
+    const doCall = async () => {
+      const resp = await fetch(apiRequest.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const text = await resp.text();
+      const json = (() => {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      })();
+      if (!resp.ok || (json && typeof json.code === 'number' && json.code !== 200)) {
+        const err: any = new Error('provider_error');
+        err.status = resp.status || 502;
+        err.statusText = resp.statusText || 'Bad Gateway';
+        err.providerCode = json?.code;
+        err.providerMessage =
+          json?.code_message || json?.message || json?.errors?.[0]?.message || null;
+        throw err;
       }
-    })();
+      return json;
+    };
 
-    if (!apiRes.ok || (maybeJson && typeof maybeJson.code === 'number' && maybeJson.code !== 200)) {
-      const httpStatus = apiRes.status || 500;
-      const httpStatusText = apiRes.statusText || 'Error';
-      const providerCode = maybeJson?.code;
-      const providerMessage =
-        maybeJson?.code_message ||
-        maybeJson?.message ||
-        maybeJson?.errors?.[0]?.message ||
-        null;
+    let apiResponse: any;
+    try {
+      apiResponse = await withRetry(doCall, 3, [1500, 3000, 5000]);
+    } catch (err: any) {
+      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
       return NextResponse.json(
         {
           error: true,
-          httpStatus,
-          httpStatusText,
-          providerCode,
-          providerMessage,
-          params: { cnpj, data_inicio, data_fim },
+          httpStatus: err?.status || 502,
+          httpStatusText: err?.statusText || 'Bad Gateway',
+          providerCode: err?.providerCode ?? null,
+          providerMessage: err?.providerMessage ?? err?.message ?? 'API error',
+          fallback,
         },
-        { status: httpStatus }
+        { status: err?.status || 502 }
       );
     }
 
-    const apiResponse = maybeJson || {};
     if (debugMode && apiResponse?.header?.parameters?.token) {
       delete apiResponse.header.parameters.token;
     }

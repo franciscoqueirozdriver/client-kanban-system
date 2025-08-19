@@ -21,6 +21,7 @@ interface CardData {
   lastConsultation: string | null;
   quantity: number;
   siteReceipt?: string | null;
+  fromCache?: boolean;
 }
 
 type ApiDebug = {
@@ -181,13 +182,30 @@ export default function PerdecompComparativoPage() {
           data_fim: endDate,
           force: forceRefresh,
           debug: true,
-          clienteId: company.Cliente_ID,
+          Cliente_ID: company.Cliente_ID,
           nomeEmpresa: company.Nome_da_Empresa,
         }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        updateResult(cnpj, { status: 'error', error: data });
+        const errorObj = {
+          httpStatus: data?.httpStatus,
+          httpStatusText: data?.httpStatusText,
+          providerCode: data?.providerCode,
+          providerMessage: data?.providerMessage,
+          message: data?.message,
+        };
+        if (data.fallback) {
+          const cardData: CardData = {
+            quantity: data.fallback.quantidade ?? 0,
+            lastConsultation: data.fallback.requested_at ?? null,
+            siteReceipt: data.fallback.site_receipt ?? null,
+            fromCache: true,
+          };
+          updateResult(cnpj, { status: 'loaded', data: cardData, error: errorObj });
+        } else {
+          updateResult(cnpj, { status: 'error', error: errorObj });
+        }
         return;
       }
 
@@ -536,6 +554,14 @@ export default function PerdecompComparativoPage() {
             )}
             {status === 'loaded' && data && (
               <div className="flex-grow flex flex-col">
+                {error && (
+                  <p className="text-red-500 text-sm whitespace-pre-line mb-2">{buildApiErrorLabel(error)}</p>
+                )}
+                {data.fromCache && (
+                  <p className="text-xs text-yellow-600 mb-2">
+                    Mostrando dados da última consulta em {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : ''} (falha {error?.httpStatus} hoje)
+                  </p>
+                )}
                 {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
                 <div className="space-y-3 text-sm mb-4 flex-grow">
                   <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.quantity}</span></div>
@@ -551,10 +577,10 @@ export default function PerdecompComparativoPage() {
                 )}
               </div>
             )}
-             {status === 'loaded' && !data?.quantity && (
-                <div className="flex-grow flex flex-col items-center justify-center text-center">
-                    <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
-                </div>
+            {status === 'loaded' && !data?.quantity && (
+              <div className="flex-grow flex flex-col items-center justify-center text-center">
+                <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
+              </div>
             )}
             {status === 'loaded' && debug && (
               <button
