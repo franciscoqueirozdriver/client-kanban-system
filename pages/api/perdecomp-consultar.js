@@ -30,8 +30,9 @@ export default async function handler(req,res){
     const head = await sheets.spreadsheets.values.get({ spreadsheetId, range: 'PEREDCOMP!1:1' });
     const headers = head.data.values?.[0] || [];
     const col = (name)=> headers.indexOf(name);
-
-    const bodyRows = await sheets.spreadsheets.values.get({ spreadsheetId, range: 'PEREDCOMP!A2:Z' });
+    const lastColLetter = (n)=>{ let s=''; while(n>=0){ s=String.fromCharCode((n%26)+65)+s; n=Math.floor(n/26)-1; } return s; };
+    const end = lastColLetter(headers.length-1);
+    const bodyRows = await sheets.spreadsheets.values.get({ spreadsheetId, range: `PEREDCOMP!A2:${end}` });
     const rows = bodyRows.data.values || [];
     const idx = {
       cliente: col('Cliente_ID'),
@@ -113,19 +114,37 @@ export default async function handler(req,res){
     try{
       body = await withRetry(doCall, 3, [1500,3000,5000]);
     }catch(err){
-      // fallback
       const fallback = found ? {
         quantidade: Number(found[idx.qtd]||0)||0,
         site_receipt: found[idx.html]||null,
         requested_at: found[idx.dt]||null
       } : null;
-      return res.status(err?.status||502).json({
+
+      if (fallback) {
+        return res.status(200).json({
+          ok: true,
+          mode: 'fallback',
+          warning: {
+            httpStatus: err?.status || 502,
+            httpStatusText: err?.statusText || 'Bad Gateway',
+            providerCode: err?.providerCode ?? null,
+            providerMessage: err?.providerMessage ?? 'API error',
+          },
+          header: { requested_at: fallback.requested_at },
+          mappedCount: null,
+          total_perdcomp: fallback.quantidade,
+          site_receipt: fallback.site_receipt,
+          primeiro: {},
+          cnpj
+        });
+      }
+
+      return res.status(err?.status || 502).json({
         error:true,
-        httpStatus: err?.status||502,
-        httpStatusText: err?.statusText||'Bad Gateway',
+        httpStatus: err?.status || 502,
+        httpStatusText: err?.statusText || 'Bad Gateway',
         providerCode: err?.providerCode ?? null,
-        providerMessage: err?.providerMessage ?? 'API error',
-        fallback
+        providerMessage: err?.providerMessage ?? 'API error'
       });
     }
 
@@ -160,13 +179,12 @@ export default async function handler(req,res){
     setIf(idx.proto, primeiro?.data_transmissao);
     setIf(idx.updt, primeiro?.situacao_detalhamento);
 
-    const range = 'PEREDCOMP!A2:Z';
     if (found){
-      const rowIndex = rows.indexOf(found); // 0-based dentro do range A2:Z
+      const rowIndex = rows.indexOf(found); // 0-based dentro do range
       const values = [...updated];
       while(values.length < headers.length) values.push('');
       await sheets.spreadsheets.values.update({
-        spreadsheetId, range: `PEREDCOMP!A${rowIndex+2}:Z${rowIndex+2}`,
+        spreadsheetId, range: `PEREDCOMP!A${rowIndex+2}:${end}${rowIndex+2}`,
         valueInputOption:'RAW', requestBody:{ values:[values.slice(0, headers.length)] }
       });
     } else {
