@@ -201,17 +201,21 @@ export async function POST(request: Request) {
       throw new Error('INFOSIMPLES_TOKEN is not set in .env.local');
     }
 
-    const payload = { cnpj, data_inicio, data_fim, timeout: 600 };
+    const params = new URLSearchParams({
+      token: token,
+      cnpj: cnpj,
+      data_inicio: data_inicio,
+      data_fim: data_fim,
+      timeout: '600',
+    });
 
     const doCall = async () => {
       const resp = await fetch(apiRequest.endpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Token ${token}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify(payload),
+        body: params.toString(),
       });
       const text = await resp.text();
       const json = (() => {
