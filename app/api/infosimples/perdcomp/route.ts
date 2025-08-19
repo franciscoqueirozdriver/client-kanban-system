@@ -5,7 +5,7 @@ import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 export const runtime = 'nodejs';
 
-const PERDECOMP_SHEET_NAME = 'PEREDCOMP';
+const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
 function todayISO() {
   const d = new Date();
