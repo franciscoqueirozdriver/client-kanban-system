@@ -70,9 +70,9 @@ function groupRows(rows) {
         size: idx.tamanho >= 0 ? row[idx.tamanho] || '' : '',
         uf: idx.uf >= 0 ? row[idx.uf] || '' : '',
         city: idx.cidade >= 0 ? row[idx.cidade] || '' : '',
-        status: idx.status >= 0 ? row[idx.status] || '',
-        dataMov: idx.data >= 0 ? row[idx.data] || '',
-        color: idx.cor >= 0 ? row[idx.cor] || '',
+        status: idx.status >= 0 ? row[idx.status] || '' : '',
+        dataMov: idx.data >= 0 ? row[idx.data] || '' : '',
+        color: idx.cor >= 0 ? row[idx.cor] || '' : '',
         rows: [],
       });
     }
