@@ -14,9 +14,9 @@ function protectPhoneValue(value) {
 // ✅ Junta os 3 tipos de e-mail e remove duplicados
 function collectEmails(row, idx) {
   const emails = [
-    row[idx.emailWork] || '',
-    row[idx.emailHome] || '',
-    row[idx.emailOther] || '',
+    idx.emailWork >= 0 ? row[idx.emailWork] || '' : '',
+    idx.emailHome >= 0 ? row[idx.emailHome] || '' : '',
+    idx.emailOther >= 0 ? row[idx.emailOther] || '' : '',
   ].map(e => e.trim()).filter(Boolean);
 
   return Array.from(new Set(emails)).join(';');
@@ -24,30 +24,32 @@ function collectEmails(row, idx) {
 
 function groupRows(rows) {
   const [header, ...data] = rows;
+  const norm = (s) => (s || '').toString().toLowerCase().replace(/[\s_]+/g, ' ').trim();
+  const hIndex = (name) => header.findIndex((h) => norm(h) === norm(name));
   const idx = {
-    clienteId: header.indexOf('Cliente_ID'),
-    org: header.indexOf('Organização - Nome'),
-    titulo: header.indexOf('Negócio - Título'),
-    contato: header.indexOf('Negócio - Pessoa de contato'),
-    cargo: header.indexOf('Pessoa - Cargo'),
-    emailWork: header.indexOf('Pessoa - Email - Work'),
-    emailHome: header.indexOf('Pessoa - Email - Home'),
-    emailOther: header.indexOf('Pessoa - Email - Other'),
-    phoneWork: header.indexOf('Pessoa - Phone - Work'),
-    phoneHome: header.indexOf('Pessoa - Phone - Home'),
-    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
-    phoneOther: header.indexOf('Pessoa - Phone - Other'),
-    tel: header.indexOf('Pessoa - Telefone'),
-    cel: header.indexOf('Pessoa - Celular'),
-    normalizado: header.indexOf('Telefone Normalizado'),
-    segmento: header.indexOf('Organização - Segmento'),
-    tamanho: header.indexOf('Organização - Tamanho da empresa'),
-    uf: header.indexOf('uf'),
-    cidade: header.indexOf('cidade_estimada'),
-    status: header.indexOf('Status_Kanban'),
-    data: header.indexOf('Data_Ultima_Movimentacao'),
-    linkedin: header.indexOf('Pessoa - End. Linkedin'),
-    cor: header.indexOf('Cor_Card'),
+    clienteId: hIndex('Cliente_ID'),
+    org: hIndex('Organização - Nome'),
+    titulo: hIndex('Negócio - Título'),
+    contato: hIndex('Negócio - Pessoa de contato'),
+    cargo: hIndex('Pessoa - Cargo'),
+    emailWork: hIndex('Pessoa - Email - Work'),
+    emailHome: hIndex('Pessoa - Email - Home'),
+    emailOther: hIndex('Pessoa - Email - Other'),
+    phoneWork: hIndex('Pessoa - Phone - Work'),
+    phoneHome: hIndex('Pessoa - Phone - Home'),
+    phoneMobile: hIndex('Pessoa - Phone - Mobile'),
+    phoneOther: hIndex('Pessoa - Phone - Other'),
+    tel: hIndex('Pessoa - Telefone'),
+    cel: hIndex('Pessoa - Celular'),
+    normalizado: hIndex('Telefone Normalizado'),
+    segmento: hIndex('Organização - Segmento'),
+    tamanho: hIndex('Organização - Tamanho da empresa'),
+    uf: hIndex('uf'),
+    cidade: hIndex('cidade_estimada'),
+    status: hIndex('Status Kanban'),
+    data: hIndex('Data Ultima Movimentacao'),
+    linkedin: hIndex('Pessoa - End. Linkedin'),
+    cor: hIndex('Cor Card'),
   };
 
   const filters = {
@@ -60,15 +62,15 @@ function groupRows(rows) {
   const clientesMap = new Map();
 
   data.forEach((row) => {
-    const clienteId = row[idx.clienteId] || '';
-    const company = row[idx.org] || '';
-    const segment = row[idx.segmento] || '';
-    const size = row[idx.tamanho] || '';
-    const uf = row[idx.uf] || '';
-    const city = row[idx.cidade] || '';
-    const status = row[idx.status] || '';
-    const dataMov = row[idx.data] || '';
-    const color = row[idx.cor] || '';
+    const clienteId = idx.clienteId >= 0 ? row[idx.clienteId] || '' : '';
+    const company = idx.org >= 0 ? row[idx.org] || '' : '';
+    const segment = idx.segmento >= 0 ? row[idx.segmento] || '' : '';
+    const size = idx.tamanho >= 0 ? row[idx.tamanho] || '' : '';
+    const uf = idx.uf >= 0 ? row[idx.uf] || '' : '';
+    const city = idx.cidade >= 0 ? row[idx.cidade] || '' : '';
+    const status = idx.status >= 0 ? row[idx.status] || '' : '';
+    const dataMov = idx.data >= 0 ? row[idx.data] || '' : '';
+    const color = idx.cor >= 0 ? row[idx.cor] || '' : '';
 
     filters.segmento.add(segment);
     filters.porte.add(size);
@@ -76,16 +78,16 @@ function groupRows(rows) {
     filters.cidade.add(city);
 
     const contact = {
-      name: (row[idx.contato] || '').trim(),
-      role: (row[idx.cargo] || '').trim(),
+      name: idx.contato >= 0 ? (row[idx.contato] || '').trim() : '',
+      role: idx.cargo >= 0 ? (row[idx.cargo] || '').trim() : '',
       email: collectEmails(row, idx),
-      phone: protectPhoneValue(row[idx.tel]),
-      mobile: protectPhoneValue(row[idx.cel]),
+      phone: idx.tel >= 0 ? protectPhoneValue(row[idx.tel]) : '',
+      mobile: idx.cel >= 0 ? protectPhoneValue(row[idx.cel]) : '',
       normalizedPhones: normalizePhones(row, idx).map(protectPhoneValue),
-      linkedin: (row[idx.linkedin] || '').trim(),
+      linkedin: idx.linkedin >= 0 ? (row[idx.linkedin] || '').trim() : '',
     };
 
-    const opportunity = row[idx.titulo] || '';
+    const opportunity = idx.titulo >= 0 ? row[idx.titulo] || '' : '';
 
     if (clientesMap.has(clienteId)) {
       const existing = clientesMap.get(clienteId);
@@ -142,14 +144,26 @@ export default async function handler(req, res) {
     const { row, values } = req.body;
 
     // ✅ Protege telefones antes de salvar
-    if (values?.telefone_normalizado) {
-      values.telefone_normalizado = values.telefone_normalizado
+    if (values?.telefone_normalizado || values?.['Telefone Normalizado']) {
+      const key = values['Telefone Normalizado'] ? 'Telefone Normalizado' : 'telefone_normalizado';
+      values['Telefone Normalizado'] = (values[key] || '')
         .split(';')
         .map(protectPhoneValue)
         .join(';');
+      if (key !== 'Telefone Normalizado') delete values[key];
     }
-    if (values?.tel) values.tel = protectPhoneValue(values.tel);
-    if (values?.cel) values.cel = protectPhoneValue(values.cel);
+
+    if (values?.tel || values?.['Pessoa - Telefone']) {
+      const key = values['Pessoa - Telefone'] ? 'Pessoa - Telefone' : 'tel';
+      values['Pessoa - Telefone'] = protectPhoneValue(values[key]);
+      if (key !== 'Pessoa - Telefone') delete values[key];
+    }
+
+    if (values?.cel || values?.['Pessoa - Celular']) {
+      const key = values['Pessoa - Celular'] ? 'Pessoa - Celular' : 'cel';
+      values['Pessoa - Celular'] = protectPhoneValue(values[key]);
+      if (key !== 'Pessoa - Celular') delete values[key];
+    }
 
     if (row) {
       await updateRow(row, values);
