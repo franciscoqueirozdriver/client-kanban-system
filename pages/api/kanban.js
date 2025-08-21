@@ -14,9 +14,9 @@ function protectPhoneValue(value) {
 // ✅ Junta os 3 tipos de e-mail e remove duplicados
 function collectEmails(row, idx) {
   const emails = [
-    row[idx.emailWork] || '',
-    row[idx.emailHome] || '',
-    row[idx.emailOther] || '',
+    idx.emailWork >= 0 ? row[idx.emailWork] || '' : '',
+    idx.emailHome >= 0 ? row[idx.emailHome] || '' : '',
+    idx.emailOther >= 0 ? row[idx.emailOther] || '' : '',
   ]
     .map((e) => String(e).trim())
     .filter(Boolean);
@@ -26,60 +26,62 @@ function collectEmails(row, idx) {
 
 function groupRows(rows) {
   const [header, ...data] = rows;
+  const norm = (s) => (s || '').toString().toLowerCase().replace(/[\s_]+/g, ' ').trim();
+  const hIndex = (name) => header.findIndex((h) => norm(h) === norm(name));
   const idx = {
-    clienteId: header.indexOf('Cliente_ID'),
-    org: header.indexOf('Organização - Nome'),
-    titulo: header.indexOf('Negócio - Título'),
-    contato: header.indexOf('Negócio - Pessoa de contato'),
-    cargo: header.indexOf('Pessoa - Cargo'),
-    emailWork: header.indexOf('Pessoa - Email - Work'),
-    emailHome: header.indexOf('Pessoa - Email - Home'),
-    emailOther: header.indexOf('Pessoa - Email - Other'),
-    phoneWork: header.indexOf('Pessoa - Phone - Work'),
-    phoneHome: header.indexOf('Pessoa - Phone - Home'),
-    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
-    phoneOther: header.indexOf('Pessoa - Phone - Other'),
-    tel: header.indexOf('Pessoa - Telefone'),
-    cel: header.indexOf('Pessoa - Celular'),
-    normalizado: header.indexOf('Telefone Normalizado'),
-    segmento: header.indexOf('Organização - Segmento'),
-    tamanho: header.indexOf('Organização - Tamanho da empresa'),
-    uf: header.indexOf('uf'),
-    cidade: header.indexOf('cidade_estimada'),
-    status: header.indexOf('Status Kanban'),
-    data: header.indexOf('Data Ultima Movimentacao'),
-    linkedin: header.indexOf('Pessoa - End. Linkedin'),
-    cor: header.indexOf('Cor Card'),
+    clienteId: hIndex('Cliente_ID'),
+    org: hIndex('Organização - Nome'),
+    titulo: hIndex('Negócio - Título'),
+    contato: hIndex('Negócio - Pessoa de contato'),
+    cargo: hIndex('Pessoa - Cargo'),
+    emailWork: hIndex('Pessoa - Email - Work'),
+    emailHome: hIndex('Pessoa - Email - Home'),
+    emailOther: hIndex('Pessoa - Email - Other'),
+    phoneWork: hIndex('Pessoa - Phone - Work'),
+    phoneHome: hIndex('Pessoa - Phone - Home'),
+    phoneMobile: hIndex('Pessoa - Phone - Mobile'),
+    phoneOther: hIndex('Pessoa - Phone - Other'),
+    tel: hIndex('Pessoa - Telefone'),
+    cel: hIndex('Pessoa - Celular'),
+    normalizado: hIndex('Telefone Normalizado'),
+    segmento: hIndex('Organização - Segmento'),
+    tamanho: hIndex('Organização - Tamanho da empresa'),
+    uf: hIndex('uf'),
+    cidade: hIndex('cidade_estimada'),
+    status: hIndex('Status Kanban'),
+    data: hIndex('Data Ultima Movimentacao'),
+    linkedin: hIndex('Pessoa - End. Linkedin'),
+    cor: hIndex('Cor Card'),
   };
 
   const map = new Map();
 
   data.forEach((row, i) => {
-    const clienteId = row[idx.clienteId];
+    const clienteId = idx.clienteId >= 0 ? row[idx.clienteId] : '';
     if (!clienteId) return;
 
     if (!map.has(clienteId)) {
       map.set(clienteId, {
         id: clienteId,
-        company: row[idx.org] || '',
+        company: idx.org >= 0 ? row[idx.org] || '' : '',
         opportunities: [],
         contactsMap: new Map(),
-        segment: row[idx.segmento] || '',
-        size: row[idx.tamanho] || '',
-        uf: row[idx.uf] || '',
-        city: row[idx.cidade] || '',
-        status: row[idx.status] || '',
-        dataMov: row[idx.data] || '',
-        color: row[idx.cor] || '',
+        segment: idx.segmento >= 0 ? row[idx.segmento] || '' : '',
+        size: idx.tamanho >= 0 ? row[idx.tamanho] || '' : '',
+        uf: idx.uf >= 0 ? row[idx.uf] || '' : '',
+        city: idx.cidade >= 0 ? row[idx.cidade] || '' : '',
+        status: idx.status >= 0 ? row[idx.status] || '',
+        dataMov: idx.data >= 0 ? row[idx.data] || '',
+        color: idx.cor >= 0 ? row[idx.cor] || '',
         rows: [],
       });
     }
 
     const client = map.get(clienteId);
-    client.opportunities.push(row[idx.titulo] || '');
+    client.opportunities.push(idx.titulo >= 0 ? row[idx.titulo] || '' : '');
     client.rows.push(i + 2);
 
-    const contactName = (row[idx.contato] || '').trim();
+    const contactName = idx.contato >= 0 ? (row[idx.contato] || '').trim() : '';
     const allEmails = collectEmails(row, idx);
     const key = `${contactName}|${allEmails}`;
 
@@ -87,12 +89,12 @@ function groupRows(rows) {
       const normalized = normalizePhones(row, idx).map(protectPhoneValue);
       client.contactsMap.set(key, {
         name: contactName,
-        role: (row[idx.cargo] || '').trim(),
+        role: idx.cargo >= 0 ? (row[idx.cargo] || '').trim() : '',
         email: allEmails,
-        phone: protectPhoneValue(row[idx.tel]),
-        mobile: protectPhoneValue(row[idx.cel]),
+        phone: idx.tel >= 0 ? protectPhoneValue(row[idx.tel]) : '',
+        mobile: idx.cel >= 0 ? protectPhoneValue(row[idx.cel]) : '',
         normalizedPhones: normalized,
-        linkedin: (row[idx.linkedin] || '').trim(),
+        linkedin: idx.linkedin >= 0 ? (row[idx.linkedin] || '').trim() : '',
       });
     }
   });
@@ -155,9 +157,12 @@ export default async function handler(req, res) {
     const rows = sheet.data.values || [];
     const [header, ...data] = rows;
 
-    const clienteIdIdx = header.indexOf('Cliente_ID');
-    const colorIdx = header.indexOf('Cor Card');
-    const statusIdx = header.indexOf('Status Kanban');
+    const norm = (s) => (s || '').toString().toLowerCase().replace(/[\s_]+/g, ' ').trim();
+    const hIndex = (name) => header.findIndex((h) => norm(h) === norm(name));
+
+    const clienteIdIdx = hIndex('Cliente_ID');
+    const colorIdx = hIndex('Cor Card');
+    const statusIdx = hIndex('Status Kanban');
 
     const promises = [];
 
