@@ -46,10 +46,10 @@ function groupRows(rows) {
     tamanho: header.indexOf('Organização - Tamanho da empresa'),
     uf: header.indexOf('uf'),
     cidade: header.indexOf('cidade_estimada'),
-    status: header.indexOf('Status_Kanban'),
-    data: header.indexOf('Data_Ultima_Movimentacao'),
+    status: header.indexOf('Status Kanban'),
+    data: header.indexOf('Data Ultima Movimentacao'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
-    cor: header.indexOf('Cor_Card'),
+    cor: header.indexOf('Cor Card'),
   };
 
   const map = new Map();
@@ -156,8 +156,8 @@ export default async function handler(req, res) {
     const [header, ...data] = rows;
 
     const clienteIdIdx = header.indexOf('Cliente_ID');
-    const colorIdx = header.indexOf('Cor_Card');
-    const statusIdx = header.indexOf('Status_Kanban');
+    const colorIdx = header.indexOf('Cor Card');
+    const statusIdx = header.indexOf('Status Kanban');
 
     const promises = [];
 
@@ -166,12 +166,12 @@ export default async function handler(req, res) {
         const rowNum = i + 2;
         const values = {};
         if (newStatus !== undefined && statusIdx !== -1) {
-          values.status_kanban = newStatus;
+          values['Status Kanban'] = newStatus;
         }
         if (newColor !== undefined && colorIdx !== -1) {
-          values.cor_card = newColor;
+          values['Cor Card'] = newColor;
         }
-        values.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
+        values['Data Ultima Movimentacao'] = new Date().toISOString().split('T')[0];
         promises.push(updateRow(rowNum, values));
       }
     });

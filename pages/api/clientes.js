@@ -44,10 +44,10 @@ function groupRows(rows) {
     tamanho: header.indexOf('Organização - Tamanho da empresa'),
     uf: header.indexOf('uf'),
     cidade: header.indexOf('cidade_estimada'),
-    status: header.indexOf('Status_Kanban'),
-    data: header.indexOf('Data_Ultima_Movimentacao'),
+    status: header.indexOf('Status Kanban'),
+    data: header.indexOf('Data Ultima Movimentacao'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
-    cor: header.indexOf('Cor_Card'),
+    cor: header.indexOf('Cor Card'),
   };
 
   const filters = {
@@ -142,14 +142,26 @@ export default async function handler(req, res) {
     const { row, values } = req.body;
 
     // ✅ Protege telefones antes de salvar
-    if (values?.telefone_normalizado) {
-      values.telefone_normalizado = values.telefone_normalizado
+    if (values?.telefone_normalizado || values?.['Telefone Normalizado']) {
+      const key = values['Telefone Normalizado'] ? 'Telefone Normalizado' : 'telefone_normalizado';
+      values['Telefone Normalizado'] = (values[key] || '')
         .split(';')
         .map(protectPhoneValue)
         .join(';');
+      if (key !== 'Telefone Normalizado') delete values[key];
     }
-    if (values?.tel) values.tel = protectPhoneValue(values.tel);
-    if (values?.cel) values.cel = protectPhoneValue(values.cel);
+
+    if (values?.tel || values?.['Pessoa - Telefone']) {
+      const key = values['Pessoa - Telefone'] ? 'Pessoa - Telefone' : 'tel';
+      values['Pessoa - Telefone'] = protectPhoneValue(values[key]);
+      if (key !== 'Pessoa - Telefone') delete values[key];
+    }
+
+    if (values?.cel || values?.['Pessoa - Celular']) {
+      const key = values['Pessoa - Celular'] ? 'Pessoa - Celular' : 'cel';
+      values['Pessoa - Celular'] = protectPhoneValue(values[key]);
+      if (key !== 'Pessoa - Celular') delete values[key];
+    }
 
     if (row) {
       await updateRow(row, values);
