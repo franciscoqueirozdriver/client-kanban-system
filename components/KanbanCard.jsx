@@ -46,7 +46,7 @@ function replacePlaceholders(template, { client, contact, phone }) {
 
 async function fetchMessages(app) {
   try {
-    const res = await fetch(`/api/mensagens?app=${app}`);
+    const res = await fetch(`/api/mensagens?app=${encodeURIComponent(app)}`);
     if (!res.ok) return [];
     const data = await res.json();
     if (Array.isArray(data)) return data;
@@ -89,7 +89,7 @@ export default function KanbanCard({ card, index }) {
   };
 
   const handleHistoryClick = async () => {
-    const res = await fetch(`/api/interacoes?clienteId=${client.id}`);
+    const res = await fetch(`/api/interacoes?clienteId=${encodeURIComponent(client.id)}`);
     const history = await res.json();
     setHistoryData(history);
     setHistoryOpen(true);
