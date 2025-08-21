@@ -349,7 +349,7 @@ export default function PerdecompComparativoPage() {
   const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
     try {
       const c = padCNPJ14(cnpj);
-      const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
+      const res = await fetch(`/api/perdecomp/verificar?cnpj=${encodeURIComponent(c)}`);
       if (res.ok) {
         const { lastConsultation } = await res.json();
         return lastConsultation;

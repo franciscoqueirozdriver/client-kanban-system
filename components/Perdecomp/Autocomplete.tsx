@@ -43,7 +43,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/clientes/buscar?q=${query}`);
+        const response = await fetch(`/api/clientes/buscar?q=${encodeURIComponent(query)}`);
         if (response.ok) {
           const data = await response.json();
           setResults(data);
