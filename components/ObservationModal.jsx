@@ -1,8 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function ObservationModal({ open, onConfirm, onClose }) {
   const [obs, setObs] = useState('');
+
+  useEffect(() => {
+    if (open) setObs('');
+  }, [open]);
 
   if (!open) return null;
 
@@ -32,7 +36,10 @@ export default function ObservationModal({ open, onConfirm, onClose }) {
         </button>
         <button
           className="px-3 py-2 bg-gray-400 text-white rounded w-full"
-          onClick={onClose}
+          onClick={() => {
+            setObs('');
+            if (onClose) onClose();
+          }}
         >
           Cancelar
         </button>
