@@ -4,7 +4,7 @@ import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 export const runtime = 'nodejs';
 
-const PERDECOMP_SHEET_NAME = 'PEREDCOMP';
+const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
 const REQUIRED_HEADERS = [
   'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
@@ -75,13 +75,13 @@ async function getLastPerdcompFromSheet({
   const sheets = await getSheetsClient();
   const head = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.SPREADSHEET_ID,
-    range: 'PEREDCOMP!1:1',
+    range: 'PERDECOMP!1:1',
   });
   const headers = head.data.values?.[0] || [];
   const col = (name: string) => headers.indexOf(name);
   const resp = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.SPREADSHEET_ID,
-    range: 'PEREDCOMP!A2:Z',
+    range: 'PERDECOMP!A2:Z',
   });
   const rows = resp.data.values || [];
   const idxCliente = col('Cliente_ID');
