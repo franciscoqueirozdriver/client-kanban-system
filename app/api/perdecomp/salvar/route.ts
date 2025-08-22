@@ -4,10 +4,28 @@ import { appendSheetData } from '../../../../lib/googleSheets.js';
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
 const PERDECOMP_HEADERS = [
-  'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
-  'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Valor_Total', 'Numero_Processo',
-  'Data_Protocolo', 'Ultima_Atualizacao', 'Quantidade_Receitas', 'Quantidade_Origens',
-  'Quantidade_DARFs', 'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta'
+  'Cliente_ID',
+  'Nome da Empresa',
+  'Perdcomp_ID',
+  'CNPJ',
+  'Tipo_Pedido',
+  'Situacao',
+  'Periodo_Inicio',
+  'Periodo_Fim',
+  'Quantidade_PERDCOMP',
+  'Numero_Processo',
+  'Data_Protocolo',
+  'Ultima_Atualizacao',
+  'Quantidade_Receitas',
+  'Quantidade_Origens',
+  'Quantidade_DARFs',
+  'URL_Comprovante_HTML',
+  'URL_Comprovante_PDF',
+  'Data_Consulta',
+  'Tipo_Empresa',
+  'Concorrentes',
+  'JSON_Bruto',
+  'Empresa_ID'
 ];
 
 export async function POST(request: Request) {
@@ -21,17 +39,18 @@ export async function POST(request: Request) {
 
     const rowsToAppend = linhas.map((linha: any) => {
       // Ensure the object has keys for all headers, even if they are empty
-      const fullLinha = PERDECOMP_HEADERS.reduce((acc, header) => {
+      const sanitizedLinha = PERDECOMP_HEADERS.reduce((acc, header) => {
         acc[header] = linha[header] ?? '';
         return acc;
       }, {} as { [key: string]: any });
 
-      // Validate that the provided line is not malformed
-      if (Object.keys(linha).length > PERDECOMP_HEADERS.length) {
-          // This is a simple check. A more robust one would check for unexpected keys.
+      // Log and ignore any unexpected keys
+      const extraKeys = Object.keys(linha).filter(key => !PERDECOMP_HEADERS.includes(key));
+      if (extraKeys.length) {
+        console.warn('[API /perdecomp/salvar] Campos extras ignorados:', extraKeys.join(', '));
       }
 
-      return PERDECOMP_HEADERS.map(header => fullLinha[header]);
+      return PERDECOMP_HEADERS.map(header => sanitizedLinha[header]);
     });
 
     // The appendSheetData function expects an array of arrays.
