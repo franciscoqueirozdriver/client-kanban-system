@@ -8,6 +8,7 @@ import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
+import { gerarClienteIdDeterministico } from '@/utils/clienteId';
 
 // --- Helper Types ---
 interface Company {
@@ -313,32 +314,44 @@ export default function PerdecompComparativoPage() {
     setCompDialogOpen(false);
   }
 
-  function confirmCompetitors(selected: Array<{ nome:string; cnpj:string }>) {
+  async function confirmCompetitors(selected: Array<{ nome:string; cnpj:string }>) {
     const next = [...competitors];
     let idx = 0;
     for (let i = 0; i < next.length && idx < selected.length; i++) {
       if (!next[i]) {
         const s = selected[idx++];
+        const cnpj = s.cnpj ? padCNPJ14(s.cnpj) : '';
+        const { lastConsultation, clienteId } = await checkLastConsultation(cnpj || undefined, s.nome);
+        const generatedId = gerarClienteIdDeterministico({ cnpj, nome: s.nome });
+        if (clienteId && clienteId !== generatedId) {
+          console.warn(`Reutilizando Cliente_ID existente para ${s.nome}`);
+        }
         next[i] = {
           company: {
-            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+            Cliente_ID: clienteId || generatedId,
             Nome_da_Empresa: s.nome,
-            CNPJ_Empresa: padCNPJ14(s.cnpj),
+            CNPJ_Empresa: cnpj,
           },
-          lastConsultation: null,
+          lastConsultation,
           forceRefresh: false,
         };
       }
     }
     while (next.length < MAX_COMPETITORS && idx < selected.length) {
       const s = selected[idx++];
+      const cnpj = s.cnpj ? padCNPJ14(s.cnpj) : '';
+      const { lastConsultation, clienteId } = await checkLastConsultation(cnpj || undefined, s.nome);
+      const generatedId = gerarClienteIdDeterministico({ cnpj, nome: s.nome });
+      if (clienteId && clienteId !== generatedId) {
+        console.warn(`Reutilizando Cliente_ID existente para ${s.nome}`);
+      }
       next.push({
         company: {
-          Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+          Cliente_ID: clienteId || generatedId,
           Nome_da_Empresa: s.nome,
-          CNPJ_Empresa: padCNPJ14(s.cnpj),
+          CNPJ_Empresa: cnpj,
         },
-        lastConsultation: null,
+        lastConsultation,
         forceRefresh: false,
       });
     }
@@ -346,18 +359,23 @@ export default function PerdecompComparativoPage() {
     setCompDialogOpen(false);
   }
 
-  const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
+  const checkLastConsultation = async (
+    cnpj?: string,
+    nome?: string
+  ): Promise<{ lastConsultation: string | null; clienteId: string | null }> => {
     try {
-      const c = padCNPJ14(cnpj);
-      const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
+      const params = new URLSearchParams();
+      if (cnpj) params.set('cnpj', padCNPJ14(cnpj));
+      if (nome) params.set('nome', nome);
+      const res = await fetch(`/api/perdecomp/verificar?${params.toString()}`);
       if (res.ok) {
-        const { lastConsultation } = await res.json();
-        return lastConsultation;
+        const { lastConsultation, clienteId } = await res.json();
+        return { lastConsultation, clienteId };
       }
-      return null;
+      return { lastConsultation: null, clienteId: null };
     } catch (error) {
       console.error('Failed to check last consultation', error);
-      return null;
+      return { lastConsultation: null, clienteId: null };
     }
   };
 
@@ -432,15 +450,29 @@ export default function PerdecompComparativoPage() {
     }
   }
 
-  const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
-    const cnpj = padCNPJ14(company.CNPJ_Empresa);
+  const handleSelectCompany = async (
+    type: 'client' | 'competitor',
+    company: Company,
+    index?: number
+  ) => {
+    const cnpj = company.CNPJ_Empresa ? padCNPJ14(company.CNPJ_Empresa) : '';
     const normalized = { ...company, CNPJ_Empresa: cnpj };
-    const lastConsultation = await checkLastConsultation(cnpj);
-    const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
+    const { lastConsultation, clienteId } = await checkLastConsultation(
+      cnpj || undefined,
+      company.Nome_da_Empresa
+    );
+    if (clienteId && clienteId !== normalized.Cliente_ID) {
+      console.warn(`Reutilizando Cliente_ID existente para ${company.Nome_da_Empresa}`);
+    }
+    const selection: CompanySelection = {
+      company: { ...normalized, Cliente_ID: clienteId || normalized.Cliente_ID },
+      lastConsultation,
+      forceRefresh: false,
+    };
     if (type === 'client') {
       setClient(selection);
     } else if (type === 'competitor' && index !== undefined) {
-      setCompetitors(prev => prev.map((c, i) => i === index ? selection : c));
+      setCompetitors(prev => prev.map((c, i) => (i === index ? selection : c)));
     }
   };
 
