@@ -8,6 +8,7 @@ import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
+import { gerarClienteIdDeterministico } from '../../../../utils/clienteId';
 
 // --- Helper Types ---
 interface Company {
@@ -313,35 +314,51 @@ export default function PerdecompComparativoPage() {
     setCompDialogOpen(false);
   }
 
-  function confirmCompetitors(selected: Array<{ nome:string; cnpj:string }>) {
+  async function confirmCompetitors(selected: Array<{ nome: string; cnpj: string }>) {
     const next = [...competitors];
-    let idx = 0;
-    for (let i = 0; i < next.length && idx < selected.length; i++) {
-      if (!next[i]) {
-        const s = selected[idx++];
-        next[i] = {
-          company: {
-            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
-            Nome_da_Empresa: s.nome,
-            CNPJ_Empresa: padCNPJ14(s.cnpj),
-          },
-          lastConsultation: null,
-          forceRefresh: false,
-        };
+    let processedCount = 0;
+
+    for (const s of selected) {
+      let clienteId = '';
+
+      // 1. Search for existing competitor by CNPJ or Name
+      try {
+        const res = await fetch(`/api/clientes/buscar?cnpj=${encodeURIComponent(s.cnpj)}&nome=${encodeURIComponent(s.nome)}`);
+        if (res.ok) {
+          const { empresa } = await res.json();
+          clienteId = empresa.Cliente_ID;
+          console.log(`Reutilizando Cliente_ID: ${clienteId} para ${s.nome}`);
+        }
+      } catch (e) {
+        console.error("Falha ao buscar cliente existente, um novo ID será gerado.", e);
       }
-    }
-    while (next.length < MAX_COMPETITORS && idx < selected.length) {
-      const s = selected[idx++];
-      next.push({
+
+      // 2. If not found, generate a new deterministic ID
+      if (!clienteId) {
+        clienteId = gerarClienteIdDeterministico({ cnpj: s.cnpj, nome: s.nome });
+        console.log(`Gerando novo Cliente_ID: ${clienteId} para ${s.nome}`);
+      }
+
+      const newCompetitorSelection: CompanySelection = {
         company: {
-          Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+          Cliente_ID: clienteId,
           Nome_da_Empresa: s.nome,
           CNPJ_Empresa: padCNPJ14(s.cnpj),
         },
         lastConsultation: null,
         forceRefresh: false,
-      });
+      };
+
+      // 3. Add the competitor to the list
+      const emptySlotIndex = next.findIndex(c => c === null);
+      if (emptySlotIndex !== -1) {
+        next[emptySlotIndex] = newCompetitorSelection;
+      } else if (next.length < MAX_COMPETITORS) {
+        next.push(newCompetitorSelection);
+      }
+      processedCount++;
     }
+
     setCompetitors(next.slice(0, MAX_COMPETITORS));
     setCompDialogOpen(false);
   }
