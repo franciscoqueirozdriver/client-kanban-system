@@ -132,31 +132,41 @@ function groupRows(rows) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    const sheet = await getSheetCached();
-    const rows = sheet.data.values || [];
-    const { clients, filters } = groupRows(rows);
-    return res.status(200).json({ clients, filters });
+    try {
+      const limit = parseInt(req.query.limit || '1000', 10);
+      const sheet = await getSheetCached();
+      const rows = sheet.data.values || [];
+      const { clients, filters } = groupRows(rows);
+      return res.status(200).json({ clients: clients.slice(0, limit), filters });
+    } catch (err) {
+      console.error('Erro ao listar clientes:', err);
+      return res.status(500).json({ error: 'Erro ao listar clientes' });
+    }
   }
 
   if (req.method === 'POST') {
-    const { row, values } = req.body;
+    try {
+      const { row, values } = req.body;
 
-    // ✅ Protege telefones antes de salvar
-    if (values?.telefone_normalizado) {
-      values.telefone_normalizado = values.telefone_normalizado
-        .split(';')
-        .map(protectPhoneValue)
-        .join(';');
-    }
-    if (values?.tel) values.tel = protectPhoneValue(values.tel);
-    if (values?.cel) values.cel = protectPhoneValue(values.cel);
+      if (values?.telefone_normalizado) {
+        values.telefone_normalizado = values.telefone_normalizado
+          .split(';')
+          .map(protectPhoneValue)
+          .join(';');
+      }
+      if (values?.tel) values.tel = protectPhoneValue(values.tel);
+      if (values?.cel) values.cel = protectPhoneValue(values.cel);
 
-    if (row) {
-      await updateRow(row, values);
-    } else {
-      await appendRow(values);
+      if (row) {
+        await updateRow(row, values);
+      } else {
+        await appendRow(values);
+      }
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      console.error('Erro ao salvar cliente:', err);
+      return res.status(500).json({ error: 'Erro ao salvar cliente' });
     }
-    return res.status(200).json({ ok: true });
   }
 
   return res.status(405).end();

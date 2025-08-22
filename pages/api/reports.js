@@ -4,10 +4,10 @@ import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const maxLeads = parseInt(req.query.maxLeads || '100', 10);
+      const limit = parseInt(req.query.limit || req.query.maxLeads || '1000', 10);
       const onlyNew = req.query.onlyNew === '1';
 
-      console.log('API /reports GET', { query: req.query, maxLeads, onlyNew });
+      console.log('API /reports GET', { query: req.query, limit, onlyNew });
 
       const sheet = await getSheet();
       const rows = sheet.data.values || [];
@@ -18,7 +18,7 @@ export default async function handler(req, res) {
       const { rows: reportRows, toMark } = mapToRows(
         map,
         req.query,
-        maxLeads,
+        limit,
         onlyNew
       );
 
