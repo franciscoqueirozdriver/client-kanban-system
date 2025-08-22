@@ -7,16 +7,28 @@ export const runtime = 'nodejs';
 const PERDECOMP_SHEET_NAME = 'PEREDCOMP';
 
 const REQUIRED_HEADERS = [
-  'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
-  'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Quantidade_PERDCOMP',
-  'Numero_Processo', 'Data_Protocolo', 'Ultima_Atualizacao',
-  'Quantidade_Receitas', 'Quantidade_Origens', 'Quantidade_DARFs',
-  'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta',
-  'Tipo_Empresa', 'Concorrentes',
-  'Code', 'Code_Message', 'MappedCount', 'Perdcomp_Principal_ID',
-  'Perdcomp_Solicitante', 'Perdcomp_Tipo_Documento',
-  'Perdcomp_Tipo_Credito', 'Perdcomp_Data_Transmissao',
-  'Perdcomp_Situacao', 'Perdcomp_Situacao_Detalhamento'
+  'Cliente_ID',
+  'Nome da Empresa',
+  'Perdcomp_ID',
+  'CNPJ',
+  'Tipo_Pedido',
+  'Situacao',
+  'Periodo_Inicio',
+  'Periodo_Fim',
+  'Quantidade_PERDCOMP',
+  'Numero_Processo',
+  'Data_Protocolo',
+  'Ultima_Atualizacao',
+  'Quantidade_Receitas',
+  'Quantidade_Origens',
+  'Quantidade_DARFs',
+  'URL_Comprovante_HTML',
+  'URL_Comprovante_PDF',
+  'Data_Consulta',
+  'Tipo_Empresa',
+  'Concorrentes',
+  'JSON_Bruto',
+  'Empresa_ID',
 ];
 
 function columnNumberToLetter(columnNumber: number) {
@@ -68,9 +80,11 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delays = [1500, 
 async function getLastPerdcompFromSheet({
   cnpj,
   clienteId,
+  empresaId,
 }: {
   cnpj?: string;
   clienteId?: string;
+  empresaId?: string;
 }) {
   const sheets = await getSheetsClient();
   const head = await sheets.spreadsheets.values.get({
@@ -85,6 +99,7 @@ async function getLastPerdcompFromSheet({
   });
   const rows = resp.data.values || [];
   const idxCliente = col('Cliente_ID');
+  const idxEmpresa = col('Empresa_ID');
   const idxCnpj = col('CNPJ');
   const idxQtd = col('Quantidade_PERDCOMP');
   const idxHtml = col('URL_Comprovante_HTML');
@@ -92,6 +107,7 @@ async function getLastPerdcompFromSheet({
   const match = rows.find(
     r =>
       (clienteId && r[idxCliente] === clienteId) ||
+      (empresaId && r[idxEmpresa] === empresaId) ||
       (cnpj && (r[idxCnpj] || '').replace(/\D/g, '') === cnpj)
   );
   if (!match) return null;
@@ -137,6 +153,11 @@ export async function POST(request: Request) {
       body?.nomeEmpresa ??
       url.searchParams.get('Nome_da_Empresa') ??
       url.searchParams.get('nomeEmpresa');
+    const empresaId =
+      body?.Empresa_ID ??
+      body?.empresaId ??
+      url.searchParams.get('Empresa_ID') ??
+      url.searchParams.get('empresaId');
     if (!clienteId || !nomeEmpresa) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
@@ -156,7 +177,11 @@ export async function POST(request: Request) {
 
       const dataForCnpj = rows.filter(row => {
         const rowCnpj = padCNPJ14(row.CNPJ);
-        return row.Cliente_ID === clienteId || rowCnpj === cnpj;
+        return (
+          row.Cliente_ID === clienteId ||
+          row.Empresa_ID === empresaId ||
+          rowCnpj === cnpj
+        );
       });
 
       if (dataForCnpj.length > 0) {
@@ -241,7 +266,7 @@ export async function POST(request: Request) {
     try {
       apiResponse = await withRetry(doCall, 3, [1500, 3000, 5000]);
     } catch (err: any) {
-      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
+      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId, empresaId });
       return NextResponse.json(
         {
           error: true,
@@ -266,19 +291,11 @@ export async function POST(request: Request) {
     const siteReceipt = apiResponse?.site_receipts?.[0] || '';
 
     const writes: Record<string, any> = {
-      Code: apiResponse.code,
-      Code_Message: apiResponse.code_message || '',
-      MappedCount: mappedCount,
       Quantidade_PERDCOMP: totalPerdcomp,
       URL_Comprovante_HTML: siteReceipt,
       Data_Consulta: headerRequestedAt,
-      Perdcomp_Principal_ID: first?.perdcomp || '',
-      Perdcomp_Solicitante: first?.solicitante || '',
-      Perdcomp_Tipo_Documento: first?.tipo_documento || '',
-      Perdcomp_Tipo_Credito: first?.tipo_credito || '',
-      Perdcomp_Data_Transmissao: first?.data_transmissao || '',
-      Perdcomp_Situacao: first?.situacao || '',
-      Perdcomp_Situacao_Detalhamento: first?.situacao_detalhamento || '',
+      JSON_Bruto: JSON.stringify(apiResponse),
+      Empresa_ID: empresaId,
     };
 
     const sheets = await getSheetsClient();
@@ -304,7 +321,11 @@ export async function POST(request: Request) {
     // Use the 'rows' we already fetched instead of calling getSheetData again
     let rowNumber = -1;
     for (const r of rows) {
-      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
+      if (
+        r.Cliente_ID === clienteId ||
+        r.Empresa_ID === empresaId ||
+        String(r.CNPJ || '').replace(/\D/g, '') === cnpj
+      ) {
         rowNumber = r._rowNumber;
         break;
       }
