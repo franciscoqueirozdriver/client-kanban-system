@@ -13,7 +13,7 @@ export async function consultarPerdcomp({
   cnpj,
   data_inicio,
   data_fim,
-  timeout = 25,
+  timeout = 9,
 }: PerdcompParams) {
   const token = process.env.INFOSIMPLES_TOKEN;
   if (!token) {

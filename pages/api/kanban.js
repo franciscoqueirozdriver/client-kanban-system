@@ -117,67 +117,78 @@ function groupRows(rows) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    const sheet = await getSheetCached();
-    const rows = sheet.data.values || [];
-    const { clients } = groupRows(rows);
+    try {
+      const limit = parseInt(req.query.limit || '1000', 10);
+      const sheet = await getSheetCached();
+      const rows = sheet.data.values || [];
+      const { clients } = groupRows(rows);
 
-    const columns = [
-      'Lead Selecionado',
-      'Tentativa de Contato',
-      'Contato Efetuado',
-      'Conversa Iniciada',
-      'Reunião Agendada',
-      'Perdido',
-    ];
-    const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
+      const columns = [
+        'Lead Selecionado',
+        'Tentativa de Contato',
+        'Contato Efetuado',
+        'Conversa Iniciada',
+        'Reunião Agendada',
+        'Perdido',
+      ];
+      const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
 
-    clients.forEach((client) => {
-      const col = board.find((c) => c.id === client.status);
-      if (col) {
-        col.cards.push({ id: client.id, client });
-      }
-    });
+      clients.slice(0, limit).forEach((client) => {
+        const col = board.find((c) => c.id === client.status);
+        if (col) {
+          col.cards.push({ id: client.id, client });
+        }
+      });
 
-    return res.status(200).json(board);
+      return res.status(200).json(board);
+    } catch (err) {
+      console.error('Erro ao listar kanban:', err);
+      return res.status(500).json({ error: 'Erro ao listar kanban' });
+    }
   }
 
   if (req.method === 'POST') {
-    const { id, destination, status, color } = req.body;
-    const newStatus = status || (destination && destination.droppableId);
-    const newColor =
-      color !== undefined
-        ? color
-        : newStatus === 'Perdido'
-        ? 'red'
-        : undefined;
+    try {
+      const { id, destination, status, color } = req.body;
+      const newStatus = status || (destination && destination.droppableId);
+      const newColor =
+        color !== undefined
+          ? color
+          : newStatus === 'Perdido'
+          ? 'red'
+          : undefined;
 
-    const sheet = await getSheetCached();
-    const rows = sheet.data.values || [];
-    const [header, ...data] = rows;
+      const sheet = await getSheetCached();
+      const rows = sheet.data.values || [];
+      const [header, ...data] = rows;
 
-    const clienteIdIdx = header.indexOf('Cliente_ID');
-    const colorIdx = header.indexOf('Cor_Card');
-    const statusIdx = header.indexOf('Status_Kanban');
+      const clienteIdIdx = header.indexOf('Cliente_ID');
+      const colorIdx = header.indexOf('Cor_Card');
+      const statusIdx = header.indexOf('Status_Kanban');
 
-    const promises = [];
+      const promises = [];
 
-    data.forEach((row, i) => {
-      if (row[clienteIdIdx] === id) {
-        const rowNum = i + 2;
-        const values = {};
-        if (newStatus !== undefined && statusIdx !== -1) {
-          values.status_kanban = newStatus;
+      data.forEach((row, i) => {
+        if (row[clienteIdIdx] === id) {
+          const rowNum = i + 2;
+          const values = {};
+          if (newStatus !== undefined && statusIdx !== -1) {
+            values.status_kanban = newStatus;
+          }
+          if (newColor !== undefined && colorIdx !== -1) {
+            values.cor_card = newColor;
+          }
+          values.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
+          promises.push(updateRow(rowNum, values));
         }
-        if (newColor !== undefined && colorIdx !== -1) {
-          values.cor_card = newColor;
-        }
-        values.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
-        promises.push(updateRow(rowNum, values));
-      }
-    });
+      });
 
-    await Promise.all(promises);
-    return res.status(200).json({ status: newStatus, color: newColor });
+      await Promise.all(promises);
+      return res.status(200).json({ status: newStatus, color: newColor });
+    } catch (err) {
+      console.error('Erro ao atualizar kanban:', err);
+      return res.status(500).json({ error: 'Erro ao atualizar kanban' });
+    }
   }
 
   return res.status(405).end();

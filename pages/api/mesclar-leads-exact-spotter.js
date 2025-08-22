@@ -1,4 +1,4 @@
-import { getSheetsClient, getSheetData } from '../../lib/googleSheets';
+import { getSheetsClient, getSheetData, withRetry, chunk } from '../../lib/googleSheets';
 
 const SHEET_LAYOUT = 'layout_importacao_empresas';
 const SHEET_SHEET1 = 'Sheet1';
@@ -128,12 +128,14 @@ export default async function handler(req, res) {
       || header.some((h, i) => h !== destHeadersRaw[i]);
 
     if (headerChanged) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.SPREADSHEET_ID,
-        range: `${SHEET_DEST}!1:1`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [header] },
-      });
+      await withRetry(() =>
+        sheets.spreadsheets.values.update({
+          spreadsheetId: process.env.SPREADSHEET_ID,
+          range: `${SHEET_DEST}!1:1`,
+          valueInputOption: 'RAW',
+          requestBody: { values: [header] },
+        })
+      );
     }
     const endCol = colLetter(header.length - 1);
 
@@ -271,22 +273,30 @@ export default async function handler(req, res) {
 
     // 6) Writes
     if (updates.length > 0) {
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: process.env.SPREADSHEET_ID,
-        requestBody: {
-          valueInputOption: 'RAW',
-          data: updates,
-        },
-      });
+      for (const batch of chunk(updates, 300)) {
+        await withRetry(() =>
+          sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId: process.env.SPREADSHEET_ID,
+            requestBody: {
+              valueInputOption: 'RAW',
+              data: batch,
+            },
+          })
+        );
+      }
     }
     if (appends.length > 0) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.SPREADSHEET_ID,
-        range: `${SHEET_DEST}!A1`,
-        valueInputOption: 'RAW',
-        insertDataOption: 'INSERT_ROWS',
-        requestBody: { values: appends },
-      });
+      for (const batch of chunk(appends, 300)) {
+        await withRetry(() =>
+          sheets.spreadsheets.values.append({
+            spreadsheetId: process.env.SPREADSHEET_ID,
+            range: `${SHEET_DEST}!A1`,
+            valueInputOption: 'RAW',
+            insertDataOption: 'INSERT_ROWS',
+            requestBody: { values: batch },
+          })
+        );
+      }
     }
 
     // 7) Retorno

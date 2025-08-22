@@ -1,4 +1,4 @@
-import { getSheetsClient } from '../../lib/googleSheets';
+import { getSheetsClient, withRetry } from '../../lib/googleSheets';
 
 const SHEETS = ['Sheet1', 'layout_importacao_empresas', 'Leads Exact Spotter'];
 
@@ -12,7 +12,7 @@ export default async function handler(req, res) {
     const sheets = await getSheetsClient();
     const spreadsheetId = process.env.SPREADSHEET_ID;
 
-    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const meta = await withRetry(() => sheets.spreadsheets.get({ spreadsheetId }));
     const sheetIdByTitle = new Map(meta.data.sheets.map(s => [s.properties.title, s.properties.sheetId]));
 
     const out = {
@@ -29,9 +29,9 @@ export default async function handler(req, res) {
       if (!sheetId) { out.warnings.push(`Aba não encontrada: ${title}`); continue; }
 
       // Header
-      const headerResp = await sheets.spreadsheets.values.get({
+      const headerResp = await withRetry(() => sheets.spreadsheets.values.get({
         spreadsheetId, range: `'${title}'!1:1`
-      });
+      }));
       const header = headerResp.data.values?.[0] || [];
       if (!header.length) { out.warnings.push(`Aba vazia: ${title}`); continue; }
 
@@ -61,9 +61,9 @@ export default async function handler(req, res) {
       // Ambas existem -> mover dados e deletar coluna errada
       if (idxCliente !== -1 && idxClient !== -1) {
         const endCol = colLetter(Math.max(idxCliente, idxClient));
-        const bodyResp = await sheets.spreadsheets.values.get({
+        const bodyResp = await withRetry(() => sheets.spreadsheets.values.get({
           spreadsheetId, range: `'${title}'!A2:${endCol}`
-        });
+        }));
         const rows = bodyResp.data.values || [];
         let moved = 0;
 
@@ -79,17 +79,17 @@ export default async function handler(req, res) {
         }
         if (moved > 0) {
           // regravar apenas as colunas até endCol para todas as linhas lidas
-          await sheets.spreadsheets.values.update({
+          await withRetry(() => sheets.spreadsheets.values.update({
             spreadsheetId,
             range: `'${title}'!A2:${endCol}`,
             valueInputOption: 'RAW',
             requestBody: { values: rows }
-          });
+          }));
           out.movedValues.push({ sheet: title, moved });
         }
 
         // Deletar coluna Client_ID
-        await sheets.spreadsheets.batchUpdate({
+        await withRetry(() => sheets.spreadsheets.batchUpdate({
           spreadsheetId,
           requestBody: {
             requests: [{
@@ -103,19 +103,19 @@ export default async function handler(req, res) {
               }
             }]
           }
-        });
+        }));
         out.deletedClientIdColumns.push({ sheet: title, index: idxClient });
         out.changedSheets.push(title);
       }
 
       if (debug) {
-        const finalHeaderResp = await sheets.spreadsheets.values.get({
+        const finalHeaderResp = await withRetry(() => sheets.spreadsheets.values.get({
           spreadsheetId, range: `'${title}'!1:1`
-        });
+        }));
         const finalHeader = finalHeaderResp.data.values?.[0] || [];
-        const sampleResp = await sheets.spreadsheets.values.get({
+        const sampleResp = await withRetry(() => sheets.spreadsheets.values.get({
           spreadsheetId, range: `'${title}'!A2:${colLetter(finalHeader.length - 1)}`
-        });
+        }));
         out.debugDump[title] = {
           header: finalHeader,
           sample: (sampleResp.data.values || []).slice(0, 3)
