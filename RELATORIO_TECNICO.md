@@ -180,7 +180,7 @@ export function gerarClienteIdDeterministico(empresa: { cnpj?: string | null; no
 ```typescript
 // app/api/clientes/buscar/route.ts
 import { NextResponse } from 'next/server';
-import { findByCnpj, findByName } from '../../../../lib/googleSheets.js';
+import { findByCnpj, findByName } from '@/lib/googleSheets.js'; // Assuming alias for lib
 
 export async function GET(request: Request) { /* ... */ }
 ```

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findByCnpj, findByName } from '../../../../lib/googleSheets.js';
-import { normalizarNomeEmpresa } from '../../../../utils/clienteId';
+import { normalizarNomeEmpresa } from '@/utils/clienteId';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

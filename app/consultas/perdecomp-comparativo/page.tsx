@@ -8,7 +8,7 @@ import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
-import { gerarClienteIdDeterministico } from '../../../../utils/clienteId';
+import { gerarClienteIdDeterministico } from '@/utils/clienteId';
 
 // --- Helper Types ---
 interface Company {
