@@ -402,7 +402,23 @@ function PerdecompComparativo() {
     Object.keys(sug || {}).forEach(k => {
       const cur = String(out[k] ?? '').trim();
       const val = String(sug[k] ?? '').trim();
-      if (!cur && val) out[k] = val;
+
+      // Regra especial para CNPJ: sobrescrever se o CNPJ base for inválido e o sugerido for válido.
+      if (k === 'CNPJ_Empresa') {
+        const currentCnpj = padCNPJ14(cur);
+        const suggestedCnpj = padCNPJ14(val);
+
+        if (isValidCNPJ(suggestedCnpj) && !isValidCNPJ(currentCnpj)) {
+          out[k] = val; // Sobrescreve o CNPJ inválido
+        } else if (!cur && val) {
+          out[k] = val; // Preenche se estiver vazio
+        }
+      } else {
+        // Lógica original para os outros campos: preencher apenas se estiverem vazios.
+        if (!cur && val) {
+          out[k] = val;
+        }
+      }
     });
     return out;
   }
