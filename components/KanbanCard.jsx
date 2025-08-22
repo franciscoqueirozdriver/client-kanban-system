@@ -1,6 +1,7 @@
 'use client';
 import { Draggable } from '@hello-pangea/dnd';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
@@ -59,6 +60,7 @@ async function fetchMessages(app) {
 }
 
 export default function KanbanCard({ card, index }) {
+  const router = useRouter();
   const [client, setClient] = useState(card.client);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
@@ -339,13 +341,26 @@ export default function KanbanCard({ card, index }) {
               )}
             </div>
           ))}
-          <div className="mt-1">
+          <div className="mt-1 flex items-center gap-2">
             <button
               type="button"
               className="text-blue-600 underline text-[10px]"
               onClick={handleHistoryClick}
             >
               Histórico
+            </button>
+            <span className="text-gray-400 text-[10px]">|</span>
+            <button
+              type="button"
+              className="text-violet-600 underline text-[10px]"
+              onClick={() => {
+                if (window.confirm(`Deseja pesquisar o cliente "${client.company}" no PER/DCOMP?`)) {
+                  const url = `/consultas/perdecomp-comparativo?clienteId=${client.id}&nome=${encodeURIComponent(client.company)}`;
+                  router.push(url);
+                }
+              }}
+            >
+              PER/DCOMP
             </button>
           </div>
         </div>

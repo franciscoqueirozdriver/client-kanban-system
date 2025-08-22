@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { FaSpinner } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
 import NewCompanyModal from '../../../components/NewCompanyModal';
@@ -90,8 +91,8 @@ function buildApiErrorLabel(e: any) {
   }
   return parts.join(' ');
 }
-// --- Main Page Component ---
-export default function PerdecompComparativoPage() {
+function PerdecompComparativo() {
+  const searchParams = useSearchParams();
   const [client, setClient] = useState<CompanySelection | null>(null);
   const [competitors, setCompetitors] = useState<Array<CompanySelection | null>>([]);
   const MAX_COMPETITORS = 3;
@@ -123,6 +124,22 @@ export default function PerdecompComparativoPage() {
     setCompanyPrefill(flat);
     setCompanyModalOpen(true);
   };
+
+  useEffect(() => {
+    const clienteId = searchParams.get('clienteId');
+    const nome = searchParams.get('nome');
+    const cnpj = searchParams.get('cnpj');
+
+    if (clienteId && nome) {
+      const companyFromUrl: Company = {
+        Cliente_ID: clienteId,
+        Nome_da_Empresa: nome,
+        CNPJ_Empresa: cnpj || '',
+      };
+      handleSelectCompany('client', companyFromUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     if (isDateAutomationEnabled) {
@@ -660,5 +677,14 @@ export default function PerdecompComparativoPage() {
         debug={previewPayload?.debug || null}
       />
     </div>
+  );
+}
+
+// Wrap the component in Suspense to handle the client-side hooks like useSearchParams
+export default function PerdecompComparativoPage() {
+  return (
+    <Suspense fallback={<div>Carregando...</div>}>
+      <PerdecompComparativo />
+    </Suspense>
   );
 }
