@@ -378,9 +378,9 @@ export default function PerdecompComparativoPage() {
     setCompanyModalOpen(true);
   }
 
-  async function handleRegisterNewFromQuery(query: string) {
+  async function handleRegisterNewFromQuery(query: string, target: { type: 'client' | 'competitor'; index?: number }) {
     setIsEnriching(true);
-    setEnrichTarget('client');
+    setEnrichTarget(target.type === 'client' ? 'client' : `competitor-${target.index}`);
     try {
       const r = await fetch('/api/empresas/enriquecer', {
         method: 'POST',
@@ -388,9 +388,9 @@ export default function PerdecompComparativoPage() {
         body: JSON.stringify({ nome: query })
       });
       const { suggestion } = await r.json();
-      openNewCompanyModal({ initialData: suggestion ?? { Nome_da_Empresa: query }, warning: !suggestion, target: { type: 'client' } });
+      openNewCompanyModal({ initialData: suggestion ?? { Nome_da_Empresa: query }, warning: !suggestion, target });
     } catch {
-      openNewCompanyModal({ initialData: { Nome_da_Empresa: query }, warning: true, target: { type: 'client' } });
+      openNewCompanyModal({ initialData: { Nome_da_Empresa: query }, warning: true, target });
     } finally {
       setIsEnriching(false);
       setEnrichTarget(null);
@@ -468,7 +468,7 @@ export default function PerdecompComparativoPage() {
                   selectedCompany={client?.company ?? null}
                   onSelect={(company) => handleSelectCompany('client', company)}
                   onClear={() => setClient(null)}
-                  onNoResults={handleRegisterNewFromQuery}
+                  onNoResults={(q) => handleRegisterNewFromQuery(q, { type: 'client' })}
                   onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'client' })}
                   onEnrichQuery={(q) => handleEnrichFromMain('query', undefined, q, { type: 'client' })}
                   isEnriching={isEnriching && enrichTarget === 'client'}
@@ -501,7 +501,15 @@ export default function PerdecompComparativoPage() {
             <div key={index} className="mb-4">
               <div className="flex items-center gap-2">
                 <div className="flex-grow">
-                  <Autocomplete selectedCompany={comp?.company ?? null} onSelect={(company) => handleSelectCompany('competitor', company, index)} onClear={() => handleRemoveCompetitor(index)} onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'competitor', index })} isEnriching={isEnriching && enrichTarget === `competitor-${index}`} />
+                  <Autocomplete
+                    selectedCompany={comp?.company ?? null}
+                    onSelect={(company) => handleSelectCompany('competitor', company, index)}
+                    onClear={() => handleRemoveCompetitor(index)}
+                    onNoResults={(q) => handleRegisterNewFromQuery(q, { type: 'competitor', index })}
+                    onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'competitor', index })}
+                    onEnrichQuery={(q) => handleEnrichFromMain('query', undefined, q, { type: 'competitor', index })}
+                    isEnriching={isEnriching && enrichTarget === `competitor-${index}`}
+                  />
                 </div>
                 <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
               </div>
