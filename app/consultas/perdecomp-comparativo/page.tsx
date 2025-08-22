@@ -323,7 +323,7 @@ export default function PerdecompComparativoPage() {
 
       // 1. Search for existing competitor by CNPJ or Name
       try {
-        const res = await fetch(`/api/clientes/buscar?cnpj=${encodeURIComponent(s.cnpj)}&nome=${encodeURIComponent(s.nome)}`);
+        const res = await fetch(`/api/clientes/lookup?cnpj=${encodeURIComponent(s.cnpj)}&nome=${encodeURIComponent(s.nome)}`);
         if (res.ok) {
           const { empresa } = await res.json();
           clienteId = empresa.Cliente_ID;

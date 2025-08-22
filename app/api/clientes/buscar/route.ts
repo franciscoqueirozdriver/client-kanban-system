@@ -1,59 +1,105 @@
 import { NextResponse } from 'next/server';
-import { findByCnpj, findByName } from '@/lib/googleSheets';
-import { normalizarNomeEmpresa } from '@/utils/clienteId';
+import { getSheetData } from '../../../../lib/googleSheets.js';
+import { padCNPJ14, onlyDigits } from '@/utils/cnpj';
 
-// Define a type for the row object returned from the sheet helpers
-interface SheetRow {
-  Cliente_ID: string;
-  'Nome da Empresa'?: string;
-  'Nome do Lead'?: string;
-  'CNPJ Empresa'?: string;
-  'CPF/CNPJ'?: string;
-  [key: string]: any; // Allow other string-keyed properties
+const SHEET_NAME = 'Leads Exact Spotter';
+const RESULT_LIMIT = 20;
+
+// Normalizer function as specified
+const norm = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g,' ').trim();
+
+interface ScoredCompany {
+    Cliente_ID: string;
+    Nome_da_Empresa: string;
+    CNPJ_Empresa: string;
+    score: number;
+    nomeLength: number;
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cnpj = searchParams.get('cnpj');
-  const nome = searchParams.get('nome');
+  const q = searchParams.get('q')?.trim() || '';
+  const qDigits = onlyDigits(q);
 
-  if (!cnpj && !nome) {
-    return NextResponse.json(
-      { error: 'Um CNPJ ou Nome deve ser fornecido para a busca.' },
-      { status: 400 }
-    );
+  if (q.length < 2 && qDigits.length < 2) {
+    return NextResponse.json([]);
   }
 
   try {
-    let existingRecord: SheetRow | null = null;
+    const { rows } = await getSheetData(SHEET_NAME);
 
-    // A busca por CNPJ é prioritária e mais confiável
-    if (cnpj) {
-      existingRecord = await findByCnpj(cnpj);
-    }
+    const scoredResults = rows.map(row => {
+      const nomeRaw = row['Nome da Empresa'] || row['Nome do Lead'] || '';
+      const cnpjRaw = row['CPF/CNPJ'] || '';
 
-    // Se não encontrou por CNPJ, tenta pelo nome normalizado
-    // A função findByName em googleSheets.js já normaliza o nome da busca
-    if (!existingRecord && nome) {
-      existingRecord = await findByName(nome);
-    }
+      const nome = norm(nomeRaw);
+      const cnpj = onlyDigits(cnpjRaw);
 
-    if (existingRecord && existingRecord.Cliente_ID) {
-      // Retorna um objeto padronizado para o frontend
-      return NextResponse.json({
-        ok: true,
-        empresa: {
-          Cliente_ID: existingRecord.Cliente_ID,
-          Nome_da_Empresa: existingRecord['Nome da Empresa'] || existingRecord['Nome do Lead'],
-          CNPJ_Empresa: existingRecord['CNPJ Empresa'] || existingRecord['CPF/CNPJ'],
-        },
-      });
-    } else {
-      return NextResponse.json({ ok: false, message: 'Nenhuma empresa encontrada.' }, { status: 404 });
-    }
+      if (!nome && !cnpj) {
+        return null;
+      }
+
+      let score = 0;
+      if (qDigits.length === 14 && cnpj === qDigits) {
+        score = 1000;
+      } else {
+        const nq = norm(q);
+        const tokens = nq.split(' ').filter(Boolean);
+
+        const starts = nome.startsWith(nq) ? 1 : 0;
+        const containsAll = tokens.every(t => nome.includes(t)) ? 1 : 0;
+        const cnpjContains = qDigits.length >= 5 && cnpj.includes(qDigits) ? 1 : 0;
+
+        score = (starts * 800) + (containsAll * 700) + (cnpjContains * 500);
+      }
+
+      if (score === 0) {
+        return null;
+      }
+
+      return {
+        Cliente_ID: row['Cliente_ID'],
+        Nome_da_Empresa: nomeRaw,
+        CNPJ_Empresa: padCNPJ14(cnpjRaw),
+        score,
+        nomeLength: nomeRaw.length,
+      };
+    }).filter(Boolean);
+
+    // Deduplicate results, keeping the one with the highest score
+    const deduplicated: ScoredCompany[] = Array.from(
+      (scoredResults as ScoredCompany[]).reduce((map, item) => {
+        const key = item.CNPJ_Empresa || item.Nome_da_Empresa; // Use CNPJ or Name as key
+        if (!map.has(key) || item.score > map.get(key)!.score) {
+          map.set(key, item);
+        }
+        return map;
+      }, new Map<string, ScoredCompany>()).values()
+    );
+
+    // Sort the results
+    deduplicated.sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      if (a.nomeLength !== b.nomeLength) {
+        return a.nomeLength - b.nomeLength;
+      }
+      return a.Nome_da_Empresa.localeCompare(b.Nome_da_Empresa);
+    });
+
+    // Limit and map to final structure
+    const finalResults = deduplicated.slice(0, RESULT_LIMIT).map(item => ({
+      Cliente_ID: item.Cliente_ID,
+      Nome_da_Empresa: item.Nome_da_Empresa,
+      CNPJ_Empresa: item.CNPJ_Empresa,
+    }));
+
+    return NextResponse.json(finalResults);
   } catch (error) {
-    console.error('[API /clientes/buscar]', error);
+    console.error('Error searching clients:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ ok: false, message: errorMessage }, { status: 500 });
+    return NextResponse.json({ message: 'Failed to search clients', error: errorMessage }, { status: 500 });
   }
 }
