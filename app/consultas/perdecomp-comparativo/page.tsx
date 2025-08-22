@@ -126,6 +126,8 @@ function PerdecompComparativo() {
   };
 
   useEffect(() => {
+    if (!searchParams) return; // Add null check
+
     const clienteId = searchParams.get('clienteId');
     const nome = searchParams.get('nome');
     const cnpj = searchParams.get('cnpj');
