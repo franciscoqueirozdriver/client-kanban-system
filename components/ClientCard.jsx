@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import useMessageCache from '../lib/useMessageCache';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
@@ -52,20 +53,6 @@ function replacePlaceholders(template, { client, contact, phone }) {
   return msg;
 }
 
-async function fetchMessages(app) {
-  try {
-    const res = await fetch(`/api/mensagens?app=${app}`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.mensagens)) return data.mensagens;
-    if (Array.isArray(data?.messages)) return data.messages;
-    return [];
-  } catch {
-    return [];
-  }
-}
-
 export default function ClientCard({ client, onStatusChange }) {
   const [color, setColor] = useState(client.color || '');
   const [status, setStatus] = useState(client.status || '');
@@ -76,6 +63,7 @@ export default function ClientCard({ client, onStatusChange }) {
   const [obsAction, setObsAction] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState([]);
+  const getMessages = useMessageCache();
 
   const handleDoubleClick = async () => {
     const newColor = 'green';
@@ -129,7 +117,7 @@ export default function ClientCard({ client, onStatusChange }) {
     const digits = displayPhone(phone).replace(/\D/g, '');
     if (!digits) return;
     const number = digits.startsWith('55') ? digits : `55${digits}`;
-    const messages = await fetchMessages('whatsapp');
+    const messages = await getMessages('whatsapp');
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem }) => {
         const finalMsg = replacePlaceholders(mensagem, { client, contact, phone });
@@ -153,7 +141,7 @@ export default function ClientCard({ client, onStatusChange }) {
     e.preventDefault();
     const phone = contact.mobile || contact.phone || '';
     const cleanEmail = displayEmail(email);
-    const messages = await fetchMessages('email');
+    const messages = await getMessages('email');
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem }) => {
         const subject = encodeURIComponent(replacePlaceholders(titulo, { client, contact, phone }));
@@ -176,7 +164,7 @@ export default function ClientCard({ client, onStatusChange }) {
   const handleLinkedinClick = async (e, url, contact) => {
     e.preventDefault();
     const phone = contact.mobile || contact.phone || '';
-    const messages = await fetchMessages('linkedin');
+    const messages = await getMessages('linkedin');
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem }) => {
         const finalMsg = encodeURIComponent(
