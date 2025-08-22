@@ -74,7 +74,7 @@ export default function ClientesPage() {
   };
 
   const handleOpenNewCompanyModal = (initialData = {}) => {
-    setCompanyPrefill({ Nome_da_Empresa: query, ...initialData });
+    setCompanyPrefill(initialData);
     setCompanyModalOpen(true);
   };
 

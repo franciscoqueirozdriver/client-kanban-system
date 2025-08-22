@@ -137,6 +137,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
     if (isOpen) {
       setError(null);
       setEnrichDebug(initialDebug || null);
+      setFormData(initialForm);
       if (initialData) {
         setFormData(prev => applySuggestionToForm(prev, initialData, false));
       }
