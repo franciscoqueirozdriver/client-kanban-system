@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
-import { findByCnpj, findByName } from '../../../../lib/googleSheets.js';
+import { findByCnpj, findByName } from '@/lib/googleSheets';
 import { normalizarNomeEmpresa } from '@/utils/clienteId';
+
+// Define a type for the row object returned from the sheet helpers
+interface SheetRow {
+  Cliente_ID: string;
+  'Nome da Empresa'?: string;
+  'Nome do Lead'?: string;
+  'CNPJ Empresa'?: string;
+  'CPF/CNPJ'?: string;
+  [key: string]: any; // Allow other string-keyed properties
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -15,7 +25,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    let existingRecord = null;
+    let existingRecord: SheetRow | null = null;
 
     // A busca por CNPJ é prioritária e mais confiável
     if (cnpj) {
