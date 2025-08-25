@@ -135,7 +135,7 @@ function PerdecompComparativo() {
         Nome_da_Empresa: nome,
         CNPJ_Empresa: cnpj || '',
       };
-      handleSelectCompany('client', companyFromUrl);
+      handleSelectCompany('client', companyFromUrl as Company & { Cliente_ID: string });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
