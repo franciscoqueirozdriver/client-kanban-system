@@ -3,18 +3,12 @@
 import { useState, useEffect } from 'react';
 import { padCNPJ14, isValidCNPJ, onlyDigits } from '@/utils/cnpj';
 
-// --- Helper Types ---
-interface Company {
-  Cliente_ID?: string;
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
-  [key: string]: any;
-}
+import { Company } from '@/lib/types';
 
 // --- Autocomplete Component ---
 interface AutocompleteProps {
   selectedCompany: Company | null;
-  onSelect: (company: Company) => void;
+  onSelect: (company: Company & { Cliente_ID: string }) => void;
   onClear: () => void;
   onNoResults?: (query: string) => void;
   onEnrichSelected?: (company: Company) => void;

@@ -10,19 +10,16 @@ import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDial
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
+import { Company } from '@/lib/types';
+
 // --- Helper Types ---
-interface Company {
-  Cliente_ID?: string;
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
-  [key: string]: any;
-}
 
 interface CardData {
   lastConsultation: string | null;
   quantity: number;
   siteReceipt?: string | null;
   fromCache?: boolean;
+  perdcompResumo?: any;
 }
 
 type ApiDebug = {
@@ -117,6 +114,7 @@ function PerdecompComparativo() {
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPayload, setPreviewPayload] = useState<{ company: Company; debug: ApiDebug } | null>(null);
+  const [cancelModalData, setCancelModalData] = useState<any>(null);
 
   // chamado pelo preview ao clicar "Usar e abrir cadastro"
   const handleUseSuggestion = (flat: Prefill) => {
@@ -247,9 +245,10 @@ function PerdecompComparativo() {
         firstLinha?.Data_Consulta ||
         null;
       const cardData: CardData = {
-        quantity: Math.max(totalPerdcomp, mappedCount),
+        quantity: data.perdcompResumo?.totalSemCancelamento ?? Math.max(totalPerdcomp, mappedCount),
         lastConsultation,
         siteReceipt,
+        perdcompResumo: data.perdcompResumo,
       };
       updateResult(cnpj, { status: 'loaded', data: cardData, debug: data.debug ?? null });
 
@@ -469,7 +468,7 @@ function PerdecompComparativo() {
     }
   }
 
-  const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
+  const handleSelectCompany = async (type: 'client' | 'competitor', company: Company & { Cliente_ID: string }, index?: number) => {
     const cnpj = padCNPJ14(company.CNPJ_Empresa);
     const normalized = { ...company, CNPJ_Empresa: cnpj };
     const lastConsultation = await checkLastConsultation(cnpj);
@@ -609,8 +608,34 @@ function PerdecompComparativo() {
                 )}
                 {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
                 <div className="space-y-3 text-sm mb-4 flex-grow">
-                  <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.quantity}</span></div>
+                  <div className="flex items-center justify-between">
+                    <span>Quantidade:</span>
+                    <strong>{data.perdcompResumo?.totalSemCancelamento ?? data.quantity ?? 0}</strong>
+                  </div>
+
+                  {data.perdcompResumo && (
+                    <div className="mt-2 text-sm">
+                      <div className="font-medium">Quantos são:</div>
+                      <div className="flex justify-between">
+                        <span>1.3 = DCOMP (compensações)</span>
+                        <span>{data.perdcompResumo.dcomp ?? 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>1.2 = REST (restituições)</span>
+                        <span>{data.perdcompResumo.rest ?? 0}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
+
+                  {data.perdcompResumo?.canc > 0 && (
+                    <div className="mt-2">
+                      <button className="underline text-sm text-blue-500 hover:text-blue-700" onClick={() => setCancelModalData(data.perdcompResumo)}>
+                        Cancelamentos
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {data.siteReceipt && (
                   <div className="mb-4">
@@ -679,6 +704,21 @@ function PerdecompComparativo() {
         company={previewPayload?.company || null}
         debug={previewPayload?.debug || null}
       />
+
+      {cancelModalData && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 w-full max-w-md shadow-lg">
+            <div className="text-lg font-semibold mb-2">Cancelamentos</div>
+            <div>Quantidade: <strong>{cancelModalData.canc ?? 0}</strong></div>
+            <div className="mt-3 text-right">
+              <button className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
+                onClick={() => setCancelModalData(null)}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

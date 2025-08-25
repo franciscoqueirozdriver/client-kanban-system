@@ -6,9 +6,12 @@ export const runtime = 'nodejs';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
+import { agregaPerdcomp } from '@/utils/perdcomp';
+
 const REQUIRED_HEADERS = [
   'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
   'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Quantidade_PERDCOMP',
+  'Qtd_PERDCOMP_DCOMP', 'Qtd_PERDCOMP_REST', 'Qtd_PERDCOMP_CANCEL',
   'Numero_Processo', 'Data_Protocolo', 'Ultima_Atualizacao',
   'Quantidade_Receitas', 'Quantidade_Origens', 'Quantidade_DARFs',
   'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta',
@@ -260,16 +263,20 @@ export async function POST(request: Request) {
     }
 
     const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
-    const first = apiResponse?.data?.[0]?.perdcomp?.[0] || {};
-    const totalPerdcomp = apiResponse?.data?.[0]?.perdcomp?.length || 0;
-    const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
+    const perdcompArray = apiResponse?.data?.[0]?.perdcomp || [];
+    const first = perdcompArray[0] || {};
+    const resumo = agregaPerdcomp(perdcompArray);
+    const mappedCount = apiResponse?.mapped_count || resumo.total;
     const siteReceipt = apiResponse?.site_receipts?.[0] || '';
 
     const writes: Record<string, any> = {
       Code: apiResponse.code,
       Code_Message: apiResponse.code_message || '',
       MappedCount: mappedCount,
-      Quantidade_PERDCOMP: totalPerdcomp,
+      Quantidade_PERDCOMP: resumo.totalSemCancelamento,
+      Qtd_PERDCOMP_DCOMP: resumo.dcomp,
+      Qtd_PERDCOMP_REST: resumo.rest,
+      Qtd_PERDCOMP_CANCEL: resumo.canc,
       URL_Comprovante_HTML: siteReceipt,
       Data_Consulta: headerRequestedAt,
       Perdcomp_Principal_ID: first?.perdcomp || '',
@@ -350,7 +357,8 @@ export async function POST(request: Request) {
       ok: true,
       header: { requested_at: headerRequestedAt },
       mappedCount,
-      total_perdcomp: totalPerdcomp,
+      total_perdcomp: resumo.total,
+      perdcompResumo: resumo,
       site_receipt: siteReceipt,
       primeiro: {
         perdcomp: first?.perdcomp,
@@ -372,7 +380,7 @@ export async function POST(request: Request) {
         mappedCount,
         siteReceipts: apiResponse?.site_receipts,
         header: apiResponse?.header,
-        total_perdcomp: totalPerdcomp,
+        total_perdcomp: resumo.total,
       };
     }
 
