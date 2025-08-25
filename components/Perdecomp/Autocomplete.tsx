@@ -8,7 +8,7 @@ import { Company } from '@/lib/types';
 // --- Autocomplete Component ---
 interface AutocompleteProps {
   selectedCompany: Company | null;
-  onSelect: (company: Company & { Cliente_ID: string }) => void;
+  onSelect: (company: Company) => void;
   onClear: () => void;
   onNoResults?: (query: string) => void;
   onEnrichSelected?: (company: Company) => void;
@@ -121,7 +121,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
 
           {!isLoading && results.map((company) => (
-            <li key={company.Cliente_ID || company.CNPJ_Empresa} onMouseDown={() => handleSelect(company as Company & { Cliente_ID: string })} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
+            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
               {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{padCNPJ14(company.CNPJ_Empresa)}</span>
             </li>
           ))}

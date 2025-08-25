@@ -9,7 +9,6 @@ import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
-
 import { Company } from '@/lib/types';
 
 // --- Helper Types ---
@@ -135,7 +134,7 @@ function PerdecompComparativo() {
         Nome_da_Empresa: nome,
         CNPJ_Empresa: cnpj || '',
       };
-      handleSelectCompany('client', companyFromUrl as Company & { Cliente_ID: string });
+      handleSelectCompany('client', companyFromUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -468,7 +467,7 @@ function PerdecompComparativo() {
     }
   }
 
-  const handleSelectCompany = async (type: 'client' | 'competitor', company: Company & { Cliente_ID: string }, index?: number) => {
+  const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
     const cnpj = padCNPJ14(company.CNPJ_Empresa);
     const normalized = { ...company, CNPJ_Empresa: cnpj };
     const lastConsultation = await checkLastConsultation(cnpj);
@@ -480,7 +479,7 @@ function PerdecompComparativo() {
     }
   };
 
-  const handleSaveNewCompany = (newCompany: Company & { Cliente_ID: string }) => {
+  const handleSaveNewCompany = (newCompany: Company) => {
     if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
       handleSelectCompany('competitor', newCompany, modalTarget.index);
     } else {
@@ -608,34 +607,8 @@ function PerdecompComparativo() {
                 )}
                 {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
                 <div className="space-y-3 text-sm mb-4 flex-grow">
-                  <div className="flex items-center justify-between">
-                    <span>Quantidade:</span>
-                    <strong>{data.perdcompResumo?.totalSemCancelamento ?? data.quantity ?? 0}</strong>
-                  </div>
-
-                  {data.perdcompResumo && (
-                    <div className="mt-2 text-sm">
-                      <div className="font-medium">Quantos são:</div>
-                      <div className="flex justify-between">
-                        <span>1.3 = DCOMP (compensações)</span>
-                        <span>{data.perdcompResumo.dcomp ?? 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>1.2 = REST (restituições)</span>
-                        <span>{data.perdcompResumo.rest ?? 0}</span>
-                      </div>
-                    </div>
-                  )}
-
+                  <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.quantity}</span></div>
                   <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
-
-                  {data.perdcompResumo?.canc > 0 && (
-                    <div className="mt-2">
-                      <button className="underline text-sm text-blue-500 hover:text-blue-700" onClick={() => setCancelModalData(data.perdcompResumo)}>
-                        Cancelamentos
-                      </button>
-                    </div>
-                  )}
                 </div>
                 {data.siteReceipt && (
                   <div className="mb-4">
@@ -704,21 +677,6 @@ function PerdecompComparativo() {
         company={previewPayload?.company || null}
         debug={previewPayload?.debug || null}
       />
-
-      {cancelModalData && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 w-full max-w-md shadow-lg">
-            <div className="text-lg font-semibold mb-2">Cancelamentos</div>
-            <div>Quantidade: <strong>{cancelModalData.canc ?? 0}</strong></div>
-            <div className="mt-3 text-right">
-              <button className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
-                onClick={() => setCancelModalData(null)}>
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
