@@ -5,7 +5,7 @@ import { padCNPJ14, isValidCNPJ, onlyDigits } from '@/utils/cnpj';
 
 // --- Helper Types ---
 interface Company {
-  Cliente_ID: string;
+  Cliente_ID?: string;
   Nome_da_Empresa: string;
   CNPJ_Empresa: string;
   [key: string]: any;
@@ -127,7 +127,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
 
           {!isLoading && results.map((company) => (
-            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
+            <li key={company.Cliente_ID || company.CNPJ_Empresa} onMouseDown={() => handleSelect(company as Company & { Cliente_ID: string })} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
               {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{padCNPJ14(company.CNPJ_Empresa)}</span>
             </li>
           ))}
