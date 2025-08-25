@@ -480,7 +480,7 @@ function PerdecompComparativo() {
     }
   };
 
-  const handleSaveNewCompany = (newCompany: Company) => {
+  const handleSaveNewCompany = (newCompany: Company & { Cliente_ID: string }) => {
     if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
       handleSelectCompany('competitor', newCompany, modalTarget.index);
     } else {
