@@ -22,6 +22,13 @@ interface CardData {
   quantity: number;
   siteReceipt?: string | null;
   fromCache?: boolean;
+  perdcompResumo?: {
+    total: number;
+    totalSemCancelamento: number;
+    canc: number;
+    porFamilia: { DCOMP: number; REST: number; RESSARC: number; CANC: number; DESCONHECIDO: number };
+    porNaturezaAgrupada: Record<string, number>;
+  };
 }
 
 type ApiDebug = {
@@ -116,6 +123,9 @@ export default function PerdecompComparativoPage() {
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPayload, setPreviewPayload] = useState<{ company: Company; debug: ApiDebug } | null>(null);
+  const [openCancel, setOpenCancel] = useState(false);
+  const [cancelCount, setCancelCount] = useState(0);
+  const showDebug = false;
 
   // chamado pelo preview ao clicar "Usar e abrir cadastro"
   const handleUseSuggestion = (flat: Prefill) => {
@@ -181,7 +191,7 @@ export default function PerdecompComparativoPage() {
           data_inicio: startDate,
           data_fim: endDate,
           force: forceRefresh,
-          debug: true,
+          debug: showDebug,
           Cliente_ID: company.Cliente_ID,
           nomeEmpresa: company.Nome_da_Empresa,
         }),
@@ -196,11 +206,36 @@ export default function PerdecompComparativoPage() {
           message: data?.message,
         };
         if (data.fallback) {
+          const dcomp = data.fallback.dcomp ?? 0;
+          const rest = data.fallback.rest ?? 0;
+          const ressarc = data.fallback.ressarc ?? 0;
+          const canc = data.fallback.canc ?? 0;
+          const porFamilia = {
+            DCOMP: dcomp,
+            REST: rest,
+            RESSARC: ressarc,
+            CANC: canc,
+            DESCONHECIDO: 0,
+          };
+          const porNaturezaAgrupada = {
+            '1.3/1.7': dcomp,
+            '1.2/1.6': rest,
+            '1.1/1.5': ressarc,
+          };
+          const resumo = {
+            total: dcomp + rest + ressarc + canc,
+            totalSemCancelamento:
+              data.fallback.quantidade ?? dcomp + rest + ressarc,
+            canc,
+            porFamilia,
+            porNaturezaAgrupada,
+          };
           const cardData: CardData = {
-            quantity: data.fallback.quantidade ?? 0,
+            quantity: resumo.totalSemCancelamento,
             lastConsultation: data.fallback.requested_at ?? null,
             siteReceipt: data.fallback.site_receipt ?? null,
             fromCache: true,
+            perdcompResumo: resumo,
           };
           updateResult(cnpj, { status: 'loaded', data: cardData, error: errorObj });
         } else {
@@ -227,14 +262,16 @@ export default function PerdecompComparativoPage() {
         data.debug?.header?.requested_at ||
         firstLinha?.Data_Consulta ||
         null;
+      const resumo = data.perdcompResumo;
       const cardData: CardData = {
-        quantity: Math.max(totalPerdcomp, mappedCount),
+        quantity: resumo?.totalSemCancelamento ?? Math.max(totalPerdcomp, mappedCount),
         lastConsultation,
         siteReceipt,
+        perdcompResumo: resumo,
       };
-      updateResult(cnpj, { status: 'loaded', data: cardData, debug: data.debug ?? null });
+      updateResult(cnpj, { status: 'loaded', data: cardData, debug: showDebug ? data.debug ?? null : null });
 
-      if (forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
+      if (showDebug && forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
         setPreviewPayload({ company, debug: data.debug ?? null });
         setPreviewOpen(true);
       }
@@ -560,37 +597,69 @@ export default function PerdecompComparativoPage() {
                 {buildApiErrorLabel(error)}
               </div>
             )}
-            {status === 'loaded' && data && (
-              <div className="flex-grow flex flex-col">
-                {error && (
-                  <p className="text-red-500 text-sm whitespace-pre-line mb-2">{buildApiErrorLabel(error)}</p>
-                )}
-                {data.fromCache && (
-                  <p className="text-xs text-yellow-600 mb-2">
-                    Mostrando dados da última consulta em {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : ''} (falha {error?.httpStatus} hoje)
-                  </p>
-                )}
-                {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
-                <div className="space-y-3 text-sm mb-4 flex-grow">
-                  <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.quantity}</span></div>
-                  <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
-                </div>
-                {data.siteReceipt && (
-                  <div className="mb-4">
-                    <h4 className="font-semibold mb-1 text-sm">Comprovantes:</h4>
-                    <div className="text-xs">
-                      <a href={data.siteReceipt} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">HTML</a>
+            {status === 'loaded' && data && (() => {
+              const resumo = data.perdcompResumo;
+              const temRegistros = (resumo?.totalSemCancelamento ?? 0) > 0;
+              return (
+                <div className="flex-grow flex flex-col">
+                  {error && (
+                    <p className="text-red-500 text-sm whitespace-pre-line mb-2">{buildApiErrorLabel(error)}</p>
+                  )}
+                  {data.fromCache && (
+                    <p className="text-xs text-yellow-600 mb-2">
+                      Mostrando dados da última consulta em {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : ''} (falha {error?.httpStatus} hoje)
+                    </p>
+                  )}
+                  {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
+                  <div className="space-y-3 text-sm mb-4 flex-grow">
+                    <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{resumo?.totalSemCancelamento ?? 0}</span></div>
+                    <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
+                    {temRegistros && (
+                      <div className="mt-2 text-sm">
+                        <div className="font-medium">Quantos são:</div>
+                        {Object.entries(resumo?.porNaturezaAgrupada || {}).map(([cod, qtd]) => (
+                          <div key={cod} className="flex justify-between">
+                            <span>
+                              {cod === '1.3/1.7'
+                                ? '1.3/1.7 = DCOMP (Declarações de Compensação)'
+                                : cod === '1.2/1.6'
+                                ? '1.2/1.6 = REST (Pedidos de Restituição)'
+                                : cod === '1.1/1.5'
+                                ? '1.1/1.5 = RESSARC (Pedidos de Ressarcimento)'
+                                : cod}
+                            </span>
+                            <span>{qtd}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-2">
+                      <button className="underline text-sm" onClick={() => { setCancelCount(resumo?.canc ?? resumo?.porFamilia?.CANC ?? 0); setOpenCancel(true); }}>
+                        Cancelamentos
+                      </button>
                     </div>
                   </div>
-                )}
-              </div>
-            )}
-            {status === 'loaded' && !data?.quantity && (
-              <div className="flex-grow flex flex-col items-center justify-center text-center">
-                <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
-              </div>
-            )}
-            {status === 'loaded' && debug && (
+                  {data.siteReceipt && (
+                    <div className="mb-4">
+                      <h4 className="font-semibold mb-1 text-sm">Comprovantes:</h4>
+                      <div className="text-xs">
+                        <a href={data.siteReceipt} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">HTML</a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            {status === 'loaded' && (() => {
+              const resumo = data?.perdcompResumo;
+              const temRegistros = (resumo?.totalSemCancelamento ?? 0) > 0;
+              return !temRegistros ? (
+                <div className="flex-grow flex flex-col items-center justify-center text-center">
+                  <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
+                </div>
+              ) : null;
+            })()}
+            {showDebug && status === 'loaded' && debug && (
               <button
                 onClick={() => { setPreviewPayload({ company, debug }); setPreviewOpen(true); }}
                 className="mt-2 w-full px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600"
@@ -601,6 +670,20 @@ export default function PerdecompComparativoPage() {
           </div>
         ))}
       </div>
+
+      {openCancel && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-4 w-full max-w-md">
+            <div className="text-lg font-semibold mb-2">Cancelamentos</div>
+            <div>Quantidade: <strong>{cancelCount}</strong></div>
+            <div className="mt-3 text-right">
+              <button className="px-3 py-1 rounded bg-gray-200" onClick={() => setOpenCancel(false)}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <EnrichmentPreviewDialog
         isOpen={showEnrichPreview}
@@ -636,12 +719,14 @@ export default function PerdecompComparativoPage() {
         onSaved={handleSaveNewCompany}
       />
 
-      <PerdcompApiPreviewDialog
-        isOpen={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        company={previewPayload?.company || null}
-        debug={previewPayload?.debug || null}
-      />
+      {showDebug && (
+        <PerdcompApiPreviewDialog
+          isOpen={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          company={previewPayload?.company || null}
+          debug={previewPayload?.debug || null}
+        />
+      )}
     </div>
   );
 }
