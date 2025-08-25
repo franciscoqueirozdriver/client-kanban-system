@@ -12,7 +12,7 @@ import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 // --- Helper Types ---
 interface Company {
-  Cliente_ID: string;
+  Cliente_ID?: string;
   Nome_da_Empresa: string;
   CNPJ_Empresa: string;
   [key: string]: any;
@@ -273,7 +273,7 @@ function PerdecompComparativo() {
       return;
     }
 
-    const allSelections = [client, ...competitors].filter((c): c is CompanySelection => c !== null);
+    const allSelections = [client, ...competitors].filter((c): c is CompanySelection => c !== null && !!c.company.Cliente_ID);
     if (allSelections.length === 0) return;
 
     setGlobalLoading(true);
@@ -346,39 +346,21 @@ function PerdecompComparativo() {
         break; // No more empty slots
       }
 
-      try {
-        // Step 1: Lookup by CNPJ and Name
-        const res = await fetch(`/api/clientes/lookup?cnpj=${encodeURIComponent(item.cnpj)}&nome=${encodeURIComponent(item.nome)}`);
-        const result = await res.json();
+      const newCompetitor: Company = {
+        Nome_da_Empresa: item.nome,
+        CNPJ_Empresa: padCNPJ14(item.cnpj),
+      };
 
-        if (res.ok && result.ok) {
-          // Step 2a: Found existing competitor, add it to the list
-          const newCompetitor = result.empresa;
-          const lastConsultation = await checkLastConsultation(newCompetitor.CNPJ_Empresa);
-          const selection: CompanySelection = { company: newCompetitor, lastConsultation, forceRefresh: false };
+      const selection: CompanySelection = {
+        company: newCompetitor,
+        lastConsultation: null,
+        forceRefresh: false,
+      };
 
-          if (emptySlotIndex !== -1) {
-            nextCompetitors[emptySlotIndex] = selection;
-          } else {
-            nextCompetitors.push(selection);
-          }
-        } else {
-          // Step 2b: Not found, trigger the enrichment flow.
-          // This ensures data is enriched and previewed before opening the final registration modal.
-          const targetIndex = emptySlotIndex !== -1 ? emptySlotIndex : nextCompetitors.length;
-          const competitorData = {
-            Nome_da_Empresa: item.nome,
-            CNPJ_Empresa: item.cnpj,
-            Cliente_ID: '', // It's a new company, so no ID yet
-          };
-          handleEnrichFromMain('selected', competitorData, undefined, { type: 'competitor', index: targetIndex });
-
-          // Stop after triggering enrichment for the first new competitor to simplify the user flow.
-          setCompDialogOpen(false);
-          return;
-        }
-      } catch (e) {
-        console.error("Falha ao buscar ou registrar concorrente", e);
+      if (emptySlotIndex !== -1) {
+        nextCompetitors[emptySlotIndex] = selection;
+      } else {
+        nextCompetitors.push(selection);
       }
     }
     setCompetitors(nextCompetitors);
