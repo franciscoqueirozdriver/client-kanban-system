@@ -189,16 +189,20 @@ export async function POST(request: Request) {
         }, '');
 
         const rawQtd = dataForCnpj[0]?.Quantidade_PERDCOMP ?? '0';
-        const totalPerdcomp = parseInt(String(rawQtd).replace(/\D/g, ''), 10) || 0;
+        const totalSemCancelamento = parseInt(String(rawQtd).replace(/\D/g, ''), 10) || 0;
         const dcomp = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_DCOMP ?? '0').replace(/\D/g, ''), 10) || 0;
         const rest = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_REST ?? '0').replace(/\D/g, ''), 10) || 0;
         const canc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_CANCEL ?? '0').replace(/\D/g, ''), 10) || 0;
+        const porTipo = { DCOMP: dcomp, REST: rest, CANC: canc, DESCONHECIDO: 0 };
+        const porNatureza: Record<string, number> = {};
+        if (dcomp) porNatureza['1.3'] = dcomp;
+        if (rest) porNatureza['1.2'] = rest;
+        if (canc) porNatureza['1.8'] = canc;
         const resumo = {
           total: dcomp + rest + canc,
-          totalSemCancelamento: totalPerdcomp,
-          dcomp,
-          rest,
-          canc,
+          totalSemCancelamento,
+          porTipo,
+          porNatureza,
         };
         const resp: any = {
           ok: true,
@@ -287,7 +291,8 @@ export async function POST(request: Request) {
     }
 
     const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
-    const perdcompArray = apiResponse?.data?.[0]?.perdcomp || [];
+    const perdcompArrayRaw = apiResponse?.data?.[0]?.perdcomp;
+    const perdcompArray = Array.isArray(perdcompArrayRaw) ? perdcompArrayRaw : [];
     const resumo = agregaPerdcomp(perdcompArray);
     const first = perdcompArray[0] || {};
     const totalPerdcomp = resumo.total;
@@ -299,9 +304,9 @@ export async function POST(request: Request) {
       Code_Message: apiResponse.code_message || '',
       MappedCount: mappedCount,
       Quantidade_PERDCOMP: resumo.totalSemCancelamento,
-      Qtd_PERDCOMP_DCOMP: resumo.dcomp,
-      Qtd_PERDCOMP_REST: resumo.rest,
-      Qtd_PERDCOMP_CANCEL: resumo.canc,
+      Qtd_PERDCOMP_DCOMP: resumo.porTipo.DCOMP,
+      Qtd_PERDCOMP_REST: resumo.porTipo.REST,
+      Qtd_PERDCOMP_CANCEL: resumo.porTipo.CANC,
       URL_Comprovante_HTML: siteReceipt,
       Data_Consulta: headerRequestedAt,
       Perdcomp_Principal_ID: first?.perdcomp || '',

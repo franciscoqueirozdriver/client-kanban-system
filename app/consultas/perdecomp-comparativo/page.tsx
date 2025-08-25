@@ -25,9 +25,8 @@ interface CardData {
   perdcompResumo?: {
     total: number;
     totalSemCancelamento: number;
-    dcomp: number;
-    rest: number;
-    canc: number;
+    porTipo: { DCOMP: number; REST: number; CANC: number; DESCONHECIDO: number };
+    porNatureza: Record<string, number>;
   };
 }
 
@@ -124,6 +123,7 @@ export default function PerdecompComparativoPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPayload, setPreviewPayload] = useState<{ company: Company; debug: ApiDebug } | null>(null);
   const [cancelamentosCount, setCancelamentosCount] = useState<number | null>(null);
+  const showDebug = false;
 
   // chamado pelo preview ao clicar "Usar e abrir cadastro"
   const handleUseSuggestion = (flat: Prefill) => {
@@ -189,7 +189,7 @@ export default function PerdecompComparativoPage() {
           data_inicio: startDate,
           data_fim: endDate,
           force: forceRefresh,
-          debug: true,
+          debug: showDebug,
           Cliente_ID: company.Cliente_ID,
           nomeEmpresa: company.Nome_da_Empresa,
         }),
@@ -204,12 +204,19 @@ export default function PerdecompComparativoPage() {
           message: data?.message,
         };
         if (data.fallback) {
+          const dcomp = data.fallback.dcomp ?? 0;
+          const rest = data.fallback.rest ?? 0;
+          const canc = data.fallback.canc ?? 0;
+          const porTipo = { DCOMP: dcomp, REST: rest, CANC: canc, DESCONHECIDO: 0 };
+          const porNatureza: Record<string, number> = {};
+          if (dcomp) porNatureza['1.3'] = dcomp;
+          if (rest) porNatureza['1.2'] = rest;
+          if (canc) porNatureza['1.8'] = canc;
           const resumo = {
-            total: (data.fallback.dcomp ?? 0) + (data.fallback.rest ?? 0) + (data.fallback.canc ?? 0),
+            total: dcomp + rest + canc,
             totalSemCancelamento: data.fallback.quantidade ?? 0,
-            dcomp: data.fallback.dcomp ?? 0,
-            rest: data.fallback.rest ?? 0,
-            canc: data.fallback.canc ?? 0,
+            porTipo,
+            porNatureza,
           };
           const cardData: CardData = {
             quantity: resumo.totalSemCancelamento,
@@ -250,9 +257,9 @@ export default function PerdecompComparativoPage() {
         siteReceipt,
         perdcompResumo: resumo,
       };
-      updateResult(cnpj, { status: 'loaded', data: cardData, debug: data.debug ?? null });
+      updateResult(cnpj, { status: 'loaded', data: cardData, debug: showDebug ? data.debug ?? null : null });
 
-      if (forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
+      if (showDebug && forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
         setPreviewPayload({ company, debug: data.debug ?? null });
         setPreviewOpen(true);
       }
@@ -578,55 +585,68 @@ export default function PerdecompComparativoPage() {
                 {buildApiErrorLabel(error)}
               </div>
             )}
-            {status === 'loaded' && data && (
-              <div className="flex-grow flex flex-col">
-                {error && (
-                  <p className="text-red-500 text-sm whitespace-pre-line mb-2">{buildApiErrorLabel(error)}</p>
-                )}
-                {data.fromCache && (
-                  <p className="text-xs text-yellow-600 mb-2">
-                    Mostrando dados da última consulta em {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : ''} (falha {error?.httpStatus} hoje)
-                  </p>
-                )}
-                {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
-                <div className="space-y-3 text-sm mb-4 flex-grow">
-                  <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.perdcompResumo?.totalSemCancelamento ?? data.quantity}</span></div>
-                  <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
-                  {data.perdcompResumo && (
+            {status === 'loaded' && data && (() => {
+              const resumo = data.perdcompResumo;
+              const totalQtd = resumo?.totalSemCancelamento ?? data.quantity;
+              const temRegistros = (totalQtd ?? 0) > 0;
+              return (
+                <div className="flex-grow flex flex-col">
+                  {error && (
+                    <p className="text-red-500 text-sm whitespace-pre-line mb-2">{buildApiErrorLabel(error)}</p>
+                  )}
+                  {data.fromCache && (
+                    <p className="text-xs text-yellow-600 mb-2">
+                      Mostrando dados da última consulta em {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : ''} (falha {error?.httpStatus} hoje)
+                    </p>
+                  )}
+                  {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
+                  <div className="space-y-3 text-sm mb-4 flex-grow">
+                    <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{totalQtd}</span></div>
+                    <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
+                    {temRegistros && (
+                      <div className="mt-2 text-sm">
+                        <div className="font-medium">Quantos são:</div>
+                        {Object.entries(resumo?.porNatureza || {}).map(([cod, qtd]) => (
+                          <div key={cod} className="flex justify-between">
+                            <span>
+                              {cod}
+                              {cod === '1.3' ? ' = DCOMP (compensações)' :
+                               cod === '1.2' ? ' = REST (restituições)' :
+                               cod === '1.8' ? ' = Cancelamentos' : ''}
+                            </span>
+                            <span>{qtd}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="mt-2">
-                      <div className="font-medium">Quantos são:</div>
-                      <div className="flex justify-between">
-                        <span>1.3 = DCOMP (compensações)</span>
-                        <span>{data.perdcompResumo.dcomp}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>1.2 = REST (restituições)</span>
-                        <span>{data.perdcompResumo.rest}</span>
-                      </div>
-                      <div className="mt-2">
-                        <button className="underline text-sm" onClick={() => setCancelamentosCount(data.perdcompResumo?.canc ?? 0)}>
-                          Cancelamentos
-                        </button>
+                      <button className="underline text-sm" onClick={() => setCancelamentosCount(resumo?.porTipo?.CANC ?? 0)}>
+                        Cancelamentos
+                      </button>
+                    </div>
+                  </div>
+                  {data.siteReceipt && (
+                    <div className="mb-4">
+                      <h4 className="font-semibold mb-1 text-sm">Comprovantes:</h4>
+                      <div className="text-xs">
+                        <a href={data.siteReceipt} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">HTML</a>
                       </div>
                     </div>
                   )}
                 </div>
-                {data.siteReceipt && (
-                  <div className="mb-4">
-                    <h4 className="font-semibold mb-1 text-sm">Comprovantes:</h4>
-                    <div className="text-xs">
-                      <a href={data.siteReceipt} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">HTML</a>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-            {status === 'loaded' && !data?.quantity && (
-              <div className="flex-grow flex flex-col items-center justify-center text-center">
-                <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
-              </div>
-            )}
-            {status === 'loaded' && debug && (
+              );
+            })()}
+            {status === 'loaded' && (() => {
+              const resumo = data?.perdcompResumo;
+              const totalQtd = resumo?.totalSemCancelamento ?? data?.quantity;
+              const temRegistros = (totalQtd ?? 0) > 0;
+              return !temRegistros ? (
+                <div className="flex-grow flex flex-col items-center justify-center text-center">
+                  <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
+                </div>
+              ) : null;
+            })()}
+            {showDebug && status === 'loaded' && debug && (
               <button
                 onClick={() => { setPreviewPayload({ company, debug }); setPreviewOpen(true); }}
                 className="mt-2 w-full px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600"
@@ -686,12 +706,14 @@ export default function PerdecompComparativoPage() {
         onSaved={handleSaveNewCompany}
       />
 
-      <PerdcompApiPreviewDialog
-        isOpen={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        company={previewPayload?.company || null}
-        debug={previewPayload?.debug || null}
-      />
+      {showDebug && (
+        <PerdcompApiPreviewDialog
+          isOpen={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          company={previewPayload?.company || null}
+          debug={previewPayload?.debug || null}
+        />
+      )}
     </div>
   );
 }
