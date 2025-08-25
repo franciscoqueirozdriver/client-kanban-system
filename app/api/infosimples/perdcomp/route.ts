@@ -189,20 +189,25 @@ export async function POST(request: Request) {
         }, '');
 
         const rawQtd = dataForCnpj[0]?.Quantidade_PERDCOMP ?? '0';
-        const totalSemCancelamento = parseInt(String(rawQtd).replace(/\D/g, ''), 10) || 0;
+        const qtdSemCanc = parseInt(String(rawQtd).replace(/\D/g, ''), 10) || 0;
         const dcomp = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_DCOMP ?? '0').replace(/\D/g, ''), 10) || 0;
         const rest = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_REST ?? '0').replace(/\D/g, ''), 10) || 0;
         const canc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_CANCEL ?? '0').replace(/\D/g, ''), 10) || 0;
         const porTipo = { DCOMP: dcomp, REST: rest, CANC: canc, DESCONHECIDO: 0 };
-        const porNatureza: Record<string, number> = {};
-        if (dcomp) porNatureza['1.3'] = dcomp;
-        if (rest) porNatureza['1.2'] = rest;
-        if (canc) porNatureza['1.8'] = canc;
+        const porNaturezaTodos: Record<string, number> = {};
+        if (dcomp) porNaturezaTodos['1.3'] = dcomp;
+        if (rest) porNaturezaTodos['1.2'] = rest;
+        if (canc) porNaturezaTodos['1.8'] = canc;
+        const porNaturezaSemCancel: Record<string, number> = {};
+        if (dcomp) porNaturezaSemCancel['1.3'] = dcomp;
+        if (rest) porNaturezaSemCancel['1.2'] = rest;
         const resumo = {
           total: dcomp + rest + canc,
-          totalSemCancelamento,
+          totalSemCancelamento: qtdSemCanc || dcomp + rest,
           porTipo,
-          porNatureza,
+          canc,
+          porNatureza: porNaturezaSemCancel,
+          porNaturezaComCancel: porNaturezaTodos,
         };
         const resp: any = {
           ok: true,

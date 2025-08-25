@@ -51,8 +51,10 @@ export function parsePerdcompNumero(raw: string) {
 
 export function agregaPerdcomp(lista: Array<{ perdcomp?: string }>) {
   let total = 0, canc = 0;
+
   const porTipo = { DCOMP: 0, REST: 0, CANC: 0, DESCONHECIDO: 0 };
-  const porNatureza: Record<string, number> = {};
+  const porNaturezaTodos: Record<string, number> = {};   // inclui 1.8
+  const porNaturezaSemCancel: Record<string, number> = {}; // exclui 1.8
 
   for (const it of (lista ?? [])) {
     const num = it?.perdcomp;
@@ -60,17 +62,30 @@ export function agregaPerdcomp(lista: Array<{ perdcomp?: string }>) {
     const p = parsePerdcompNumero(num);
     if (!p.valido) continue;
 
-    total++;
-    porTipo[p.tipo] = (porTipo[p.tipo] ?? 0) + 1;
-    porNatureza[p.natureza] = (porNatureza[p.natureza] ?? 0) + 1;
+    total += 1;
 
-    if (p.tipo === 'CANC') canc++;
+    // por tipo
+    porTipo[p.tipo] = (porTipo[p.tipo] ?? 0) + 1;
+
+    // por natureza (todos)
+    porNaturezaTodos[p.natureza] = (porNaturezaTodos[p.natureza] ?? 0) + 1;
+
+    // por natureza (exclui 1.8)
+    if (p.natureza !== '1.8') {
+      porNaturezaSemCancel[p.natureza] = (porNaturezaSemCancel[p.natureza] ?? 0) + 1;
+    }
+
+    if (p.tipo === 'CANC') canc += 1;
   }
 
+  const totalSemCancelamento = total - canc;
+
   return {
-    total,
-    totalSemCancelamento: total - canc,
-    porTipo,      // { DCOMP, REST, CANC, DESCONHECIDO }
-    porNatureza,  // { '1.3': 1016, '1.2': 9, '1.7': 812, ... }
+    total,                       // total bruto (inclui 1.8)
+    totalSemCancelamento,        // usar no Card "Quantidade"
+    porTipo,                     // ler CANC no modal
+    canc,                        // quantidade de cancelamentos (atalho)
+    porNatureza: porNaturezaSemCancel,   // usar na UI "Quantos são" (sem 1.8)
+    porNaturezaComCancel: porNaturezaTodos // opcional (debug / conferência)
   };
 }

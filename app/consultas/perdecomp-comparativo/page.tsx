@@ -26,7 +26,9 @@ interface CardData {
     total: number;
     totalSemCancelamento: number;
     porTipo: { DCOMP: number; REST: number; CANC: number; DESCONHECIDO: number };
+    canc: number;
     porNatureza: Record<string, number>;
+    porNaturezaComCancel?: Record<string, number>;
   };
 }
 
@@ -209,15 +211,20 @@ export default function PerdecompComparativoPage() {
           const rest = data.fallback.rest ?? 0;
           const canc = data.fallback.canc ?? 0;
           const porTipo = { DCOMP: dcomp, REST: rest, CANC: canc, DESCONHECIDO: 0 };
-          const porNatureza: Record<string, number> = {};
-          if (dcomp) porNatureza['1.3'] = dcomp;
-          if (rest) porNatureza['1.2'] = rest;
-          if (canc) porNatureza['1.8'] = canc;
+          const porNaturezaTodos: Record<string, number> = {};
+          if (dcomp) porNaturezaTodos['1.3'] = dcomp;
+          if (rest) porNaturezaTodos['1.2'] = rest;
+          if (canc) porNaturezaTodos['1.8'] = canc;
+          const porNaturezaSemCancel: Record<string, number> = {};
+          if (dcomp) porNaturezaSemCancel['1.3'] = dcomp;
+          if (rest) porNaturezaSemCancel['1.2'] = rest;
           const resumo = {
             total: dcomp + rest + canc,
-            totalSemCancelamento: data.fallback.quantidade ?? 0,
+            totalSemCancelamento: data.fallback.quantidade ?? dcomp + rest,
             porTipo,
-            porNatureza,
+            canc,
+            porNatureza: porNaturezaSemCancel,
+            porNaturezaComCancel: porNaturezaTodos,
           };
           const cardData: CardData = {
             quantity: resumo.totalSemCancelamento,
@@ -611,8 +618,7 @@ export default function PerdecompComparativoPage() {
                             <span>
                               {cod}
                               {cod === '1.3' ? ' = DCOMP (compensações)' :
-                               cod === '1.2' ? ' = REST (restituições)' :
-                               cod === '1.8' ? ' = Cancelamentos' : ''}
+                               cod === '1.2' ? ' = REST (restituições)' : ''}
                             </span>
                             <span>{qtd}</span>
                           </div>
@@ -620,7 +626,7 @@ export default function PerdecompComparativoPage() {
                       </div>
                     )}
                     <div className="mt-2">
-                      <button className="underline text-sm" onClick={() => { setCancelCount(resumo?.porTipo?.CANC ?? 0); setOpenCancel(true); }}>
+                      <button className="underline text-sm" onClick={() => { setCancelCount(resumo?.canc ?? resumo?.porTipo?.CANC ?? 0); setOpenCancel(true); }}>
                         Cancelamentos
                       </button>
                     </div>
