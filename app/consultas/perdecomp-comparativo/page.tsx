@@ -363,16 +363,17 @@ function PerdecompComparativo() {
             nextCompetitors.push(selection);
           }
         } else {
-          // Step 2b: Not found, open the registration modal.
-          // This is a necessary UI flow change to ensure competitors get a proper sequential ID
-          // and the user is prompted for the Filial/Matriz decision, fulfilling core requirements.
+          // Step 2b: Not found, trigger the enrichment flow.
+          // This ensures data is enriched and previewed before opening the final registration modal.
           const targetIndex = emptySlotIndex !== -1 ? emptySlotIndex : nextCompetitors.length;
-          openNewCompanyModal({
-            initialData: { Nome_da_Empresa: item.nome, CNPJ_Empresa: item.cnpj },
-            target: { type: 'competitor', index: targetIndex }
-          });
+          const competitorData = {
+            Nome_da_Empresa: item.nome,
+            CNPJ_Empresa: item.cnpj,
+            Cliente_ID: '', // It's a new company, so no ID yet
+          };
+          handleEnrichFromMain('selected', competitorData, undefined, { type: 'competitor', index: targetIndex });
 
-          // Stop after opening the modal for the first new competitor to simplify the user flow.
+          // Stop after triggering enrichment for the first new competitor to simplify the user flow.
           setCompDialogOpen(false);
           return;
         }
