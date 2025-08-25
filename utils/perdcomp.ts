@@ -2,7 +2,6 @@ export type PerdcompTipo = 'DCOMP' | 'REST' | 'CANC' | 'DESCONHECIDO';
 
 export function formatPerdcompNumero(raw: string) {
   const onlyDigits = raw.replace(/\D/g, '');
-  if (onlyDigits.length !== 27) return raw;
   const b1 = onlyDigits.slice(0, 5);
   const b2 = onlyDigits.slice(5, 10);
   const b3 = onlyDigits.slice(10, 16);
