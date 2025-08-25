@@ -1,4 +1,5 @@
 export type PerdcompTipo = 'DCOMP' | 'REST' | 'CANC' | 'DESCONHECIDO';
+export type FamiliaTipo = 'DCOMP' | 'REST' | 'RESSARC' | 'CANC' | 'DESCONHECIDO';
 
 export function formatPerdcompNumero(raw: string): string {
   const digits = (raw || '').replace(/\D/g, '');
@@ -49,43 +50,72 @@ export function parsePerdcompNumero(raw: string) {
   };
 }
 
+// Natureza (bloco 5) mapeada para a família principal
+export const NATUREZA_TO_FAMILIA: Record<string, FamiliaTipo> = {
+  '1.1': 'RESSARC',
+  '1.5': 'RESSARC',
+
+  '1.2': 'REST',
+  '1.6': 'REST',
+
+  '1.3': 'DCOMP',
+  '1.7': 'DCOMP',
+
+  '1.8': 'CANC',
+};
+
+export function classificaFamiliaPorNatureza(natureza: string): FamiliaTipo {
+  return NATUREZA_TO_FAMILIA[natureza] ?? 'DESCONHECIDO';
+}
+
 export function agregaPerdcomp(lista: Array<{ perdcomp?: string }>) {
-  let total = 0, canc = 0;
+  let total = 0;
+  let canc = 0;
 
-  const porTipo = { DCOMP: 0, REST: 0, CANC: 0, DESCONHECIDO: 0 };
-  const porNaturezaTodos: Record<string, number> = {};   // inclui 1.8
-  const porNaturezaSemCancel: Record<string, number> = {}; // exclui 1.8
+  const porFamilia: Record<FamiliaTipo, number> = {
+    DCOMP: 0,
+    REST: 0,
+    RESSARC: 0,
+    CANC: 0,
+    DESCONHECIDO: 0,
+  };
 
-  for (const it of (lista ?? [])) {
+  // Naturezas agrupadas para exibição no card
+  const porNaturezaAgrupada: Record<string, number> = {
+    '1.3/1.7': 0,
+    '1.2/1.6': 0,
+    '1.1/1.5': 0,
+  };
+
+  for (const it of lista ?? []) {
     const num = it?.perdcomp;
     if (!num) continue;
     const p = parsePerdcompNumero(num);
     if (!p.valido) continue;
 
-    total += 1;
+    total++;
 
-    // por tipo
-    porTipo[p.tipo] = (porTipo[p.tipo] ?? 0) + 1;
+    const familia = classificaFamiliaPorNatureza(p.natureza);
+    porFamilia[familia] = (porFamilia[familia] ?? 0) + 1;
 
-    // por natureza (todos)
-    porNaturezaTodos[p.natureza] = (porNaturezaTodos[p.natureza] ?? 0) + 1;
-
-    // por natureza (exclui 1.8)
-    if (p.natureza !== '1.8') {
-      porNaturezaSemCancel[p.natureza] = (porNaturezaSemCancel[p.natureza] ?? 0) + 1;
+    if (p.natureza === '1.3' || p.natureza === '1.7') {
+      porNaturezaAgrupada['1.3/1.7']++;
+    }
+    if (p.natureza === '1.2' || p.natureza === '1.6') {
+      porNaturezaAgrupada['1.2/1.6']++;
+    }
+    if (p.natureza === '1.1' || p.natureza === '1.5') {
+      porNaturezaAgrupada['1.1/1.5']++;
     }
 
-    if (p.tipo === 'CANC') canc += 1;
+    if (familia === 'CANC') canc++;
   }
 
-  const totalSemCancelamento = total - canc;
-
   return {
-    total,                       // total bruto (inclui 1.8)
-    totalSemCancelamento,        // usar no Card "Quantidade"
-    porTipo,                     // ler CANC no modal
-    canc,                        // quantidade de cancelamentos (atalho)
-    porNatureza: porNaturezaSemCancel,   // usar na UI "Quantos são" (sem 1.8)
-    porNaturezaComCancel: porNaturezaTodos // opcional (debug / conferência)
+    total,
+    totalSemCancelamento: total - canc,
+    canc,
+    porFamilia,
+    porNaturezaAgrupada,
   };
 }

@@ -10,7 +10,7 @@ const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 const REQUIRED_HEADERS = [
   'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
   'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Quantidade_PERDCOMP',
-  'Qtd_PERDCOMP_DCOMP', 'Qtd_PERDCOMP_REST', 'Qtd_PERDCOMP_CANCEL',
+  'Qtd_PERDCOMP_DCOMP', 'Qtd_PERDCOMP_REST', 'Qtd_PERDCOMP_RESSARC', 'Qtd_PERDCOMP_CANCEL',
   'Numero_Processo', 'Data_Protocolo', 'Ultima_Atualizacao',
   'Quantidade_Receitas', 'Quantidade_Origens', 'Quantidade_DARFs',
   'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta',
@@ -93,6 +93,7 @@ async function getLastPerdcompFromSheet({
   const idxData = col('Data_Consulta');
   const idxQtdDcomp = col('Qtd_PERDCOMP_DCOMP');
   const idxQtdRest = col('Qtd_PERDCOMP_REST');
+  const idxQtdRessarc = col('Qtd_PERDCOMP_RESSARC');
   const idxQtdCancel = col('Qtd_PERDCOMP_CANCEL');
   const match = rows.find(
     r =>
@@ -103,11 +104,13 @@ async function getLastPerdcompFromSheet({
   const qtd = Number(match[idxQtd] ?? 0);
   const dcomp = Number(match[idxQtdDcomp] ?? 0);
   const rest = Number(match[idxQtdRest] ?? 0);
+  const ressarc = Number(match[idxQtdRessarc] ?? 0);
   const canc = Number(match[idxQtdCancel] ?? 0);
   return {
     quantidade: qtd || 0,
     dcomp,
     rest,
+    ressarc,
     canc,
     site_receipt: match[idxHtml] || null,
     requested_at: match[idxData] || null,
@@ -192,22 +195,21 @@ export async function POST(request: Request) {
         const qtdSemCanc = parseInt(String(rawQtd).replace(/\D/g, ''), 10) || 0;
         const dcomp = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_DCOMP ?? '0').replace(/\D/g, ''), 10) || 0;
         const rest = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_REST ?? '0').replace(/\D/g, ''), 10) || 0;
+        const ressarc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_RESSARC ?? '0').replace(/\D/g, ''), 10) || 0;
         const canc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_CANCEL ?? '0').replace(/\D/g, ''), 10) || 0;
-        const porTipo = { DCOMP: dcomp, REST: rest, CANC: canc, DESCONHECIDO: 0 };
-        const porNaturezaTodos: Record<string, number> = {};
-        if (dcomp) porNaturezaTodos['1.3'] = dcomp;
-        if (rest) porNaturezaTodos['1.2'] = rest;
-        if (canc) porNaturezaTodos['1.8'] = canc;
-        const porNaturezaSemCancel: Record<string, number> = {};
-        if (dcomp) porNaturezaSemCancel['1.3'] = dcomp;
-        if (rest) porNaturezaSemCancel['1.2'] = rest;
+        const porFamilia = { DCOMP: dcomp, REST: rest, RESSARC: ressarc, CANC: canc, DESCONHECIDO: 0 };
+        const porNaturezaAgrupada = {
+          '1.3/1.7': dcomp,
+          '1.2/1.6': rest,
+          '1.1/1.5': ressarc,
+        };
+        const total = dcomp + rest + ressarc + canc;
         const resumo = {
-          total: dcomp + rest + canc,
-          totalSemCancelamento: qtdSemCanc || dcomp + rest,
-          porTipo,
+          total,
+          totalSemCancelamento: qtdSemCanc || dcomp + rest + ressarc,
           canc,
-          porNatureza: porNaturezaSemCancel,
-          porNaturezaComCancel: porNaturezaTodos,
+          porFamilia,
+          porNaturezaAgrupada,
         };
         const resp: any = {
           ok: true,
@@ -309,9 +311,10 @@ export async function POST(request: Request) {
       Code_Message: apiResponse.code_message || '',
       MappedCount: mappedCount,
       Quantidade_PERDCOMP: resumo.totalSemCancelamento,
-      Qtd_PERDCOMP_DCOMP: resumo.porTipo.DCOMP,
-      Qtd_PERDCOMP_REST: resumo.porTipo.REST,
-      Qtd_PERDCOMP_CANCEL: resumo.porTipo.CANC,
+      Qtd_PERDCOMP_DCOMP: resumo.porFamilia.DCOMP,
+      Qtd_PERDCOMP_REST: resumo.porFamilia.REST,
+      Qtd_PERDCOMP_RESSARC: resumo.porFamilia.RESSARC,
+      Qtd_PERDCOMP_CANCEL: resumo.porFamilia.CANC,
       URL_Comprovante_HTML: siteReceipt,
       Data_Consulta: headerRequestedAt,
       Perdcomp_Principal_ID: first?.perdcomp || '',

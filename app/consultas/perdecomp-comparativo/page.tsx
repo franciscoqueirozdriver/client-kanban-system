@@ -25,10 +25,9 @@ interface CardData {
   perdcompResumo?: {
     total: number;
     totalSemCancelamento: number;
-    porTipo: { DCOMP: number; REST: number; CANC: number; DESCONHECIDO: number };
     canc: number;
-    porNatureza: Record<string, number>;
-    porNaturezaComCancel?: Record<string, number>;
+    porFamilia: { DCOMP: number; REST: number; RESSARC: number; CANC: number; DESCONHECIDO: number };
+    porNaturezaAgrupada: Record<string, number>;
   };
 }
 
@@ -209,22 +208,27 @@ export default function PerdecompComparativoPage() {
         if (data.fallback) {
           const dcomp = data.fallback.dcomp ?? 0;
           const rest = data.fallback.rest ?? 0;
+          const ressarc = data.fallback.ressarc ?? 0;
           const canc = data.fallback.canc ?? 0;
-          const porTipo = { DCOMP: dcomp, REST: rest, CANC: canc, DESCONHECIDO: 0 };
-          const porNaturezaTodos: Record<string, number> = {};
-          if (dcomp) porNaturezaTodos['1.3'] = dcomp;
-          if (rest) porNaturezaTodos['1.2'] = rest;
-          if (canc) porNaturezaTodos['1.8'] = canc;
-          const porNaturezaSemCancel: Record<string, number> = {};
-          if (dcomp) porNaturezaSemCancel['1.3'] = dcomp;
-          if (rest) porNaturezaSemCancel['1.2'] = rest;
+          const porFamilia = {
+            DCOMP: dcomp,
+            REST: rest,
+            RESSARC: ressarc,
+            CANC: canc,
+            DESCONHECIDO: 0,
+          };
+          const porNaturezaAgrupada = {
+            '1.3/1.7': dcomp,
+            '1.2/1.6': rest,
+            '1.1/1.5': ressarc,
+          };
           const resumo = {
-            total: dcomp + rest + canc,
-            totalSemCancelamento: data.fallback.quantidade ?? dcomp + rest,
-            porTipo,
+            total: dcomp + rest + ressarc + canc,
+            totalSemCancelamento:
+              data.fallback.quantidade ?? dcomp + rest + ressarc,
             canc,
-            porNatureza: porNaturezaSemCancel,
-            porNaturezaComCancel: porNaturezaTodos,
+            porFamilia,
+            porNaturezaAgrupada,
           };
           const cardData: CardData = {
             quantity: resumo.totalSemCancelamento,
@@ -613,12 +617,16 @@ export default function PerdecompComparativoPage() {
                     {temRegistros && (
                       <div className="mt-2 text-sm">
                         <div className="font-medium">Quantos são:</div>
-                        {Object.entries(resumo?.porNatureza || {}).map(([cod, qtd]) => (
+                        {Object.entries(resumo?.porNaturezaAgrupada || {}).map(([cod, qtd]) => (
                           <div key={cod} className="flex justify-between">
                             <span>
-                              {cod}
-                              {cod === '1.3' ? ' = DCOMP (compensações)' :
-                               cod === '1.2' ? ' = REST (restituições)' : ''}
+                              {cod === '1.3/1.7'
+                                ? '1.3/1.7 = DCOMP (Declarações de Compensação)'
+                                : cod === '1.2/1.6'
+                                ? '1.2/1.6 = REST (Pedidos de Restituição)'
+                                : cod === '1.1/1.5'
+                                ? '1.1/1.5 = RESSARC (Pedidos de Ressarcimento)'
+                                : cod}
                             </span>
                             <span>{qtd}</span>
                           </div>
@@ -626,7 +634,7 @@ export default function PerdecompComparativoPage() {
                       </div>
                     )}
                     <div className="mt-2">
-                      <button className="underline text-sm" onClick={() => { setCancelCount(resumo?.canc ?? resumo?.porTipo?.CANC ?? 0); setOpenCancel(true); }}>
+                      <button className="underline text-sm" onClick={() => { setCancelCount(resumo?.canc ?? resumo?.porFamilia?.CANC ?? 0); setOpenCancel(true); }}>
                         Cancelamentos
                       </button>
                     </div>
