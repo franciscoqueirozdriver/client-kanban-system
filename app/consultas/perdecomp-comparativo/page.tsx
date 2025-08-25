@@ -9,7 +9,6 @@ import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
-import { gerarClienteIdDeterministico } from '@/utils/clienteId';
 
 // --- Helper Types ---
 interface Company {
@@ -269,6 +268,11 @@ function PerdecompComparativo() {
   }
 
   const handleConsult = async () => {
+    if (!client?.company?.Cliente_ID) {
+      alert('Por favor, selecione ou cadastre um cliente com Cliente_ID antes de consultar.');
+      return;
+    }
+
     const allSelections = [client, ...competitors].filter((c): c is CompanySelection => c !== null);
     if (allSelections.length === 0) return;
 
@@ -334,51 +338,49 @@ function PerdecompComparativo() {
   }
 
   async function confirmCompetitors(selected: Array<{ nome: string; cnpj: string }>) {
-    const next = [...competitors];
-    let processedCount = 0;
+    const nextCompetitors = [...competitors];
 
-    for (const s of selected) {
-      let clienteId = '';
+    for (const item of selected) {
+      const emptySlotIndex = nextCompetitors.findIndex(c => c === null);
+      if (emptySlotIndex === -1 && nextCompetitors.length >= MAX_COMPETITORS) {
+        break; // No more empty slots
+      }
 
-      // 1. Search for existing competitor by CNPJ or Name
       try {
-        const res = await fetch(`/api/clientes/lookup?cnpj=${encodeURIComponent(s.cnpj)}&nome=${encodeURIComponent(s.nome)}`);
-        if (res.ok) {
-          const { empresa } = await res.json();
-          clienteId = empresa.Cliente_ID;
-          console.log(`Reutilizando Cliente_ID: ${clienteId} para ${s.nome}`);
+        // Step 1: Lookup by CNPJ and Name
+        const res = await fetch(`/api/clientes/lookup?cnpj=${encodeURIComponent(item.cnpj)}&nome=${encodeURIComponent(item.nome)}`);
+        const result = await res.json();
+
+        if (res.ok && result.ok) {
+          // Step 2a: Found existing competitor, add it to the list
+          const newCompetitor = result.empresa;
+          const lastConsultation = await checkLastConsultation(newCompetitor.CNPJ_Empresa);
+          const selection: CompanySelection = { company: newCompetitor, lastConsultation, forceRefresh: false };
+
+          if (emptySlotIndex !== -1) {
+            nextCompetitors[emptySlotIndex] = selection;
+          } else {
+            nextCompetitors.push(selection);
+          }
+        } else {
+          // Step 2b: Not found, open the registration modal.
+          // This is a necessary UI flow change to ensure competitors get a proper sequential ID
+          // and the user is prompted for the Filial/Matriz decision, fulfilling core requirements.
+          const targetIndex = emptySlotIndex !== -1 ? emptySlotIndex : nextCompetitors.length;
+          openNewCompanyModal({
+            initialData: { Nome_da_Empresa: item.nome, CNPJ_Empresa: item.cnpj },
+            target: { type: 'competitor', index: targetIndex }
+          });
+
+          // Stop after opening the modal for the first new competitor to simplify the user flow.
+          setCompDialogOpen(false);
+          return;
         }
       } catch (e) {
-        console.error("Falha ao buscar cliente existente, um novo ID será gerado.", e);
+        console.error("Falha ao buscar ou registrar concorrente", e);
       }
-
-      // 2. If not found, generate a new deterministic ID
-      if (!clienteId) {
-        clienteId = gerarClienteIdDeterministico({ cnpj: s.cnpj, nome: s.nome });
-        console.log(`Gerando novo Cliente_ID: ${clienteId} para ${s.nome}`);
-      }
-
-      const newCompetitorSelection: CompanySelection = {
-        company: {
-          Cliente_ID: clienteId,
-          Nome_da_Empresa: s.nome,
-          CNPJ_Empresa: padCNPJ14(s.cnpj),
-        },
-        lastConsultation: null,
-        forceRefresh: false,
-      };
-
-      // 3. Add the competitor to the list
-      const emptySlotIndex = next.findIndex(c => c === null);
-      if (emptySlotIndex !== -1) {
-        next[emptySlotIndex] = newCompetitorSelection;
-      } else if (next.length < MAX_COMPETITORS) {
-        next.push(newCompetitorSelection);
-      }
-      processedCount++;
     }
-
-    setCompetitors(next.slice(0, MAX_COMPETITORS));
+    setCompetitors(nextCompetitors);
     setCompDialogOpen(false);
   }
 

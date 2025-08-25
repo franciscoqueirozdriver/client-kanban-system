@@ -3,7 +3,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import type { CompanySuggestion } from '../lib/perplexity';
-import { onlyDigits, padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
+import { onlyDigits, padCNPJ14, isValidCNPJ, isFilial, cnpjToHeadquarters } from '@/utils/cnpj';
 
 // --- Types ---
 interface CompanyData {
@@ -162,13 +162,26 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
     }
     setIsLoading(true);
     setError(null);
+
     try {
-      const cnpj = padCNPJ14(formData.CNPJ_Empresa);
+      let cnpj = padCNPJ14(formData.CNPJ_Empresa);
       if (formData.CNPJ_Empresa && !isValidCNPJ(cnpj)) {
         setIsLoading(false);
         setError('CNPJ inválido. Verifique e tente novamente.');
         return;
       }
+
+      // Lógica Filial -> Matriz
+      if (cnpj && isFilial(cnpj)) {
+        const matriz = cnpjToHeadquarters(cnpj);
+        const userConfirmed = window.confirm(
+          `Foi identificado CNPJ de filial (${cnpj}). Deseja usar o CNPJ da matriz (${matriz})?`
+        );
+        if (userConfirmed) {
+          cnpj = matriz; // User chose to use the headquarters CNPJ
+        }
+      }
+
       const payload: FullCompanyPayload = {
         Cliente_ID: formData.Cliente_ID,
         Empresa: {
@@ -182,7 +195,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
           Bairro_Empresa: formData.Bairro_Empresa,
           Complemento_Empresa: formData.Complemento_Empresa,
           CEP_Empresa: formData.CEP_Empresa,
-          CNPJ_Empresa: formData.CNPJ_Empresa ? cnpj : '',
+          CNPJ_Empresa: cnpj, // Use the final CNPJ (matriz or filial)
           DDI_Empresa: formData.DDI_Empresa,
           Telefones_Empresa: formData.Telefones_Empresa,
           Observacao_Empresa: formData.Observacao_Empresa,

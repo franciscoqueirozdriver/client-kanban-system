@@ -28,3 +28,27 @@ export function isValidCNPJ(input: any) {
   if (parseInt(cnpj[13], 10) !== dv2) return false;
   return true;
 }
+
+function calcCnpjDv(base12: string, pesos: number[]): number {
+  let soma = 0;
+  for (let i = 0; i < pesos.length; i++) soma += parseInt(base12[i], 10) * pesos[i];
+  const resto = soma % 11;
+  return resto < 2 ? 0 : 11 - resto;
+}
+
+export function cnpjToHeadquarters(cnpj: string): string {
+  const digits = onlyDigits(cnpj);
+  if (digits.length !== 14) return digits;
+  const raiz = digits.substring(0, 8);
+  const base = raiz + '0001'; // 12 dígitos
+  const dv1 = calcCnpjDv(base, [5,4,3,2,9,8,7,6,5,4,3,2]);
+  const dv2 = calcCnpjDv(base + String(dv1), [6,5,4,3,2,9,8,7,6,5,4,3,2]);
+  return base + String(dv1) + String(dv2);
+}
+
+export function isFilial(cnpj: string): boolean {
+  const digits = onlyDigits(cnpj);
+  if (digits.length !== 14) return false;
+  const ordem = digits.substring(8, 12);
+  return ordem !== '0001';
+}
