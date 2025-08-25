@@ -122,7 +122,8 @@ export default function PerdecompComparativoPage() {
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPayload, setPreviewPayload] = useState<{ company: Company; debug: ApiDebug } | null>(null);
-  const [cancelamentosCount, setCancelamentosCount] = useState<number | null>(null);
+  const [openCancel, setOpenCancel] = useState(false);
+  const [cancelCount, setCancelCount] = useState(0);
   const showDebug = false;
 
   // chamado pelo preview ao clicar "Usar e abrir cadastro"
@@ -587,8 +588,7 @@ export default function PerdecompComparativoPage() {
             )}
             {status === 'loaded' && data && (() => {
               const resumo = data.perdcompResumo;
-              const totalQtd = resumo?.totalSemCancelamento ?? data.quantity;
-              const temRegistros = (totalQtd ?? 0) > 0;
+              const temRegistros = (resumo?.totalSemCancelamento ?? 0) > 0;
               return (
                 <div className="flex-grow flex flex-col">
                   {error && (
@@ -601,7 +601,7 @@ export default function PerdecompComparativoPage() {
                   )}
                   {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
                   <div className="space-y-3 text-sm mb-4 flex-grow">
-                    <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{totalQtd}</span></div>
+                    <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{resumo?.totalSemCancelamento ?? 0}</span></div>
                     <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
                     {temRegistros && (
                       <div className="mt-2 text-sm">
@@ -620,7 +620,7 @@ export default function PerdecompComparativoPage() {
                       </div>
                     )}
                     <div className="mt-2">
-                      <button className="underline text-sm" onClick={() => setCancelamentosCount(resumo?.porTipo?.CANC ?? 0)}>
+                      <button className="underline text-sm" onClick={() => { setCancelCount(resumo?.porTipo?.CANC ?? 0); setOpenCancel(true); }}>
                         Cancelamentos
                       </button>
                     </div>
@@ -638,8 +638,7 @@ export default function PerdecompComparativoPage() {
             })()}
             {status === 'loaded' && (() => {
               const resumo = data?.perdcompResumo;
-              const totalQtd = resumo?.totalSemCancelamento ?? data?.quantity;
-              const temRegistros = (totalQtd ?? 0) > 0;
+              const temRegistros = (resumo?.totalSemCancelamento ?? 0) > 0;
               return !temRegistros ? (
                 <div className="flex-grow flex flex-col items-center justify-center text-center">
                   <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
@@ -658,13 +657,13 @@ export default function PerdecompComparativoPage() {
         ))}
       </div>
 
-      {cancelamentosCount !== null && (
+      {openCancel && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-4 w-full max-w-md">
             <div className="text-lg font-semibold mb-2">Cancelamentos</div>
-            <div>Quantidade: <strong>{cancelamentosCount}</strong></div>
+            <div>Quantidade: <strong>{cancelCount}</strong></div>
             <div className="mt-3 text-right">
-              <button className="px-3 py-1 rounded bg-gray-200" onClick={() => setCancelamentosCount(null)}>
+              <button className="px-3 py-1 rounded bg-gray-200" onClick={() => setOpenCancel(false)}>
                 Fechar
               </button>
             </div>
