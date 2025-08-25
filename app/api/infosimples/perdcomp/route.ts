@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
+import { agregaPerdcomp } from '@/utils/perdcomp';
 
 export const runtime = 'nodejs';
 
@@ -9,6 +10,7 @@ const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 const REQUIRED_HEADERS = [
   'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
   'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Quantidade_PERDCOMP',
+  'Qtd_PERDCOMP_DCOMP', 'Qtd_PERDCOMP_REST', 'Qtd_PERDCOMP_CANCEL',
   'Numero_Processo', 'Data_Protocolo', 'Ultima_Atualizacao',
   'Quantidade_Receitas', 'Quantidade_Origens', 'Quantidade_DARFs',
   'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta',
@@ -89,6 +91,9 @@ async function getLastPerdcompFromSheet({
   const idxQtd = col('Quantidade_PERDCOMP');
   const idxHtml = col('URL_Comprovante_HTML');
   const idxData = col('Data_Consulta');
+  const idxQtdDcomp = col('Qtd_PERDCOMP_DCOMP');
+  const idxQtdRest = col('Qtd_PERDCOMP_REST');
+  const idxQtdCancel = col('Qtd_PERDCOMP_CANCEL');
   const match = rows.find(
     r =>
       (clienteId && r[idxCliente] === clienteId) ||
@@ -96,8 +101,14 @@ async function getLastPerdcompFromSheet({
   );
   if (!match) return null;
   const qtd = Number(match[idxQtd] ?? 0);
+  const dcomp = Number(match[idxQtdDcomp] ?? 0);
+  const rest = Number(match[idxQtdRest] ?? 0);
+  const canc = Number(match[idxQtdCancel] ?? 0);
   return {
     quantidade: qtd || 0,
+    dcomp,
+    rest,
+    canc,
     site_receipt: match[idxHtml] || null,
     requested_at: match[idxData] || null,
   };
@@ -179,7 +190,23 @@ export async function POST(request: Request) {
 
         const rawQtd = dataForCnpj[0]?.Quantidade_PERDCOMP ?? '0';
         const totalPerdcomp = parseInt(String(rawQtd).replace(/\D/g, ''), 10) || 0;
-        const resp: any = { ok: true, fonte: 'planilha', linhas: dataForCnpj };
+        const dcomp = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_DCOMP ?? '0').replace(/\D/g, ''), 10) || 0;
+        const rest = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_REST ?? '0').replace(/\D/g, ''), 10) || 0;
+        const canc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_CANCEL ?? '0').replace(/\D/g, ''), 10) || 0;
+        const resumo = {
+          total: dcomp + rest + canc,
+          totalSemCancelamento: totalPerdcomp,
+          dcomp,
+          rest,
+          canc,
+        };
+        const resp: any = {
+          ok: true,
+          fonte: 'planilha',
+          linhas: dataForCnpj,
+          perdcompResumo: resumo,
+          total_perdcomp: resumo.total,
+        };
         if (debugMode) {
           resp.debug = {
             requestedAt,
@@ -188,7 +215,7 @@ export async function POST(request: Request) {
             apiResponse: null,
             mappedCount: dataForCnpj.length,
             header: { requested_at: lastConsulta },
-            total_perdcomp: totalPerdcomp,
+            total_perdcomp: resumo.total,
           };
         }
         return NextResponse.json(resp);
@@ -260,8 +287,10 @@ export async function POST(request: Request) {
     }
 
     const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
-    const first = apiResponse?.data?.[0]?.perdcomp?.[0] || {};
-    const totalPerdcomp = apiResponse?.data?.[0]?.perdcomp?.length || 0;
+    const perdcompArray = apiResponse?.data?.[0]?.perdcomp || [];
+    const resumo = agregaPerdcomp(perdcompArray);
+    const first = perdcompArray[0] || {};
+    const totalPerdcomp = resumo.total;
     const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
     const siteReceipt = apiResponse?.site_receipts?.[0] || '';
 
@@ -269,7 +298,10 @@ export async function POST(request: Request) {
       Code: apiResponse.code,
       Code_Message: apiResponse.code_message || '',
       MappedCount: mappedCount,
-      Quantidade_PERDCOMP: totalPerdcomp,
+      Quantidade_PERDCOMP: resumo.totalSemCancelamento,
+      Qtd_PERDCOMP_DCOMP: resumo.dcomp,
+      Qtd_PERDCOMP_REST: resumo.rest,
+      Qtd_PERDCOMP_CANCEL: resumo.canc,
       URL_Comprovante_HTML: siteReceipt,
       Data_Consulta: headerRequestedAt,
       Perdcomp_Principal_ID: first?.perdcomp || '',
@@ -352,6 +384,8 @@ export async function POST(request: Request) {
       mappedCount,
       total_perdcomp: totalPerdcomp,
       site_receipt: siteReceipt,
+      perdcomp: perdcompArray,
+      perdcompResumo: resumo,
       primeiro: {
         perdcomp: first?.perdcomp,
         solicitante: first?.solicitante,
@@ -373,6 +407,7 @@ export async function POST(request: Request) {
         siteReceipts: apiResponse?.site_receipts,
         header: apiResponse?.header,
         total_perdcomp: totalPerdcomp,
+        perdcompResumo: resumo,
       };
     }
 

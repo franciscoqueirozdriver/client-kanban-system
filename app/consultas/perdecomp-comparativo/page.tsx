@@ -22,6 +22,13 @@ interface CardData {
   quantity: number;
   siteReceipt?: string | null;
   fromCache?: boolean;
+  perdcompResumo?: {
+    total: number;
+    totalSemCancelamento: number;
+    dcomp: number;
+    rest: number;
+    canc: number;
+  };
 }
 
 type ApiDebug = {
@@ -116,6 +123,7 @@ export default function PerdecompComparativoPage() {
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPayload, setPreviewPayload] = useState<{ company: Company; debug: ApiDebug } | null>(null);
+  const [cancelamentosCount, setCancelamentosCount] = useState<number | null>(null);
 
   // chamado pelo preview ao clicar "Usar e abrir cadastro"
   const handleUseSuggestion = (flat: Prefill) => {
@@ -196,11 +204,19 @@ export default function PerdecompComparativoPage() {
           message: data?.message,
         };
         if (data.fallback) {
+          const resumo = {
+            total: (data.fallback.dcomp ?? 0) + (data.fallback.rest ?? 0) + (data.fallback.canc ?? 0),
+            totalSemCancelamento: data.fallback.quantidade ?? 0,
+            dcomp: data.fallback.dcomp ?? 0,
+            rest: data.fallback.rest ?? 0,
+            canc: data.fallback.canc ?? 0,
+          };
           const cardData: CardData = {
-            quantity: data.fallback.quantidade ?? 0,
+            quantity: resumo.totalSemCancelamento,
             lastConsultation: data.fallback.requested_at ?? null,
             siteReceipt: data.fallback.site_receipt ?? null,
             fromCache: true,
+            perdcompResumo: resumo,
           };
           updateResult(cnpj, { status: 'loaded', data: cardData, error: errorObj });
         } else {
@@ -227,10 +243,12 @@ export default function PerdecompComparativoPage() {
         data.debug?.header?.requested_at ||
         firstLinha?.Data_Consulta ||
         null;
+      const resumo = data.perdcompResumo;
       const cardData: CardData = {
-        quantity: Math.max(totalPerdcomp, mappedCount),
+        quantity: resumo?.totalSemCancelamento ?? Math.max(totalPerdcomp, mappedCount),
         lastConsultation,
         siteReceipt,
+        perdcompResumo: resumo,
       };
       updateResult(cnpj, { status: 'loaded', data: cardData, debug: data.debug ?? null });
 
@@ -572,8 +590,26 @@ export default function PerdecompComparativoPage() {
                 )}
                 {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
                 <div className="space-y-3 text-sm mb-4 flex-grow">
-                  <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.quantity}</span></div>
+                  <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{data.perdcompResumo?.totalSemCancelamento ?? data.quantity}</span></div>
                   <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
+                  {data.perdcompResumo && (
+                    <div className="mt-2">
+                      <div className="font-medium">Quantos são:</div>
+                      <div className="flex justify-between">
+                        <span>1.3 = DCOMP (compensações)</span>
+                        <span>{data.perdcompResumo.dcomp}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>1.2 = REST (restituições)</span>
+                        <span>{data.perdcompResumo.rest}</span>
+                      </div>
+                      <div className="mt-2">
+                        <button className="underline text-sm" onClick={() => setCancelamentosCount(data.perdcompResumo?.canc ?? 0)}>
+                          Cancelamentos
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {data.siteReceipt && (
                   <div className="mb-4">
@@ -601,6 +637,20 @@ export default function PerdecompComparativoPage() {
           </div>
         ))}
       </div>
+
+      {cancelamentosCount !== null && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-4 w-full max-w-md">
+            <div className="text-lg font-semibold mb-2">Cancelamentos</div>
+            <div>Quantidade: <strong>{cancelamentosCount}</strong></div>
+            <div className="mt-3 text-right">
+              <button className="px-3 py-1 rounded bg-gray-200" onClick={() => setCancelamentosCount(null)}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <EnrichmentPreviewDialog
         isOpen={showEnrichPreview}
