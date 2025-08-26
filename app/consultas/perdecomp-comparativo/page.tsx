@@ -350,34 +350,50 @@ export default function PerdecompComparativoPage() {
     setCompDialogOpen(false);
   }
 
-  function confirmCompetitors(selected: Array<{ nome:string; cnpj:string }>) {
+  function confirmCompetitors(selected: Array<{ nome: string; cnpj: string }>) {
     const next = [...competitors];
     let idx = 0;
-    for (let i = 0; i < next.length && idx < selected.length; i++) {
-      if (!next[i]) {
-        const s = selected[idx++];
-        next[i] = {
-          company: {
-            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
-            Nome_da_Empresa: s.nome,
-            CNPJ_Empresa: padCNPJ14(s.cnpj),
-          },
-          lastConsultation: null,
-          forceRefresh: false,
-        };
-      }
-    }
-    while (next.length < MAX_COMPETITORS && idx < selected.length) {
-      const s = selected[idx++];
-      next.push({
+
+    const createCompanySelection = (s: { nome: string; cnpj: string }): CompanySelection => {
+      const cnpj = padCNPJ14(s.cnpj);
+      return {
         company: {
-          Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+          Cliente_ID: `COMP-${(cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
           Nome_da_Empresa: s.nome,
-          CNPJ_Empresa: padCNPJ14(s.cnpj),
+          CNPJ_Empresa: cnpj,
+          Site_Empresa: '',
+          Pais_Empresa: 'Brasil',
+          Estado_Empresa: '',
+          Cidade_Empresa: '',
+          Logradouro_Empresa: '',
+          Numero_Empresa: '',
+          Bairro_Empresa: '',
+          Complemento_Empresa: '',
+          CEP_Empresa: '',
+          DDI_Empresa: '+55',
+          Telefones_Empresa: '',
+          Observacao_Empresa: '',
+          Nome_Contato: '',
+          Email_Contato: '',
+          Cargo_Contato: '',
+          DDI_Contato: '+55',
+          Telefones_Contato: '',
+          Mercado: '',
+          Produto: '',
+          Area: '',
         },
         lastConsultation: null,
         forceRefresh: false,
-      });
+      };
+    };
+
+    for (let i = 0; i < next.length && idx < selected.length; i++) {
+      if (!next[i]) {
+        next[i] = createCompanySelection(selected[idx++]);
+      }
+    }
+    while (next.length < MAX_COMPETITORS && idx < selected.length) {
+      next.push(createCompanySelection(selected[idx++]));
     }
     setCompetitors(next.slice(0, MAX_COMPETITORS));
     setCompDialogOpen(false);
