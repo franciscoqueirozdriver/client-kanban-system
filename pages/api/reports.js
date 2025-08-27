@@ -4,14 +4,14 @@ import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const limit = parseInt(req.query.limit || req.query.maxLeads || '1000', 10);
+      const limitParam = parseInt(req.query.limit ?? req.query.maxLeads, 10);
       const onlyNew = req.query.onlyNew === '1';
-
-      console.log('API /reports GET', { query: req.query, limit, onlyNew });
 
       const sheet = await getSheet();
       const rows = sheet.data.values || [];
 
+      const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : rows.length;
+      console.log('API /reports GET', { query: req.query, limit, onlyNew });
       // ✅ buildReport já agrupa por Cliente_ID agora
       // Evita atualizar telefones durante a geração do relatório
       const { map, filters } = await buildReport(rows, { savePhones: false });

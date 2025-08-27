@@ -133,10 +133,17 @@ function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const limit = parseInt(req.query.limit || '1000', 10);
       const sheet = await getSheetCached();
       const rows = sheet.data.values || [];
       const { clients, filters } = groupRows(rows);
+
+      const limitParam = parseInt(req.query.limit, 10);
+      const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
+
+      if (req.query.countOnly === '1') {
+        return res.status(200).json({ total: clients.length });
+      }
+
       return res.status(200).json({ clients: clients.slice(0, limit), filters });
     } catch (err) {
       console.error('Erro ao listar clientes:', err);
