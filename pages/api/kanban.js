@@ -118,10 +118,12 @@ function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const limit = parseInt(req.query.limit || '1000', 10);
       const sheet = await getSheetCached();
       const rows = sheet.data.values || [];
       const { clients } = groupRows(rows);
+
+      const limitParam = parseInt(req.query.limit, 10);
+      const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
 
       const columns = [
         'Lead Selecionado',
