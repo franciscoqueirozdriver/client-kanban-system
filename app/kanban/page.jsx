@@ -10,6 +10,7 @@ export default function KanbanPage() {
   const [produtos, setProdutos] = useState([]);
   const [produto, setProduto] = useState('');
   const isAdmin = process.env.NEXT_PUBLIC_IS_ADMIN === 'true';
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Buscar dados ao montar
   useEffect(() => {
@@ -116,7 +117,14 @@ export default function KanbanPage() {
 
   const onDragEnd = async (result) => {
     if (!result.destination) return;
+    if (
+      result.destination.droppableId === result.source.droppableId &&
+      result.destination.index === result.source.index
+    )
+      return;
+    if (isUpdating) return;
     const { source, destination, draggableId } = result;
+    const prevColumns = columns.map((c) => ({ ...c, cards: [...c.cards] }));
     const newColumns = columns.map((c) => ({ ...c, cards: [...c.cards] }));
     const sourceCol = newColumns.find((c) => c.id === source.droppableId);
     const destCol = newColumns.find((c) => c.id === destination.droppableId);
@@ -124,6 +132,9 @@ export default function KanbanPage() {
     destCol.cards.splice(destination.index, 0, moved);
 
     const newStatus = destCol.id;
+    if (newStatus === moved.client.status) {
+      return;
+    }
     let newColor = moved.client.color;
 
     if (newStatus === 'Perdido') {
@@ -136,24 +147,32 @@ export default function KanbanPage() {
     moved.client.color = newColor;
 
     setColumns(newColumns);
-
-    await fetch('/api/kanban', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
-    });
-
-    await fetch('/api/interacoes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clienteId: draggableId,
-        tipo: 'Mudança de Fase',
-        deFase: source.droppableId,
-        paraFase: destination.droppableId,
-        dataHora: new Date().toISOString(),
-      }),
-    });
+    setIsUpdating(true);
+    try {
+      const res = await fetch('/api/kanban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
+      });
+      if (!res.ok) throw new Error('Erro ao atualizar');
+      await fetchColumns();
+      await fetch('/api/interacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clienteId: draggableId,
+          tipo: 'Mudança de Fase',
+          deFase: source.droppableId,
+          paraFase: destination.droppableId,
+          dataHora: new Date().toISOString(),
+        }),
+      });
+    } catch (err) {
+      setColumns(prevColumns);
+      alert('Erro ao atualizar');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const columnsToShow = filteredColumns ?? columns;
