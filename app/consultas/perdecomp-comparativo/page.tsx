@@ -128,7 +128,7 @@ export default function PerdecompComparativoPage() {
   const [cancelCount, setCancelCount] = useState(0);
   const showDebug = false;
   const searchParams = useSearchParams();
-  const q = searchParams.get('q') || '';
+  const q: string = searchParams?.get('q') ?? '';
 
   // chamado pelo preview ao clicar "Usar e abrir cadastro"
   const handleUseSuggestion = (flat: Prefill) => {
