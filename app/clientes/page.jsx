@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { FaSpinner } from 'react-icons/fa';
 import ClientCard from '../../components/ClientCard';
 import Filters from '../../components/Filters';
@@ -87,10 +86,15 @@ export default function ClientesPage() {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex justify-end">
-        <Link href="/kanban" className="text-blue-600 underline">
-          Ver Kanban
-        </Link>
+      <div className="flex">
+        <div
+          className="ml-auto text-2xl md:text-3xl font-semibold tracking-tight"
+          aria-label="Total de clientes exibidos"
+          data-testid="total-clientes-exibidos"
+          title="Quantidade de clientes atualmente exibidos, após a aplicação de filtros"
+        >
+          TOTAL DE CLIENTES EXIBIDOS: <span className="tabular-nums">{filtered.length}</span>
+        </div>
       </div>
       <Filters onFilter={handleFilter} />
 
