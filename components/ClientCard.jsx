@@ -76,26 +76,43 @@ export default function ClientCard({ client, onStatusChange }) {
   const [obsAction, setObsAction] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState([]);
+  const [updating, setUpdating] = useState(false);
 
   const handleDoubleClick = async () => {
+    if (updating || status === 'Lead Selecionado') return;
+    const prevColor = color;
+    const prevStatus = status;
     const newColor = 'green';
     const newStatus = 'Lead Selecionado';
     setColor(newColor);
     setStatus(newStatus);
-
-  if (onStatusChange) {
+    if (onStatusChange) {
       onStatusChange(client.id, newStatus, newColor);
     }
-
-    await fetch('/api/kanban', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: client.id,
-        status: newStatus,
-        color: newColor,
-      }),
-    });
+    setUpdating(true);
+    try {
+      const res = await fetch('/api/kanban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: client.id,
+          status: newStatus,
+          color: newColor,
+        }),
+      });
+      if (!res.ok) throw new Error('Erro ao atualizar');
+      await res.json();
+      await fetch('/api/kanban');
+    } catch (err) {
+      setColor(prevColor);
+      setStatus(prevStatus);
+      if (onStatusChange) {
+        onStatusChange(client.id, prevStatus, prevColor);
+      }
+      alert('Erro ao atualizar');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const openModal = (messages, action) => {

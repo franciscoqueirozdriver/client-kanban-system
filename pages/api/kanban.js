@@ -1,4 +1,4 @@
-import { getSheetCached, updateRow } from '../../lib/googleSheets';
+import { getSheetCached, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
 import { normalizePhones } from '../../lib/report';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
@@ -160,36 +160,28 @@ export default async function handler(req, res) {
           ? 'red'
           : undefined;
 
-      const sheet = await getSheetCached();
-      const rows = sheet.data.values || [];
-      const [header, ...data] = rows;
+      const sheetName = 'Sheet1';
+      const rowIndex = await findRowIndexById(sheetName, 1, 'Cliente_ID', id);
+      if (rowIndex < 0) {
+        return res.status(404).json({ error: 'ID não encontrado' });
+      }
 
-      const clienteIdIdx = header.indexOf('Cliente_ID');
-      const colorIdx = header.indexOf('Cor_Card');
-      const statusIdx = header.indexOf('Status_Kanban');
+      const updates = {};
+      if (newStatus !== undefined) {
+        updates['Status_Kanban'] = newStatus;
+      }
+      if (newColor !== undefined) {
+        updates['Cor_Card'] = newColor;
+      }
+      updates['Data_Ultima_Movimentacao'] = new Date().toISOString().split('T')[0];
 
-      const promises = [];
+      await updateRowByIndex({ sheetName, rowIndex, updates });
 
-      data.forEach((row, i) => {
-        if (row[clienteIdIdx] === id) {
-          const rowNum = i + 2;
-          const values = {};
-          if (newStatus !== undefined && statusIdx !== -1) {
-            values.status_kanban = newStatus;
-          }
-          if (newColor !== undefined && colorIdx !== -1) {
-            values.cor_card = newColor;
-          }
-          values.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
-          promises.push(updateRow(rowNum, values));
-        }
-      });
-
-      await Promise.all(promises);
       return res.status(200).json({ status: newStatus, color: newColor });
     } catch (err) {
       console.error('Erro ao atualizar kanban:', err);
-      return res.status(500).json({ error: 'Erro ao atualizar kanban' });
+      const statusCode = err?.response?.status || err?.code || 500;
+      return res.status(statusCode).json({ error: err.message || 'Erro ao atualizar kanban' });
     }
   }
 
