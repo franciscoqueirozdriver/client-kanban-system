@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     try {
       const start = Date.now();
       const clienteId = req.query.clienteId || '';
-      const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+      const limit = parseInt(req.query.limit || '1000', 10);
       const sheet = await getHistorySheetCached();
       const rows = sheet.data.values || [];
       if (rows.length === 0) return res.status(200).json([]);
@@ -70,7 +70,7 @@ export default async function handler(req, res) {
           mensagemUsada: r[idx.msg] || '',
         }))
         .sort((a, b) => (a.dataHora < b.dataHora ? 1 : -1))
-        .slice(0, limit || data.length);
+        .slice(0, limit);
 
       console.log('INTERACOES_READ', { duration: Date.now() - start, count: itens.length });
       return res.status(200).json(itens);

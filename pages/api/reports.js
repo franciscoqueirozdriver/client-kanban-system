@@ -4,8 +4,7 @@ import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const limitParam = req.query.limit || req.query.maxLeads;
-      const limit = limitParam ? parseInt(limitParam, 10) : null;
+      const limit = parseInt(req.query.limit || req.query.maxLeads || '1000', 10);
       const onlyNew = req.query.onlyNew === '1';
 
       console.log('API /reports GET', { query: req.query, limit, onlyNew });
@@ -19,7 +18,7 @@ export default async function handler(req, res) {
       const { rows: reportRows, toMark } = mapToRows(
         map,
         req.query,
-        limit || rows.length,
+        limit,
         onlyNew
       );
 

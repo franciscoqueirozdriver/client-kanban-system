@@ -118,7 +118,7 @@ function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+      const limit = parseInt(req.query.limit || '1000', 10);
       const sheet = await getSheetCached();
       const rows = sheet.data.values || [];
       const { clients } = groupRows(rows);
@@ -133,7 +133,7 @@ export default async function handler(req, res) {
       ];
       const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
 
-      (limit ? clients.slice(0, limit) : clients).forEach((client) => {
+      clients.slice(0, limit).forEach((client) => {
         const col = board.find((c) => c.id === client.status);
         if (col) {
           col.cards.push({ id: client.id, client });
