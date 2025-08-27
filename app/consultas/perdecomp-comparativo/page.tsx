@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { FaSpinner } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
 import NewCompanyModal from '../../../components/NewCompanyModal';
@@ -126,6 +127,8 @@ export default function PerdecompComparativoPage() {
   const [openCancel, setOpenCancel] = useState(false);
   const [cancelCount, setCancelCount] = useState(0);
   const showDebug = false;
+  const searchParams = useSearchParams();
+  const q = searchParams.get('q') || '';
 
   // chamado pelo preview ao clicar "Usar e abrir cadastro"
   const handleUseSuggestion = (flat: Prefill) => {
@@ -492,6 +495,24 @@ export default function PerdecompComparativoPage() {
     setModalTarget(null);
   };
 
+  useEffect(() => {
+    if (!q) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/clientes/buscar?q=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            await handleSelectCompany('client', data[0]);
+            handleConsult();
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao pré-preencher busca', err);
+      }
+    })();
+  }, [q]);
+
   return (
     <div className="container mx-auto p-4 text-gray-900 dark:text-gray-100">
       <h1 className="text-3xl font-bold mb-6">Comparativo PER/DCOMP</h1>
@@ -509,6 +530,7 @@ export default function PerdecompComparativoPage() {
                   onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'client' })}
                   onEnrichQuery={(q) => handleEnrichFromMain('query', undefined, q, { type: 'client' })}
                   isEnriching={isEnriching && enrichTarget === 'client'}
+                  initialQuery={q}
                 />
               </div>
             </div>

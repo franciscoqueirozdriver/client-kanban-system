@@ -21,14 +21,19 @@ interface AutocompleteProps {
   onEnrichQuery?: (query: string) => void;
   isEnriching?: boolean;
   placeholder?: string;
+  initialQuery?: string;
 }
 
-const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnrichSelected, onEnrichQuery, isEnriching, placeholder = "Digite o Nome ou CNPJ" }: AutocompleteProps) => {
-  const [query, setQuery] = useState('');
+const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnrichSelected, onEnrichQuery, isEnriching, placeholder = "Digite o Nome ou CNPJ", initialQuery = '' }: AutocompleteProps) => {
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
 
   useEffect(() => {
     // Clear results and error if query is too short

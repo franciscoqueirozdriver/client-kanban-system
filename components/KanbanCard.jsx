@@ -1,9 +1,11 @@
 'use client';
 import { Draggable } from '@hello-pangea/dnd';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
+import { onlyDigits, isValidCNPJ } from '@/utils/cnpj';
 
 // Remove proteção visual dos números ('+553199999999' -> +553199999999)
 function displayPhone(phone) {
@@ -68,6 +70,24 @@ export default function KanbanCard({ card, index }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [perdecompOpen, setPerdecompOpen] = useState(false);
+  const router = useRouter();
+
+  const queryValue = useMemo(() => {
+    const raw =
+      client?.cnpj ||
+      client?.CNPJ ||
+      client?.CNPJ_Empresa ||
+      '';
+    const clean = onlyDigits(raw);
+    if (clean.length === 14 && isValidCNPJ(clean)) return clean;
+    const name =
+      client?.company ||
+      client?.nome ||
+      client?.Nome_da_Empresa ||
+      '';
+    return name.trim();
+  }, [client]);
 
   const openModal = (messages, action) => {
     setModalMessages(messages);
@@ -93,6 +113,13 @@ export default function KanbanCard({ card, index }) {
     const history = await res.json();
     setHistoryData(history);
     setHistoryOpen(true);
+  };
+
+  const handlePerdecompConfirm = () => {
+    const base = '/consultas/perdecomp-comparativo';
+    const url = `${base}?q=${encodeURIComponent(queryValue)}`;
+    setPerdecompOpen(false);
+    router.push(url);
   };
 
   const handleDoubleClick = async () => {
@@ -339,13 +366,23 @@ export default function KanbanCard({ card, index }) {
               )}
             </div>
           ))}
-          <div className="mt-1">
+          <div className="mt-1 flex items-center justify-between text-[10px]">
             <button
               type="button"
-              className="text-blue-600 underline text-[10px]"
+              className="text-blue-600 underline"
               onClick={handleHistoryClick}
             >
               Histórico
+            </button>
+            <button
+              type="button"
+              onClick={() => setPerdecompOpen(true)}
+              className="text-blue-600 underline"
+              aria-label="Consultar PER/DCOMP para este cliente"
+              data-testid="cta-perdecomp"
+              title="Consultar PER/DCOMP"
+            >
+              Consultar PER/DCOMP
             </button>
           </div>
         </div>
@@ -371,6 +408,42 @@ export default function KanbanCard({ card, index }) {
           interactions={historyData}
           onClose={() => setHistoryOpen(false)}
         />
+        {perdecompOpen && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+            <div className="bg-white rounded shadow-lg p-6 w-11/12 max-w-md mx-auto">
+              <h2 className="text-lg font-bold mb-2 text-center">Confirmar consulta PER/DCOMP</h2>
+              <div className="text-sm mb-4">
+                <div>
+                  <span className="font-medium">Empresa:</span> {client.company || client.nome || client.Nome_da_Empresa || '—'}
+                </div>
+                {(client.cnpj || client.CNPJ || client.CNPJ_Empresa) && (
+                  <div>
+                    <span className="font-medium">CNPJ:</span>{' '}
+                    {client.cnpj || client.CNPJ || client.CNPJ_Empresa}
+                  </div>
+                )}
+                <div className="mt-2">
+                  <span className="font-medium">Será enviado:</span>{' '}
+                  <code className="px-1 py-0.5 bg-gray-100 rounded">{queryValue || '—'}</code>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setPerdecompOpen(false)}
+                  className="px-3 py-1.5 rounded border"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handlePerdecompConfirm}
+                  className="px-3 py-1.5 rounded bg-black text-white"
+                >
+                  Sim, continuar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         </>
       )}
     </Draggable>
