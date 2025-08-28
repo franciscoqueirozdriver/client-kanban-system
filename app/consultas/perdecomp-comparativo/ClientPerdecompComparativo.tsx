@@ -7,7 +7,7 @@ import NewCompanyModal from '../../../components/NewCompanyModal';
 import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
-import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
+import { padCNPJ14, isValidCNPJ, normalizeDigits, isEmptyCNPJLike, isCNPJ14 } from '@/utils/cnpj';
 
 // --- Helper Types ---
 interface Company {
@@ -404,7 +404,15 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     Object.keys(sug || {}).forEach(k => {
       const cur = String(out[k] ?? '').trim();
       const val = String(sug[k] ?? '').trim();
-      if (!cur && val) out[k] = val;
+      if (k === 'CNPJ_Empresa') {
+        const curDigits = normalizeDigits(cur);
+        const valDigits = normalizeDigits(val);
+        if (isEmptyCNPJLike(curDigits) && isCNPJ14(valDigits)) {
+          out[k] = valDigits;
+        }
+      } else if (!cur && val) {
+        out[k] = val;
+      }
     });
     return out;
   }
