@@ -6,6 +6,19 @@ export function padCNPJ14(v: any) {
   return onlyDigits(v).padStart(14, '0');
 }
 
+export function normalizeDigits(str?: string) {
+  return (str ?? '').replace(/\D/g, '');
+}
+
+export function isEmptyCNPJLike(value?: string) {
+  const digits = normalizeDigits(value);
+  return digits.length === 0 || /^0+$/.test(digits);
+}
+
+export function isCNPJ14(digits?: string) {
+  return /^\d{14}$/.test(digits ?? '');
+}
+
 // Official validation (mod 11). Accepts any input and validates after padStart.
 export function isValidCNPJ(input: any) {
   const cnpj = padCNPJ14(input);
