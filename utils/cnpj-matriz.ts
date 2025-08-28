@@ -1,13 +1,17 @@
 export const onlyDigits = (v?: string) => (v ?? '').replace(/\D/g, '');
 const is14 = (d: string) => /^\d{14}$/.test(d);
-export const ordemDoCNPJ = (cnpj: string) => {
+export const ordem = (cnpj: string) => {
   const d = onlyDigits(cnpj);
   return d.length >= 12 ? d.slice(8, 12) : '';
 };
-export const isMatriz = (cnpj: string) => ordemDoCNPJ(cnpj) === '0001';
+export const isMatriz = (cnpj: string) => ordem(cnpj) === '0001';
 export const isFilial = (cnpj: string) => {
   const d = onlyDigits(cnpj);
-  return is14(d) && ordemDoCNPJ(d) !== '0001';
+  return is14(d) && ordem(d) !== '0001';
+};
+export const isEmptyCNPJLike = (v?: string) => {
+  const d = onlyDigits(v);
+  return d.length === 0 || /^0+$/.test(d);
 };
 
 // cálculo oficial dos DVs (mód 11)
@@ -27,5 +31,3 @@ export const toMatrizCNPJ = (cnpj: string) => {
   const base12 = `${raiz8}0001`;
   return `${base12}${calcDVs(base12)}`;
 };
-export const fmtCNPJ = (d: string) =>
-  onlyDigits(d).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');

@@ -4,6 +4,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import type { CompanySuggestion } from '../lib/perplexity';
 import { onlyDigits, padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
+import { isEmptyCNPJLike } from '@/utils/cnpj-matriz';
 
 // --- Types ---
 interface CompanyData {
@@ -163,8 +164,9 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
     setIsLoading(true);
     setError(null);
     try {
-      const cnpj = padCNPJ14(formData.CNPJ_Empresa);
-      if (formData.CNPJ_Empresa && !isValidCNPJ(cnpj)) {
+      const digits = onlyDigits(formData.CNPJ_Empresa);
+      const cnpj = isEmptyCNPJLike(digits) ? '' : padCNPJ14(digits);
+      if (cnpj && !isValidCNPJ(cnpj)) {
         setIsLoading(false);
         setError('CNPJ inválido. Verifique e tente novamente.');
         return;
@@ -182,7 +184,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
           Bairro_Empresa: formData.Bairro_Empresa,
           Complemento_Empresa: formData.Complemento_Empresa,
           CEP_Empresa: formData.CEP_Empresa,
-          CNPJ_Empresa: formData.CNPJ_Empresa ? cnpj : '',
+          CNPJ_Empresa: cnpj,
           DDI_Empresa: formData.DDI_Empresa,
           Telefones_Empresa: formData.Telefones_Empresa,
           Observacao_Empresa: formData.Observacao_Empresa,

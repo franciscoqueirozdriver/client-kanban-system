@@ -5,7 +5,7 @@ import ClientCard from '../../components/ClientCard';
 import Filters from '../../components/Filters';
 import NewCompanyModal from '../../components/NewCompanyModal';
 import EnrichmentPreviewDialog from '../../components/EnrichmentPreviewDialog';
-import { onlyDigits, isFilial, isMatriz, toMatrizCNPJ, fmtCNPJ } from '@/utils/cnpj-matriz';
+import { onlyDigits, isEmptyCNPJLike, isFilial, isMatriz, toMatrizCNPJ } from '@/utils/cnpj-matriz';
 
 async function openConfirmDialog({ title, description, confirmText, cancelText }) {
   const msg = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
@@ -151,27 +151,23 @@ export default function ClientesPage() {
         onConfirm={async (flat) => {
           const merged = { ...enrichPreview.base, ...flat };
           const enriched = onlyDigits(flat?.CNPJ_Empresa ?? flat?.cnpj ?? '');
-          let cnpjParaSalvar = enriched;
+          const current = onlyDigits(merged?.CNPJ_Empresa ?? '');
+          let candidate = (isEmptyCNPJLike(current) && enriched) ? enriched : current;
 
-          if (isFilial(enriched)) {
-            const matriz = toMatrizCNPJ(enriched);
+          if (isFilial(candidate)) {
+            const matriz = toMatrizCNPJ(candidate);
             const choice = await openConfirmDialog({
               title: 'CNPJ indica Filial',
-              description:
-                `Detectamos FILIAL: ${fmtCNPJ(enriched)}.\n` +
-                `Deseja salvar como filial mesmo?\n` +
-                `Se preferir MATriz, salvaremos: ${fmtCNPJ(matriz)}.`,
+              description: `Detectamos FILIAL (${candidate}). Deseja salvar como filial mesmo?\nSe preferir Matriz, salvaremos ${matriz}.`,
               confirmText: 'Usar Matriz',
               cancelText: 'Manter Filial',
             });
-            if (choice === 'confirm') cnpjParaSalvar = matriz;
+            if (choice === 'confirm') candidate = matriz;
+          } else if (isMatriz(candidate)) {
+            // já é matriz, segue sem confirmação
           }
 
-          if (isMatriz(enriched)) {
-            cnpjParaSalvar = enriched;
-          }
-
-          const mergedWithCnpj = { ...merged, CNPJ_Empresa: cnpjParaSalvar };
+          const mergedWithCnpj = { ...merged, CNPJ_Empresa: candidate };
           handleOpenNewCompanyModal(mergedWithCnpj);
           setShowEnrichPreview(false);
         }}
