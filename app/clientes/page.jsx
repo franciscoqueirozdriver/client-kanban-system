@@ -5,7 +5,7 @@ import ClientCard from '../../components/ClientCard';
 import Filters from '../../components/Filters';
 import NewCompanyModal from '../../components/NewCompanyModal';
 import EnrichmentPreviewDialog from '../../components/EnrichmentPreviewDialog';
-import { onlyDigits, isEmptyCNPJLike, isFilial, isMatriz, toMatrizCNPJ } from '@/utils/cnpj-matriz';
+import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 
 async function openConfirmDialog({ title, description, confirmText, cancelText }) {
   const msg = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
@@ -150,24 +150,20 @@ export default function ClientesPage() {
         error={enrichPreview?.error ? String(enrichPreview.error) : undefined}
         onConfirm={async (flat) => {
           const merged = { ...enrichPreview.base, ...flat };
-          const enriched = onlyDigits(flat?.CNPJ_Empresa ?? flat?.cnpj ?? '');
-          const current = onlyDigits(merged?.CNPJ_Empresa ?? '');
-          let candidate = (isEmptyCNPJLike(current) && enriched) ? enriched : current;
-
-          if (isFilial(candidate)) {
-            const matriz = toMatrizCNPJ(candidate);
-            const choice = await openConfirmDialog({
-              title: 'CNPJ indica Filial',
-              description: `Detectamos FILIAL (${candidate}). Deseja salvar como filial mesmo?\nSe preferir Matriz, salvaremos ${matriz}.`,
-              confirmText: 'Usar Matriz',
-              cancelText: 'Manter Filial',
-            });
-            if (choice === 'confirm') candidate = matriz;
-          } else if (isMatriz(candidate)) {
-            // já é matriz, segue sem confirmação
-          }
-
-          const mergedWithCnpj = { ...merged, CNPJ_Empresa: candidate };
+          const cnpjFinal = await decideCNPJFinal({
+            currentFormCNPJ: merged?.CNPJ_Empresa,
+            enrichedCNPJ: flat?.CNPJ_Empresa ?? flat?.cnpj,
+            ask: async (matriz, filial) => {
+              const choice = await openConfirmDialog({
+                title: 'CNPJ indica Filial',
+                description: `Detectamos FILIAL (${filial}). Deseja salvar como filial mesmo?\nSe preferir Matriz, salvaremos ${matriz}.`,
+                confirmText: 'Usar Matriz',
+                cancelText: 'Manter Filial',
+              });
+              return choice === 'confirm';
+            },
+          });
+          const mergedWithCnpj = { ...merged, CNPJ_Empresa: cnpjFinal };
           handleOpenNewCompanyModal(mergedWithCnpj);
           setShowEnrichPreview(false);
         }}

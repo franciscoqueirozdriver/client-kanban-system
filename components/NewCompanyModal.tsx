@@ -5,6 +5,7 @@ import { FaSpinner } from 'react-icons/fa';
 import type { CompanySuggestion } from '../lib/perplexity';
 import { onlyDigits, padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 import { isEmptyCNPJLike } from '@/utils/cnpj-matriz';
+import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 
 // --- Types ---
 interface CompanyData {
@@ -164,7 +165,12 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
     setIsLoading(true);
     setError(null);
     try {
-      const digits = onlyDigits(formData.CNPJ_Empresa);
+      const decided = await decideCNPJFinal({
+        currentFormCNPJ: formData.CNPJ_Empresa,
+        enrichedCNPJ: initialData?.CNPJ_Empresa,
+        ask: async () => false,
+      });
+      const digits = onlyDigits(decided);
       const cnpj = isEmptyCNPJLike(digits) ? '' : padCNPJ14(digits);
       if (cnpj && !isValidCNPJ(cnpj)) {
         setIsLoading(false);
