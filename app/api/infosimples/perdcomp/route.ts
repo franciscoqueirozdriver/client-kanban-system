@@ -263,7 +263,8 @@ export async function POST(request: Request) {
           return null;
         }
       })();
-      if (!resp.ok || (json && typeof json.code === 'number' && json.code !== 200)) {
+      // Allow 200 (OK) and 612 (No data found) to be treated as "successful" calls
+      if (!resp.ok || (json && typeof json.code === 'number' && ![200, 612].includes(json.code))) {
         const err: any = new Error('provider_error');
         err.status = resp.status || 502;
         err.statusText = resp.statusText || 'Bad Gateway';
@@ -298,7 +299,8 @@ export async function POST(request: Request) {
     }
 
     const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
-    const perdcompArrayRaw = apiResponse?.data?.[0]?.perdcomp;
+    // If code is 612 (no data), treat perdcomp array as empty
+    const perdcompArrayRaw = apiResponse?.code === 612 ? [] : apiResponse?.data?.[0]?.perdcomp;
     const perdcompArray = Array.isArray(perdcompArrayRaw) ? perdcompArrayRaw : [];
     const resumo = agregaPerdcomp(perdcompArray);
     const first = perdcompArray[0] || {};

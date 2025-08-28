@@ -206,6 +206,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           providerMessage: data?.providerMessage,
           message: data?.message,
         };
+        // Special handling for non-critical "no data" error when we have fallback data
+        const isNoDataError = errorObj.providerCode === 612;
+
         if (data.fallback) {
           const dcomp = data.fallback.dcomp ?? 0;
           const rest = data.fallback.rest ?? 0;
@@ -238,7 +241,8 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             fromCache: true,
             perdcompResumo: resumo,
           };
-          updateResult(cnpj, { status: 'loaded', data: cardData, error: errorObj });
+          // Do not show a scary error message for a simple "no data found"
+          updateResult(cnpj, { status: 'loaded', data: cardData, error: isNoDataError ? null : errorObj });
         } else {
           updateResult(cnpj, { status: 'error', error: errorObj });
         }
