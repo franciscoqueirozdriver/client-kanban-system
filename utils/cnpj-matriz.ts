@@ -31,3 +31,6 @@ export const toMatrizCNPJ = (cnpj: string) => {
   const base12 = `${raiz8}0001`;
   return `${base12}${calcDVs(base12)}`;
 };
+
+export const fmtCNPJ = (d: string) =>
+  onlyDigits(d).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');

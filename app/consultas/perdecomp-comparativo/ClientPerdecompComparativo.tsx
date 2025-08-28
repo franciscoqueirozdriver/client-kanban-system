@@ -717,11 +717,15 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         isOpen={showEnrichPreview}
         onClose={() => { setShowEnrichPreview(false); setModalTarget(null); }}
         suggestionFlat={enrichPreview?.suggestion || null}
+        baseCompany={enrichPreview?.base || null}
         rawJson={enrichPreview?.debug?.parsedJson}
         error={enrichPreview?.error ? String(enrichPreview.error) : undefined}
         onConfirm={(flat) => {
           const merged = enrichPreview?.base ? mergeEmptyFields(enrichPreview.base, flat) : flat;
-          handleUseSuggestion(merged);
+          // The CNPJ decision is now made inside the dialog, so we just use the result (flat).
+          // However, we still need to merge other fields.
+          const finalData = { ...merged, CNPJ_Empresa: flat.CNPJ_Empresa };
+          handleUseSuggestion(finalData);
           setModalWarning(!enrichPreview?.suggestion);
           setShowEnrichPreview(false);
         }}

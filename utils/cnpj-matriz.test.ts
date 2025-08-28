@@ -13,3 +13,11 @@ test('BSBIOS: 07322382001352 -> matriz 07322382000119', () => {
   expect(ordem(filial)).toBe('0013');
   expect(toMatrizCNPJ(filial)).toBe('07322382000119');
 });
+
+test('Prompt example: 08781394002036 -> matriz 08781394000174', () => {
+  const filial = '08.781.394/0020-36'; // with punctuation
+  const matriz = '08781394000174'; // Corrected expected value from 09 to 74
+  expect(isFilial(filial)).toBe(true);
+  expect(ordem(filial)).toBe('0020');
+  expect(toMatrizCNPJ(filial)).toBe(matriz);
+});
