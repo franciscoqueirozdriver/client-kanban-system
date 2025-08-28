@@ -5,6 +5,12 @@ import ClientCard from '../../components/ClientCard';
 import Filters from '../../components/Filters';
 import NewCompanyModal from '../../components/NewCompanyModal';
 import EnrichmentPreviewDialog from '../../components/EnrichmentPreviewDialog';
+import { decideCNPJFinal } from '@/helpers/decideCNPJ';
+
+async function openConfirmDialog({ title, description, confirmText, cancelText }) {
+  const msg = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
+  return window.confirm(msg) ? 'confirm' : 'cancel';
+}
 
 export default function ClientesPage() {
   const [clients, setClients] = useState([]);
@@ -142,9 +148,23 @@ export default function ClientesPage() {
         suggestionFlat={enrichPreview?.suggestion || null}
         rawJson={enrichPreview?.debug?.parsedJson}
         error={enrichPreview?.error ? String(enrichPreview.error) : undefined}
-        onConfirm={(flat) => {
+        onConfirm={async (flat) => {
           const merged = { ...enrichPreview.base, ...flat };
-          handleOpenNewCompanyModal(merged);
+          const cnpjFinal = await decideCNPJFinal({
+            currentFormCNPJ: merged?.CNPJ_Empresa,
+            enrichedCNPJ: flat?.CNPJ_Empresa ?? flat?.cnpj,
+            ask: async (matriz, filial) => {
+              const choice = await openConfirmDialog({
+                title: 'CNPJ indica Filial',
+                description: `Detectamos FILIAL (${filial}). Deseja salvar como filial mesmo?\nSe preferir Matriz, salvaremos ${matriz}.`,
+                confirmText: 'Usar Matriz',
+                cancelText: 'Manter Filial',
+              });
+              return choice === 'confirm';
+            },
+          });
+          const mergedWithCnpj = { ...merged, CNPJ_Empresa: cnpjFinal };
+          handleOpenNewCompanyModal(mergedWithCnpj);
           setShowEnrichPreview(false);
         }}
       />
