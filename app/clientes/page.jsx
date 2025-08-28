@@ -5,6 +5,12 @@ import ClientCard from '../../components/ClientCard';
 import Filters from '../../components/Filters';
 import NewCompanyModal from '../../components/NewCompanyModal';
 import EnrichmentPreviewDialog from '../../components/EnrichmentPreviewDialog';
+import { onlyDigits, isFilial, isMatriz, toMatrizCNPJ, fmtCNPJ } from '@/utils/cnpj-matriz';
+
+async function openConfirmDialog({ title, description, confirmText, cancelText }) {
+  const msg = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
+  return window.confirm(msg) ? 'confirm' : 'cancel';
+}
 
 export default function ClientesPage() {
   const [clients, setClients] = useState([]);
@@ -142,9 +148,31 @@ export default function ClientesPage() {
         suggestionFlat={enrichPreview?.suggestion || null}
         rawJson={enrichPreview?.debug?.parsedJson}
         error={enrichPreview?.error ? String(enrichPreview.error) : undefined}
-        onConfirm={(flat) => {
+        onConfirm={async (flat) => {
           const merged = { ...enrichPreview.base, ...flat };
-          handleOpenNewCompanyModal(merged);
+          const enriched = onlyDigits(flat?.CNPJ_Empresa ?? flat?.cnpj ?? '');
+          let cnpjParaSalvar = enriched;
+
+          if (isFilial(enriched)) {
+            const matriz = toMatrizCNPJ(enriched);
+            const choice = await openConfirmDialog({
+              title: 'CNPJ indica Filial',
+              description:
+                `Detectamos FILIAL: ${fmtCNPJ(enriched)}.\n` +
+                `Deseja salvar como filial mesmo?\n` +
+                `Se preferir MATriz, salvaremos: ${fmtCNPJ(matriz)}.`,
+              confirmText: 'Usar Matriz',
+              cancelText: 'Manter Filial',
+            });
+            if (choice === 'confirm') cnpjParaSalvar = matriz;
+          }
+
+          if (isMatriz(enriched)) {
+            cnpjParaSalvar = enriched;
+          }
+
+          const mergedWithCnpj = { ...merged, CNPJ_Empresa: cnpjParaSalvar };
+          handleOpenNewCompanyModal(mergedWithCnpj);
           setShowEnrichPreview(false);
         }}
       />
