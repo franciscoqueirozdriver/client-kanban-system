@@ -60,6 +60,7 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
             [fieldMap["Nome do Lead"]]: client?.company ?? "Lead sem título",
             [fieldMap["Origem"]]: client?.origem ?? process.env.NEXT_PUBLIC_DEFAULT_CONTACT_ORIGEM ?? "Kanban",
             [fieldMap["Mercado"]]: selectedMarket,
+            [fieldMap["Produto"]]: client?.produto || "",
             [fieldMap["Telefones"]]: client?.contacts?.[0]?.normalizedPhones?.join(";") || "",
             [fieldMap["Área"]]: (Array.isArray(client?.opportunities) && client.opportunities.length > 0 ? client.opportunities.join(";") : client?.segment) ?? "Geral",
             [fieldMap["Etapa"]]: client?.status ?? "Novo",

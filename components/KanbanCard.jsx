@@ -73,6 +73,7 @@ export default function KanbanCard({ card, index }) {
   const [loading, setLoading] = useState(false);
   const [perdecompOpen, setPerdecompOpen] = useState(false);
   const [isSpotterModalOpen, setIsSpotterModalOpen] = useState(false);
+  const [isEnrichConfirmOpen, setIsEnrichConfirmOpen] = useState(false);
   const router = useRouter();
 
   const queryValue = useMemo(() => {
@@ -124,7 +125,13 @@ export default function KanbanCard({ card, index }) {
     router.push(url);
   };
 
-  const handleDoubleClick = async () => {
+  const handleDoubleClick = () => {
+    if (loading) return;
+    setIsEnrichConfirmOpen(true);
+  };
+
+  const handleEnrichConfirm = async () => {
+    setIsEnrichConfirmOpen(false);
     try {
       setLoading(true);
       const payload = {
@@ -145,7 +152,7 @@ export default function KanbanCard({ card, index }) {
       let json = await res.json();
 
       if (json.exists) {
-        const proceed = confirm('cliente já adicionado em lista anterior');
+        const proceed = confirm('Este cliente já existe em outra lista. Deseja sobrescrever os dados com o enriquecimento?');
         if (!proceed) {
           setLoading(false);
           return;
@@ -167,7 +174,7 @@ export default function KanbanCard({ card, index }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: client.id, status: 'Lead Importado', color: 'gray' }),
       });
-      setClient((prev) => ({ ...prev, status: 'Lead Importado', color: 'gray' }));
+      setClient((prev) => ({ ...prev, ...json.data, status: 'Lead Importado', color: 'gray' }));
 
       console.log('Enriquecimento concluído:', json.data);
       alert('Dados da empresa enriquecidos e salvos na planilha.');
@@ -432,6 +439,30 @@ export default function KanbanCard({ card, index }) {
             setClient(prev => ({ ...prev, ...update }));
           }}
         />
+        {isEnrichConfirmOpen && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+            <div className="bg-white rounded shadow-lg p-6 w-11/12 max-w-md mx-auto">
+              <h2 className="text-lg font-bold mb-2 text-center">Confirmar Enriquecimento</h2>
+              <p className="text-sm text-center mb-4">
+                Deseja buscar e atualizar os dados para a empresa <span className="font-bold">{client.company}</span>?
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setIsEnrichConfirmOpen(false)}
+                  className="px-3 py-1.5 rounded border"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleEnrichConfirm}
+                  className="px-3 py-1.5 rounded bg-black text-white"
+                >
+                  Sim, enriquecer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {perdecompOpen && (
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
             <div className="bg-white rounded shadow-lg p-6 w-11/12 max-w-md mx-auto">

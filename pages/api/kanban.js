@@ -50,6 +50,7 @@ function groupRows(rows) {
     data: header.indexOf('Data_Ultima_Movimentacao'),
     linkedin: header.indexOf('Pessoa - End. Linkedin'),
     cor: header.indexOf('Cor_Card'),
+    produto: header.indexOf('Negócio - Nome do produto'),
   };
 
   const map = new Map();
@@ -71,6 +72,7 @@ function groupRows(rows) {
         status: row[idx.status] || '',
         dataMov: row[idx.data] || '',
         color: row[idx.cor] || '',
+        produto: row[idx.produto] || '',
         rows: [],
       });
     }
@@ -110,6 +112,7 @@ function groupRows(rows) {
       status: c.status,
       dataMov: c.dataMov,
       color: c.color,
+      produto: c.produto,
       rows: c.rows,
     })),
   };
