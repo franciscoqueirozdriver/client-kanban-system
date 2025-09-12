@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 
-export default function SpotterModal({ isOpen, onClose, initialData }) {
+export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
   const [formData, setFormData] = useState({});
   const [isSending, setIsSending] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
@@ -70,19 +70,32 @@ export default function SpotterModal({ isOpen, onClose, initialData }) {
     setIsSending(true);
     setError(null);
     try {
-      const res = await fetch('/api/spoter/oportunidades', {
+      const spotterRes = await fetch('/api/spoter/oportunidades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
+      const spotterData = await spotterRes.json().catch(() => ({}));
+      if (!spotterRes.ok) throw new Error(spotterData.error || `Erro ${spotterRes.status}`);
 
-      alert(`Sucesso! Resposta da API: ${JSON.stringify(data, null, 2)}`);
-      onClose(); // Fecha o modal após o sucesso
+      alert(`Sucesso! Resposta da API do Spotter: ${JSON.stringify(spotterData, null, 2)}`);
+
+      // Agora, atualiza o card no Kanban
+      const updatePayload = { id: initialData.id, color: 'purple', status: 'Enviado Spotter' };
+      await fetch('/api/kanban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload)
+      });
+
+      if (onSent) {
+        onSent({ color: 'purple', status: 'Enviado Spotter' });
+      }
+
+      onClose(); // Fecha o modal após tudo dar certo
     } catch (err) {
       setError(err.message);
-      alert(`Erro ao enviar para o Spotter: ${err.message}`);
+      alert(`Erro no processo de envio: ${err.message}`);
     } finally {
       setIsSending(false);
     }

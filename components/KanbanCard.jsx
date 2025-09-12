@@ -262,6 +262,8 @@ export default function KanbanCard({ card, index }) {
       ? '#ffca99'
       : client.color === 'gray'
       ? '#e5e7eb'
+      : client.color === 'purple'
+      ? '#e9d5ff' // Light purple
       : 'white';
 
   const borderLeftColor =
@@ -271,6 +273,8 @@ export default function KanbanCard({ card, index }) {
       ? '#ff7043'
       : client.color === 'gray'
       ? '#9ca3af'
+      : client.color === 'purple'
+      ? '#9333ea' // Darker purple
       : 'transparent';
 
   return (
@@ -424,6 +428,9 @@ export default function KanbanCard({ card, index }) {
           isOpen={isSpotterModalOpen}
           onClose={() => setIsSpotterModalOpen(false)}
           initialData={client}
+          onSent={(update) => {
+            setClient(prev => ({ ...prev, ...update }));
+          }}
         />
         {perdecompOpen && (
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
