@@ -30,6 +30,7 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
   const [errors, setErrors] = useState([]); // {field, message}
   const [produtosList, setProdutosList] = useState([]);
   const [mercadosList, setMercadosList] = useState([]);
+  const [isEnrichConfirmOpen, setIsEnrichConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -95,12 +96,9 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleEnrich = async () => {
+  const handleEnrichConfirm = async () => {
+    setIsEnrichConfirmOpen(false);
     const companyName = formData[fieldMap["Nome da Empresa"]];
-    if (!companyName) {
-      alert('Por favor, preencha o nome da empresa para enriquecer.');
-      return;
-    }
     setIsEnriching(true);
     setErrors([]);
     try {
@@ -115,14 +113,12 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
       const s = data.suggestion;
       setFormData(prev => {
         const nextState = { ...prev };
-        // Logic: only update if the previous value is empty/falsy
         for (const layoutKey in s) {
           const formKey = fieldMap[layoutKey];
           if (formKey && !nextState[formKey]) {
             nextState[formKey] = s[layoutKey];
           }
         }
-        // Special case for Mercado: enrichment can suggest a better market
         if (s.Mercado) {
             const foundMarket = mercadosList.find(m => m.toLowerCase() === s.Mercado.toLowerCase());
             if(foundMarket) {
@@ -137,6 +133,15 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
     } finally {
       setIsEnriching(false);
     }
+  };
+
+  const handleEnrich = () => {
+    const companyName = formData[fieldMap["Nome da Empresa"]];
+    if (!companyName) {
+      alert('Por favor, preencha o nome da empresa para enriquecer.');
+      return;
+    }
+    setIsEnrichConfirmOpen(true);
   };
 
   const handleSubmit = async (e) => {
@@ -309,6 +314,30 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
           </footer>
         </form>
       </div>
+      {isEnrichConfirmOpen && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 z-10">
+            <div className="bg-white rounded shadow-lg p-6 w-11/12 max-w-md mx-auto">
+              <h2 className="text-lg font-bold mb-2 text-center">Confirmar Enriquecimento</h2>
+              <p className="text-sm text-center mb-4">
+                Deseja buscar e atualizar os dados para a empresa <span className="font-bold">{formData[fieldMap["Nome da Empresa"]]}</span>?
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setIsEnrichConfirmOpen(false)}
+                  className="px-3 py-1.5 rounded border"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleEnrichConfirm}
+                  className="px-3 py-1.5 rounded bg-black text-white"
+                >
+                  Sim, enriquecer
+                </button>
+              </div>
+            </div>
+          </div>
+      )}
     </div>
   );
 }
