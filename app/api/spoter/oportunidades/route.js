@@ -1,6 +1,6 @@
 // app/api/spoter/oportunidades/route.js
 import { NextResponse } from 'next/server';
-import { createOportunidadeSpotter } from '@/lib/exactSpotter';
+import { spotterPost } from '@/lib/exactSpotter';
 import { normalizePhoneList } from '@/utils/telefone';
 
 // Validation function based on user's pseudocode
@@ -51,9 +51,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Campos inválidos', details: erros }, { status: 400 });
     }
 
-    const created = await createOportunidadeSpotter(payloadSpotter, {
-      entitySetPath: '/Leads' // Using /Leads as a more likely placeholder
-    });
+      const created = await spotterPost('Oportunidades', payloadSpotter);
 
     return NextResponse.json({ ok: true, data: created }, { status: 201 });
   } catch (err) {

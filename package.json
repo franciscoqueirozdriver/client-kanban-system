@@ -2,12 +2,13 @@
   "name": "client-kanban-system",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "test": "jest --coverage"
-  },
+    "scripts": {
+      "dev": "next dev",
+      "build": "next build",
+      "start": "next start",
+      "test": "jest --coverage",
+      "check-spotter-url": "scripts/check-spotter-url.sh"
+    },
   "dependencies": {
     "@hello-pangea/dnd": "16.5.0",
     "chart.js": "^4.5.0",
