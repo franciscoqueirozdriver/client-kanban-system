@@ -49,7 +49,7 @@ export async function POST(req) {
     }
 
     // Use the centralized service to make the API call
-    const created = await spotterPost('Leads', payload);
+    const created = await spotterPost('LeadsAdd', payload);
 
     return NextResponse.json({ ok: true, data: created }, { status: 201 });
   } catch (err) {
