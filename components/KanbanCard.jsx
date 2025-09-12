@@ -71,6 +71,8 @@ export default function KanbanCard({ card, index }) {
   const [historyData, setHistoryData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [perdecompOpen, setPerdecompOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sentOk, setSentOk] = useState(false);
   const router = useRouter();
 
   const queryValue = useMemo(() => {
@@ -253,6 +255,41 @@ export default function KanbanCard({ card, index }) {
     }
   };
 
+  async function enviarAoSpotter() {
+    try {
+      setSending(true);
+      setSentOk(false);
+
+      const payload = {
+        titulo: client?.company || 'Oportunidade no Kanban',
+        empresa: client?.company || 'N/A',
+        contato_nome: client?.contacts?.[0]?.name || null,
+        contato_email: client?.contacts?.[0]?.email?.split(';')[0].trim() || null,
+        contato_telefone: client?.contacts?.[0]?.normalizedPhones?.[0] || null,
+        origem: 'Kanban',
+        valor_previsto: typeof client?.valor === 'number' ? client.valor : null,
+        observacoes: client?.observacoes || null
+      };
+
+      const res = await fetch('/api/spoter/oportunidades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Erro ${res.status}`);
+
+      setSentOk(true);
+      alert('Enviado ao Spotter com sucesso!');
+    } catch (e) {
+      console.error('Erro ao enviar ao Spotter:', e);
+      alert(`Erro ao enviar ao Spotter: ${e.message}`);
+    } finally {
+      setSending(false);
+    }
+  }
+
   const backgroundColor =
     client.color === 'green'
       ? '#a3ffac'
@@ -366,6 +403,17 @@ export default function KanbanCard({ card, index }) {
               )}
             </div>
           ))}
+          <div className="mt-2">
+            <button
+              onClick={enviarAoSpotter}
+              disabled={sending || sentOk}
+              className="w-full text-center rounded-md border px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
+              title="Enviar esta oportunidade para o Exact Spotter"
+            >
+              {sending ? 'Enviando…' : (sentOk ? 'Enviado ✓' : 'Enviar ao Spotter')}
+            </button>
+          </div>
+
           <div className="mt-1 flex items-center justify-between text-[10px]">
             <button
               type="button"
