@@ -108,7 +108,11 @@ Responda ESTRITAMENTE com um único objeto JSON no formato:
     "Area": "Área (ex: Saúde, Varejo)"
   }
 }
-Sem comentários, sem Markdown, sem \`\`\`.
+
+Regras importantes:
+- O campo "CNPJ_Empresa" é obrigatório. Faça o seu melhor para encontrá-lo.
+- Se, após uma busca exaustiva, o CNPJ não for encontrado, retorne "CNPJ_Empresa": "" (uma string vazia). Não invente um número.
+- Sem comentários, sem Markdown, sem \`\`\`.
   `.trim();
 
   const resp = await fetch(endpoint, {

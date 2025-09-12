@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
-import { FaSpinner } from 'react-icons/fa';
+import { FaSpinner, FaSearch } from 'react-icons/fa';
 import type { CompanySuggestion } from '../lib/perplexity';
 import { onlyDigits, padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 import { isEmptyCNPJLike } from '@/utils/cnpj-matriz';
@@ -272,7 +272,21 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                     </div>
                     <div>
                       <label htmlFor="cnpj-empresa" className="block text-sm font-medium mb-1">CNPJ Empresa</label>
-                      <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={formData.CNPJ_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: onlyDigits(e.target.value) }))} onBlur={() => setFormData(prev => ({ ...prev, CNPJ_Empresa: padCNPJ14(prev.CNPJ_Empresa) }))} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <div className="flex items-center gap-2">
+                        <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={formData.CNPJ_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: onlyDigits(e.target.value) }))} onBlur={() => setFormData(prev => ({ ...prev, CNPJ_Empresa: padCNPJ14(prev.CNPJ_Empresa) }))} className="flex-grow w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const query = encodeURIComponent(`${formData.Nome_da_Empresa} CNPJ`);
+                            window.open(`https://www.google.com/search?q=${query}`, '_blank');
+                          }}
+                          className="p-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded"
+                          aria-label="Pesquisar CNPJ no Google"
+                          title="Pesquisar CNPJ no Google"
+                        >
+                          <FaSearch />
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-500 mt-1">Apenas dígitos; validado no envio.</p>
                     </div>
                     <div>
