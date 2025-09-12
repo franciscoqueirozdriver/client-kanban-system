@@ -180,9 +180,10 @@ Retorne ESTRITAMENTE um array JSON de objetos no formato:
   {"nome": "<Nome da empresa>", "cnpj": "<apenas números, 14 dígitos; se desconhecido, string vazia>"}
 ]
 
-Regras:
-- "cnpj" deve conter somente dígitos (0-9), com 14 dígitos. Se vier com menos de 14, complete com zeros à esquerda.
-- Se não souber o CNPJ, retorne "cnpj": "" (string vazia).
+Regras importantes:
+- Para cada concorrente, faça o seu melhor para encontrar o CNPJ oficial. A qualidade do CNPJ é crucial.
+- O campo "cnpj" deve conter somente dígitos (0-9), com 14 dígitos. Se o CNPJ oficial tiver menos de 14, complete com zeros à esquerda.
+- Se, após uma busca exaustiva, o CNPJ de um concorrente não for encontrado, retorne "cnpj": "" (uma string vazia) para esse concorrente. Não invente números.
 - Não inclua comentários, Markdown ou texto fora do JSON.
 `.trim();
 
