@@ -1,6 +1,7 @@
 // app/api/spoter/oportunidades/route.js
 import { NextResponse } from 'next/server';
-import { createOportunidadeSpotter, normalizaListaTelefones } from '@/lib/exactSpotter';
+import { createOportunidadeSpotter } from '@/lib/exactSpotter';
+import { normalizePhoneList } from '@/utils/telefone';
 
 // Validation function based on user's pseudocode
 function validarObrigatoriedades(p) {
@@ -38,51 +39,17 @@ function validarObrigatoriedades(p) {
 
 export async function POST(req) {
   try {
-    const client = await req.json(); // Expecting the raw client/card object
+    const payloadSpotter = await req.json(); // Expecting the final payload from the modal form
 
-    // Map card data to the exact layout payload
-    const payloadSpotter = {
-      "Nome do Lead": client?.company ?? "Lead sem título",
-      "Origem": client?.origem ?? process.env.DEFAULT_CONTACT_ORIGEM ?? "Lista Francisco",
-      "Sub-Origem": client?.sub_origem ?? null,
-      "Mercado": client?.segment ?? "Geral",
-      "Produto": client?.produto ?? null,
-      "Site": client?.site ?? null,
-      "País": client?.country ?? (client.city ? 'Brasil' : null),
-      "Estado": client?.uf ?? null,
-      "Cidade": client?.city ?? null,
-      "Logradouro": client?.address ?? null,
-      "Número": client?.number ?? null,
-      "Bairro": client?.neighborhood ?? null,
-      "Complemento": client?.complement ?? null,
-      "CEP": client?.cep ?? null,
-      "DDI": "55",
-      "Telefones": client?.contacts?.[0]?.normalizedPhones?.join(";") || null,
-      "Observação": client?.observacoes ?? null,
-      "CPF/CNPJ": client?.cnpj ?? null,
-      "Email Pré-vendedor": null,
-      "Nome Contato": client?.contacts?.[0]?.name ?? null,
-      "E-mail Contato": client?.contacts?.[0]?.email?.split(';')[0].trim() ?? process.env.DEFAULT_CONTACT_EMAIL,
-      "Cargo Contato": client?.contacts?.[0]?.role ?? null,
-      "DDI Contato": "55",
-      "Telefones Contato": client?.contacts?.[0]?.normalizedPhones?.join(";") || null,
-      "Tipo do Serv. Comunicação": null,
-      "ID do Serv. Comunicação": null,
-      "Área": (Array.isArray(client?.opportunities) && client.opportunities.length > 0 ? client.opportunities.join(";") : client?.segment) ?? "Geral",
-      "Nome da Empresa": client?.company ?? null,
-      "Etapa": client?.status ?? "Novo",
-      "Funil": client?.funil ?? null
-    };
+    // Normalize phone numbers before validation, as validation depends on them
+    payloadSpotter["Telefones"] = normalizePhoneList(payloadSpotter["Telefones"]);
+    payloadSpotter["Telefones Contato"] = normalizePhoneList(payloadSpotter["Telefones Contato"]);
 
     // Run validation
     const erros = validarObrigatoriedades(payloadSpotter);
     if (erros.length > 0) {
       return NextResponse.json({ error: 'Campos inválidos', details: erros }, { status: 400 });
     }
-
-    // Normalize phone numbers in the final payload
-    payloadSpotter["Telefones"] = normalizaListaTelefones(payloadSpotter["Telefones"]);
-    payloadSpotter["Telefones Contato"] = normalizaListaTelefones(payloadSpotter["Telefones Contato"]);
 
     const created = await createOportunidadeSpotter(payloadSpotter, {
       entitySetPath: '/Leads' // Using /Leads as a more likely placeholder

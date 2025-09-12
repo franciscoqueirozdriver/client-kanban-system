@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FaSpinner } from 'react-icons/fa';
+import { FaSpinner, FaSearch } from 'react-icons/fa';
 
 // Maps layout field names to simpler keys for form state
 const fieldMap = {
@@ -112,27 +112,24 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
       if (!res.ok) throw new Error(data.error || 'Falha ao enriquecer');
 
       const s = data.suggestion;
-      setFormData(prev => ({
-        ...prev,
-        [fieldMap["Nome da Empresa"]]: s.Nome_da_Empresa || prev[fieldMap["Nome da Empresa"]],
-        [fieldMap["Site"]]: s.Site_Empresa || prev[fieldMap["Site"]],
-        [fieldMap["País"]]: s.Pais_Empresa || prev[fieldMap["País"]],
-        [fieldMap["Estado"]]: s.Estado_Empresa || prev[fieldMap["Estado"]],
-        [fieldMap["Cidade"]]: s.Cidade_Empresa || prev[fieldMap["Cidade"]],
-        [fieldMap["Logradouro"]]: s.Logradouro_Empresa || prev[fieldMap["Logradouro"]],
-        [fieldMap["Número"]]: s.Numero_Empresa || prev[fieldMap["Número"]],
-        [fieldMap["Bairro"]]: s.Bairro_Empresa || prev[fieldMap["Bairro"]],
-        [fieldMap["CEP"]]: s.CEP_Empresa || prev[fieldMap["CEP"]],
-        [fieldMap["CPF/CNPJ"]]: s.CNPJ_Empresa || prev[fieldMap["CPF/CNPJ"]],
-        [fieldMap["Telefones"]]: s.Telefones_Empresa || prev[fieldMap["Telefones"]],
-        [fieldMap["Nome Contato"]]: s.Nome_Contato || prev[fieldMap["Nome Contato"]],
-        [fieldMap["E-mail Contato"]]: s.Email_Contato || prev[fieldMap["E-mail Contato"]],
-        [fieldMap["Cargo Contato"]]: s.Cargo_Contato || prev[fieldMap["Cargo Contato"]],
-        [fieldMap["Telefones Contato"]]: s.Telefones_Contato || prev[fieldMap["Telefones Contato"]],
-        [fieldMap["Mercado"]]: s.Mercado || prev[fieldMap["Mercado"]],
-        [fieldMap["Produto"]]: s.Produto || prev[fieldMap["Produto"]],
-        [fieldMap["Área"]]: s.Area || prev[fieldMap["Área"]],
-      }));
+      setFormData(prev => {
+        const nextState = { ...prev };
+        // Logic: only update if the previous value is empty/falsy
+        for (const layoutKey in s) {
+          const formKey = fieldMap[layoutKey];
+          if (formKey && !nextState[formKey]) {
+            nextState[formKey] = s[layoutKey];
+          }
+        }
+        // Special case for Mercado: enrichment can suggest a better market
+        if (s.Mercado) {
+            const foundMarket = mercadosList.find(m => m.toLowerCase() === s.Mercado.toLowerCase());
+            if(foundMarket) {
+                nextState[fieldMap["Mercado"]] = foundMarket;
+            }
+        }
+        return nextState;
+      });
       alert('Dados enriquecidos com sucesso!');
     } catch (err) {
       alert(`Erro ao enriquecer: ${err.message}`);
@@ -238,7 +235,30 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
           <div className="flex-grow p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-3 gap-4">
             {renderInput("Nome do Lead", fieldMap["Nome do Lead"], { required: true })}
             {renderInput("Nome da Empresa", fieldMap["Nome da Empresa"])}
-            {renderInput("CPF/CNPJ", fieldMap["CPF/CNPJ"])}
+            <div>
+              <label className="block text-sm font-medium mb-1">CPF/CNPJ</label>
+              <div className="flex items-center gap-2">
+                <input
+                  id={fieldMap["CPF/CNPJ"]}
+                  name={fieldMap["CPF/CNPJ"]}
+                  value={formData[fieldMap["CPF/CNPJ"]] || ''}
+                  onChange={handleChange}
+                  className="flex-grow w-full rounded border p-2"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const query = encodeURIComponent(`${formData[fieldMap["Nome da Empresa"]]} CNPJ`);
+                    window.open(`https://www.google.com/search?q=${query}`, '_blank');
+                  }}
+                  className="p-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded"
+                  aria-label="Pesquisar CNPJ no Google"
+                  title="Pesquisar CNPJ no Google"
+                >
+                  <FaSearch />
+                </button>
+              </div>
+            </div>
             {renderInput("Site", fieldMap["Site"], { type: 'url' })}
             {renderInput("Origem", fieldMap["Origem"], { required: true })}
             {renderInput("Sub-Origem", fieldMap["Sub-Origem"])}
