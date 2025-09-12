@@ -147,6 +147,7 @@ export default function KanbanCard({ card, index }) {
       if (json.exists) {
         const proceed = confirm('cliente já adicionado em lista anterior');
         if (!proceed) {
+          setLoading(false);
           return;
         }
         res = await fetch('/api/enriquecer-empresa', {
@@ -315,7 +316,6 @@ export default function KanbanCard({ card, index }) {
               <p className="font-medium">{c.name}</p>
               {c.role && <p className="text-[10px]">{c.role}</p>}
 
-              {/* ✅ Suporte a múltiplos e-mails separados por ; */}
               {c.email && (
                 <p className="text-[10px]">
                   {c.email.split(';').map((em, idx) => {

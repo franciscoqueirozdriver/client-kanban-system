@@ -220,6 +220,8 @@ export default function ClientCard({ client, onStatusChange }) {
       ? '#ffca99'
       : color === 'gray'
       ? '#e5e7eb'
+      : color === 'purple'
+      ? '#e9d5ff' // Light purple
       : 'white';
 
   const borderLeftColor =
@@ -229,6 +231,8 @@ export default function ClientCard({ client, onStatusChange }) {
       ? '#ff7043'
       : color === 'gray'
       ? '#9ca3af'
+      : color === 'purple'
+      ? '#9333ea' // Darker purple
       : 'transparent';
 
   return (
