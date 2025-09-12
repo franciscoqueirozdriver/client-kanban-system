@@ -51,7 +51,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Campos inválidos', details: erros }, { status: 400 });
     }
 
-      const created = await spotterPost('Leads', payloadSpotter);
+      const created = await spotterPost('Oportunidades', payloadSpotter);
 
     return NextResponse.json({ ok: true, data: created }, { status: 201 });
   } catch (err) {
