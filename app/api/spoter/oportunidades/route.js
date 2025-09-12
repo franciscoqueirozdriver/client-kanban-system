@@ -43,7 +43,7 @@ export async function POST(req) {
     // Map card data to the exact layout payload
     const payloadSpotter = {
       "Nome do Lead": client?.company ?? "Lead sem título",
-      "Origem": client?.origem ?? process.env.DEFAULT_CONTACT_ORIGEM ?? "Kanban",
+      "Origem": client?.origem ?? process.env.DEFAULT_CONTACT_ORIGEM ?? "Lista Francisco",
       "Sub-Origem": client?.sub_origem ?? null,
       "Mercado": client?.segment ?? "Geral",
       "Produto": client?.produto ?? null,
