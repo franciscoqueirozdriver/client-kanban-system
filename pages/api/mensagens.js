@@ -12,16 +12,24 @@ function normalizeApp(str) {
 
 async function fetchMensagens() {
   const { headers, rows } = await getSheetData('Mensagens');
-  const lower = headers.map((h) => h.toLowerCase());
-  const tituloIdx = lower.indexOf('título') !== -1 ? lower.indexOf('título') : lower.indexOf('titulo');
-  const appIdx = lower.indexOf('aplicativo');
-  const msgIdx = lower.indexOf('mensagem');
+
+  // Find header names safely, accommodating for variations.
+  const lowerHeaders = headers.map(h => (h || '').toLowerCase());
+  const tituloHeader = headers[lowerHeaders.indexOf('título')] || headers[lowerHeaders.indexOf('titulo')];
+  const appHeader = headers[lowerHeaders.indexOf('aplicativo')];
+  const msgHeader = headers[lowerHeaders.indexOf('mensagem')];
+
+  // If essential headers are missing, log an error and return empty.
+  if (!tituloHeader || !appHeader || !msgHeader) {
+    console.error('Could not find required headers (título/titulo, aplicativo, mensagem) in "Mensagens" sheet.');
+    return [];
+  }
 
   return rows
     .map((row) => ({
-      titulo: row[tituloIdx] || '',
-      aplicativo: normalizeApp(row[appIdx]),
-      mensagem: row[msgIdx] || '',
+      titulo: row[tituloHeader] || '',
+      aplicativo: normalizeApp(row[appHeader]),
+      mensagem: row[msgHeader] || '',
     }))
     .filter((m) => m.titulo || m.mensagem);
 }
