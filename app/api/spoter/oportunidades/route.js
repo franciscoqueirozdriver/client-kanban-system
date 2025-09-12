@@ -1,7 +1,10 @@
 // app/api/spoter/oportunidades/route.js
 import { NextResponse } from 'next/server';
-import { spotterPost } from '@/lib/exactSpotter';
-import { normalizePhoneList } from '@/utils/telefone';
+import {
+  spotterPostAndFetch,
+  spotterGetByFilter,
+  normalizePhonesList,
+} from '@/lib/exactSpotter';
 
 // Validation function based on user's pseudocode
 function validarObrigatoriedades(p) {
@@ -39,22 +42,51 @@ function validarObrigatoriedades(p) {
 
 export async function POST(req) {
   try {
-    const payloadSpotter = await req.json(); // Expecting the final payload from the modal form
+    const body = await req.json();
 
-    // Normalize phone numbers before validation, as validation depends on them
-    payloadSpotter["Telefones"] = normalizePhoneList(payloadSpotter["Telefones"]);
-    payloadSpotter["Telefones Contato"] = normalizePhoneList(payloadSpotter["Telefones Contato"]);
+    const marker = `kanban:${body?.id || body?.codigo || 'card'}:${Date.now()}`;
+    const payload = {
+      'Nome do Lead': body.titulo || body.nome || body.empresa || 'Lead',
+      Origem: body.origem || process.env.DEFAULT_CONTACT_ORIGEM || 'Kanban',
+      Mercado: body.mercado || 'Geral',
+      Telefones: normalizePhonesList(body.telefones || body.telefone),
+      'Área': Array.isArray(body.areas)
+        ? body.areas.join(';')
+        : body.area || 'Geral',
+      Etapa: body.etapa || 'Novo',
+      'Telefones Contato': normalizePhonesList(
+        body.telefonesContato || body.telefoneContato
+      ),
+      'E-mail Contato': body.emailContato,
+      'Cargo Contato': body.cargoContato,
+      'DDI Contato': body.ddiContato,
+      'Nome Contato': body.nomeContato,
+      Observação: `${body.observacoes || body.descricao || ''} | ${marker}`,
+    };
 
-    // Run validation
-    const erros = validarObrigatoriedades(payloadSpotter);
+    const erros = validarObrigatoriedades(payload);
     if (erros.length > 0) {
-      return NextResponse.json({ error: 'Campos inválidos', details: erros }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: 'Campos inválidos', details: erros },
+        { status: 400 }
+      );
     }
 
-      const created = await spotterPost('Oportunidades', payloadSpotter);
+    const created = await spotterPostAndFetch('Oportunidades', payload);
 
-    return NextResponse.json({ ok: true, data: created }, { status: 201 });
+    let { entity, entityUrl } = created;
+
+    if (!entity) {
+      const filtro = `contains(Observação,'${marker}')`;
+      const achados = await spotterGetByFilter('Oportunidades', filtro, 1);
+      entity = achados[0] || null;
+    }
+
+    return NextResponse.json(
+      { ok: true, status: created.status, marker, entityUrl, entity },
+      { status: 201 }
+    );
   } catch (err) {
-    return NextResponse.json({ error: err.message || 'Erro interno' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }
