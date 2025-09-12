@@ -2,27 +2,64 @@
 import { useState, useEffect } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 
+// Maps layout field names to simpler keys for form state
+const fieldMap = {
+  "Nome do Lead": "nomeLead", "Origem": "origem", "Sub-Origem": "subOrigem",
+  "Mercado": "mercado", "Produto": "produto", "Site": "site", "País": "pais",
+  "Estado": "estado", "Cidade": "cidade", "Logradouro": "logradouro",
+  "Número": "numero", "Bairro": "bairro", "Complemento": "complemento",
+  "CEP": "cep", "DDI": "ddi", "Telefones": "telefones", "Observação": "observacao",
+  "CPF/CNPJ": "cpfCnpj",
+  "Nome Contato": "nomeContato", "E-mail Contato": "emailContato",
+  "Cargo Contato": "cargoContato", "DDI Contato": "ddiContato",
+  "Telefones Contato": "telefonesContato",
+  "Tipo do Serv. Comunicação": "tipoServComunicacao",
+  "ID do Serv. Comunicação": "idServComunicacao", "Área": "area",
+  "Nome da Empresa": "nomeEmpresa", "Etapa": "etapa", "Funil": "funil"
+};
+
+const reversedFieldMap = Object.entries(fieldMap).reduce((acc, [key, value]) => {
+    acc[value] = key;
+    return acc;
+}, {});
+
 export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
   const [formData, setFormData] = useState({});
   const [isSending, setIsSending] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
-  const [error, setError] = useState(null);
+  const [errors, setErrors] = useState([]); // {field, message}
 
   useEffect(() => {
-    if (isOpen) {
-      // Quando o modal abre, popula o formulário com os dados iniciais do card.
-      const payload = {
-        titulo: initialData?.company || 'Oportunidade no Kanban',
-        empresa: initialData?.company || 'N/A',
-        contato_nome: initialData?.contacts?.[0]?.name || null,
-        contato_email: initialData?.contacts?.[0]?.email?.split(';')[0].trim() || null,
-        contato_telefone: initialData?.contacts?.[0]?.normalizedPhones?.[0] || null,
-        origem: 'Kanban',
-        valor_previsto: typeof initialData?.valor === 'number' ? initialData.valor : null,
-        observacoes: initialData?.observacoes || null
+    if (isOpen && initialData) {
+      const client = initialData;
+      const initialFormState = {
+        [fieldMap["Nome do Lead"]]: client?.company ?? "Lead sem título",
+        [fieldMap["Origem"]]: client?.origem ?? process.env.NEXT_PUBLIC_DEFAULT_CONTACT_ORIGEM ?? "Kanban",
+        [fieldMap["Mercado"]]: client?.segment ?? "Geral",
+        [fieldMap["Telefones"]]: client?.contacts?.[0]?.normalizedPhones?.join(";") || "",
+        [fieldMap["Área"]]: (Array.isArray(client?.opportunities) && client.opportunities.length > 0 ? client.opportunities.join(";") : client?.segment) ?? "Geral",
+        [fieldMap["Etapa"]]: client?.status ?? "Novo",
+        [fieldMap["Nome da Empresa"]]: client?.company ?? "",
+        [fieldMap["Nome Contato"]]: client?.contacts?.[0]?.name ?? "",
+        [fieldMap["E-mail Contato"]]: client?.contacts?.[0]?.email?.split(';')[0].trim() ?? process.env.NEXT_PUBLIC_DEFAULT_CONTACT_EMAIL,
+        [fieldMap["Telefones Contato"]]: client?.contacts?.[0]?.normalizedPhones?.join(";") || "",
+        [fieldMap["Cargo Contato"]]: client?.contacts?.[0]?.role ?? "",
+        [fieldMap["CPF/CNPJ"]]: client?.cnpj ?? "",
+        [fieldMap["Estado"]]: client?.uf ?? "",
+        [fieldMap["Cidade"]]: client?.city ?? "",
+        [fieldMap["País"]]: client?.country ?? (client.city ? 'Brasil' : ''),
+        [fieldMap["DDI"]]: "55",
+        [fieldMap["DDI Contato"]]: "55",
       };
-      setFormData(payload);
-      setError(null);
+
+      // Initialize all keys to prevent uncontrolled component warnings
+      const fullForm = Object.values(fieldMap).reduce((acc, key) => {
+        acc[key] = acc[key] ?? "";
+        return acc;
+      }, initialFormState);
+
+      setFormData(fullForm);
+      setErrors([]);
     }
   }, [isOpen, initialData]);
 
@@ -32,33 +69,46 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
   };
 
   const handleEnrich = async () => {
-    if (!formData.empresa) {
+    const companyName = formData[fieldMap["Nome da Empresa"]];
+    if (!companyName) {
       alert('Por favor, preencha o nome da empresa para enriquecer.');
       return;
     }
     setIsEnriching(true);
-    setError(null);
+    setErrors([]);
     try {
       const res = await fetch('/api/empresas/enriquecer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: formData.empresa })
+        body: JSON.stringify({ nome: companyName })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Falha ao enriquecer');
 
-      const suggestion = data.suggestion;
+      const s = data.suggestion;
       setFormData(prev => ({
         ...prev,
-        empresa: suggestion.Nome_da_Empresa || prev.empresa,
-        contato_nome: suggestion.Nome_Contato || prev.contato_nome,
-        contato_email: suggestion.Email_Contato || prev.contato_email,
-        contato_telefone: suggestion.Telefones_Contato || prev.contato_telefone,
-        observacoes: suggestion.Observacao_Empresa || prev.observacoes,
+        [fieldMap["Nome da Empresa"]]: s.Nome_da_Empresa || prev[fieldMap["Nome da Empresa"]],
+        [fieldMap["Site"]]: s.Site_Empresa || prev[fieldMap["Site"]],
+        [fieldMap["País"]]: s.Pais_Empresa || prev[fieldMap["País"]],
+        [fieldMap["Estado"]]: s.Estado_Empresa || prev[fieldMap["Estado"]],
+        [fieldMap["Cidade"]]: s.Cidade_Empresa || prev[fieldMap["Cidade"]],
+        [fieldMap["Logradouro"]]: s.Logradouro_Empresa || prev[fieldMap["Logradouro"]],
+        [fieldMap["Número"]]: s.Numero_Empresa || prev[fieldMap["Número"]],
+        [fieldMap["Bairro"]]: s.Bairro_Empresa || prev[fieldMap["Bairro"]],
+        [fieldMap["CEP"]]: s.CEP_Empresa || prev[fieldMap["CEP"]],
+        [fieldMap["CPF/CNPJ"]]: s.CNPJ_Empresa || prev[fieldMap["CPF/CNPJ"]],
+        [fieldMap["Telefones"]]: s.Telefones_Empresa || prev[fieldMap["Telefones"]],
+        [fieldMap["Nome Contato"]]: s.Nome_Contato || prev[fieldMap["Nome Contato"]],
+        [fieldMap["E-mail Contato"]]: s.Email_Contato || prev[fieldMap["E-mail Contato"]],
+        [fieldMap["Cargo Contato"]]: s.Cargo_Contato || prev[fieldMap["Cargo Contato"]],
+        [fieldMap["Telefones Contato"]]: s.Telefones_Contato || prev[fieldMap["Telefones Contato"]],
+        [fieldMap["Mercado"]]: s.Mercado || prev[fieldMap["Mercado"]],
+        [fieldMap["Produto"]]: s.Produto || prev[fieldMap["Produto"]],
+        [fieldMap["Área"]]: s.Area || prev[fieldMap["Área"]],
       }));
       alert('Dados enriquecidos com sucesso!');
     } catch (err) {
-      setError(err.message);
       alert(`Erro ao enriquecer: ${err.message}`);
     } finally {
       setIsEnriching(false);
@@ -68,34 +118,49 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSending(true);
-    setError(null);
+    setErrors([]);
     try {
-      const spotterRes = await fetch('/api/spoter/oportunidades', {
+      const payloadForApi = Object.entries(formData).reduce((acc, [formKey, value]) => {
+        const layoutKey = reversedFieldMap[formKey];
+        if (layoutKey) {
+          acc[layoutKey] = value || null;
+        }
+        return acc;
+      }, {});
+
+      const res = await fetch('/api/spoter/oportunidades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payloadForApi)
       });
-      const spotterData = await spotterRes.json().catch(() => ({}));
-      if (!spotterRes.ok) throw new Error(spotterData.error || `Erro ${spotterRes.status}`);
 
-      alert(`Sucesso! Resposta da API do Spotter: ${JSON.stringify(spotterData, null, 2)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 400 && data.details) {
+          setErrors(data.details);
+          const errorMessages = data.details.map(err => `${err.field}: ${err.message}`).join('\\n');
+          alert(`Por favor, corrija os seguintes erros:\n${errorMessages}`);
+        }
+        throw new Error(data.error || `Erro ${res.status}`);
+      }
 
-      // Agora, atualiza o card no Kanban
-      const updatePayload = { id: initialData.id, color: 'purple', status: 'Enviado Spotter' };
+      alert(`Sucesso! Resposta da API do Spotter: ${JSON.stringify(data, null, 2)}`);
+
       await fetch('/api/kanban', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatePayload)
+        body: JSON.stringify({ id: initialData.id, color: 'purple', status: 'Enviado Spotter' })
       });
 
       if (onSent) {
         onSent({ color: 'purple', status: 'Enviado Spotter' });
       }
-
-      onClose(); // Fecha o modal após tudo dar certo
+      onClose();
     } catch (err) {
-      setError(err.message);
-      alert(`Erro no processo de envio: ${err.message}`);
+      // Avoid double-alerting validation errors
+      if (!errors.length) {
+        alert(`Erro no processo de envio: ${err.message}`);
+      }
     } finally {
       setIsSending(false);
     }
@@ -103,73 +168,72 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
 
   if (!isOpen) return null;
 
+  const renderInput = (label, key, props = {}) => {
+    const error = errors.find(e => e.field === label);
+    return (
+      <div>
+        <label htmlFor={key} className="block text-sm font-medium mb-1">{label} {props.required && '*'}</label>
+        <input id={key} name={key} value={formData[key] || ''} onChange={handleChange} {...props} className={`w-full rounded border p-2 ${error ? 'border-red-500' : 'border-gray-300'}`}/>
+        {error && <p className="text-red-500 text-xs mt-1">{error.message}</p>}
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
-        <header className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-            Enviar para Exact Spotter
-          </h2>
-          <p className="text-sm text-gray-500">Confirme ou edite os dados antes de enviar.</p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
+        <header className="flex-shrink-0 px-6 py-4 border-b">
+          <h2 className="text-xl font-bold">Enviar para Exact Spotter</h2>
+          <p className="text-sm text-gray-500">Confirme ou edite os dados para envio.</p>
         </header>
 
         <form onSubmit={handleSubmit} className="flex-grow contents">
-          <div className="flex-grow p-6 space-y-4 overflow-y-auto">
-            {/* Campos do Formulário */}
-            <div>
-              <label htmlFor="titulo" className="block text-sm font-medium mb-1">Título *</label>
-              <input id="titulo" type="text" name="titulo" value={formData.titulo || ''} onChange={handleChange} required className="w-full rounded border p-2"/>
-            </div>
-            <div>
-              <label htmlFor="empresa" className="block text-sm font-medium mb-1">Empresa *</label>
-              <input id="empresa" type="text" name="empresa" value={formData.empresa || ''} onChange={handleChange} required className="w-full rounded border p-2"/>
-            </div>
-            <div>
-              <label htmlFor="contato_nome" className="block text-sm font-medium mb-1">Nome do Contato</label>
-              <input id="contato_nome" type="text" name="contato_nome" value={formData.contato_nome || ''} onChange={handleChange} className="w-full rounded border p-2"/>
-            </div>
-            <div>
-              <label htmlFor="contato_email" className="block text-sm font-medium mb-1">Email do Contato</label>
-              <input id="contato_email" type="email" name="contato_email" value={formData.contato_email || ''} onChange={handleChange} className="w-full rounded border p-2"/>
-            </div>
-            <div>
-              <label htmlFor="contato_telefone" className="block text-sm font-medium mb-1">Telefone do Contato</label>
-              <input id="contato_telefone" type="text" name="contato_telefone" value={formData.contato_telefone || ''} onChange={handleChange} className="w-full rounded border p-2"/>
-            </div>
-            <div>
-              <label htmlFor="valor_previsto" className="block text-sm font-medium mb-1">Valor Previsto</label>
-              <input id="valor_previsto" type="number" name="valor_previsto" value={formData.valor_previsto || ''} onChange={handleChange} className="w-full rounded border p-2"/>
-            </div>
-            <div>
-              <label htmlFor="observacoes" className="block text-sm font-medium mb-1">Observações</label>
-              <textarea id="observacoes" name="observacoes" value={formData.observacoes || ''} onChange={handleChange} rows={3} className="w-full rounded border p-2"/>
-            </div>
+          <div className="flex-grow p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-3 gap-4">
+            {renderInput("Nome do Lead", fieldMap["Nome do Lead"], { required: true })}
+            {renderInput("Nome da Empresa", fieldMap["Nome da Empresa"])}
+            {renderInput("CPF/CNPJ", fieldMap["CPF/CNPJ"])}
+            {renderInput("Site", fieldMap["Site"], { type: 'url' })}
+            {renderInput("Origem", fieldMap["Origem"], { required: true })}
+            {renderInput("Sub-Origem", fieldMap["Sub-Origem"])}
+            {renderInput("Mercado", fieldMap["Mercado"], { required: true })}
+            {renderInput("Produto", fieldMap["Produto"])}
+            {renderInput("Área", fieldMap["Área"], { required: true, placeholder: "Separar múltiplas por ;" })}
+            {renderInput("Etapa", fieldMap["Etapa"], { required: true })}
+            {renderInput("Funil", fieldMap["Funil"])}
+            {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
+            {renderInput("Observação", fieldMap["Observação"])}
+
+            <h3 className="md:col-span-3 text-lg font-semibold border-t pt-4 mt-2">Endereço</h3>
+            {renderInput("País", fieldMap["País"])}
+            {renderInput("Estado", fieldMap["Estado"])}
+            {renderInput("Cidade", fieldMap["Cidade"])}
+            {renderInput("Logradouro", fieldMap["Logradouro"])}
+            {renderInput("Número", fieldMap["Número"])}
+            {renderInput("Bairro", fieldMap["Bairro"])}
+            {renderInput("Complemento", fieldMap["Complemento"])}
+            {renderInput("CEP", fieldMap["CEP"])}
+
+            <h3 className="md:col-span-3 text-lg font-semibold border-t pt-4 mt-2">Contato</h3>
+            {renderInput("Nome Contato", fieldMap["Nome Contato"])}
+            {renderInput("Cargo Contato", fieldMap["Cargo Contato"])}
+            {renderInput("E-mail Contato", fieldMap["E-mail Contato"], { type: 'email' })}
+            {renderInput("Telefones Contato", fieldMap["Telefones Contato"], { placeholder: "Separar múltiplos por ;" })}
+
+            <h3 className="md:col-span-3 text-lg font-semibold border-t pt-4 mt-2">Outros</h3>
+            {renderInput("Tipo do Serv. Comunicação", fieldMap["Tipo do Serv. Comunicação"])}
+            {renderInput("ID do Serv. Comunicação", fieldMap["ID do Serv. Comunicação"])}
           </div>
 
           <footer className="flex-shrink-0 px-6 py-4 border-t bg-white flex justify-between items-center">
-            <button
-              type="button"
-              onClick={handleEnrich}
-              disabled={isEnriching || isSending}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60 flex items-center gap-2"
-            >
+            <button type="button" onClick={handleEnrich} disabled={isEnriching || isSending} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60 flex items-center gap-2">
               {isEnriching && <FaSpinner className="animate-spin" />}
               Enriquecer com IA
             </button>
             <div className="flex gap-3">
-              {error && <p className="text-red-500 text-sm self-center mr-auto">{error}</p>}
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-3 py-2 rounded-md bg-gray-200 text-gray-900 hover:bg-gray-300"
-              >
+              <button type="button" onClick={onClose} className="px-3 py-2 rounded-md bg-gray-200 text-gray-900 hover:bg-gray-300">
                 Cancelar
               </button>
-              <button
-                type="submit"
-                disabled={isSending || isEnriching}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-60 flex items-center gap-2"
-              >
+              <button type="submit" disabled={isSending || isEnriching} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-60 flex items-center gap-2">
                 {isSending && <FaSpinner className="animate-spin" />}
                 Enviar ao Spotter
               </button>
