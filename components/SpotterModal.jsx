@@ -28,38 +28,64 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
   const [isSending, setIsSending] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
   const [errors, setErrors] = useState([]); // {field, message}
+  const [produtosList, setProdutosList] = useState([]);
+  const [mercadosList, setMercadosList] = useState([]);
 
   useEffect(() => {
-    if (isOpen && initialData) {
-      const client = initialData;
-      const initialFormState = {
-        [fieldMap["Nome do Lead"]]: client?.company ?? "Lead sem título",
-        [fieldMap["Origem"]]: client?.origem ?? process.env.NEXT_PUBLIC_DEFAULT_CONTACT_ORIGEM ?? "Kanban",
-        [fieldMap["Mercado"]]: client?.segment ?? "Geral",
-        [fieldMap["Telefones"]]: client?.contacts?.[0]?.normalizedPhones?.join(";") || "",
-        [fieldMap["Área"]]: (Array.isArray(client?.opportunities) && client.opportunities.length > 0 ? client.opportunities.join(";") : client?.segment) ?? "Geral",
-        [fieldMap["Etapa"]]: client?.status ?? "Novo",
-        [fieldMap["Nome da Empresa"]]: client?.company ?? "",
-        [fieldMap["Nome Contato"]]: client?.contacts?.[0]?.name ?? "",
-        [fieldMap["E-mail Contato"]]: client?.contacts?.[0]?.email?.split(';')[0].trim() ?? process.env.NEXT_PUBLIC_DEFAULT_CONTACT_EMAIL,
-        [fieldMap["Telefones Contato"]]: client?.contacts?.[0]?.normalizedPhones?.join(";") || "",
-        [fieldMap["Cargo Contato"]]: client?.contacts?.[0]?.role ?? "",
-        [fieldMap["CPF/CNPJ"]]: client?.cnpj ?? "",
-        [fieldMap["Estado"]]: client?.uf ?? "",
-        [fieldMap["Cidade"]]: client?.city ?? "",
-        [fieldMap["País"]]: client?.country ?? (client.city ? 'Brasil' : ''),
-        [fieldMap["DDI"]]: "55",
-        [fieldMap["DDI Contato"]]: "55",
+    if (isOpen) {
+      const fetchAndSetData = async () => {
+        let fetchedMercados = [];
+        try {
+          const res = await fetch('/api/padroes');
+          const data = await res.json();
+          if (res.ok) {
+            setProdutosList(data.produtos || []);
+            fetchedMercados = data.mercados || [];
+            setMercadosList(fetchedMercados);
+          }
+        } catch (error) {
+          console.error("Failed to fetch padroes", error);
+        }
+
+        const client = initialData;
+        const initialMarket = client?.segment || '';
+        const foundMarket = fetchedMercados.find(m => m.toLowerCase() === initialMarket.toLowerCase());
+        const selectedMarket = foundMarket || 'N/A';
+
+        if (selectedMarket === 'N/A' && !fetchedMercados.includes('N/A')) {
+            setMercadosList(prev => [...prev, 'N/A']);
+        }
+
+        const initialFormState = {
+            [fieldMap["Nome do Lead"]]: client?.company ?? "Lead sem título",
+            [fieldMap["Origem"]]: client?.origem ?? process.env.NEXT_PUBLIC_DEFAULT_CONTACT_ORIGEM ?? "Kanban",
+            [fieldMap["Mercado"]]: selectedMarket,
+            [fieldMap["Telefones"]]: client?.contacts?.[0]?.normalizedPhones?.join(";") || "",
+            [fieldMap["Área"]]: (Array.isArray(client?.opportunities) && client.opportunities.length > 0 ? client.opportunities.join(";") : client?.segment) ?? "Geral",
+            [fieldMap["Etapa"]]: client?.status ?? "Novo",
+            [fieldMap["Nome da Empresa"]]: client?.company ?? "",
+            [fieldMap["Nome Contato"]]: client?.contacts?.[0]?.name ?? "",
+            [fieldMap["E-mail Contato"]]: client?.contacts?.[0]?.email?.split(';')[0].trim() ?? process.env.NEXT_PUBLIC_DEFAULT_CONTACT_EMAIL,
+            [fieldMap["Telefones Contato"]]: client?.contacts?.[0]?.normalizedPhones?.join(";") || "",
+            [fieldMap["Cargo Contato"]]: client?.contacts?.[0]?.role ?? "",
+            [fieldMap["CPF/CNPJ"]]: client?.cnpj ?? "",
+            [fieldMap["Estado"]]: client?.uf ?? "",
+            [fieldMap["Cidade"]]: client?.city ?? "",
+            [fieldMap["País"]]: client?.country ?? (client.city ? 'Brasil' : ''),
+            [fieldMap["DDI"]]: "55",
+            [fieldMap["DDI Contato"]]: "55",
+        };
+
+        const fullForm = Object.values(fieldMap).reduce((acc, key) => {
+            acc[key] = acc[key] ?? "";
+            return acc;
+        }, initialFormState);
+
+        setFormData(fullForm);
+        setErrors([]);
       };
 
-      // Initialize all keys to prevent uncontrolled component warnings
-      const fullForm = Object.values(fieldMap).reduce((acc, key) => {
-        acc[key] = acc[key] ?? "";
-        return acc;
-      }, initialFormState);
-
-      setFormData(fullForm);
-      setErrors([]);
+      fetchAndSetData();
     }
   }, [isOpen, initialData]);
 
@@ -179,6 +205,27 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
     );
   };
 
+  const renderSelect = (label, key, options, props = {}) => {
+    const error = errors.find(e => e.field === label);
+    return (
+      <div>
+        <label htmlFor={key} className="block text-sm font-medium mb-1">{label} {props.required && '*'}</label>
+        <select
+          id={key}
+          name={key}
+          value={formData[key] || ''}
+          onChange={handleChange}
+          {...props}
+          className={`w-full rounded border p-2 ${error ? 'border-red-500' : 'border-gray-300'}`}
+        >
+          <option value="">Selecione...</option>
+          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+        {error && <p className="text-red-500 text-xs mt-1">{error.message}</p>}
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
@@ -195,8 +242,8 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
             {renderInput("Site", fieldMap["Site"], { type: 'url' })}
             {renderInput("Origem", fieldMap["Origem"], { required: true })}
             {renderInput("Sub-Origem", fieldMap["Sub-Origem"])}
-            {renderInput("Mercado", fieldMap["Mercado"], { required: true })}
-            {renderInput("Produto", fieldMap["Produto"])}
+            {renderSelect("Mercado", fieldMap["Mercado"], mercadosList, { required: true })}
+            {renderSelect("Produto", fieldMap["Produto"], produtosList)}
             {renderInput("Área", fieldMap["Área"], { required: true, placeholder: "Separar múltiplas por ;" })}
             {renderInput("Etapa", fieldMap["Etapa"], { required: true })}
             {renderInput("Funil", fieldMap["Funil"])}
