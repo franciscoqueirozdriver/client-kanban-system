@@ -1,18 +1,11 @@
-import LoginClient from './LoginClient.jsx';
+import LoginClient from "./LoginClient.jsx";
 
-// Este é um Server Component. Ele pode receber searchParams como props.
+export const dynamic = "force-dynamic";
+
 export default function LoginPage({ searchParams }) {
-  const callbackUrl = searchParams.callbackUrl || '/';
+  // Using the new spec's variable names and structure
+  const error = (searchParams?.error ?? "").toString();
+  const callbackUrl = (searchParams?.callbackUrl ?? "").toString(); // NextAuth uses callbackUrl by default
 
-  // Mapeia os erros conhecidos do NextAuth para mensagens amigáveis.
-  // A lógica de erro da nossa API (no `authorize`) já retorna mensagens amigáveis.
-  const errorMessages = {
-    CredentialsSignin: 'Credenciais inválidas. Verifique seu e-mail e senha.',
-    // Adicione outros erros de URL do NextAuth aqui se necessário
-  };
-
-  const error = searchParams.error;
-  const errorFromUrl = error ? (errorMessages[error] || 'Ocorreu um erro. Tente novamente.') : '';
-
-  return <LoginClient callbackUrl={callbackUrl} errorFromUrl={errorFromUrl} />;
+  return <LoginClient error={error} callbackUrl={callbackUrl} />;
 }
