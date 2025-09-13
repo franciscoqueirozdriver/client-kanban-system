@@ -1,113 +1,18 @@
-'use client';
+import LoginClient from './LoginClient.jsx';
 
-import { useState, useEffect } from 'react';
-import { signIn } from 'next-auth/react';
-import { useRouter, useSearchParams } from 'next/navigation';
+// Este é um Server Component. Ele pode receber searchParams como props.
+export default function LoginPage({ searchParams }) {
+  const callbackUrl = searchParams.callbackUrl || '/';
 
-export default function LoginPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
-  const errorFromUrl = searchParams.get('error');
-
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    // Map NextAuth default error codes to user-friendly messages
-    const errorMessages = {
-      CredentialsSignin: 'Credenciais inválidas. Verifique seu e-mail e senha.',
-      // Add other specific NextAuth errors if needed
-    };
-    if (errorFromUrl && errorMessages[errorFromUrl]) {
-      setError(errorMessages[errorFromUrl]);
-    }
-  }, [errorFromUrl]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const result = await signIn('credentials', {
-        redirect: false,
-        email: email,
-        password: password,
-      });
-
-      if (result.ok) {
-        // Login successful, redirect to the originally requested page or dashboard
-        router.push(callbackUrl);
-      } else {
-        // Login failed, display the error message from the authorize function
-        setError(result.error || 'Ocorreu um erro desconhecido.');
-      }
-    } catch (err) {
-      console.error('Login submission error:', err);
-      setError('Falha ao tentar fazer login. Verifique sua conexão.');
-    } finally {
-      setLoading(false);
-    }
+  // Mapeia os erros conhecidos do NextAuth para mensagens amigáveis.
+  // A lógica de erro da nossa API (no `authorize`) já retorna mensagens amigáveis.
+  const errorMessages = {
+    CredentialsSignin: 'Credenciais inválidas. Verifique seu e-mail e senha.',
+    // Adicione outros erros de URL do NextAuth aqui se necessário
   };
 
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-center text-gray-900">Acessar Sistema</h2>
+  const error = searchParams.error;
+  const errorFromUrl = error ? (errorMessages[error] || 'Ocorreu um erro. Tente novamente.') : '';
 
-        {error && (
-          <div className="p-3 text-sm text-center text-red-800 bg-red-100 border border-red-200 rounded-lg">
-            {error}
-          </div>
-        )}
-
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              E-mail
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="block w-full px-3 py-2 mt-1 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Senha
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="block w-full px-3 py-2 mt-1 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            />
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300"
-            >
-              {loading ? 'Entrando...' : 'Entrar'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+  return <LoginClient callbackUrl={callbackUrl} errorFromUrl={errorFromUrl} />;
 }
