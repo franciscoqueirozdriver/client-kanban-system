@@ -1,9 +1,9 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
-import { getUserByEmail, updateUserByEmail } from "@/lib/auth/sheetsUsers";
-import { canAttempt, registerFailure, registerSuccess } from "@/lib/auth/rateLimit";
-import { getPermissoesDoUsuario } from "@/lib/rbac/permissoes";
+import { getUserByEmail, updateUserByEmail } from "../../../../lib/auth/sheetsUsers.js";
+import { canAttempt, registerFailure, registerSuccess } from "../../../../lib/auth/rateLimit.js";
+import { getPermissoesDoUsuario } from "../../../../lib/rbac/permissoes.js";
 
 const LOCKOUT_MIN = parseInt(process.env.LOCKOUT_MIN || '20', 10);
 const RATE_LIMIT_MAX_ATTEMPTS = parseInt(process.env.RATE_LIMIT_MAX_ATTEMPTS || '5', 10);
