@@ -4,7 +4,7 @@ import KanbanCard from './KanbanCard';
 
 export default function KanbanColumn({ column }) {
   return (
-    <div className="w-64">
+    <div className="w-full md:w-64 flex-shrink-0">
       {/*
         Append the current number of cards to the column title.
         This updates automatically whenever the column prop changes,
