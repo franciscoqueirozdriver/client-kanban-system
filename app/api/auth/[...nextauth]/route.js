@@ -8,7 +8,7 @@ import { getPermissoesDoUsuario } from "@/lib/rbac/permissoes";
 const LOCKOUT_MIN = parseInt(process.env.LOCKOUT_MIN || '20', 10);
 const RATE_LIMIT_MAX_ATTEMPTS = parseInt(process.env.RATE_LIMIT_MAX_ATTEMPTS || '5', 10);
 
-export const authOptions = {
+const authOptions = {
   providers: [
     CredentialsProvider({
       name: "Credentials",
