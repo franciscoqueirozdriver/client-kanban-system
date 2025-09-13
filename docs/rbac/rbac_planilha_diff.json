@@ -1,0 +1,212 @@
+{
+  "report": {
+    "Usuarios": {
+      "exists": true,
+      "targetHeader": [
+        "Usuario_ID",
+        "Nome",
+        "Email",
+        "Hash_Senha",
+        "Role",
+        "Ativo",
+        "Tentativas_Login",
+        "Bloqueado_Ate",
+        "Ultimo_Login",
+        "Criado_Em",
+        "Atualizado_Em",
+        "Token_Reset",
+        "Expira_Reset"
+      ],
+      "currentHeader": [
+        "Usuario_ID",
+        "Nome",
+        "Email",
+        "Hash_Senha",
+        "Role",
+        "Ativo",
+        "Tentativas_Login",
+        "Bloqueado_Ate",
+        "Ultimo_Login",
+        "Criado_Em",
+        "Atualizado_Em",
+        "Token_Reset",
+        "Expira_Reset",
+        "Teste_Nova_Coluna"
+      ],
+      "missingColumns": [],
+      "extraColumns": [
+        "Teste_Nova_Coluna"
+      ],
+      "similarColumns": {}
+    },
+    "Rotas": {
+      "exists": true,
+      "targetHeader": [
+        "Rota_Codigo",
+        "Rota_Path",
+        "Descricao",
+        "Ativa"
+      ],
+      "currentHeader": [
+        "Rota_Codigo",
+        "Rota_Path",
+        "Descricao",
+        "Ativa"
+      ],
+      "missingColumns": [],
+      "extraColumns": [],
+      "similarColumns": {}
+    },
+    "Permissoes": {
+      "exists": true,
+      "targetHeader": [
+        "tipo",
+        "rota",
+        "role",
+        "visualizar",
+        "editar",
+        "excluir",
+        "exportar",
+        "enviar_crm",
+        "gerar_pdf",
+        "enriquecer",
+        "consultar_perdcomp",
+        "ativo"
+      ],
+      "currentHeader": [
+        "tipo",
+        "rota",
+        "role",
+        "visualizar",
+        "editar",
+        "excluir",
+        "exportar",
+        "enviar_crm",
+        "gerar_pdf",
+        "enriquecer",
+        "consultar_perdcomp",
+        "ativo"
+      ],
+      "missingColumns": [],
+      "extraColumns": [],
+      "similarColumns": {}
+    },
+    "Permissoes_Acoes": {
+      "exists": false,
+      "targetHeader": [
+        "rota",
+        "acao_custom",
+        "role",
+        "permitido",
+        "ativo"
+      ],
+      "currentHeader": [],
+      "missingColumns": [
+        "rota",
+        "acao_custom",
+        "role",
+        "permitido",
+        "ativo"
+      ],
+      "extraColumns": [],
+      "similarColumns": {}
+    },
+    "Vocab_Permissoes": {
+      "exists": true,
+      "targetHeader": [
+        "chave",
+        "descricao",
+        "escopo",
+        "rota_padrao"
+      ],
+      "currentHeader": [
+        "chave",
+        "descricao",
+        "escopo",
+        "rota_padrao"
+      ],
+      "missingColumns": [],
+      "extraColumns": [],
+      "similarColumns": {}
+    },
+    "Roles_Default": {
+      "exists": true,
+      "targetHeader": [
+        "role",
+        "rota",
+        "visualizar",
+        "editar",
+        "excluir",
+        "exportar",
+        "enviar_crm",
+        "gerar_pdf",
+        "enriquecer",
+        "consultar_perdcomp"
+      ],
+      "currentHeader": [
+        "role",
+        "rota",
+        "visualizar",
+        "editar",
+        "excluir",
+        "exportar",
+        "enviar_crm",
+        "gerar_pdf",
+        "enriquecer",
+        "consultar_perdcomp"
+      ],
+      "missingColumns": [],
+      "extraColumns": [],
+      "similarColumns": {}
+    },
+    "Auditoria_Acesso": {
+      "exists": true,
+      "targetHeader": [
+        "Evento_ID",
+        "Usuario_Email",
+        "Tipo_Evento",
+        "Origem_IP",
+        "User_Agent",
+        "Data_Hora",
+        "Detalhes"
+      ],
+      "currentHeader": [
+        "Evento_ID",
+        "Usuario_Email",
+        "Tipo_Evento",
+        "Origem_IP",
+        "User_Agent",
+        "Data_Hora",
+        "Detalhes"
+      ],
+      "missingColumns": [],
+      "extraColumns": [],
+      "similarColumns": {}
+    },
+    "Auditoria_Acao": {
+      "exists": true,
+      "targetHeader": [
+        "Evento_ID",
+        "Usuario_Email",
+        "Rota",
+        "Acao",
+        "Sucesso",
+        "Data_Hora",
+        "Payload_Resumo"
+      ],
+      "currentHeader": [
+        "Evento_ID",
+        "Usuario_Email",
+        "Rota",
+        "Acao",
+        "Sucesso",
+        "Data_Hora",
+        "Payload_Resumo"
+      ],
+      "missingColumns": [],
+      "extraColumns": [],
+      "similarColumns": {}
+    }
+  },
+  "actionsPerformed": []
+}

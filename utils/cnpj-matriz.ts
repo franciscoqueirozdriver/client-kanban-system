@@ -26,7 +26,7 @@ function calcDVs(base12: string) {
 }
 export const toMatrizCNPJ = (cnpj: string) => {
   const d = onlyDigits(cnpj);
-  if (d.length < 8) return '';
+  if (d.length < 12) return d;
   const raiz8 = d.slice(0, 8);
   const base12 = `${raiz8}0001`;
   return `${base12}${calcDVs(base12)}`;

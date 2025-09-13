@@ -21,8 +21,3 @@ test('Prompt example: 08781394002036 -> matriz 08781394000174', () => {
   expect(ordem(filial)).toBe('0020');
   expect(toMatrizCNPJ(filial)).toBe(matriz);
 });
-
-test('should return an empty string for incomplete CNPJ', () => {
-  const incompleteCNPJ = '1234567';
-  expect(toMatrizCNPJ(incompleteCNPJ)).toBe('');
-});

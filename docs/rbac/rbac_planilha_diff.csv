@@ -1,0 +1,9 @@
+aba;exists;missing;extra;similar;actions
+Usuarios;true;"";"Teste_Nova_Coluna";"";""
+Rotas;true;"";"";"";""
+Permissoes;true;"";"";"";""
+Permissoes_Acoes;false;"rota, acao_custom, role, permitido, ativo";"";"";""
+Vocab_Permissoes;true;"";"";"";""
+Roles_Default;true;"";"";"";""
+Auditoria_Acesso;true;"";"";"";""
+Auditoria_Acao;true;"";"";"";""
