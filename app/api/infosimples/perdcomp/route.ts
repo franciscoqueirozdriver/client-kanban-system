@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
+import { getSheetData, getSheetsClient } from '@/lib/googleSheets';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 import { agregaPerdcomp } from '@/utils/perdcomp';
 

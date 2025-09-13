@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets.js';
+import { getSheetData } from '@/lib/googleSheets';
 import { padCNPJ14, onlyDigits } from '@/utils/cnpj';
 
 const SHEET_NAME = 'Leads Exact Spotter';

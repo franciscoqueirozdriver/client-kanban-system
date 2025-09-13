@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { appendSheetData } from '../../../../lib/googleSheets.js';
-import { getSheetData } from '../../../../lib/googleSheets.js';
+import { appendSheetData, getSheetData } from '@/lib/googleSheets';
 
 const SHEET_NAME = 'layout_importacao_empresas';
 
