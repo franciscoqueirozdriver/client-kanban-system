@@ -1,0 +1,11 @@
+export function getSheetData(sheetName: string, range?: string, spreadsheetId?: string): Promise<{ headers: string[]; rows: any[] }>;
+export function appendSheetData(sheetName: string, rows: any[][], spreadsheetId?: string): Promise<void>;
+export function getSheetsClient(): Promise<any>;
+export function getSpreadsheet(spreadsheetId?: string): Promise<any>;
+export function getHeader(sheetTitle: string): Promise<string[]>;
+export function createSheetIfMissing(title: string): Promise<void>;
+export function appendMissingColumns(sheetTitle: string, targetHeader: readonly string[], spreadsheetId?: string): Promise<void>;
+export function findRowIndexById(sheetName: string, headersRow: number, idColumnName: string, idValue: any): Promise<number>;
+export function updateRowByIndex(options: { sheetName: string; rowIndex: number; updates: Record<string, any>; }): Promise<void>;
+export function withRetry<T>(fn: () => Promise<T>, tries?: number): Promise<T>;
+export function chunk<T>(arr: T[], size: number): T[][];
