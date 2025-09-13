@@ -18,7 +18,7 @@ const authOptions = {
       },
       async authorize(credentials, req) {
         // 1. Obter IP e normalizar email
-        const ip = req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.socket.remoteAddress;
+        const ip = req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.socket?.remoteAddress;
         const email = (credentials?.email || "").trim().toLowerCase();
         const password = credentials?.password || "";
 
