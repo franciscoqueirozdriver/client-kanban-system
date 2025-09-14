@@ -54,7 +54,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - login (the login page itself)
+     * - auth/create-password (the password creation page)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|login).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|login|auth/create-password).*)',
   ],
 };
