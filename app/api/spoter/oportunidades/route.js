@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth/options';
+import authOptions from '@/lib/auth/options';
 import { temPermissao } from '@/lib/rbac/checker';
 import { spotterPost } from '@/lib/exactSpotter';
 import { normalizePhoneList } from '@/utils/telefone.js';

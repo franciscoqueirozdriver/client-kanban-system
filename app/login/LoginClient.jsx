@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from 'next/navigation';
 
 export default function LoginClient({ error = "", next = "" }) {
@@ -8,12 +8,13 @@ export default function LoginClient({ error = "", next = "" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [secretWord, setSecretWord] = useState("");
-  const [msg, setMsg] = useState(error);
+  const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { data: session, update: updateSession } = useSession();
 
   useEffect(() => {
-    if (error && error !== "NO_PASSWORD") {
+    if (error) {
       setMsg(error === "CredentialsSignin" ? "Usuário ou senha inválidos." : "Ocorreu um erro durante a autenticação.");
     }
   }, [error]);
@@ -26,14 +27,18 @@ export default function LoginClient({ error = "", next = "" }) {
     const res = await signIn("credentials", {
       email,
       password,
-      redirect: false, // Handle redirect manually to check for custom errors
+      redirect: false,
     });
 
     if (res.ok) {
-      router.push(next || "/");
-    } else if (res.error === "NO_PASSWORD") {
-      setMsg("Este usuário não tem uma senha configurada. Por favor, insira sua palavra secreta para continuar.");
-      setMode("setup");
+      // Refresh the session to get the latest data from the server (with our custom flag)
+      const newSession = await updateSession();
+      if (newSession?.setupRequired) {
+        setMsg("Este usuário não tem uma senha configurada. Por favor, insira sua palavra secreta para continuar.");
+        setMode("setup");
+      } else {
+        router.push(next || "/");
+      }
     } else {
       setMsg(res.error === "CredentialsSignin" ? "Usuário ou senha inválidos." : res.error);
     }
@@ -65,6 +70,9 @@ export default function LoginClient({ error = "", next = "" }) {
       setLoading(false);
     }
   }
+
+  // The rest of the JSX remains the same as my previous implementation
+  // which already handles the two modes. I will just paste it again to be sure.
 
   if (mode === "setup") {
     return (
