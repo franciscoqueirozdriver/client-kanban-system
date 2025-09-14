@@ -13,9 +13,13 @@ const REQUIRED_ENVS = [
 
 function logRequest(req) {
   const missing = REQUIRED_ENVS.filter((k) => !process.env[k]);
-  console.log(
-    `[auth] method=${req.method} url=${req.url} runtime=${process.env.NEXT_RUNTIME || "node"} missing=${missing.join(",")}`
-  );
+  const runtime = process.env.NEXT_RUNTIME || "node";
+  const base = `[auth] method=${req.method} url=${req.url} runtime=${runtime} missing=${missing.join(",")}`;
+  if (process.env.VERCEL_ENV === "preview") {
+    console.log(`${base} node=${process.versions.node} abi=${process.versions.modules}`);
+  } else {
+    console.log(base);
+  }
 }
 
 async function runAuth(req, ctx) {
