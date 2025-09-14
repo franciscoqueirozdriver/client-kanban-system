@@ -13,6 +13,16 @@ export default function LoginClient({ error = "", next = "" }) {
   const router = useRouter();
   const { data: session, update: updateSession } = useSession();
 
+  const { status } = useSession();
+
+  useEffect(() => {
+    // If the user lands on the login page but already has a session (even a broken one),
+    // sign them out first to ensure a clean login flow.
+    if (status === 'authenticated') {
+      signOut({ redirect: false });
+    }
+  }, [status]);
+
   useEffect(() => {
     if (error) {
       setMsg(error === "CredentialsSignin" ? "Usuário ou senha inválidos." : "Ocorreu um erro durante a autenticação.");
