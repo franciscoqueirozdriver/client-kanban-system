@@ -9,20 +9,19 @@ export default withAuth(
 
     // Se não houver token (não logado), withAuth já redireciona para /login
     // A lógica aqui é para verificações de permissão (RBAC)
-    if (token && token.permissoes) {
-      // Exemplo: verificar permissão de 'visualizar' para a rota acessada
-      // A chave no objeto de permissões é o path da rota, ex: '/clientes'
-      const rotaPermissao = token.permissoes[pathname];
+    // RBAC Check: "Fail-closed" logic. Deny by default.
+    const permissoes = token?.permissoes || {};
+    const rotaPermissao = permissoes[pathname];
 
-      // Se a rota está no nosso sistema de permissões mas o usuário não tem direito de visualizá-la
-      if (rotaPermissao !== undefined && !rotaPermissao.visualizar) {
-        // Redireciona para uma página de "acesso negado" ou para a home
-        // Por enquanto, vamos redirecionar para a home com uma mensagem (hipotética)
-        const url = req.nextUrl.clone();
-        url.pathname = '/';
-        // url.search = `error=access_denied`; // Poderia ser usado para mostrar uma mensagem
-        return NextResponse.redirect(url);
-      }
+    // Deny access if there is no permission entry for the route,
+    // or if the 'visualizar' permission is not explicitly true.
+    if (!rotaPermissao || rotaPermissao.visualizar !== true) {
+      // For API routes or specific pages, one might return a 403.
+      // For page navigations, redirecting to a safe page is better UX.
+      const url = req.nextUrl.clone();
+      url.pathname = '/'; // Redirect to home page
+      url.searchParams.set('error', 'access_denied');
+      return NextResponse.redirect(url);
     }
 
     // Se o usuário estiver logado e tiver permissão (ou a rota não for gerenciada pelo RBAC), permite o acesso.
