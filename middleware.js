@@ -19,8 +19,12 @@ export default withAuth(
       // For API routes or specific pages, one might return a 403.
       // For page navigations, redirecting to a safe page is better UX.
       const url = req.nextUrl.clone();
-      url.pathname = '/'; // Redirect to home page
+      url.pathname = '/login'; // Redirect to login page to break redirect loops
       url.searchParams.set('error', 'access_denied');
+      // Preserve the original callbackUrl if it exists, so the user can be sent there after successful login
+      if (req.nextUrl.searchParams.has('callbackUrl')) {
+        url.searchParams.set('callbackUrl', req.nextUrl.searchParams.get('callbackUrl'));
+      }
       return NextResponse.redirect(url);
     }
 
