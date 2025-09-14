@@ -4,12 +4,12 @@ export const dynamic = "force-dynamic";
 import NextAuth from "next-auth";
 import authOptions from "@/lib/auth/options";
 
-const nextAuthHandler = NextAuth(authOptions);
+const handler = NextAuth(authOptions);
 
-// Wrappers com try/catch para evitar 500 e redirecionar ao /login quando algo der ruim
+// Wrappers para que /api/auth/signin nunca exploda 500 e redirecione ao /login
 export async function GET(req, ctx) {
   try {
-    return await nextAuthHandler(req, ctx);
+    return await handler(req, ctx);
   } catch (e) {
     console.error("Auth GET error:", e);
     const url = new URL(req.url);
@@ -22,7 +22,7 @@ export async function GET(req, ctx) {
 
 export async function POST(req, ctx) {
   try {
-    return await nextAuthHandler(req, ctx);
+    return await handler(req, ctx);
   } catch (e) {
     console.error("Auth POST error:", e);
     return new Response(JSON.stringify({ error: "auth_internal_error" }), {
