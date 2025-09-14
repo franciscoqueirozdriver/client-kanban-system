@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth/options';
+import { temPermissao } from '@/lib/rbac/checker';
 import { spotterPost } from '@/lib/exactSpotter';
 import { normalizePhoneList } from '@/utils/telefone.js';
 
@@ -73,8 +76,27 @@ function validatePayload(p) {
 }
 
 export async function POST(req) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
+
   try {
     const formPayload = await req.json();
+    const sourceRoute = formPayload.sourceRoute; // e.g., '/kanban' or '/clientes'
+
+    if (!sourceRoute || (sourceRoute !== '/kanban' && sourceRoute !== '/clientes')) {
+      return NextResponse.json({ error: 'Rota de origem inválida para a ação.' }, { status: 400 });
+    }
+
+    // Defense in Depth: Check for 'enviar_spotter' and 'visualizar' or 'editar' permissions
+    const canSend = temPermissao(session, sourceRoute, 'enviar_spotter');
+    const canAccess = temPermissao(session, sourceRoute, 'visualizar') || temPermissao(session, sourceRoute, 'editar');
+
+    if (!canSend || !canAccess) {
+      // TODO: Add to Audit Log here
+      return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
+    }
 
     // 1. Normalize phone numbers first, as validation depends on them
     formPayload["Telefones"] = normalizePhoneList(formPayload["Telefones"]);
