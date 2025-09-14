@@ -21,6 +21,10 @@ export default function Sidebar() {
     signOut({ callbackUrl: '/login' });
   };
 
+  if (pathname === '/login') {
+    return null;
+  }
+
   return (
     <>
       <button
