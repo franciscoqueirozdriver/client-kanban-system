@@ -9,6 +9,12 @@ export default withAuth(
 
     // Se não houver token (não logado), withAuth já redireciona para /login
     // A lógica aqui é para verificações de permissão (RBAC)
+    // Allow the user to access the password creation page if they have a session token.
+    // The page itself is protected by requiring a valid token in the URL.
+    if (pathname.startsWith('/auth/create-password')) {
+      return NextResponse.next();
+    }
+
     // RBAC Check: "Fail-closed" logic. Deny by default.
     const permissoes = token?.permissoes || {};
     const rotaPermissao = permissoes[pathname];
