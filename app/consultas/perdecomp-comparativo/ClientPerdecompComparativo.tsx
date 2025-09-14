@@ -96,25 +96,6 @@ function buildApiErrorLabel(e: any) {
   }
   return parts.join(' ');
 }
-// --- Helper Functions ---
-function buildApiErrorLabel(e: any) {
-  const parts: string[] = [];
-  if (e?.httpStatus) {
-    parts.push(
-      `API error: ${e.httpStatus}${e.httpStatusText ? ' ' + e.httpStatusText : ''}`,
-    );
-  } else {
-    parts.push('API error:');
-  }
-  if (e?.providerCode) {
-    parts.push(
-      `– ${e.providerCode}${e?.providerMessage ? ' ' + e.providerMessage : ''}`,
-    );
-  } else if (e?.message) {
-    parts.push(`– ${e.message}`);
-  }
-  return parts.join(' ');
-}
 
 /**
  * Checks if the refresh option for a PER/DCOMP consultation should be disabled.
