@@ -1,11 +1,12 @@
-import LoginClient from "./LoginClient.jsx";
+import LoginClient from './LoginClient';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
-export default function LoginPage({ searchParams }) {
-  // Using the new spec's variable names and structure
-  const error = (searchParams?.error ?? "").toString();
-  const callbackUrl = (searchParams?.callbackUrl ?? "").toString(); // NextAuth uses callbackUrl by default
+export default function Page({ searchParams }) {
+  const error = (searchParams?.error ?? '').toString();
+  // The user's spec uses 'next', but NextAuth's default is 'callbackUrl'.
+  // I will check for both to be safe and robust.
+  const next = (searchParams?.next ?? searchParams?.callbackUrl ?? '').toString();
 
-  return <LoginClient error={error} callbackUrl={callbackUrl} />;
+  return <LoginClient error={error} next={next} />;
 }

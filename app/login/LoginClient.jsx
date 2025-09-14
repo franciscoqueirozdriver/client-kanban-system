@@ -1,102 +1,70 @@
 'use client';
-
 import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Although not used in the new spec, it's good practice to keep for potential future use.
 
-export default function LoginClient({ callbackUrl, errorFromUrl }) {
-  const router = useRouter();
+export default function LoginClient({ error = '', next = '' }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Use useEffect to set the initial error message from the URL
   useEffect(() => {
-    if (errorFromUrl) {
-      setError(errorFromUrl);
+    if (error) {
+      setMsg(error === 'CredentialsSignin' ? 'Usuário ou senha inválidos.' : 'Ocorreu um erro. Tente novamente.');
     }
-  }, [errorFromUrl]);
+  }, [error]);
 
-  const handleSubmit = async (e) => {
+  async function onSubmit(e) {
     e.preventDefault();
-    setError('');
     setLoading(true);
+    setMsg('');
 
-    try {
-      const result = await signIn('credentials', {
-        redirect: false,
-        email: email,
-        password: password,
-      });
+    // The new logic for signIn is more robust.
+    // It only redirects if 'next' (callbackUrl) is present.
+    // Otherwise, it handles errors inline.
+    const res = await signIn('credentials', {
+      email,
+      password,
+      redirect: !!next, // Coerce to boolean: redirect only if 'next' exists.
+      callbackUrl: next || '/',
+    });
 
-      if (result.ok) {
-        router.push(callbackUrl || '/');
-      } else {
-        setError(result.error || 'Ocorreu um erro desconhecido.');
-      }
-    } catch (err) {
-      console.error('Login submission error:', err);
-      setError('Falha ao tentar fazer login. Verifique sua conexão.');
-    } finally {
-      setLoading(false);
+    // This part of the logic runs only if redirect is false.
+    if (!next && res && res.error) {
+      setMsg(res.error === 'CredentialsSignin' ? 'Usuário ou senha inválidos.' : res.error);
     }
-  };
+
+    // If the redirect is happening, this component might unmount, so setting state might not be necessary.
+    // But if it fails before redirecting, we need to stop the loading indicator.
+    setLoading(false);
+  }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-center text-gray-900">Acessar Sistema</h2>
-
-        {error && (
-          <div className="p-3 text-sm text-center text-red-800 bg-red-100 border border-red-200 rounded-lg">
-            {error}
-          </div>
-        )}
-
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              E-mail
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="block w-full px-3 py-2 mt-1 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Senha
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="block w-full px-3 py-2 mt-1 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            />
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300"
-            >
-              {loading ? 'Entrando...' : 'Entrar'}
-            </button>
-          </div>
-        </form>
-      </div>
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="w-full max-w-sm p-8 space-y-6 bg-white rounded-lg shadow-xl">
+            <h2 className="text-2xl font-bold text-center text-gray-900">Acessar Sistema</h2>
+            <form onSubmit={onSubmit} className="space-y-4">
+                {msg ? <p className="p-2 text-sm text-center text-red-600 bg-red-100 rounded-md">{msg}</p> : null}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                    <input className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500" type="email"
+                        value={email} onChange={e => setEmail(e.target.value)} required />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                    <input className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500" type="password"
+                        value={password} onChange={e => setPassword(e.target.value)} required />
+                </div>
+                <button className="w-full bg-indigo-600 text-white rounded-md px-3 py-2 font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400" disabled={loading}>
+                    {loading ? 'Entrando...' : 'Entrar'}
+                </button>
+                <div className="text-center">
+                    <a className="block text-sm text-indigo-600 hover:underline" href="/forgot">Esqueci minha senha</a>
+                </div>
+            </form>
+        </div>
     </div>
   );
 }
