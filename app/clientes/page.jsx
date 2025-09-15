@@ -35,7 +35,7 @@ export default function ClientesPage() {
     } catch (e) {
       console.error(e);
       if (e?.status === 401) {
-        router.push('/login?callbackUrl=/clientes');
+        router.replace(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
       }
     }
   };
@@ -76,8 +76,12 @@ export default function ClientesPage() {
       setShowEnrichPreview(true);
     } catch (e) {
       console.error(e);
-      setEnrichPreview({ error: e?.toString?.() || 'Erro ao enriquecer', base: { Nome_da_Empresa: query } });
-      setShowEnrichPreview(true);
+      if (e?.status === 401) {
+        router.replace(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
+      } else {
+        setEnrichPreview({ error: e?.toString?.() || 'Erro ao enriquecer', base: { Nome_da_Empresa: query } });
+        setShowEnrichPreview(true);
+      }
     } finally {
       setIsEnriching(false);
     }

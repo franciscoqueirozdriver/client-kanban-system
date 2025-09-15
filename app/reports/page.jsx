@@ -25,7 +25,7 @@ export default function ReportsPage() {
     } catch (e) {
       console.error(e);
       if (e?.status === 401) {
-        router.push('/login?callbackUrl=/reports');
+        router.replace(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
       }
     }
   };

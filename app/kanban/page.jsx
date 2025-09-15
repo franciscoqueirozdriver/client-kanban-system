@@ -32,7 +32,7 @@ export default function KanbanPage() {
     } catch (e) {
       console.error(e);
       if (e?.status === 401) {
-        router.push('/login?callbackUrl=/kanban');
+        router.replace(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
       }
     }
   };
@@ -46,7 +46,7 @@ export default function KanbanPage() {
         } catch (e) {
           console.error(e);
           if (e?.status === 401) {
-            router.push('/login?callbackUrl=/kanban');
+            router.replace(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
           }
         }
     };
@@ -70,7 +70,7 @@ export default function KanbanPage() {
     } catch (err) {
       alert(err.message || 'Erro ao mesclar');
       if (err?.status === 401) {
-        router.push('/login?callbackUrl=/kanban');
+        router.replace(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
       }
     }
   };
@@ -186,6 +186,9 @@ export default function KanbanPage() {
     } catch (err) {
       setColumns(prevColumns);
       alert('Erro ao atualizar');
+      if (err?.status === 401) {
+        router.replace(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
+      }
     } finally {
       setIsUpdating(false);
     }

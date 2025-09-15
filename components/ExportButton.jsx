@@ -1,10 +1,13 @@
-'use client';
+"use client";
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import PdfModal from './PdfModal';
 import * as XLSX from 'xlsx';
+import fetchJson from '@/lib/http/fetchJson';
 
 export default function ExportButton({ data, filters }) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
 
   const exportExcel = () => {
     const ws = XLSX.utils.json_to_sheet(data);
@@ -13,7 +16,7 @@ export default function ExportButton({ data, filters }) {
     XLSX.writeFile(wb, 'lista_prospeccao.xlsx');
   };
 
-  const generatePdf = (max, onlyNew) => {
+  const generatePdf = async (max, onlyNew) => {
     // ✅ Salva dados no localStorage para evitar URL gigante
     localStorage.setItem('printData', JSON.stringify(data));
     localStorage.setItem('printFilters', JSON.stringify({ ...filters, max, onlyNew }));
@@ -23,11 +26,17 @@ export default function ExportButton({ data, filters }) {
 
     // 🔥 Se for somente leads inéditos, marca na planilha
     if (onlyNew) {
-      fetch('/api/reports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rowsToMark: data.map((d) => d.rowNum).filter(Boolean) }),
-      });
+      try {
+        await fetchJson('/api/reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rowsToMark: data.map((d) => d.rowNum).filter(Boolean) }),
+        });
+      } catch (e) {
+        if (e?.status === 401) {
+          router.replace(`/login?callbackUrl=${encodeURIComponent(location.pathname)}`);
+        }
+      }
     }
   };
 

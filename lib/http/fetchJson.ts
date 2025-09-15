@@ -1,5 +1,10 @@
-export default async function fetchJson(url: string, options?: RequestInit) {
-  const res = await fetch(url, options);
+export default async function fetchJson(url: string, options: RequestInit = {}) {
+  const opts: RequestInit = {
+    credentials: 'include',
+    headers: { Accept: 'application/json', ...(options.headers || {}) },
+    ...options,
+  };
+  const res = await fetch(url, opts);
   const contentType = res.headers?.get('content-type') || '';
   if (res.status === 401) {
     const err: any = new Error('unauthorized');

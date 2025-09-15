@@ -1,15 +1,28 @@
-'use client';
+"use client";
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import fetchJson from '@/lib/http/fetchJson';
 
 export default function Filters({ onFilter }) {
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState({ segmento: '', porte: [], uf: '', cidade: '' });
   const [options, setOptions] = useState({ segmento: [], porte: [], uf: [], cidade: [] });
 
+  const router = useRouter();
+
   useEffect(() => {
-    fetch('/api/clientes')
-      .then((res) => res.json())
-      .then((data) => setOptions(data.filters));
+    async function loadOptions() {
+      try {
+        const data = await fetchJson('/api/clientes');
+        setOptions(data.filters || { segmento: [], porte: [], uf: [], cidade: [] });
+      } catch (e) {
+        console.error(e);
+        if (e?.status === 401) {
+          router.replace(`/login?callbackUrl=${encodeURIComponent(location.pathname)}`);
+        }
+      }
+    }
+    loadOptions();
   }, []);
 
   useEffect(() => {
