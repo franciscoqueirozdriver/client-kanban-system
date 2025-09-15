@@ -79,9 +79,14 @@ function groupRows(rows) {
 
     // Always update status and color to reflect the latest row for a given ID
     const client = map.get(clienteId);
-    client.status = (row[idx.status] || '').trim();
-    client.color = row[idx.cor] || '';
-    client.dataMov = row[idx.data] || '';
+    const newStatus = (row[idx.status] || '').trim();
+    const newColor = row[idx.cor] || '';
+    const newDataMov = row[idx.data] || '';
+
+    if (newStatus) client.status = newStatus;
+    if (newColor) client.color = newColor;
+    if (newDataMov) client.dataMov = newDataMov;
+
     client.opportunities.push(row[idx.titulo] || '');
     client.rows.push(i + 2);
 
