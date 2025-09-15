@@ -41,7 +41,7 @@ export async function middleware(req) {
   // RBAC check
   const permissoes = token.permissoes || {};
   const rotaPermissao = permissoes[pathname];
-  if (!rotaPermissao || rotaPermissao.visualizar !== true) {
+  if (rotaPermissao && rotaPermissao.visualizar !== true) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("error", "access_denied");
