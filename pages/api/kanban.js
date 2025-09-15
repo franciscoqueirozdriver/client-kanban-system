@@ -69,7 +69,7 @@ function groupRows(rows) {
         size: row[idx.tamanho] || '',
         uf: row[idx.uf] || '',
         city: row[idx.cidade] || '',
-        status: row[idx.status] || '',
+        status: (row[idx.status] || '').trim(),
         dataMov: row[idx.data] || '',
         color: row[idx.cor] || '',
         produto: row[idx.produto] || '',
