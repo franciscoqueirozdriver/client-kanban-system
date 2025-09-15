@@ -44,7 +44,7 @@ const apiFieldMap = {
 
 function validatePayload(p) {
   const errs = [];
-  const requiredFields = ["Nome do Lead", "Origem", "Mercado", "Telefones", "Área", "Etapa"];
+  const requiredFields = ["Nome do Lead", "Origem", "Mercado", "Área", "Etapa"];
 
   for (const f of requiredFields) {
     if (!p[f] || String(p[f]).trim() === "") {
