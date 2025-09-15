@@ -4,12 +4,34 @@ export const dynamic = "force-dynamic";
 import NextAuth from "next-auth";
 import authOptions from "@/lib/auth/options";
 
-const handler = NextAuth(authOptions);
+const REQUIRED_ENVS = [
+  "NEXTAUTH_SECRET",
+  "GOOGLE_CLIENT_EMAIL",
+  "GOOGLE_PRIVATE_KEY",
+  "SPREADSHEET_ID",
+];
+
+function logRequest(req) {
+  const missing = REQUIRED_ENVS.filter((k) => !process.env[k]);
+  const runtime = process.env.NEXT_RUNTIME || "node";
+  const base = `[auth] method=${req.method} url=${req.url} runtime=${runtime} missing=${missing.join(",")}`;
+  if (process.env.VERCEL_ENV === "preview") {
+    console.log(`${base} node=${process.versions.node} abi=${process.versions.modules}`);
+  } else {
+    console.log(base);
+  }
+}
+
+async function runAuth(req, ctx) {
+  const handler = NextAuth(authOptions);
+  return handler(req, ctx);
+}
 
 // Wrappers para que /api/auth/signin nunca exploda 500 e redirecione ao /login
 export async function GET(req, ctx) {
+  logRequest(req);
   try {
-    return await handler(req, ctx);
+    return await runAuth(req, ctx);
   } catch (e) {
     console.error("Auth GET error:", e);
     const url = new URL(req.url);
@@ -21,8 +43,9 @@ export async function GET(req, ctx) {
 }
 
 export async function POST(req, ctx) {
+  logRequest(req);
   try {
-    return await handler(req, ctx);
+    return await runAuth(req, ctx);
   } catch (e) {
     // Intercept the custom "NO_PASSWORD" error to send a specific response
     if (e.message === "NO_PASSWORD") {
