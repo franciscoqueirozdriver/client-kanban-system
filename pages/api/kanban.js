@@ -1,4 +1,4 @@
-import { getSheetCached, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
+import { getSheet, getSheetCached, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
 import { normalizePhones } from '../../lib/report';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
@@ -130,7 +130,7 @@ function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const sheet = await getSheetCached();
+      const sheet = await getSheet();
       const rows = sheet.data.values || [];
       const { clients } = groupRows(rows);
 
