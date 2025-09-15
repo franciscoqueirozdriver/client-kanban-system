@@ -15,7 +15,12 @@ export default withAuth(
       return NextResponse.next();
     }
 
-    // RBAC Check: "Fail-closed" logic. Deny by default.
+    // The root path should be accessible to all authenticated users as a safe landing page.
+    if (pathname === '/') {
+      return NextResponse.next();
+    }
+
+    // RBAC Check: "Fail-closed" logic. Deny by default for all other pages.
     const permissoes = token?.permissoes || {};
     const rotaPermissao = permissoes[pathname];
 
