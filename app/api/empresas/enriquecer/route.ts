@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getToken } from 'next-auth/jwt';
+import { getServerSession } from 'next-auth';
+import authOptions from '@/lib/auth/options';
 import { enrichCompanyData } from '@/lib/perplexity';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  if (!token) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   try {

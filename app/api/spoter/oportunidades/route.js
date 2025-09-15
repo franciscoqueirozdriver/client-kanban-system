@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from 'next-auth';
 import authOptions from '@/lib/auth/options';
 import { temPermissao } from '@/lib/rbac/checker';
 import { spotterPost } from '@/lib/exactSpotter';
 import { normalizePhoneList } from '@/utils/telefone.js';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // Mapping from user-facing layout names to the actual API field names
 const apiFieldMap = {
@@ -78,7 +81,7 @@ function validatePayload(p) {
 export async function POST(req) {
   const session = await getServerSession(authOptions);
   if (!session) {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
   try {

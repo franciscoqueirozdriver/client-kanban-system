@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import authOptions from '@/lib/auth/options';
 import { getSheetData, getSheetsClient } from '@/lib/googleSheets';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 import { agregaPerdcomp } from '@/utils/perdcomp';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
@@ -118,6 +121,10 @@ async function getLastPerdcompFromSheet({
 }
 
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   try {
     const body = await request.json().catch(() => ({}));
     const url = new URL(request.url);

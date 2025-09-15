@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { appendSheetData, getSheetData } from '@/lib/googleSheets';
+import { getServerSession } from 'next-auth';
+import authOptions from '@/lib/auth/options';
+import { appendSheetData } from '@/lib/googleSheets';
 
 const SHEET_NAME = 'layout_importacao_empresas';
 
@@ -17,7 +19,14 @@ function generateClienteId() {
   return `CL-${datePart}-${randomPart}`;
 }
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   try {
     const body = await request.json();
 

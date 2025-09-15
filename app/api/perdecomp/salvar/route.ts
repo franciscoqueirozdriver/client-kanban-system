@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import authOptions from '@/lib/auth/options';
 import { appendSheetData } from '@/lib/googleSheets';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
@@ -10,7 +12,14 @@ const PERDECOMP_HEADERS = [
   'Quantidade_DARFs', 'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta'
 ];
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   try {
     const body = await request.json();
     const { linhas } = body;

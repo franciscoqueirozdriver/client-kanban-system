@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import authOptions from '@/lib/auth/options';
 import {
   getNextClienteId,
   findByCnpj,
@@ -36,7 +38,14 @@ function isValidCnpj(cnpj: string | undefined | null): boolean {
 
 // --- API Route Handler ---
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   try {
     const payload = await req.json();
     const { Cliente_ID, Empresa, Contato, Comercial } = payload;

@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import authOptions from '@/lib/auth/options';
 import { TARGET_SCHEMA } from '@/lib/rbac/targetSchema';
 import { COMPAT_MAP } from '@/lib/rbac/compatMap';
 import { getSpreadsheet, getHeader, createSheetIfMissing, appendMissingColumns } from '@/lib/googleSheets';
 import { promises as fs } from 'fs';
 import path from 'path';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 function findSimilarColumns(currentHeader, targetHeader) {
   const similar = {};
@@ -26,6 +31,11 @@ function findSimilarColumns(currentHeader, targetHeader) {
 }
 
 export async function GET(request) {
+  const session = await getServerSession(authOptions);
+  const isAdmin = session?.user?.role === 'admin';
+  if (!isAdmin) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { searchParams } = new URL(request.url);
   const fix = searchParams.get('fix') === '1';
   const isDev = process.env.NODE_ENV !== 'production';
