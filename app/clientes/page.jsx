@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { FaSpinner } from 'react-icons/fa';
 import ClientCard from '../../components/ClientCard';
 import Filters from '../../components/Filters';
@@ -14,6 +15,7 @@ async function openConfirmDialog({ title, description, confirmText, cancelText }
 }
 
 export default function ClientesPage() {
+  const router = useRouter();
   const [clients, setClients] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [query, setQuery] = useState('');
@@ -32,6 +34,9 @@ export default function ClientesPage() {
       setFiltered(data.clients);
     } catch (e) {
       console.error(e);
+      if (e?.status === 401) {
+        router.push('/login?callbackUrl=/clientes');
+      }
     }
   };
 
@@ -39,7 +44,7 @@ export default function ClientesPage() {
     fetchClients();
   }, []);
 
-  const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
+  const handleFilter = ({ query, segmento, porte, uf, cidade } = {}) => {
     setQuery(query); // Keep track of the query for the "no results" case
     let result = clients.filter((client) => {
       if (segmento && segmento.trim() && (client.segment || '').trim().toLowerCase() !== segmento.trim().toLowerCase()) return false;

@@ -1,11 +1,13 @@
 'use client';
 import { DragDropContext } from '@hello-pangea/dnd';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import KanbanColumn from '../../components/KanbanColumn';
 import Filters from '../../components/Filters';
 import fetchJson from '@/lib/http/fetchJson';
 
 export default function KanbanPage() {
+  const router = useRouter();
   const [columns, setColumns] = useState([]);
   const [filteredColumns, setFilteredColumns] = useState(null);
   const [produtos, setProdutos] = useState([]);
@@ -29,6 +31,9 @@ export default function KanbanPage() {
       setColumns(data);
     } catch (e) {
       console.error(e);
+      if (e?.status === 401) {
+        router.push('/login?callbackUrl=/kanban');
+      }
     }
   };
 
@@ -40,6 +45,9 @@ export default function KanbanPage() {
           setProdutos(data.produtos || []);
         } catch (e) {
           console.error(e);
+          if (e?.status === 401) {
+            router.push('/login?callbackUrl=/kanban');
+          }
         }
     };
     loadProdutos();
@@ -61,10 +69,13 @@ export default function KanbanPage() {
       );
     } catch (err) {
       alert(err.message || 'Erro ao mesclar');
+      if (err?.status === 401) {
+        router.push('/login?callbackUrl=/kanban');
+      }
     }
   };
 
-  const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
+  const handleFilter = ({ query, segmento, porte, uf, cidade } = {}) => {
     // Função de filtro
     const filterFn = (client) => {
       // segmento

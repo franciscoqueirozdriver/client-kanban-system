@@ -1,30 +1,36 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Filters from '../../components/Filters';
 import ReportTable from '../../components/ReportTable';
 import ExportButton from '../../components/ExportButton';
 import fetchJson from '@/lib/http/fetchJson';
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [rows, setRows] = useState([]);
   const [filters, setFilters] = useState({});
   const [maxLeads, setMaxLeads] = useState(30);
 
-  const fetchData = (filt, limit = maxLeads) => {
+  const fetchData = async (filt, limit = maxLeads) => {
     const params = new URLSearchParams();
     Object.entries(filt).forEach(([k, v]) => {
       if (v) params.append(k, v);
     });
     if (limit) params.append('maxLeads', limit);
 
-      fetchJson(`/api/reports?${params.toString()}`)
-        .then((data) => {
-          setRows(data.rows);
-        })
-        .catch((e) => console.error(e));
+    try {
+      const data = await fetchJson(`/api/reports?${params.toString()}`);
+      setRows(data.rows);
+    } catch (e) {
+      console.error(e);
+      if (e?.status === 401) {
+        router.push('/login?callbackUrl=/reports');
+      }
+    }
   };
 
-  const handleFilter = (f) => {
+  const handleFilter = (f = {}) => {
     // ✅ Se o filtro de porte vier como array (do <select multiple>), converte para string
     const adjusted = { ...f };
     if (Array.isArray(adjusted.porte)) {

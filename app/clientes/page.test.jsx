@@ -4,6 +4,10 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ClientesPage from './page';
 
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn() }),
+}));
+
 jest.mock('../../components/ClientCard', () => () => <div />);
 jest.mock('../../components/NewCompanyModal', () => () => null);
 jest.mock('../../components/EnrichmentPreviewDialog', () => () => null);
