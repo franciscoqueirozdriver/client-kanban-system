@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "jest --coverage"
+    "test": "jest --coverage",
+    "inventario": "node scripts/inventario.js"
   },
   "dependencies": {
     "@hello-pangea/dnd": "16.5.0",
