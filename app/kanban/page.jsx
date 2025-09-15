@@ -3,6 +3,7 @@ import { DragDropContext } from '@hello-pangea/dnd';
 import { useEffect, useState } from 'react';
 import KanbanColumn from '../../components/KanbanColumn';
 import Filters from '../../components/Filters';
+import fetchJson from '@/lib/http/fetchJson';
 
 export default function KanbanPage() {
   const [columns, setColumns] = useState([]);
@@ -23,17 +24,23 @@ export default function KanbanPage() {
   }, [columns]);
 
   const fetchColumns = async () => {
-    const res = await fetch('/api/kanban');
-    const data = await res.json();
-    setColumns(data);
+    try {
+      const data = await fetchJson('/api/kanban');
+      setColumns(data);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   useEffect(() => {
     if (!isAdmin) return;
     const loadProdutos = async () => {
-      const res = await fetch('/api/padroes');
-      const data = await res.json();
-      setProdutos(data.produtos || []);
+        try {
+          const data = await fetchJson('/api/padroes');
+          setProdutos(data.produtos || []);
+        } catch (e) {
+          console.error(e);
+        }
     };
     loadProdutos();
   }, [isAdmin]);
@@ -43,19 +50,18 @@ export default function KanbanPage() {
       alert('Selecione um produto');
       return;
     }
-    const res = await fetch('/api/mesclar-leads-exact-spotter', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ produto }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data.error || 'Erro ao mesclar');
-      return;
+    try {
+      const data = await fetchJson('/api/mesclar-leads-exact-spotter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ produto }),
+      });
+      alert(
+        `Criadas: ${data.criadas}\nAtualizadas: ${data.atualizadas}\nIgnoradas: ${data.ignoradas}\nErros: ${data.erros?.join?.(', ')}`
+      );
+    } catch (err) {
+      alert(err.message || 'Erro ao mesclar');
     }
-    alert(
-      `Criadas: ${data.criadas}\nAtualizadas: ${data.atualizadas}\nIgnoradas: ${data.ignoradas}\nErros: ${data.erros.join(', ')}`
-    );
   };
 
   const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
@@ -149,24 +155,23 @@ export default function KanbanPage() {
     setColumns(newColumns);
     setIsUpdating(true);
     try {
-      const res = await fetch('/api/kanban', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
-      });
-      if (!res.ok) throw new Error('Erro ao atualizar');
-      await fetchColumns();
-      await fetch('/api/interacoes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clienteId: draggableId,
-          tipo: 'Mudança de Fase',
-          deFase: source.droppableId,
-          paraFase: destination.droppableId,
-          dataHora: new Date().toISOString(),
-        }),
-      });
+        await fetchJson('/api/kanban', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
+        });
+        await fetchColumns();
+        await fetchJson('/api/interacoes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clienteId: draggableId,
+            tipo: 'Mudança de Fase',
+            deFase: source.droppableId,
+            paraFase: destination.droppableId,
+            dataHora: new Date().toISOString(),
+          }),
+        });
     } catch (err) {
       setColumns(prevColumns);
       alert('Erro ao atualizar');

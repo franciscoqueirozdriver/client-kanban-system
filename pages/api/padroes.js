@@ -1,6 +1,9 @@
 import { getSheetData } from '../../lib/googleSheets';
+import { requireSession } from '@/lib/auth/requireSession';
 
 export default async function handler(req, res) {
+  const session = await requireSession(req, res);
+  if (!session) return;
   if (req.method !== 'GET') return res.status(405).end();
   const start = Date.now();
   try {

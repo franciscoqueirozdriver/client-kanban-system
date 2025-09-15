@@ -28,9 +28,11 @@ describe('ClientesPage total counter', () => {
 
   test('renders total count of 4384 when no filters applied', async () => {
     const clients = buildClients(4384);
-    global.fetch = jest.fn().mockResolvedValue({
-      json: async () => ({ clients, filters: { segmento: [], porte: [], uf: [], cidade: [] } }),
-    });
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ clients, filters: { segmento: [], porte: [], uf: [], cidade: [] } }),
+      });
 
     render(<ClientesPage />);
 
@@ -42,9 +44,11 @@ describe('ClientesPage total counter', () => {
 
   test('updates count when UF filter is applied', async () => {
     const clients = buildClients(1200, (i) => (i < 950 ? 'SP' : 'RJ'));
-    global.fetch = jest.fn().mockResolvedValue({
-      json: async () => ({ clients, filters: { segmento: [], porte: [], uf: ['SP', 'RJ'], cidade: [] } }),
-    });
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ clients, filters: { segmento: [], porte: [], uf: ['SP', 'RJ'], cidade: [] } }),
+      });
 
     render(<ClientesPage />);
 

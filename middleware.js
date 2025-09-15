@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 export async function middleware(req) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    return NextResponse.next();
+  }
+  const token = await getToken({ req, secret });
   const { pathname } = req.nextUrl;
 
   // Allow unauthenticated access to login and password creation
@@ -14,7 +18,11 @@ export async function middleware(req) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
-    return NextResponse.redirect(url);
+    const res = NextResponse.redirect(url);
+    if (process.env.VERCEL_ENV === "preview") {
+      res.headers.set("X-From-Middleware", "1");
+    }
+    return res;
   }
 
   // Avoid redirect loop if already on login while authenticated
@@ -38,7 +46,11 @@ export async function middleware(req) {
     url.pathname = "/login";
     url.searchParams.set("error", "access_denied");
     url.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
-    return NextResponse.redirect(url);
+    const res = NextResponse.redirect(url);
+    if (process.env.VERCEL_ENV === "preview") {
+      res.headers.set("X-From-Middleware", "1");
+    }
+    return res;
   }
 
   return NextResponse.next();
@@ -46,6 +58,6 @@ export async function middleware(req) {
 
 export const config = {
   matcher: [
-    '/((?!api/auth|login|_next|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif)|forgot|reset).*)',
+    '/((?!api/.*|_next/.*|favicon.ico|assets/.*|login|forgot|reset|.*\\.(?:png|jpg|jpeg|svg|gif)).*)',
   ],
 };

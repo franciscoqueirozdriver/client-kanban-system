@@ -1,7 +1,11 @@
 import { getSheet, updateRow } from '../../lib/googleSheets';
 import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
+import { requireSession } from '@/lib/auth/requireSession';
 
 export default async function handler(req, res) {
+  const session = await requireSession(req, res);
+  if (!session) return;
+
   if (req.method === 'GET') {
     try {
       const limitParam = parseInt(req.query.limit ?? req.query.maxLeads, 10);
@@ -42,7 +46,7 @@ export default async function handler(req, res) {
     }
   }
 
-  if (req.method === 'POST') {
+    if (req.method === 'POST') {
     try {
       const { rowsToMark } = req.body;
       if (!rowsToMark || rowsToMark.length === 0) {

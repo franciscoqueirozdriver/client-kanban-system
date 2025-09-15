@@ -5,6 +5,9 @@ import { getSheetCached } from '../../lib/googleSheets';
 jest.mock('../../lib/googleSheets', () => ({
   getSheetCached: jest.fn()
 }));
+jest.mock('../../lib/auth/requireSession', () => ({
+  requireSession: jest.fn().mockResolvedValue({ user: { email: 'x' } }),
+}));
 
 describe('GET /api/clientes', () => {
   const header = [

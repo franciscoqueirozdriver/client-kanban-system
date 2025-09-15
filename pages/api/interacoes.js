@@ -1,6 +1,10 @@
 import { getHistorySheetCached, appendHistoryRow } from '../../lib/googleSheets';
+import { requireSession } from '@/lib/auth/requireSession';
 
 export default async function handler(req, res) {
+  const session = await requireSession(req, res);
+  if (!session) return;
+
   if (req.method === 'POST') {
     const {
       clienteId,

@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 import { enrichCompanyData } from '@/lib/perplexity';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  if (!token) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   try {
     const body = await req.json().catch(() => ({}));
     const nome = body?.nome ?? '';

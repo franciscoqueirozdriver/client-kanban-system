@@ -1,5 +1,6 @@
 import { getSheetCached, appendRow, updateRow } from '../../lib/googleSheets';
 import { normalizePhones } from '../../lib/report';
+import { requireSession } from '@/lib/auth/requireSession';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
 function protectPhoneValue(value) {
@@ -131,6 +132,9 @@ function groupRows(rows) {
 }
 
 export default async function handler(req, res) {
+  const session = await requireSession(req, res);
+  if (!session) return;
+
   if (req.method === 'GET') {
     try {
       const sheet = await getSheetCached();
@@ -151,7 +155,7 @@ export default async function handler(req, res) {
     }
   }
 
-  if (req.method === 'POST') {
+    if (req.method === 'POST') {
     try {
       const { row, values } = req.body;
 

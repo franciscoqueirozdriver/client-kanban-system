@@ -7,6 +7,9 @@ jest.mock('../../lib/googleSheets', () => ({
   findRowIndexById: jest.fn(),
   updateRowByIndex: jest.fn(),
 }));
+jest.mock('../../lib/auth/requireSession', () => ({
+  requireSession: jest.fn().mockResolvedValue({ user: { email: 'x' } }),
+}));
 
 describe('POST /api/kanban', () => {
   beforeEach(() => {

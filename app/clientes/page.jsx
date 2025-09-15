@@ -6,6 +6,7 @@ import Filters from '../../components/Filters';
 import NewCompanyModal from '../../components/NewCompanyModal';
 import EnrichmentPreviewDialog from '../../components/EnrichmentPreviewDialog';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
+import fetchJson from '@/lib/http/fetchJson';
 
 async function openConfirmDialog({ title, description, confirmText, cancelText }) {
   const msg = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
@@ -24,13 +25,14 @@ export default function ClientesPage() {
   const [showEnrichPreview, setShowEnrichPreview] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
 
-  const fetchClients = () => {
-    fetch('/api/clientes')
-      .then((res) => res.json())
-      .then((data) => {
-        setClients(data.clients);
-        setFiltered(data.clients);
-      });
+  const fetchClients = async () => {
+    try {
+      const data = await fetchJson('/api/clientes');
+      setClients(data.clients);
+      setFiltered(data.clients);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   useEffect(() => {
@@ -60,13 +62,11 @@ export default function ClientesPage() {
     if (!query) return;
     setIsEnriching(true);
     try {
-      const resp = await fetch('/api/empresas/enriquecer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: query })
-      });
-      const json = await resp.json();
-      if (!resp.ok) throw new Error(json?.error || 'Falha ao enriquecer');
+        const json = await fetchJson('/api/empresas/enriquecer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome: query })
+        });
       setEnrichPreview({ ...json, base: { Nome_da_Empresa: query } });
       setShowEnrichPreview(true);
     } catch (e) {

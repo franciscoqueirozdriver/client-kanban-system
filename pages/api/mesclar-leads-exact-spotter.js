@@ -1,4 +1,5 @@
 import { getSheetsClient, getSheetData, withRetry, chunk } from '../../lib/googleSheets';
+import { requireSession } from '@/lib/auth/requireSession';
 
 const SHEET_LAYOUT = 'layout_importacao_empresas';
 const SHEET_SHEET1 = 'Sheet1';
@@ -75,6 +76,8 @@ function colLetter(n) {
 }
 
 export default async function handler(req, res) {
+  const session = await requireSession(req, res);
+  if (!session) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

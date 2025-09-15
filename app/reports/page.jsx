@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Filters from '../../components/Filters';
 import ReportTable from '../../components/ReportTable';
 import ExportButton from '../../components/ExportButton';
+import fetchJson from '@/lib/http/fetchJson';
 
 export default function ReportsPage() {
   const [rows, setRows] = useState([]);
@@ -16,11 +17,11 @@ export default function ReportsPage() {
     });
     if (limit) params.append('maxLeads', limit);
 
-    fetch(`/api/reports?${params.toString()}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setRows(data.rows);
-      });
+      fetchJson(`/api/reports?${params.toString()}`)
+        .then((data) => {
+          setRows(data.rows);
+        })
+        .catch((e) => console.error(e));
   };
 
   const handleFilter = (f) => {
