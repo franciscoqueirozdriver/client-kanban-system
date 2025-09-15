@@ -81,20 +81,16 @@ export default async function handler(req, res) {
 
   try {
     // 1) Ler abas com helpers do lib
-    const [{ rows: layout }, { rows: sheet1 }, { rows: padroes }, destRaw, { rows: usuarios }] = await Promise.all([
+    const [{ rows: layout }, { rows: sheet1 }, { rows: padroes }, destRaw] = await Promise.all([
       getSheetData(SHEET_LAYOUT),
       getSheetData(SHEET_SHEET1),
       getSheetData(SHEET_PADROES),
       getSheetData(SHEET_DEST),
-      getSheetData('Usuarios'),
     ]);
 
     const { headers: destHeadersRaw, rows: destRows } = destRaw;
 
-    // 2) Lista de e-mails de pré-vendedores
-    const prevendedorEmails = usuarios.map(u => clean(u['Email'])).filter(Boolean).join(';');
-
-    // 3) Listas válidas de Produtos e Mercados
+    // 2) Listas válidas de Produtos e Mercados
     const produtosValidos = padroes.map(r => clean(r['Produtos'])).filter(Boolean);
     const mercadosValidos = padroes.map(r => clean(r['Mercados'])).filter(Boolean);
 
@@ -112,7 +108,7 @@ export default async function handler(req, res) {
       'Observação','CPF/CNPJ',
       'Nome Contato','E-mail Contato','Cargo Contato','DDI Contato','Telefones Contato',
       'Tipo do Serv. Comunicação','ID do Serv. Comunicação','Área',
-      'Nome da Empresa','Etapa','Funil', 'Email Pré-vendedor',
+      'Nome da Empresa','Etapa','Funil',
     ]);
 
     let header = Array.isArray(destHeadersRaw) ? [...destHeadersRaw] : [];
@@ -220,7 +216,7 @@ export default async function handler(req, res) {
         [KEY]: id,
 
         'Nome do Lead': preferNonEmpty(atual['Nome do Lead'], nomeLead),
-        'Origem': 'Lista Francisco',
+        'Origem': 'Carteira de Clientes',
         'Sub-Origem': '',
 
         'Mercado': preferNonEmpty(atual['Mercado'], mercado),
@@ -255,9 +251,8 @@ export default async function handler(req, res) {
         'Área': '',
 
         'Nome da Empresa': preferNonEmpty(atual['Nome da Empresa'], nomeEmpresa),
-        'Etapa': 'Entrada',
+        'Etapa': 'Agendados',
         'Funil': 'Padrão',
-        'Email Pré-vendedor': prevendedorEmails,
       };
 
       const rowValues = header.map(col => (novo[col] ?? '').toString());

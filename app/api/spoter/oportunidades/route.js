@@ -31,6 +31,7 @@ const apiFieldMap = {
   "Nome da Empresa": "companyName", // Not in doc, but in user's layout
   "Etapa": "stage",
   "Funil": "funnelId", // The API expects an ID here, might need adjustment
+  "Email Pré-vendedor": "sdrEmail",
   // Fields not in the modal form but in the API docs
   "organizationId": null,
   "sdrEmail": null,
@@ -114,7 +115,7 @@ export async function POST(req) {
     const finalApiPayload = {
         name: formPayload["Nome do Lead"],
         industry: formPayload["Mercado"],
-        source: formPayload["Origem"],
+        source: "Lista Francisco",
         subSource: formPayload["Sub-Origem"],
         website: formPayload["Site"],
         leadProduct: formPayload["Produto"],
@@ -128,8 +129,9 @@ export async function POST(req) {
         country: formPayload["País"],
         description: formPayload["Observação"],
         cpfcnpj: formPayload["CPF/CNPJ"],
-        funnelId: formPayload["Funil"] ? parseInt(formPayload["Funil"], 10) : null,
-        stage: formPayload["Etapa"],
+        funnelId: null, // Padrão
+        stage: "Entrada",
+        sdrEmail: formPayload["Email Pré-vendedor"],
         // The docs show ddiPhone and phone separately. My normalizer combines them.
         // I will send the combined number in `phone` and the DDI separately.
         ddiPhone: formPayload["Telefones"] ? '55' : null,

@@ -15,7 +15,8 @@ const fieldMap = {
   "Telefones Contato": "telefonesContato",
   "Tipo do Serv. Comunicação": "tipoServComunicacao",
   "ID do Serv. Comunicação": "idServComunicacao", "Área": "area",
-  "Nome da Empresa": "nomeEmpresa", "Etapa": "etapa", "Funil": "funil"
+  "Nome da Empresa": "nomeEmpresa", "Etapa": "etapa", "Funil": "funil",
+  "Email Pré-vendedor": "emailPrevendedor"
 };
 
 const reversedFieldMap = Object.entries(fieldMap).reduce((acc, [key, value]) => {
@@ -30,6 +31,7 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
   const [errors, setErrors] = useState([]); // {field, message}
   const [produtosList, setProdutosList] = useState([]);
   const [mercadosList, setMercadosList] = useState([]);
+  const [prevendedoresList, setPrevendedoresList] = useState([]);
   const [isEnrichConfirmOpen, setIsEnrichConfirmOpen] = useState(false);
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
             setProdutosList(data.produtos || []);
             fetchedMercados = data.mercados || [];
             setMercadosList(fetchedMercados);
+            setPrevendedoresList(data.prevendedores || []);
           }
         } catch (error) {
           console.error("Failed to fetch padroes", error);
@@ -59,12 +62,13 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
 
         const initialFormState = {
             [fieldMap["Nome do Lead"]]: client?.company ?? "Lead sem título",
-            [fieldMap["Origem"]]: client?.origem ?? process.env.NEXT_PUBLIC_DEFAULT_CONTACT_ORIGEM ?? "Kanban",
+            [fieldMap["Origem"]]: "Lista Francisco",
             [fieldMap["Mercado"]]: selectedMarket,
             [fieldMap["Produto"]]: client?.produto || "",
             [fieldMap["Telefones"]]: client?.contacts?.[0]?.normalizedPhones?.join(";") || "",
             [fieldMap["Área"]]: (Array.isArray(client?.opportunities) && client.opportunities.length > 0 ? client.opportunities.join(";") : client?.segment) ?? "Geral",
-            [fieldMap["Etapa"]]: client?.status ?? "Novo",
+            [fieldMap["Etapa"]]: "Entrada",
+            [fieldMap["Funil"]]: "Padrão",
             [fieldMap["Nome da Empresa"]]: client?.company ?? "",
             [fieldMap["Nome Contato"]]: client?.contacts?.[0]?.name ?? "",
             [fieldMap["E-mail Contato"]]: client?.contacts?.[0]?.email?.split(';')[0].trim() ?? process.env.NEXT_PUBLIC_DEFAULT_CONTACT_EMAIL,
@@ -266,13 +270,11 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
               </div>
             </div>
             {renderInput("Site", fieldMap["Site"], { type: 'url' })}
-            {renderInput("Origem", fieldMap["Origem"], { required: true })}
             {renderInput("Sub-Origem", fieldMap["Sub-Origem"])}
             {renderSelect("Mercado", fieldMap["Mercado"], mercadosList, { required: true })}
             {renderSelect("Produto", fieldMap["Produto"], produtosList)}
+            {renderSelect("Email Pré-vendedor", fieldMap["Email Pré-vendedor"], prevendedoresList)}
             {renderInput("Área", fieldMap["Área"], { required: true, placeholder: "Separar múltiplas por ;" })}
-            {renderInput("Etapa", fieldMap["Etapa"], { required: true })}
-            {renderInput("Funil", fieldMap["Funil"])}
             {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
             {renderInput("Observação", fieldMap["Observação"])}
 
