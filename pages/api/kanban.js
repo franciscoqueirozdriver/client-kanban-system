@@ -134,6 +134,7 @@ export default async function handler(req, res) {
         'Contato Efetuado',
         'Conversa Iniciada',
         'Reunião Agendada',
+        'Enviado Spotter',
         'Perdido',
       ];
       const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
