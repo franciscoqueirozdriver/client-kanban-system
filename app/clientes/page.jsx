@@ -30,8 +30,9 @@ export default function ClientesPage() {
   const fetchClients = async () => {
     try {
       const data = await fetchJson('/api/clientes');
-      setClients(data.clients);
-      setFiltered(data.clients);
+      const list = Array.isArray(data.clients) ? data.clients : [];
+      setClients(list);
+      setFiltered(list);
     } catch (e) {
       console.error(e);
       if (e?.status === 401) {
@@ -47,15 +48,15 @@ export default function ClientesPage() {
   const handleFilter = ({ query, segmento, porte, uf, cidade } = {}) => {
     setQuery(query); // Keep track of the query for the "no results" case
     let result = clients.filter((client) => {
-      if (segmento && segmento.trim() && (client.segment || '').trim().toLowerCase() !== segmento.trim().toLowerCase()) return false;
-      if (porte && porte.length > 0 && !porte.map(p => p.toLowerCase()).includes((client.size || '').trim().toLowerCase())) return false;
-      if (uf && uf.trim() && (client.uf || '').trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
-      if (cidade && cidade.trim() && (client.city || '').trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
+      if (segmento && segmento.trim() && (client?.segment || '').trim().toLowerCase() !== segmento.trim().toLowerCase()) return false;
+      if (porte && porte.length > 0 && !porte.map(p => p.toLowerCase()).includes((client?.size || '').trim().toLowerCase())) return false;
+      if (uf && uf.trim() && (client?.uf || '').trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
+      if (cidade && cidade.trim() && (client?.city || '').trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
       if (query) {
         const q = query.toLowerCase();
-        const matchName = (client.company || '').toLowerCase().includes(q);
-        const matchContact = (client.contacts || []).some((c) => (c.name || c.nome || '').toLowerCase().includes(q));
-        const matchOpp = (client.opportunities || []).some((o) => (o || '').toLowerCase().includes(q));
+        const matchName = (client?.company || '').toLowerCase().includes(q);
+        const matchContact = (client?.contacts || []).some((c) => (c.name || c.nome || '').toLowerCase().includes(q));
+        const matchOpp = (client?.opportunities || []).some((o) => (o || '').toLowerCase().includes(q));
         if (!matchName && !matchContact && !matchOpp) return false;
       }
       return true;
@@ -136,9 +137,10 @@ export default function ClientesPage() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((client) => (
-          <ClientCard key={client.id} client={client} />
-        ))}
+        {Array.isArray(filtered) &&
+          filtered.map((client) => (
+            <ClientCard key={client.id} client={client} />
+          ))}
       </div>
 
       <NewCompanyModal

@@ -2,6 +2,7 @@ export default async function fetchJson(url: string, options: RequestInit = {}) 
   const opts: RequestInit = {
     credentials: 'include',
     headers: { Accept: 'application/json', ...(options.headers || {}) },
+    cache: 'no-store',
     ...options,
   };
   const res = await fetch(url, opts);

@@ -1,9 +1,10 @@
-import { getSheetCached, appendRow, updateRow } from '../../lib/googleSheets';
-import { normalizePhones } from '../../lib/report';
-import { requireSession } from '@/lib/auth/requireSession';
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import authOptions from '@/lib/auth/options';
+import { getSheetCached, appendRow, updateRow } from '@/lib/googleSheets';
+import { normalizePhones } from '@/lib/report';
 
-// ✅ Protege números de telefone para salvar como texto no Sheets
-function protectPhoneValue(value) {
+function protectPhoneValue(value: any) {
   if (!value) return '';
   const str = String(value).trim();
   if (/^\+?\d{8,}$/.test(str)) {
@@ -12,18 +13,14 @@ function protectPhoneValue(value) {
   return str;
 }
 
-// ✅ Junta os 3 tipos de e-mail e remove duplicados
-function collectEmails(row, idx) {
-  const emails = [
-    row[idx.emailWork] || '',
-    row[idx.emailHome] || '',
-    row[idx.emailOther] || '',
-  ].map(e => e.trim()).filter(Boolean);
-
+function collectEmails(row: any[], idx: any) {
+  const emails = [row[idx.emailWork] || '', row[idx.emailHome] || '', row[idx.emailOther] || '']
+    .map((e) => e.trim())
+    .filter(Boolean);
   return Array.from(new Set(emails)).join(';');
 }
 
-function groupRows(rows) {
+function groupRows(rows: any[]) {
   const [header, ...data] = rows;
   const idx = {
     clienteId: header.indexOf('Cliente_ID'),
@@ -52,13 +49,13 @@ function groupRows(rows) {
   };
 
   const filters = {
-    segmento: new Set(),
-    porte: new Set(),
-    uf: new Set(),
-    cidade: new Set(),
+    segmento: new Set<string>(),
+    porte: new Set<string>(),
+    uf: new Set<string>(),
+    cidade: new Set<string>(),
   };
 
-  const clientesMap = new Map();
+  const clientesMap = new Map<string, any>();
 
   data.forEach((row) => {
     const clienteId = row[idx.clienteId] || '';
@@ -90,13 +87,11 @@ function groupRows(rows) {
 
     if (clientesMap.has(clienteId)) {
       const existing = clientesMap.get(clienteId);
-
       if (opportunity && !existing.opportunities.includes(opportunity)) {
         existing.opportunities.push(opportunity);
       }
-
       const existsContact = existing.contacts.find(
-        (c) => c.name === contact.name && c.email === contact.email
+        (c: any) => c.name === contact.name && c.email === contact.email
       );
       if (!existsContact && (contact.name || contact.email)) {
         existing.contacts.push(contact);
@@ -131,54 +126,62 @@ function groupRows(rows) {
   };
 }
 
-export default async function handler(req, res) {
-  const session = await requireSession(req, res);
-  if (!session) return;
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-  if (req.method === 'GET') {
-    try {
-      const sheet = await getSheetCached();
-      const rows = sheet.data.values || [];
-      const { clients, filters } = groupRows(rows);
-
-      const limitParam = parseInt(req.query.limit, 10);
-      const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
-
-      if (req.query.countOnly === '1') {
-        return res.status(200).json({ total: clients.length });
-      }
-
-      return res.status(200).json({ clients: clients.slice(0, limit), filters });
-    } catch (err) {
-      console.error('Erro ao listar clientes:', err);
-      return res.status(500).json({ error: 'Erro ao listar clientes' });
-    }
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (process.env.VERCEL_ENV === 'preview') {
+    console.log('cookie', Boolean(request.headers.get('cookie')), 'session', !!session);
   }
-
-    if (req.method === 'POST') {
-    try {
-      const { row, values } = req.body;
-
-      if (values?.telefone_normalizado) {
-        values.telefone_normalizado = values.telefone_normalizado
-          .split(';')
-          .map(protectPhoneValue)
-          .join(';');
-      }
-      if (values?.tel) values.tel = protectPhoneValue(values.tel);
-      if (values?.cel) values.cel = protectPhoneValue(values.cel);
-
-      if (row) {
-        await updateRow(row, values);
-      } else {
-        await appendRow(values);
-      }
-      return res.status(200).json({ ok: true });
-    } catch (err) {
-      console.error('Erro ao salvar cliente:', err);
-      return res.status(500).json({ error: 'Erro ao salvar cliente' });
-    }
+  if (!session) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
-
-  return res.status(405).end();
+  try {
+    const sheet = await getSheetCached();
+    const rows = sheet.data.values || [];
+    const { clients, filters } = groupRows(rows);
+    const { searchParams } = new URL(request.url);
+    const limitParam = parseInt(searchParams.get('limit') || '', 10);
+    const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
+    if (searchParams.get('countOnly') === '1') {
+      return NextResponse.json({ total: clients.length });
+    }
+    return NextResponse.json({ clients: clients.slice(0, limit), filters });
+  } catch (err) {
+    console.error('Erro ao listar clientes:', err);
+    return NextResponse.json({ error: 'Erro ao listar clientes' }, { status: 500 });
+  }
 }
+
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (process.env.VERCEL_ENV === 'preview') {
+    console.log('cookie', Boolean(request.headers.get('cookie')), 'session', !!session);
+  }
+  if (!session) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+  try {
+    const { row, values } = await request.json();
+    if (values?.telefone_normalizado) {
+      values.telefone_normalizado = values.telefone_normalizado
+        .split(';')
+        .map(protectPhoneValue)
+        .join(';');
+    }
+    if (values?.tel) values.tel = protectPhoneValue(values.tel);
+    if (values?.cel) values.cel = protectPhoneValue(values.cel);
+
+    if (row) {
+      await updateRow(row, values);
+    } else {
+      await appendRow(values);
+    }
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('Erro ao salvar cliente:', err);
+    return NextResponse.json({ error: 'Erro ao salvar cliente' }, { status: 500 });
+  }
+}
+
