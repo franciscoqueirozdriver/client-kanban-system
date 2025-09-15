@@ -69,15 +69,19 @@ function groupRows(rows) {
         size: row[idx.tamanho] || '',
         uf: row[idx.uf] || '',
         city: row[idx.cidade] || '',
-        status: (row[idx.status] || '').trim(),
-        dataMov: row[idx.data] || '',
-        color: row[idx.cor] || '',
+        status: '', // Will be overwritten by the latest row
+        dataMov: '', // Will be overwritten by the latest row
+        color: '', // Will be overwritten by the latest row
         produto: row[idx.produto] || '',
         rows: [],
       });
     }
 
+    // Always update status and color to reflect the latest row for a given ID
     const client = map.get(clienteId);
+    client.status = (row[idx.status] || '').trim();
+    client.color = row[idx.cor] || '';
+    client.dataMov = row[idx.data] || '';
     client.opportunities.push(row[idx.titulo] || '');
     client.rows.push(i + 2);
 
