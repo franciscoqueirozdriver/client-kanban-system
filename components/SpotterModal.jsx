@@ -275,7 +275,7 @@ export default function SpotterModal({ isOpen, onClose, initialData, onSent }) {
             {renderSelect("Produto", fieldMap["Produto"], produtosList)}
             {renderSelect("Email Pré-vendedor", fieldMap["Email Pré-vendedor"], prevendedoresList)}
             {renderInput("Área", fieldMap["Área"], { required: true, placeholder: "Separar múltiplas por ;" })}
-            {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
+            {renderInput("Telefones", fieldMap["Telefones"], { placeholder: "Separar múltiplos por ;" })}
             {renderInput("Observação", fieldMap["Observação"])}
 
             <h3 className="md:col-span-3 text-lg font-semibold border-t pt-4 mt-2">Endereço</h3>
