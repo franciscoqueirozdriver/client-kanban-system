@@ -96,32 +96,6 @@ function buildApiErrorLabel(e: any) {
   }
   return parts.join(' ');
 }
-
-/**
- * Checks if the refresh option for a PER/DCOMP consultation should be disabled.
- * The rule is: the option is locked until the 20th day of the second month
- * following the last consultation.
- * @param lastConsultationDate The date of the last consultation.
- * @returns True if the refresh option should be disabled.
- */
-function isRefreshDisabled(lastConsultationDate: string | null): boolean {
-  if (!lastConsultationDate) {
-    return true; // Should not be refreshable if there's no last consultation
-  }
-  try {
-    const lastDate = new Date(lastConsultationDate);
-    // Move to the second month after the consultation
-    const lockoutDate = new Date(lastDate.getFullYear(), lastDate.getMonth() + 2, 20);
-    const now = new Date();
-
-    // Disable if today is before the lockout date
-    return now < lockoutDate;
-  } catch (e) {
-    console.error("Error parsing last consultation date:", e);
-    return true; // Disable on error
-  }
-}
-
 // --- Main Page Component ---
 export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ?: string }) {
   const [client, setClient] = useState<CompanySelection | null>(null);
@@ -570,24 +544,14 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                 />
               </div>
             </div>
-            {client?.lastConsultation && (() => {
-              const disabled = isRefreshDisabled(client.lastConsultation);
-              const title = disabled ? "A opção de refazer a consulta será liberada após o prazo para entrega da escrituração fiscal." : "Marque para forçar uma nova consulta na Receita Federal, ignorando dados em cache.";
-              return (
-                <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  <label className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-60' : ''}`} title={title}>
-                    <input
-                      type="checkbox"
-                      checked={client.forceRefresh}
-                      onChange={(e) => setClient(c => c ? {...c, forceRefresh: e.target.checked} : null)}
-                      className="form-checkbox h-4 w-4 text-violet-600"
-                      disabled={disabled}
-                    />
-                    <span>Refazer consulta (última em: {new Date(client.lastConsultation).toLocaleDateString()})</span>
-                  </label>
-                </div>
-              );
-            })()}
+            {client?.lastConsultation && (
+              <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={client.forceRefresh} onChange={(e) => setClient(c => c ? {...c, forceRefresh: e.target.checked} : null)} className="form-checkbox h-4 w-4 text-violet-600"/>
+                  <span>Refazer consulta (última em: {new Date(client.lastConsultation).toLocaleDateString()})</span>
+                </label>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -618,24 +582,14 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                 </div>
                 <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
               </div>
-              {comp?.lastConsultation && (() => {
-                const disabled = isRefreshDisabled(comp.lastConsultation);
-                const title = disabled ? "A opção de refazer a consulta será liberada após o prazo para entrega da escrituração fiscal." : "Marque para forçar uma nova consulta na Receita Federal, ignorando dados em cache.";
-                return (
-                  <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    <label className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-60' : ''}`} title={title}>
-                      <input
-                        type="checkbox"
-                        checked={comp.forceRefresh}
-                        onChange={(e) => handleCompetitorChange(index, { forceRefresh: e.target.checked })}
-                        className="form-checkbox h-4 w-4 text-violet-600"
-                        disabled={disabled}
-                      />
-                      <span>Refazer consulta (última em: {new Date(comp.lastConsultation).toLocaleDateString()})</span>
-                    </label>
-                  </div>
-                );
-              })()}
+              {comp?.lastConsultation && (
+                <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={comp.forceRefresh} onChange={(e) => handleCompetitorChange(index, { forceRefresh: e.target.checked })} className="form-checkbox h-4 w-4 text-violet-600"/>
+                    <span>Refazer consulta (última em: {new Date(comp.lastConsultation).toLocaleDateString()})</span>
+                  </label>
+                </div>
+              )}
             </div>
           ))}
           <div className="mt-2 flex gap-2">
