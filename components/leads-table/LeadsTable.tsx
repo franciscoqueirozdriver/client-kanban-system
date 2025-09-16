@@ -139,7 +139,7 @@ export default function LeadsTable({
                     className="underline"
                     onClick={() => {
                       // abre split direto: set ?view=split&selected=id
-                      const sp = new URLSearchParams(search.toString());
+                      const sp = new URLSearchParams(search?.toString() ?? "");
                       sp.set("view", "split");
                       sp.set("selected", r.id);
                       router.push(`?${sp.toString()}`, { scroll: false });
