@@ -178,7 +178,7 @@ export default function KanbanPage() {
   const columnsToShow = filteredColumns ?? columns;
 
   return (
-    <div className="p-4 overflow-x-auto">
+    <div className="p-4">
       <div className="mb-4">
         <Filters onFilter={handleFilter} />
       </div>
@@ -205,7 +205,7 @@ export default function KanbanPage() {
         </div>
       )}
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex items-start gap-4 overflow-x-auto scroll-px-4 px-4 pb-6 w-full sm:flex-nowrap flex-wrap">
+        <div className="flex items-start gap-4 w-full">
           {columnsToShow.map((col) => (
             <KanbanColumn key={col.id} column={col} />
           ))}

@@ -1,6 +1,5 @@
-import { getSheet, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
+import { getSheet, getSheetCached, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
 import { normalizePhones } from '../../lib/report';
-import { KANBAN_COLUMNS, normalizeStatus, baseVisibleFilter } from '../../app/lib/kanbanHelpers';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
 function protectPhoneValue(value) {
@@ -56,68 +55,58 @@ function groupRows(rows) {
 
   const map = new Map();
 
-  data
-    .map(row => {
-      // Adiciona o _rowNumber para referência futura, se necessário
-      const obj = {};
-      header.forEach((h, i) => {
-        if (h) obj[h] = row[i] ?? '';
+  data.forEach((row, i) => {
+    const clienteId = row[idx.clienteId];
+    if (!clienteId) return;
+
+    if (!map.has(clienteId)) {
+      map.set(clienteId, {
+        id: clienteId,
+        company: row[idx.org] || '',
+        opportunities: [],
+        contactsMap: new Map(),
+        segment: row[idx.segmento] || '',
+        size: row[idx.tamanho] || '',
+        uf: row[idx.uf] || '',
+        city: row[idx.cidade] || '',
+        status: '', // Will be overwritten by the latest row
+        dataMov: '', // Will be overwritten by the latest row
+        color: '', // Will be overwritten by the latest row
+        produto: row[idx.produto] || '',
+        rows: [],
       });
-      return obj;
-    })
-    .filter(baseVisibleFilter) // <--- Aplica o filtro para remover status vazios
-    .forEach((row, i) => {
-      const clienteId = row[header[idx.clienteId]];
-      if (!clienteId) return;
+    }
 
-      if (!map.has(clienteId)) {
-        map.set(clienteId, {
-          id: clienteId,
-          company: row[header[idx.org]] || '',
-          opportunities: [],
-          contactsMap: new Map(),
-          segment: row[header[idx.segmento]] || '',
-          size: row[header[idx.tamanho]] || '',
-          uf: row[header[idx.uf]] || '',
-          city: row[header[idx.cidade]] || '',
-          status: '', // Will be overwritten by the latest row
-          dataMov: '', // Will be overwritten by the latest row
-          color: '', // Will be overwritten by the latest row
-          produto: row[header[idx.produto]] || '',
-          rows: [],
-        });
-      }
+    // Always update status and color to reflect the latest row for a given ID
+    const client = map.get(clienteId);
+    const newStatus = (row[idx.status] || '').trim();
+    const newColor = row[idx.cor] || '';
+    const newDataMov = row[idx.data] || '';
 
-      // Always update status and color to reflect the latest row for a given ID
-      const client = map.get(clienteId);
-      const newStatus = normalizeStatus(row[header[idx.status]]); // <--- Normaliza o status
-      const newColor = row[header[idx.cor]] || '';
-      const newDataMov = row[header[idx.data]] || '';
+    if (newStatus) client.status = newStatus;
+    if (newColor) client.color = newColor;
+    if (newDataMov) client.dataMov = newDataMov;
 
-      if (newStatus) client.status = newStatus;
-      if (newColor) client.color = newColor;
-      if (newDataMov) client.dataMov = newDataMov;
+    client.opportunities.push(row[idx.titulo] || '');
+    client.rows.push(i + 2);
 
-      client.opportunities.push(row[header[idx.titulo]] || '');
-      client.rows.push(i + 2);
+    const contactName = (row[idx.contato] || '').trim();
+    const allEmails = collectEmails(row, idx);
+    const key = `${contactName}|${allEmails}`;
 
-      const contactName = (row[header[idx.contato]] || '').trim();
-      const allEmails = collectEmails(row, idx);
-      const key = `${contactName}|${allEmails}`;
-
-      if (!client.contactsMap.has(key)) {
-        const normalized = normalizePhones(row, idx).map(protectPhoneValue);
-        client.contactsMap.set(key, {
-          name: contactName,
-          role: (row[header[idx.cargo]] || '').trim(),
-          email: allEmails,
-          phone: protectPhoneValue(row[header[idx.tel]]),
-          mobile: protectPhoneValue(row[header[idx.cel]]),
-          normalizedPhones: normalized,
-          linkedin: (row[header[idx.linkedin]] || '').trim(),
-        });
-      }
-    });
+    if (!client.contactsMap.has(key)) {
+      const normalized = normalizePhones(row, idx).map(protectPhoneValue);
+      client.contactsMap.set(key, {
+        name: contactName,
+        role: (row[idx.cargo] || '').trim(),
+        email: allEmails,
+        phone: protectPhoneValue(row[idx.tel]),
+        mobile: protectPhoneValue(row[idx.cel]),
+        normalizedPhones: normalized,
+        linkedin: (row[idx.linkedin] || '').trim(),
+      });
+    }
+  });
 
   return {
     clients: Array.from(map.values()).map((c) => ({
@@ -148,18 +137,21 @@ export default async function handler(req, res) {
       const limitParam = parseInt(req.query.limit, 10);
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
 
-      const board = KANBAN_COLUMNS.map((col) => ({ id: col, title: col, cards: [] }));
+      const columns = [
+        'Lead Selecionado',
+        'Tentativa de Contato',
+        'Contato Efetuado',
+        'Conversa Iniciada',
+        'Reunião Agendada',
+        'Enviado Spotter',
+        'Perdido',
+      ];
+      const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
 
       clients.slice(0, limit).forEach((client) => {
         const col = board.find((c) => c.id === client.status);
         if (col) {
           col.cards.push({ id: client.id, client });
-        } else {
-          // Fallback for any status that might not be in KANBAN_COLUMNS after normalization
-          const fallbackCol = board.find(c => c.id === 'Lead Selecionado');
-          if (fallbackCol) {
-            fallbackCol.cards.push({ id: client.id, client });
-          }
         }
       });
 
