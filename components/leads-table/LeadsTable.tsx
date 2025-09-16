@@ -37,7 +37,7 @@ export default function LeadsTable({
   const router = useRouter();
   const search = useSearchParams();
   const { selectedIds, isSelected, toggle, setMany } = useSelection();
-  const [density, setDensity] = useState(search.get("density") || "comfortable");
+  const [density, setDensity] = useState(search?.get("density") || "comfortable");
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
