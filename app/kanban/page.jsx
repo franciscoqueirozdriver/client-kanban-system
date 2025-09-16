@@ -206,12 +206,17 @@ export default function KanbanPage() {
       )}
       <DragDropContext onDragEnd={onDragEnd}>
         <div
-          className="flex items-start gap-4 w-full overflow-x-auto px-4 pb-6 sm:flex-nowrap flex-wrap"
-          role="list"
+          id="kanban-viewport"
+          className="sticky top-[140px] h-[calc(100vh-220px)] w-full overflow-x-auto overflow-y-hidden px-4 pb-3 pt-1 bg-transparent z-10"
         >
-          {columnsToShow.map((col) => (
-            <KanbanColumn key={col.id} column={col} />
-          ))}
+          <div
+            className="flex items-start gap-4 w-max pr-2 select-none"
+            role="list"
+          >
+            {columnsToShow.map((col) => (
+              <KanbanColumn key={col.id} column={col} />
+            ))}
+          </div>
         </div>
       </DragDropContext>
     </div>
