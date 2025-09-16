@@ -5,7 +5,7 @@ import KanbanCard from './KanbanCard';
 export default function KanbanColumn({ column }) {
   return (
     <section
-      className="flex flex-col w-[340px] flex-none rounded-xl"
+      className="flex flex-col h-full w-[240px] flex-none rounded-xl min-h-0"
       role="listitem"
       aria-label={column.title}
     >
@@ -22,7 +22,7 @@ export default function KanbanColumn({ column }) {
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className="flex-1 min-h-0 overflow-y-auto mt-2 space-y-3 pr-1"
+            className="flex-1 min-h-0 overflow-y-auto mt-2 space-y-3 pr-1 pb-4"
           >
             {column.cards.length === 0 ? (
               <div className="rounded-md border border-dashed text-sm text-neutral-500 p-3 text-center">
