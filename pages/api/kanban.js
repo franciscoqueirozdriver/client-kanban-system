@@ -1,6 +1,6 @@
 import { getSheet, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
 import { normalizePhones } from '../../lib/report';
-import { KANBAN_COLUMNS, normalizeStatus, baseVisibleFilter } from '../../lib/kanbanHelpers';
+import { KANBAN_COLUMNS, normalizeStatus, baseVisibleFilter } from '../../app/lib/kanbanHelpers';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
 function protectPhoneValue(value) {
