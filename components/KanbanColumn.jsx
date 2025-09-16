@@ -4,21 +4,21 @@ import KanbanCard from './KanbanCard';
 
 export default function KanbanColumn({ column }) {
   return (
-    <section className="flex flex-col gap-3 bg-gray-100 p-2 rounded-lg">
-      <header>
-        <h3 className="text-base font-semibold">
-          {column.title}{' '}
-          <span className="font-normal text-neutral-600">
-            ({column.cards.length})
-          </span>
-        </h3>
-      </header>
+    <div className="w-full md:w-64 flex-shrink-0">
+      {/*
+        Append the current number of cards to the column title.
+        This updates automatically whenever the column prop changes,
+        ensuring the count reflects drag-and-drop operations or refreshes.
+      */}
+      <h2 className="font-bold mb-2">
+        {`${column.title} | ${column.cards.length}`}
+      </h2>
       <Droppable droppableId={column.id}>
-        {(provided, snapshot) => (
+        {(provided) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className="min-h-[100px] flex-1"
+            className="min-h-[100px] p-2 bg-gray-100 rounded"
           >
             {column.cards.map((card, index) => (
               <KanbanCard key={card.id} card={card} index={index} />
@@ -27,6 +27,6 @@ export default function KanbanColumn({ column }) {
           </div>
         )}
       </Droppable>
-    </section>
+    </div>
   );
 }

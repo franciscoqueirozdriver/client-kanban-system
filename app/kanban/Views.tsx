@@ -7,7 +7,7 @@ import LeadDrawer from "@/components/leads-drawer/LeadDrawer";
 
 export default function Views({ leads = [] }) {
   const search = useSearchParams();
-  const view = search.get("view") || "kanban";
+  const view = search?.get("view") || "kanban";
 
   if (view === "list") {
     return (

@@ -233,7 +233,7 @@ function KanbanPage() {
         </div>
       )}
 
-      {view === 'kanban' && (
+      {view === 'kanban' ? (
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex gap-4 overflow-x-auto">
             {columnsToShow.map((col) => (
@@ -241,9 +241,9 @@ function KanbanPage() {
             ))}
           </div>
         </DragDropContext>
+      ) : (
+        <Views leads={leads} />
       )}
-
-      <Views leads={leads} />
     </div>
   );
 }
