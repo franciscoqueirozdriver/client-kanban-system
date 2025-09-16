@@ -181,7 +181,13 @@ function KanbanPage() {
     }
   };
 
-  const columnsToShow = filteredColumns ?? columns;
+  const columnsToShow = useMemo(() => {
+    const originalColumns = filteredColumns ?? columns;
+    if (view === 'kanban') {
+      return originalColumns.filter(col => col.id !== 'Enviado para Spotter');
+    }
+    return originalColumns;
+  }, [columns, filteredColumns, view]);
 
   // Transforma os dados para a tabela/lista
   const leads = useMemo(() => {

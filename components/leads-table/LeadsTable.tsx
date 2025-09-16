@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSelection } from "@/store/selection";
+import type { Lead } from "@/types/lead";
 import BulkActions from "./BulkActions";
 
 const ETAPAS = [
@@ -29,22 +30,6 @@ function CurrencyInput({ value, onChange }) {
     />
   );
 }
-
-export type Lead = {
-  id: string | number;
-  empresa?: string;
-  contato?: string;
-  cidade?: string;
-  uf?: string;
-  segmento?: string;
-  etapa?: string;
-  owner?: string;
-  valor?: string | number;
-  ultimoContato?: string;
-  fonte?: string;
-  email?: string;
-  linkedin?: string;
-};
 
 type LeadsTableProps = {
   data?: Lead[]; // opcional, com default
