@@ -30,17 +30,38 @@ function CurrencyInput({ value, onChange }) {
   );
 }
 
+export type Lead = {
+  id: string | number;
+  empresa?: string;
+  contato?: string;
+  cidade?: string;
+  uf?: string;
+  segmento?: string;
+  etapa?: string;
+  owner?: string;
+  valor?: string | number;
+  ultimoContato?: string;
+  fonte?: string;
+  email?: string;
+  linkedin?: string;
+};
+
+type LeadsTableProps = {
+  data?: Lead[]; // opcional, com default
+  onInlinePatch?: (id: Lead["id"], partial: Partial<Lead>) => void | Promise<void>;
+};
+
 export default function LeadsTable({
-  data = [],
-  onInlinePatch, // async (id, partial) => void
-}) {
+  data = [] as Lead[],
+  onInlinePatch,
+}: LeadsTableProps) {
   const router = useRouter();
   const search = useSearchParams();
   const { selectedIds, isSelected, toggle, setMany } = useSelection();
   const [density, setDensity] = useState(search?.get("density") || "comfortable");
   const [query, setQuery] = useState("");
 
-  const filtered = useMemo(() => {
+  const filtered: Lead[] = useMemo(() => {
     if (!query) return data;
     const q = query.toLowerCase();
     return data.filter((r) =>
