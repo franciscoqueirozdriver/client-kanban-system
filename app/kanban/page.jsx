@@ -1,16 +1,23 @@
 'use client';
 import { DragDropContext } from '@hello-pangea/dnd';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import KanbanColumn from '../../components/KanbanColumn';
 import Filters from '../../components/Filters';
+import ViewToggle from '@/components/view-toggle/ViewToggle';
+import Views from './Views';
 
-export default function KanbanPage() {
+// O componente principal agora é um Client Component que faz o fetch dos dados
+function KanbanPage() {
   const [columns, setColumns] = useState([]);
   const [filteredColumns, setFilteredColumns] = useState(null);
   const [produtos, setProdutos] = useState([]);
   const [produto, setProduto] = useState('');
   const isAdmin = process.env.NEXT_PUBLIC_IS_ADMIN === 'true';
   const [isUpdating, setIsUpdating] = useState(false);
+
+  const searchParams = useSearchParams();
+  const view = searchParams.get('view') || (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) || 'kanban';
 
   // Buscar dados ao montar
   useEffect(() => {
@@ -111,7 +118,6 @@ export default function KanbanPage() {
       cards: col.cards.filter(card => filterFn(card.client))
     }));
 
-    // Se o filtro resultar em todas as colunas vazias, mostra vazio (poderia ser um estado especial se quiser)
     setFilteredColumns(newFiltered);
   };
 
@@ -177,12 +183,34 @@ export default function KanbanPage() {
 
   const columnsToShow = filteredColumns ?? columns;
 
+  // Transforma os dados para a tabela/lista
+  const leads = useMemo(() => {
+    return (filteredColumns ?? columns)
+      .flatMap(col => col.cards.map(card => ({
+        id: card.id,
+        empresa: card.client.company,
+        contato: card.client.contacts?.[0]?.name || '',
+        cidade: card.client.city,
+        uf: card.client.uf,
+        segmento: card.client.segment,
+        etapa: card.client.status,
+        owner: card.client.owner || '', // Supondo que 'owner' exista
+        valor: card.client.valor || '', // Supondo que 'valor' exista
+        ultimoContato: card.client.dataMov,
+        fonte: card.client.fonte || '', // Supondo que 'fonte' exista
+        email: card.client.contacts?.[0]?.email || '',
+        linkedin: card.client.contacts?.[0]?.linkedin || '',
+      })));
+  }, [columns, filteredColumns]);
+
   return (
     <div className="p-4">
-      <div className="mb-4">
+      <div className="flex items-center justify-between mb-4">
         <Filters onFilter={handleFilter} />
+        {view === 'kanban' && <ViewToggle />}
       </div>
-      {isAdmin && (
+
+      {isAdmin && view === 'kanban' && (
         <div className="mb-4 flex items-center gap-2">
           <select
             className="border p-1"
@@ -204,21 +232,27 @@ export default function KanbanPage() {
           </button>
         </div>
       )}
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div
-          id="kanban-viewport"
-          className="sticky top-[140px] h-[calc(100vh-220px)] w-full min-h-0 overflow-x-auto px-4 pb-3 pt-1 z-10"
-        >
-          <div
-            className="flex items-stretch gap-3 w-max pr-4 select-none min-h-0"
-            role="list"
-          >
+
+      {view === 'kanban' && (
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div className="flex gap-4 overflow-x-auto">
             {columnsToShow.map((col) => (
               <KanbanColumn key={col.id} column={col} />
             ))}
           </div>
-        </div>
-      </DragDropContext>
+        </DragDropContext>
+      )}
+
+      <Views leads={leads} />
     </div>
+  );
+}
+
+// O export default agora é um wrapper com Suspense
+export default function KanbanPageWrapper() {
+  return (
+    <Suspense fallback={<div>Carregando...</div>}>
+      <KanbanPage />
+    </Suspense>
   );
 }

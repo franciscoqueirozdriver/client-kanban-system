@@ -1,0 +1,26 @@
+"use client";
+import { useSelection } from "@/store/selection";
+
+export default function BulkActions({ onMoveStage, onAssignOwner, onSendSpotter, onConsultarPerdcomp }) {
+  const { selectedIds, clear } = useSelection();
+  const count = selectedIds.size;
+  if (!count) return null;
+
+  return (
+    <div className="sticky top-[64px] z-20 mb-3 rounded-lg border bg-white p-2 flex items-center gap-2 text-sm">
+      <span className="px-2 py-1 rounded bg-neutral-100 border">{count} selecionado(s)</span>
+      <button className="btn" onClick={() => onMoveStage(Array.from(selectedIds))}>Mover etapa</button>
+      <button className="btn" onClick={() => onAssignOwner(Array.from(selectedIds))}>Atribuir dono</button>
+      <button className="btn" onClick={() => onSendSpotter(Array.from(selectedIds))}>Enviar Spotter</button>
+      <button className="btn" onClick={() => onConsultarPerdcomp(Array.from(selectedIds))}>Consultar PER/DCOMP</button>
+      <div className="ml-auto" />
+      <button className="text-neutral-600 hover:underline" onClick={clear}>Limpar seleção</button>
+      <style jsx>{`
+        .btn {
+          padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff;
+        }
+        .btn:hover { background: #fafafa; }
+      `}</style>
+    </div>
+  );
+}

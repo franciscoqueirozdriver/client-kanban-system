@@ -29,9 +29,4 @@ body {
   text-overflow: ellipsis;
 }
 
-/* melhora a sensação de rolagem horizontal */
-#kanban-viewport {
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-gutter: stable both-edges;
-}
+/* Styles for #kanban-viewport removed */
