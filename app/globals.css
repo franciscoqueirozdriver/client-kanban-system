@@ -5,3 +5,26 @@
 body {
   @apply bg-gray-100 text-gray-900;
 }
+
+/* Garante que nada “sangre” pra fora do card arredondado */
+.card-safe {
+  overflow: hidden; /* clippa dentro do raio da borda */
+}
+
+/* Evita vazamento em QUALQUER texto/link dentro do card */
+.card-safe a,
+.card-safe p,
+.card-safe li,
+.card-safe span,
+.card-safe div {
+  max-width: 100%;
+  overflow-wrap: anywhere; /* quebra em qualquer ponto seguro */
+  word-break: break-word; /* fallback amplo */
+}
+
+/* Para linhas que devem ser uma só (se houver): aplique esta classe no elemento */
+.truncate-1 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

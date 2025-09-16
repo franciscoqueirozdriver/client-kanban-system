@@ -263,126 +263,117 @@ export default function KanbanCard({ card, index }) {
     }
   };
 
-  const backgroundColor =
-    client.color === 'green'
-      ? '#a3ffac'
-      : client.color === 'red'
-      ? '#ffca99'
-      : client.color === 'gray'
-      ? '#e5e7eb'
-      : client.color === 'purple'
-      ? '#e9d5ff' // Light purple
-      : 'white';
-
-  const borderLeftColor =
-    client.color === 'green'
-      ? '#4caf50'
-      : client.color === 'red'
-      ? '#ff7043'
-      : client.color === 'gray'
-      ? '#9ca3af'
-      : client.color === 'purple'
-      ? '#9333ea' // Darker purple
-      : 'transparent';
+  const colorClasses = useMemo(() => {
+    switch (client.color) {
+      case 'green':
+        return 'bg-[#a3ffac] border-l-4 border-l-[#4caf50]';
+      case 'red':
+        return 'bg-[#ffca99] border-l-4 border-l-[#ff7043]';
+      case 'gray':
+        return 'bg-gray-200 border-l-4 border-l-gray-400';
+      case 'purple':
+        return 'bg-purple-200 border-l-4 border-l-purple-600';
+      default:
+        return 'bg-white border-l-4 border-l-transparent';
+    }
+  }, [client.color]);
 
   return (
     <Draggable draggableId={card.id} index={index}>
       {(provided) => (
         <>
-        <article
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          {...provided.dragHandleProps}
-          style={{
-            ...provided.draggableProps.style,
-            backgroundColor,
-            borderLeft: `4px solid ${borderLeftColor}`,
-          }}
-          className={`p-3 mb-2 rounded-lg shadow transition-colors flex flex-col justify-between gap-2 min-h-[140px] ${loading ? 'opacity-60 pointer-events-none' : ''}`}
-          onDoubleClick={handleDoubleClick}
-          title="Dê duplo clique para enriquecer os dados desta empresa"
-        >
-          <div>
-            <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
+          <article
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            {...provided.dragHandleProps}
+            style={{ ...provided.draggableProps.style }}
+            className={`card-safe rounded-lg border p-3 min-h-[140px] flex flex-col justify-between gap-2 ${colorClasses} ${loading ? 'opacity-60 pointer-events-none' : ''}`}
+            onDoubleClick={handleDoubleClick}
+            title="Dê duplo clique para enriquecer os dados desta empresa"
+          >
+            <div className="flex flex-col gap-1">
+              <h4 className="text-sm font-semibold leading-snug break-words max-w-full">
+                {client.company}
+              </h4>
 
-            {(client.city || client.uf) && (
-              <p className="text-[10px] text-gray-600 mb-1">
-                {[client.city, client.uf].filter(Boolean).join(' - ')}
-              </p>
-            )}
+              {(client.city || client.uf) && (
+                <p className="text-[10px] text-gray-600 break-words max-w-full">
+                  {[client.city, client.uf].filter(Boolean).join(' - ')}
+                </p>
+              )}
 
-            {client.opportunities.length > 0 && (
-              <ul className="text-[10px] list-disc ml-4 mb-1">
-                {client.opportunities.map((o, i) => (
-                  <li key={i}>{o}</li>
-                ))}
-              </ul>
-            )}
+              {client.opportunities.length > 0 && (
+                <ul className="text-[10px] list-disc ml-4">
+                  {client.opportunities.map((o, i) => (
+                    <li key={i} className="break-words max-w-full">{o}</li>
+                  ))}
+                </ul>
+              )}
 
-            {client.contacts.map((c, i) => (
-              <div key={i} className="text-xs border-t pt-1">
-                <p className="font-medium">{c.name}</p>
-                {c.role && <p className="text-[10px]">{c.role}</p>}
+              {client.contacts.map((c, i) => (
+                <div key={i} className="text-xs border-t pt-1 mt-1">
+                  <p className="font-medium break-words max-w-full">{c.name}</p>
+                  {c.role && <p className="text-[10px] break-words max-w-full">{c.role}</p>}
 
-                {c.email && (
-                  <p className="text-[10px]">
-                    {c.email.split(';').map((em, idx) => {
-                      const clean = displayEmail(em.trim());
-                      return (
+                  {c.email && (
+                    <p className="text-[10px]">
+                      {c.email.split(';').map((em, idx) => {
+                        const clean = displayEmail(em.trim());
+                        return (
+                          <span key={idx}>
+                            <button
+                              type="button"
+                              className="text-blue-600 underline break-words max-w-full"
+                              onClick={(e) => handleEmailClick(e, clean, c)}
+                            >
+                              {clean}
+                            </button>
+                            {idx < c.email.split(';').length - 1 ? ' / ' : ''}
+                          </span>
+                        );
+                      })}
+                    </p>
+                  )}
+
+                  {c.normalizedPhones && c.normalizedPhones.length > 0 && (
+                    <p className="text-[10px]">
+                      {c.normalizedPhones.map((p, idx) => (
                         <span key={idx}>
-                          <button
-                            type="button"
-                            className="text-blue-600 underline"
-                            onClick={(e) => handleEmailClick(e, clean, c)}
+                          <a
+                            href={`https://web.whatsapp.com/send/?phone=${displayPhone(p)
+                              .replace(/\D/g, '')
+                              .replace(/^/, (d) => (d.startsWith('55') ? d : `55${d}`))}&type=phone_number&app_absent=0`}
+                            className="text-green-600 underline break-words max-w-full"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => handlePhoneClick(e, p, c)}
                           >
-                            {clean}
-                          </button>
-                          {idx < c.email.split(';').length - 1 ? ' / ' : ''}
+                            {displayPhone(p)}
+                          </a>
+                          {idx < c.normalizedPhones.length - 1 ? ' / ' : ''}
                         </span>
-                      );
-                    })}
-                  </p>
-                )}
+                      ))}
+                    </p>
+                  )}
 
-                {c.normalizedPhones && c.normalizedPhones.length > 0 && (
-                  <p className="text-[10px]">
-                    {c.normalizedPhones.map((p, idx) => (
-                      <span key={idx}>
-                        <a
-                          href={`https://web.whatsapp.com/send/?phone=${displayPhone(p)
-                            .replace(/\D/g, '')
-                            .replace(/^/, (d) => (d.startsWith('55') ? d : `55${d}`))}&type=phone_number&app_absent=0`}
-                          className="text-green-600 underline"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => handlePhoneClick(e, p, c)}
-                        >
-                          {displayPhone(p)}
-                        </a>
-                        {idx < c.normalizedPhones.length - 1 ? ' / ' : ''}
-                      </span>
-                    ))}
-                  </p>
-                )}
+                  {c.linkedin && (
+                    <p>
+                      <a
+                        href={c.linkedin}
+                        className="text-blue-600 underline break-words max-w-full"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => handleLinkedinClick(e, c.linkedin, c)}
+                      >
+                        LinkedIn
+                      </a>
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
 
-                {c.linkedin && (
-                  <p>
-                    <a
-                      href={c.linkedin}
-                      className="text-blue-600 underline"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => handleLinkedinClick(e, c.linkedin, c)}
-                    >
-                      LinkedIn
-                    </a>
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-2 flex flex-col gap-2">
+            <div className="mt-2 flex flex-col gap-2">
               <button
                 onClick={() => setIsSpotterModalOpen(true)}
                 className="w-full text-center rounded-md border px-2 py-1 text-xs hover:bg-gray-50"
@@ -391,28 +382,28 @@ export default function KanbanCard({ card, index }) {
                 Enviar ao Spotter
               </button>
 
-            <div className="flex items-center justify-between text-[10px]">
-              <button
-                type="button"
-                className="text-blue-600 underline"
-                onClick={handleHistoryClick}
-              >
-                Histórico
-              </button>
-              <button
-                type="button"
-                onClick={() => setPerdecompOpen(true)}
-                className="text-blue-600 underline"
-                aria-label="Consultar PER/DCOMP para este cliente"
-                data-testid="cta-perdecomp"
-                title="Consultar PER/DCOMP"
-              >
-                Consultar PER/DCOMP
-              </button>
+              <div className="flex items-center justify-between text-[10px]">
+                <button
+                  type="button"
+                  className="text-blue-600 underline"
+                  onClick={handleHistoryClick}
+                >
+                  Histórico
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPerdecompOpen(true)}
+                  className="text-blue-600 underline"
+                  aria-label="Consultar PER/DCOMP para este cliente"
+                  data-testid="cta-perdecomp"
+                  title="Consultar PER/DCOMP"
+                >
+                  Consultar PER/DCOMP
+                </button>
+              </div>
             </div>
-          </div>
-        </article>
-        <MessageModal
+          </article>
+          <MessageModal
           open={modalOpen}
           messages={modalMessages}
           onSelect={(msg) => {
