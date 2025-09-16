@@ -141,7 +141,7 @@ export default function LeadsTable({
                       // abre split direto: set ?view=split&selected=id
                       const sp = new URLSearchParams(search?.toString() ?? "");
                       sp.set("view", "split");
-                      sp.set("selected", r.id);
+                      sp.set("selected", String(r.id));
                       router.push(`?${sp.toString()}`, { scroll: false });
                     }}
                   >
