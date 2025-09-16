@@ -12,10 +12,6 @@ export default function Views({ leads = [] }) {
   if (view === "list") {
     return (
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Leads (Lista)</h2>
-          <ViewToggle />
-        </div>
         <LeadsTable
           data={leads}
           onInlinePatch={async (id, partial) => {
@@ -31,11 +27,6 @@ export default function Views({ leads = [] }) {
   if (view === "split") {
     return (
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Leads (Split)</h2>
-          <ViewToggle />
-        </div>
-
         {/* layout: tabela à esquerda + drawer à direita */}
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(520px,1fr)_minmax(380px,420px)] gap-4 h-[calc(100vh-260px)]">
           <div className="min-h-0 overflow-hidden rounded-lg border bg-white p-3">

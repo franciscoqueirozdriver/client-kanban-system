@@ -5,3 +5,10 @@
 body {
   @apply bg-gray-100 text-gray-900;
 }
+
+/* melhora a sensação de rolagem horizontal */
+#kanban-viewport {
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
+}

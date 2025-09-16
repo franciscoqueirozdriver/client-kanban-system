@@ -206,8 +206,11 @@ function KanbanPage() {
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <Filters onFilter={handleFilter} />
-        {view === 'kanban' && <ViewToggle />}
+        <h1 className="text-2xl font-semibold">Leads</h1>
+        <div className="flex items-center gap-4">
+          <Filters onFilter={handleFilter} />
+          <ViewToggle />
+        </div>
       </div>
 
       {isAdmin && view === 'kanban' && (
@@ -235,10 +238,18 @@ function KanbanPage() {
 
       {view === 'kanban' ? (
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-4 overflow-x-auto">
-            {columnsToShow.map((col) => (
-              <KanbanColumn key={col.id} column={col} />
-            ))}
+          <div
+            id="kanban-viewport"
+            className="sticky top-[140px] h-[calc(100vh-220px)] w-full min-h-0 overflow-x-auto px-4 pb-3 pt-1 z-10"
+          >
+            <div
+              className="flex items-stretch gap-3 w-max pr-4 select-none min-h-0"
+              role="list"
+            >
+              {columnsToShow.map((col) => (
+                <KanbanColumn key={col.id} column={col} />
+              ))}
+            </div>
           </div>
         </DragDropContext>
       ) : (
