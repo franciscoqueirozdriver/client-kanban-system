@@ -17,7 +17,7 @@ function KanbanPage() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const searchParams = useSearchParams();
-  const view = searchParams.get('view') || (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) || 'kanban';
+  const view = searchParams?.get('view') || (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) || 'kanban';
 
   // Buscar dados ao montar
   useEffect(() => {
