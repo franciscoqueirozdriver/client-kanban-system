@@ -9,7 +9,7 @@ export default function ViewToggle() {
   const pathname = usePathname();
   const search = useSearchParams();
 
-  const current = search.get("view") || (typeof window !== "undefined" && localStorage.getItem("kanban_view_pref")) || "kanban";
+  const current = search?.get("view") || (typeof window !== "undefined" && localStorage.getItem("kanban_view_pref")) || "kanban";
 
   useEffect(() => {
     // persiste preferência
@@ -19,7 +19,7 @@ export default function ViewToggle() {
   }, [current]);
 
   const setView = (v) => {
-    const sp = new URLSearchParams(search.toString());
+    const sp = new URLSearchParams(search?.toString() ?? "");
     sp.set("view", v);
     router.push(`${pathname}?${sp.toString()}`, { scroll: false });
   };
