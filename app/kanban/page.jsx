@@ -205,7 +205,7 @@ export default function KanbanPage() {
         </div>
       )}
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex flex-wrap gap-4">
+        <div className="flex items-start gap-4 overflow-x-auto scroll-px-4 px-4 pb-6 w-full sm:flex-nowrap flex-wrap">
           {columnsToShow.map((col) => (
             <KanbanColumn key={col.id} column={col} />
           ))}

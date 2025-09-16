@@ -4,29 +4,33 @@ import KanbanCard from './KanbanCard';
 
 export default function KanbanColumn({ column }) {
   return (
-    <div className="w-full md:w-64 flex-shrink-0">
-      {/*
-        Append the current number of cards to the column title.
-        This updates automatically whenever the column prop changes,
-        ensuring the count reflects drag-and-drop operations or refreshes.
-      */}
-      <h2 className="font-bold mb-2">
-        {`${column.title} | ${column.cards.length}`}
-      </h2>
+    <section className="flex flex-col flex-1 min-w-[320px] max-w-[380px] flex-shrink-0 gap-3">
+      <header className="sticky top-0 z-10 bg-gray-100 pb-2 pt-2">
+        <h3 className="text-base font-semibold">
+          {column.title}{' '}
+          <span className="font-normal text-neutral-600 inline-block min-w-[3ch]">
+            | {column.cards.length}
+          </span>
+        </h3>
+      </header>
       <Droppable droppableId={column.id}>
-        {(provided) => (
+        {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className="min-h-[100px] p-2 bg-gray-100 rounded"
+            className="min-h-[100px] p-2 bg-gray-100 rounded flex-1"
           >
-            {column.cards.map((card, index) => (
-              <KanbanCard key={card.id} card={card} index={index} />
-            ))}
+            {column.cards.length === 0 ? (
+              <div className="text-sm text-neutral-500 py-2">Sem cards</div>
+            ) : (
+              column.cards.map((card, index) => (
+                <KanbanCard key={card.id} card={card} index={index} />
+              ))
+            )}
             {provided.placeholder}
           </div>
         )}
       </Droppable>
-    </div>
+    </section>
   );
 }
