@@ -17,11 +17,12 @@ export async function getSheetsClient(): Promise<sheets_v4.Sheets> {
     const auth = new google.auth.GoogleAuth({
       scopes: SCOPES
     });
-    const authClient = await auth.getClient();
-    sheetsClientPromise = Promise.resolve(google.sheets({
-      version: 'v4',
-      auth: authClient
-    }));
+    sheetsClientPromise = Promise.resolve(
+      google.sheets({
+        version: 'v4',
+        auth
+      })
+    );
   }
   return sheetsClientPromise;
 }
