@@ -96,9 +96,11 @@ export function agregaPerdcomp(lista: Array<{ perdcomp?: string }>): ResumoPerdc
     CANC: 99,
   };
 
-  const breakdown = [...porNome.values()].sort(
-    (a, b) => (ordemFamilia[a.familia] ?? 9) - (ordemFamilia[b.familia] ?? 9)
-  );
+  const breakdown = Array.from(porNome.values()).sort((a, b) => {
+    const ordemA = ordemFamilia[a.familia] !== undefined ? ordemFamilia[a.familia] : 9;
+    const ordemB = ordemFamilia[b.familia] !== undefined ? ordemFamilia[b.familia] : 9;
+    return ordemA - ordemB;
+  });
 
   const totalSemCancelamento = total - canc;
 
