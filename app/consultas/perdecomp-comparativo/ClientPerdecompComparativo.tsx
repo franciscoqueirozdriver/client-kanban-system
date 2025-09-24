@@ -8,6 +8,7 @@ import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import { padCNPJ14, isValidCNPJ, normalizeDigits, isEmptyCNPJLike, isCNPJ14 } from '@/utils/cnpj';
+import { DEFAULT_FAMILIA_LABELS, type ResumoPerdcomp } from '@/utils/perdcomp';
 
 // --- Helper Types ---
 interface Company {
@@ -22,13 +23,7 @@ interface CardData {
   quantity: number;
   siteReceipt?: string | null;
   fromCache?: boolean;
-  perdcompResumo?: {
-    total: number;
-    totalSemCancelamento: number;
-    canc: number;
-    porFamilia: { DCOMP: number; REST: number; RESSARC: number; CANC: number; DESCONHECIDO: number };
-    porNaturezaAgrupada: Record<string, number>;
-  };
+  perdcompResumo?: ResumoPerdcomp;
 }
 
 type ApiDebug = {
@@ -123,7 +118,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPayload, setPreviewPayload] = useState<{ company: Company; debug: ApiDebug } | null>(null);
-  const [openCancel, setOpenCancel] = useState(false);
+  const [openCancelamentos, setOpenCancelamentos] = useState(false);
   const [cancelCount, setCancelCount] = useState(0);
   const showDebug = false;
   const q: string = initialQ;
@@ -214,25 +209,30 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           const rest = data.fallback.rest ?? 0;
           const ressarc = data.fallback.ressarc ?? 0;
           const canc = data.fallback.canc ?? 0;
-          const porFamilia = {
-            DCOMP: dcomp,
-            REST: rest,
-            RESSARC: ressarc,
-            CANC: canc,
-            DESCONHECIDO: 0,
-          };
-          const porNaturezaAgrupada = {
-            '1.3/1.7': dcomp,
-            '1.2/1.6': rest,
-            '1.1/1.5': ressarc,
-          };
-          const resumo = {
-            total: dcomp + rest + ressarc + canc,
-            totalSemCancelamento:
-              data.fallback.quantidade ?? dcomp + rest + ressarc,
+          const breakdown = [] as ResumoPerdcomp['breakdown'];
+          if (dcomp > 0) {
+            breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.DCOMP, familia: 'DCOMP', quantidade: dcomp });
+          }
+          if (rest > 0) {
+            breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.REST, familia: 'REST', quantidade: rest });
+          }
+          if (ressarc > 0) {
+            breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.RESSARC, familia: 'RESSARC', quantidade: ressarc });
+          }
+          const declaredTotal = Number(data.fallback.quantidade ?? 0) || 0;
+          let breakdownSum = dcomp + rest + ressarc;
+          if (declaredTotal > breakdownSum) {
+            const diff = declaredTotal - breakdownSum;
+            if (diff > 0) {
+              breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.DESCONHECIDO, familia: 'DESCONHECIDO', quantidade: diff });
+              breakdownSum += diff;
+            }
+          }
+          const resumo: ResumoPerdcomp = {
+            total: breakdownSum + canc,
+            totalSemCancelamento: breakdownSum,
             canc,
-            porFamilia,
-            porNaturezaAgrupada,
+            breakdown,
           };
           const cardData: CardData = {
             quantity: resumo.totalSemCancelamento,
@@ -644,29 +644,30 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                   )}
                   {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
                   <div className="space-y-3 text-sm mb-4 flex-grow">
-                    <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{resumo?.totalSemCancelamento ?? 0}</span></div>
+                    <div className="flex items-center justify-between">
+                      <span>Quantidade:</span>
+                      <strong>{resumo?.totalSemCancelamento ?? 0}</strong>
+                    </div>
                     <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
                     {temRegistros && (
                       <div className="mt-2 text-sm">
                         <div className="font-medium">Quantos são:</div>
-                        {Object.entries(resumo?.porNaturezaAgrupada || {}).map(([cod, qtd]) => (
-                          <div key={cod} className="flex justify-between">
-                            <span>
-                              {cod === '1.3/1.7'
-                                ? '1.3/1.7 = DCOMP (Declarações de Compensação)'
-                                : cod === '1.2/1.6'
-                                ? '1.2/1.6 = REST (Pedidos de Restituição)'
-                                : cod === '1.1/1.5'
-                                ? '1.1/1.5 = RESSARC (Pedidos de Ressarcimento)'
-                                : cod}
-                            </span>
-                            <span>{qtd}</span>
+                        {(resumo?.breakdown ?? []).map(row => (
+                          <div key={row.nome} className="flex justify-between">
+                            <span>{row.nome}</span>
+                            <span>{row.quantidade}</span>
                           </div>
                         ))}
                       </div>
                     )}
                     <div className="mt-2">
-                      <button className="underline text-sm" onClick={() => { setCancelCount(resumo?.canc ?? resumo?.porFamilia?.CANC ?? 0); setOpenCancel(true); }}>
+                      <button
+                        className="underline text-sm"
+                        onClick={() => {
+                          setCancelCount(resumo?.canc ?? 0);
+                          setOpenCancelamentos(true);
+                        }}
+                      >
                         Cancelamentos
                       </button>
                     </div>
@@ -703,13 +704,13 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         ))}
       </div>
 
-      {openCancel && (
+      {openCancelamentos && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-4 w-full max-w-md">
             <div className="text-lg font-semibold mb-2">Cancelamentos</div>
             <div>Quantidade: <strong>{cancelCount}</strong></div>
             <div className="mt-3 text-right">
-              <button className="px-3 py-1 rounded bg-gray-200" onClick={() => setOpenCancel(false)}>
+              <button className="px-3 py-1 rounded bg-gray-200" onClick={() => setOpenCancelamentos(false)}>
                 Fechar
               </button>
             </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
-import { agregaPerdcomp } from '@/utils/perdcomp';
+import { agregaPerdcomp, contaPorFamilia, DEFAULT_FAMILIA_LABELS, ResumoPerdcomp } from '@/utils/perdcomp';
 
 export const runtime = 'nodejs';
 
@@ -197,19 +197,25 @@ export async function POST(request: Request) {
         const rest = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_REST ?? '0').replace(/\D/g, ''), 10) || 0;
         const ressarc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_RESSARC ?? '0').replace(/\D/g, ''), 10) || 0;
         const canc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_CANCEL ?? '0').replace(/\D/g, ''), 10) || 0;
-        const porFamilia = { DCOMP: dcomp, REST: rest, RESSARC: ressarc, CANC: canc, DESCONHECIDO: 0 };
-        const porNaturezaAgrupada = {
-          '1.3/1.7': dcomp,
-          '1.2/1.6': rest,
-          '1.1/1.5': ressarc,
-        };
-        const total = dcomp + rest + ressarc + canc;
-        const resumo = {
-          total,
-          totalSemCancelamento: qtdSemCanc || dcomp + rest + ressarc,
+        let totalSemCancelamento = qtdSemCanc || dcomp + rest + ressarc;
+        const breakdown = [] as ResumoPerdcomp['breakdown'];
+        if (dcomp > 0) breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.DCOMP, familia: 'DCOMP', quantidade: dcomp });
+        if (rest > 0) breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.REST, familia: 'REST', quantidade: rest });
+        if (ressarc > 0) breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.RESSARC, familia: 'RESSARC', quantidade: ressarc });
+        let breakdownSum = dcomp + rest + ressarc;
+        if (totalSemCancelamento > breakdownSum) {
+          const diff = totalSemCancelamento - breakdownSum;
+          if (diff > 0) {
+            breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.DESCONHECIDO, familia: 'DESCONHECIDO', quantidade: diff });
+            breakdownSum += diff;
+          }
+        }
+        totalSemCancelamento = breakdownSum;
+        const resumo: ResumoPerdcomp = {
+          total: totalSemCancelamento + canc,
+          totalSemCancelamento,
           canc,
-          porFamilia,
-          porNaturezaAgrupada,
+          breakdown,
         };
         const resp: any = {
           ok: true,
@@ -303,6 +309,7 @@ export async function POST(request: Request) {
     const perdcompArrayRaw = apiResponse?.code === 612 ? [] : apiResponse?.data?.[0]?.perdcomp;
     const perdcompArray = Array.isArray(perdcompArrayRaw) ? perdcompArrayRaw : [];
     const resumo = agregaPerdcomp(perdcompArray);
+    const porFamilia = contaPorFamilia(resumo);
     const first = perdcompArray[0] || {};
     const totalPerdcomp = resumo.total;
     const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
@@ -313,10 +320,10 @@ export async function POST(request: Request) {
       Code_Message: apiResponse.code_message || '',
       MappedCount: mappedCount,
       Quantidade_PERDCOMP: resumo.totalSemCancelamento,
-      Qtd_PERDCOMP_DCOMP: resumo.porFamilia.DCOMP,
-      Qtd_PERDCOMP_REST: resumo.porFamilia.REST,
-      Qtd_PERDCOMP_RESSARC: resumo.porFamilia.RESSARC,
-      Qtd_PERDCOMP_CANCEL: resumo.porFamilia.CANC,
+      Qtd_PERDCOMP_DCOMP: porFamilia.DCOMP,
+      Qtd_PERDCOMP_REST: porFamilia.REST,
+      Qtd_PERDCOMP_RESSARC: porFamilia.RESSARC,
+      Qtd_PERDCOMP_CANCEL: porFamilia.CANC,
       URL_Comprovante_HTML: siteReceipt,
       Data_Consulta: headerRequestedAt,
       Perdcomp_Principal_ID: first?.perdcomp || '',
