@@ -143,7 +143,7 @@ export async function POST(request: Request) {
 
     // 1. Gravar Itens Detalhados em PERDCOMP_ITENS
     const existingIds = await getExistingPerdcompIds(cnpj);
-    const newItemsValues = [];
+    const newItemsValues: (string | number | boolean)[][] = [];
 
     for (const item of perdcompArray) {
       if (!item.perdcomp || existingIds.has(item.perdcomp)) {
