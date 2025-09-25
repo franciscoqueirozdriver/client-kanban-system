@@ -8,7 +8,7 @@ import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import { padCNPJ14, isValidCNPJ, normalizeDigits, isEmptyCNPJLike, isCNPJ14 } from '@/utils/cnpj';
-import { DEFAULT_FAMILIA_LABELS, type ResumoPerdcomp } from '@/utils/perdcomp';
+import { type PerdcompResumo } from '@/utils/perdcomp';
 
 // --- Helper Types ---
 interface Company {
@@ -23,7 +23,7 @@ interface CardData {
   quantity: number;
   siteReceipt?: string | null;
   fromCache?: boolean;
-  perdcompResumo?: ResumoPerdcomp;
+  perdcompResumo?: PerdcompResumo;
 }
 
 type ApiDebug = {
@@ -73,6 +73,16 @@ type Prefill = {
   Area?: string;
 };
 
+const MOTIVOS_ORDER: Array<keyof PerdcompResumo['situacoes']> = [
+  'Recepcionado',
+  'Deferido',
+  'Indeferido',
+  'Cancelado',
+  'Cancelamento negado',
+  'Homologado',
+  'Outro/Desconhecido',
+];
+
 function buildApiErrorLabel(e: any) {
   const parts: string[] = [];
   if (e?.httpStatus) {
@@ -120,6 +130,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const [previewPayload, setPreviewPayload] = useState<{ company: Company; debug: ApiDebug } | null>(null);
   const [openCancelamentos, setOpenCancelamentos] = useState(false);
   const [cancelCount, setCancelCount] = useState(0);
+  const [cancelList, setCancelList] = useState<string[]>([]);
   const showDebug = false;
   const q: string = initialQ;
 
@@ -209,30 +220,36 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           const rest = data.fallback.rest ?? 0;
           const ressarc = data.fallback.ressarc ?? 0;
           const canc = data.fallback.canc ?? 0;
-          const breakdown = [] as ResumoPerdcomp['breakdown'];
-          if (dcomp > 0) {
-            breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.DCOMP, familia: 'DCOMP', quantidade: dcomp });
-          }
-          if (rest > 0) {
-            breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.REST, familia: 'REST', quantidade: rest });
-          }
-          if (ressarc > 0) {
-            breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.RESSARC, familia: 'RESSARC', quantidade: ressarc });
-          }
+          const familias: PerdcompResumo['familias'] = {
+            DCOMP: dcomp,
+            REST: rest,
+            RESSARC: ressarc,
+            CANC: canc,
+            DESCONHECIDO: 0,
+          };
           const declaredTotal = Number(data.fallback.quantidade ?? 0) || 0;
-          let breakdownSum = dcomp + rest + ressarc;
-          if (declaredTotal > breakdownSum) {
-            const diff = declaredTotal - breakdownSum;
-            if (diff > 0) {
-              breakdown.push({ nome: DEFAULT_FAMILIA_LABELS.DESCONHECIDO, familia: 'DESCONHECIDO', quantidade: diff });
-              breakdownSum += diff;
-            }
+          let totalSemCancelamento = dcomp + rest + ressarc;
+          if (declaredTotal > totalSemCancelamento) {
+            const diff = declaredTotal - totalSemCancelamento;
+            familias.DESCONHECIDO = diff;
+            totalSemCancelamento += diff;
           }
-          const resumo: ResumoPerdcomp = {
-            total: breakdownSum + canc,
-            totalSemCancelamento: breakdownSum,
+          const resumo: PerdcompResumo = {
+            total: totalSemCancelamento + canc,
+            totalSemCancelamento,
             canc,
-            breakdown,
+            familias,
+            topCreditos: [],
+            situacoes: {
+              Recepcionado: 0,
+              Deferido: 0,
+              Indeferido: 0,
+              Cancelado: 0,
+              'Cancelamento negado': 0,
+              Homologado: 0,
+              'Outro/Desconhecido': 0,
+            },
+            cancelamentos: [],
           };
           const cardData: CardData = {
             quantity: resumo.totalSemCancelamento,
@@ -631,7 +648,18 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             )}
             {status === 'loaded' && data && (() => {
               const resumo = data.perdcompResumo;
+              const familias = resumo?.familias ?? { DCOMP: 0, REST: 0, RESSARC: 0, CANC: 0, DESCONHECIDO: 0 };
               const temRegistros = (resumo?.totalSemCancelamento ?? 0) > 0;
+              const quantosSao = [
+                { label: 'DCOMP (1.0/1.3/1.7/1.9)', valor: familias.DCOMP ?? 0 },
+                { label: 'REST (1.2/1.6)', valor: familias.REST ?? 0 },
+                { label: 'RESSARC (1.1/1.5)', valor: familias.RESSARC ?? 0 },
+              ];
+              const topCreditos = resumo?.topCreditos ?? [];
+              const situacoesList = MOTIVOS_ORDER
+                .map(key => ({ key, valor: resumo?.situacoes?.[key] ?? 0 }))
+                .filter(item => item.valor > 0);
+              const cancelamentos = resumo?.cancelamentos ?? [];
               return (
                 <div className="flex-grow flex flex-col">
                   {error && (
@@ -648,29 +676,52 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                       <span>Quantidade:</span>
                       <strong>{resumo?.totalSemCancelamento ?? 0}</strong>
                     </div>
-                    <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
+                    <div className="flex items-center justify-between">
+                      <span>Cancelamentos:</span>
+                      <button
+                        className="underline text-sm text-left"
+                        onClick={() => {
+                          setCancelCount(resumo?.canc ?? 0);
+                          setCancelList(cancelamentos);
+                          setOpenCancelamentos(true);
+                        }}
+                      >
+                        Ver ({resumo?.canc ?? 0})
+                      </button>
+                    </div>
                     {temRegistros && (
-                      <div className="mt-2 text-sm">
+                      <div className="mt-2 text-sm space-y-1">
                         <div className="font-medium">Quantos são:</div>
-                        {(resumo?.breakdown ?? []).map(row => (
-                          <div key={row.nome} className="flex justify-between">
-                            <span>{row.nome}</span>
-                            <span>{row.quantidade}</span>
+                        {quantosSao.map(item => (
+                          <div key={item.label} className="flex justify-between">
+                            <span>{item.label}</span>
+                            <span>{item.valor}</span>
                           </div>
                         ))}
                       </div>
                     )}
-                    <div className="mt-2">
-                      <button
-                        className="underline text-sm"
-                        onClick={() => {
-                          setCancelCount(resumo?.canc ?? 0);
-                          setOpenCancelamentos(true);
-                        }}
-                      >
-                        Cancelamentos
-                      </button>
-                    </div>
+                    {topCreditos.length > 0 && (
+                      <div className="mt-2 text-sm space-y-1">
+                        <div className="font-medium">Créditos mais usados:</div>
+                        {topCreditos.map(item => (
+                          <div key={item.codigo} className="flex justify-between">
+                            <span>{`${item.codigo} — ${item.descricao ?? '(desconhecido)'}`}</span>
+                            <span>{item.quantidade}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {situacoesList.length > 0 && (
+                      <div className="mt-2 text-sm space-y-1">
+                        <div className="font-medium">Situações (normalizadas):</div>
+                        {situacoesList.map(item => (
+                          <div key={item.key} className="flex justify-between">
+                            <span>{item.key}</span>
+                            <span>{item.valor}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {data.siteReceipt && (
                     <div className="mb-4">
@@ -709,6 +760,15 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           <div className="bg-white rounded-xl p-4 w-full max-w-md">
             <div className="text-lg font-semibold mb-2">Cancelamentos</div>
             <div>Quantidade: <strong>{cancelCount}</strong></div>
+            {cancelList.length > 0 ? (
+              <div className="mt-3 max-h-48 overflow-y-auto text-sm space-y-1">
+                {cancelList.map(numero => (
+                  <div key={numero}>{numero}</div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-3 text-sm text-gray-500">Nenhum protocolo listado.</div>
+            )}
             <div className="mt-3 text-right">
               <button className="px-3 py-1 rounded bg-gray-200" onClick={() => setOpenCancelamentos(false)}>
                 Fechar
