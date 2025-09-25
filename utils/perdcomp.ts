@@ -1,31 +1,45 @@
-export type PerdcompTipo = 'DCOMP' | 'REST' | 'RESSARC' | 'CANC' | 'DESCONHECIDO';
+export type PerdcompFamilia = 'DCOMP' | 'REST' | 'RESSARC' | 'CANC' | 'DESCONHECIDO';
 
-export const DEFAULT_FAMILIA_LABELS: Record<PerdcompTipo, string> = {
-  DCOMP: 'DCOMP (Declarações de Compensação)',
-  REST: 'REST (Pedidos de Restituição)',
-  RESSARC: 'RESSARC (Pedidos de Ressarcimento)',
-  CANC: 'Cancelamentos',
-  DESCONHECIDO: 'Desconhecido',
+export interface PerdcompParsed {
+  valido: boolean;
+  raw: string;
+  formatted?: string;
+  b1?: string;
+  b2?: string;
+  dataDDMMAA?: string;
+  tipoNum?: number;
+  natureza?: string;
+  familia?: PerdcompFamilia;
+  credito?: string;
+  protocolo?: string;
+  dataISO?: string;
+}
+
+const NATUREZA_FAMILIA_MAP: Record<string, PerdcompFamilia> = {
+  '1.0': 'DCOMP',
+  '1.3': 'DCOMP',
+  '1.7': 'DCOMP',
+  '1.9': 'DCOMP',
+  '1.2': 'REST',
+  '1.6': 'REST',
+  '1.1': 'RESSARC',
+  '1.5': 'RESSARC',
+  '1.8': 'CANC'
 };
 
-export type NaturezaInfo = { familia: PerdcompTipo; nome: string };
-
-// TODO: trocar por leitura do dicionário da planilha.
-// Fallback mínimo para já funcionar agora.
-export const NATUREZA_FALLBACK: Record<string, NaturezaInfo> = {
-  '1.3': { familia: 'DCOMP', nome: DEFAULT_FAMILIA_LABELS.DCOMP },
-  '1.7': { familia: 'DCOMP', nome: DEFAULT_FAMILIA_LABELS.DCOMP },
-  '1.2': { familia: 'REST', nome: DEFAULT_FAMILIA_LABELS.REST },
-  '1.6': { familia: 'REST', nome: DEFAULT_FAMILIA_LABELS.REST },
-  '1.1': { familia: 'RESSARC', nome: DEFAULT_FAMILIA_LABELS.RESSARC },
-  '1.5': { familia: 'RESSARC', nome: DEFAULT_FAMILIA_LABELS.RESSARC },
-  '1.8': { familia: 'CANC', nome: DEFAULT_FAMILIA_LABELS.CANC },
-  // Outros cairão como desconhecidos até o dicionário ser preenchido
+const FAMILIA_DEFAULT_LABELS: Record<PerdcompFamilia, string> = {
+  DCOMP: 'DCOMP',
+  REST: 'REST',
+  RESSARC: 'RESSARC',
+  CANC: 'CANC',
+  DESCONHECIDO: 'DESCONHECIDO'
 };
 
-export function formatPerdcompNumero(raw: string) {
+export function formatPerdcompNumero(raw: string): string {
   const digits = String(raw ?? '').replace(/\D/g, '');
-  if (digits.length < 24) return raw;
+  if (digits.length < 24) {
+    return raw;
+  }
   const useDigits = digits.slice(-24);
   const b1 = useDigits.slice(0, 5);
   const b2 = useDigits.slice(5, 10);
@@ -37,93 +51,241 @@ export function formatPerdcompNumero(raw: string) {
   return `${b1}.${b2}.${b3}.${b4}.${b5}.${b6}-${suf}`;
 }
 
-export function parsePerdcompNumero(numero: string) {
-  const formatted = formatPerdcompNumero(numero);
-  const m = formatted.match(/^(\d{5})\.(\d{5})\.(\d{6})\.(\d)\.(\d)\.(\d{2})-(\d{4})$/);
-  if (!m) return null;
-  const [, , , , tipoStr, nat1, cred] = m;
-  const tipoNum = Number(tipoStr);
-  const tipo: PerdcompTipo =
-    tipoNum === 1 ? 'DCOMP' : tipoNum === 2 ? 'REST' : tipoNum === 8 ? 'CANC' : 'DESCONHECIDO';
-  const natureza = `1.${nat1}`;
-  return { formatted, tipo, natureza, credito: cred };
+function inferFamilia(tipoNum?: number, natureza?: string): PerdcompFamilia {
+  if (natureza && NATUREZA_FAMILIA_MAP[natureza]) {
+    return NATUREZA_FAMILIA_MAP[natureza];
+  }
+  if (tipoNum === 1) return 'DCOMP';
+  if (tipoNum === 2) return 'REST';
+  if (tipoNum === 8) return 'CANC';
+  return 'DESCONHECIDO';
 }
 
-export type ResumoPerdcomp = {
-  total: number; // bruto
-  totalSemCancelamento: number; // para o card
-  canc: number;
-  breakdown: Array<{ nome: string; familia: PerdcompTipo; quantidade: number }>;
-};
+function toISOFromDDMMAA(ddmmaa?: string): string | undefined {
+  if (!ddmmaa || ddmmaa.length !== 6) {
+    return undefined;
+  }
+  const dia = Number(ddmmaa.slice(0, 2));
+  const mes = Number(ddmmaa.slice(2, 4));
+  const ano = Number(ddmmaa.slice(4, 6));
+  if (!dia || !mes) {
+    return undefined;
+  }
+  const anoFull = ano >= 70 ? 1900 + ano : 2000 + ano;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${anoFull}-${pad(mes)}-${pad(dia)}`;
+}
 
-export function agregaPerdcomp(lista: Array<{ perdcomp?: string }>): ResumoPerdcomp {
-  const porNome = new Map<string, { nome: string; familia: PerdcompTipo; quantidade: number }>();
-  let total = 0;
-  let canc = 0;
+const REGEX_PERDCOMP = /^(\d{5})\.(\d{5})\.(\d{6})\.(\d)\.(\d)\.(\d{2})-(\d{4})$/;
 
-  for (const item of lista ?? []) {
-    const numero = item?.perdcomp;
-    if (!numero) continue;
-    const parsed = parsePerdcompNumero(numero);
-    if (!parsed) continue;
-
-    total += 1;
-
-    const info = NATUREZA_FALLBACK[parsed.natureza] ?? {
-      familia: parsed.tipo,
-      nome: DEFAULT_FAMILIA_LABELS[parsed.tipo] ?? parsed.tipo,
-    };
-
-    if (info.familia === 'CANC') {
-      canc += 1;
-      continue;
-    }
-
-    const key = info.nome;
-    const atual = porNome.get(key);
-    if (atual) {
-      atual.quantidade += 1;
-    } else {
-      porNome.set(key, { nome: info.nome, familia: info.familia, quantidade: 1 });
-    }
+export function parsePerdcompNumero(raw: string): PerdcompParsed {
+  const formatted = formatPerdcompNumero(raw);
+  const match = formatted.match(REGEX_PERDCOMP);
+  if (!match) {
+    return { valido: false, raw };
   }
 
-  const ordemFamilia: Record<PerdcompTipo, number> = {
-    DCOMP: 1,
-    REST: 2,
-    RESSARC: 3,
-    DESCONHECIDO: 9,
-    CANC: 99,
-  };
-
-  const breakdown = Array.from(porNome.values()).sort((a, b) => {
-    const ordemA = ordemFamilia[a.familia] !== undefined ? ordemFamilia[a.familia] : 9;
-    const ordemB = ordemFamilia[b.familia] !== undefined ? ordemFamilia[b.familia] : 9;
-    return ordemA - ordemB;
-  });
-
-  const totalSemCancelamento = total - canc;
+  const [, b1, b2, b3, tipoStr, natDigit, credito, protocolo] = match;
+  const tipoNum = Number(tipoStr);
+  const natureza = `1.${natDigit}`;
+  const familia = inferFamilia(tipoNum, natureza);
+  const dataISO = toISOFromDDMMAA(b3);
 
   return {
-    total,
-    totalSemCancelamento,
-    canc,
-    breakdown,
+    valido: true,
+    raw,
+    formatted,
+    b1,
+    b2,
+    dataDDMMAA: b3,
+    tipoNum,
+    natureza,
+    familia,
+    credito,
+    protocolo,
+    dataISO
   };
 }
 
-export function contaPorFamilia(resumo: ResumoPerdcomp): Record<PerdcompTipo, number> {
-  const base: Record<PerdcompTipo, number> = {
+export type MotivoNormalizado =
+  | 'Recepcionado'
+  | 'Deferido'
+  | 'Indeferido'
+  | 'Cancelado'
+  | 'Cancelamento negado'
+  | 'Homologado'
+  | 'Outro/Desconhecido';
+
+function normalizeText(value?: string): string {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+}
+
+export function normalizaMotivo(situacao?: string, detalhe?: string): MotivoNormalizado {
+  const s = normalizeText(situacao);
+  const d = normalizeText(detalhe);
+
+  if (s.includes('recepcionado em procedimento de análise')) {
+    return 'Recepcionado';
+  }
+  if (s.includes('análise concluída com direito creditório reconhecido')) {
+    return 'Deferido';
+  }
+  if (s.includes('análise concluída com indeferimento')) {
+    return 'Indeferido';
+  }
+  if (s.includes('pedido de cancelamento deferido')) {
+    return 'Cancelado';
+  }
+  if (s.includes('pedido de cancelamento indeferido') || d.includes('indeferido')) {
+    return 'Cancelamento negado';
+  }
+  if (s.includes('homologado') || s.includes('credito utilizado') || d.includes('homologado')) {
+    return 'Homologado';
+  }
+
+  return 'Outro/Desconhecido';
+}
+
+export interface Agregado {
+  total: number;
+  canc: number;
+  totalSemCancelamento: number;
+  porFamilia: Record<PerdcompFamilia, number>;
+  porNatureza: Record<string, number>;
+  porCredito: Record<string, number>;
+  topCreditos: Array<{ codigo: string; descricao?: string; quantidade: number }>;
+  porMotivo: Record<MotivoNormalizado, number>;
+  cancelamentosLista: string[];
+}
+
+export interface PerdcompResumo {
+  total: number;
+  canc: number;
+  totalSemCancelamento: number;
+  familias: Record<PerdcompFamilia, number>;
+  topCreditos: Array<{ codigo: string; descricao?: string; quantidade: number }>;
+  situacoes: Record<MotivoNormalizado, number>;
+  cancelamentos: string[];
+}
+
+const MOTIVOS_BASE: MotivoNormalizado[] = [
+  'Recepcionado',
+  'Deferido',
+  'Indeferido',
+  'Cancelado',
+  'Cancelamento negado',
+  'Homologado',
+  'Outro/Desconhecido'
+];
+
+const FAMILIAS: PerdcompFamilia[] = ['DCOMP', 'REST', 'RESSARC', 'CANC', 'DESCONHECIDO'];
+
+export function agregaPerdcomp(
+  lista: Array<{ perdcomp: string; situacao?: string; situacao_detalhamento?: string; tipo_credito?: string }>,
+  creditosDict?: Record<string, string>
+): Agregado {
+  const porFamilia: Record<PerdcompFamilia, number> = {
     DCOMP: 0,
     REST: 0,
     RESSARC: 0,
-    CANC: resumo.canc,
-    DESCONHECIDO: 0,
+    CANC: 0,
+    DESCONHECIDO: 0
   };
 
-  for (const row of resumo.breakdown) {
-    base[row.familia] = (base[row.familia] ?? 0) + row.quantidade;
+  const porNatureza: Record<string, number> = {};
+  const porCredito: Record<string, number> = {};
+  const porMotivo: Record<MotivoNormalizado, number> = MOTIVOS_BASE.reduce((acc, motivo) => {
+    acc[motivo] = 0;
+    return acc;
+  }, {} as Record<MotivoNormalizado, number>);
+
+  const cancelamentosLista: string[] = [];
+
+  let total = 0;
+
+  for (const item of lista ?? []) {
+    const numero = item?.perdcomp;
+    if (!numero) {
+      continue;
+    }
+    const parsed = parsePerdcompNumero(numero);
+    if (!parsed.valido) {
+      continue;
+    }
+
+    total += 1;
+
+    const familia = parsed.familia ?? 'DESCONHECIDO';
+    porFamilia[familia] = (porFamilia[familia] ?? 0) + 1;
+
+    if (parsed.natureza) {
+      porNatureza[parsed.natureza] = (porNatureza[parsed.natureza] ?? 0) + 1;
+    }
+
+    const codigoCredito = parsed.credito ?? item.tipo_credito;
+    if (codigoCredito) {
+      const normalized = codigoCredito.padStart(2, '0');
+      porCredito[normalized] = (porCredito[normalized] ?? 0) + 1;
+    }
+
+    const motivo = normalizaMotivo(item.situacao, item.situacao_detalhamento);
+    porMotivo[motivo] = (porMotivo[motivo] ?? 0) + 1;
+
+    if (familia === 'CANC') {
+      cancelamentosLista.push(parsed.formatted ?? formatPerdcompNumero(numero));
+    }
   }
 
-  return base;
+  const canc = porFamilia.CANC;
+  const totalSemCancelamento = total - canc;
+
+  const topCreditos = Array.from(Object.entries(porCredito))
+    .map(([codigo, quantidade]) => ({
+      codigo,
+      descricao: creditosDict?.[codigo],
+      quantidade
+    }))
+    .sort((a, b) => {
+      if (b.quantidade !== a.quantidade) {
+        return b.quantidade - a.quantidade;
+      }
+      return a.codigo.localeCompare(b.codigo);
+    })
+    .slice(0, 3);
+
+  // Garantir chaves para famílias não vistas (caso o reduce tenha removido)
+  for (const familia of FAMILIAS) {
+    if (!(familia in porFamilia)) {
+      porFamilia[familia] = 0;
+    }
+  }
+
+  return {
+    total,
+    canc,
+    totalSemCancelamento,
+    porFamilia,
+    porNatureza,
+    porCredito,
+    topCreditos,
+    porMotivo,
+    cancelamentosLista
+  };
+}
+
+export const DEFAULT_FAMILIA_LABELS: Record<PerdcompFamilia, string> = FAMILIA_DEFAULT_LABELS;
+
+export function toPerdcompResumo(agregado: Agregado): PerdcompResumo {
+  return {
+    total: agregado.total,
+    canc: agregado.canc,
+    totalSemCancelamento: agregado.totalSemCancelamento,
+    familias: agregado.porFamilia,
+    topCreditos: agregado.topCreditos,
+    situacoes: agregado.porMotivo,
+    cancelamentos: agregado.cancelamentosLista
+  };
 }
