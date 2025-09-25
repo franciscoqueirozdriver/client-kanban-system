@@ -152,8 +152,13 @@ async function fetchInfosimples({
       const err: any = new Error('provider_error');
       err.status = response.status || 502;
       err.statusText = response.statusText || 'Bad Gateway';
-      err.providerCode = json?.code;
-      err.providerMessage = json?.code_message || json?.message || json?.errors?.[0]?.message || null;
+      const j: any = json;
+      err.providerCode = j?.code ?? null;
+      err.providerMessage =
+        j?.code_message ??
+        j?.message ??
+        (Array.isArray(j?.errors) ? j.errors[0]?.message : null) ??
+        null;
       throw err;
     }
 
