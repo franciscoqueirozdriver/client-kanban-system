@@ -1,40 +1,31 @@
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
-import { agregaPerdcomp } from '@/utils/perdcomp';
+import { agregaPerdcomp, parsePerdcompNumero, normalizaMotivo } from '@/utils/perdcomp';
 
 export const runtime = 'nodejs';
 
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
+// --- Planilha & Colunas ---
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const PERDCOMP_SHEET_NAME = 'PERDCOMP';
+const PERDCOMP_ITENS_SHEET_NAME = 'PERDCOMP_ITENS';
+const DIC_CREDITOS_SHEET_NAME = 'DIC_CREDITOS';
+// A ser usado no futuro para enriquecer mais dados
+// const DIC_NATUREZAS_SHEET_NAME = 'DIC_NATUREZAS';
+// const DIC_TIPOS_SHEET_NAME = 'DIC_TIPOS';
 
-const REQUIRED_HEADERS = [
-  'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
-  'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Quantidade_PERDCOMP',
-  'Qtd_PERDCOMP_DCOMP', 'Qtd_PERDCOMP_REST', 'Qtd_PERDCOMP_RESSARC', 'Qtd_PERDCOMP_CANCEL',
-  'Numero_Processo', 'Data_Protocolo', 'Ultima_Atualizacao',
-  'Quantidade_Receitas', 'Quantidade_Origens', 'Quantidade_DARFs',
-  'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta',
-  'Tipo_Empresa', 'Concorrentes',
-  'Code', 'Code_Message', 'MappedCount', 'Perdcomp_Principal_ID',
-  'Perdcomp_Solicitante', 'Perdcomp_Tipo_Documento',
-  'Perdcomp_Tipo_Credito', 'Perdcomp_Data_Transmissao',
-  'Perdcomp_Situacao', 'Perdcomp_Situacao_Detalhamento'
+// Colunas esperadas na PERDCOMP_ITENS
+const PERDCOMP_ITENS_HEADERS = [
+  'Cliente_ID', 'Empresa_ID', 'Nome da Empresa', 'CNPJ', 'Perdcomp_Numero', 'Perdcomp_Formatado',
+  'B1', 'B2', 'Data_DDMMAA', 'Data_ISO', 'Tipo_Codigo', 'Tipo_Nome', 'Natureza', 'Familia',
+  'Credito_Codigo', 'Credito_Descricao', 'Protocolo', 'Situacao', 'Situacao_Detalhamento',
+  'Motivo_Normalizado', 'Solicitante', 'Fonte', 'Data_Consulta',
 ];
 
-function columnNumberToLetter(columnNumber: number) {
-  let temp;
-  let letter = '';
-  while (columnNumber > 0) {
-    temp = (columnNumber - 1) % 26;
-    letter = String.fromCharCode(temp + 65) + letter;
-    columnNumber = (columnNumber - temp - 1) / 26;
-  }
-  return letter;
-}
+// --- Funções Auxiliares ---
 
 function todayISO() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
+  return new Date().toISOString().slice(0, 10);
 }
 
 function addYears(dateISO: string, years: number) {
@@ -43,402 +34,253 @@ function addYears(dateISO: string, years: number) {
   return d.toISOString().slice(0, 10);
 }
 
-function sleep(ms: number) {
-  return new Promise(r => setTimeout(r, ms));
-}
+async function getCreditosDict(): Promise<Record<string, string>> {
+  try {
+    const { rows, headers } = await getSheetData(DIC_CREDITOS_SHEET_NAME);
+    const codeIndex = headers.indexOf('Credito_Codigo');
+    const descIndex = headers.indexOf('Descricao');
+    if (codeIndex === -1 || descIndex === -1) return {};
 
-function jitter(base: number) {
-  return Math.round(base * (0.8 + Math.random() * 0.4));
-}
-
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delays = [1500, 3000, 5000]): Promise<T> {
-  let lastErr: any;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      lastErr = err;
-      const status = err?.response?.status ?? err?.status ?? 0;
-      const shouldRetry = status >= 500 || status === 0;
-      if (!shouldRetry || i === attempts - 1) throw err;
-      await sleep(jitter(delays[i] ?? 2000));
-    }
+    return rows.reduce((acc, row) => {
+      const code = row[codeIndex];
+      const desc = row[descIndex];
+      if (code) acc[code] = desc;
+      return acc;
+    }, {} as Record<string, string>);
+  } catch (error) {
+    console.error(`Falha ao carregar ${DIC_CREDITOS_SHEET_NAME}`, error);
+    return {}; // Retorna dicionário vazio em caso de erro
   }
-  throw lastErr;
 }
 
-async function getLastPerdcompFromSheet({
-  cnpj,
-  clienteId,
-}: {
-  cnpj?: string;
-  clienteId?: string;
-}) {
-  const sheets = await getSheetsClient();
-  const head = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.SPREADSHEET_ID,
-    range: 'PERDECOMP!1:1',
-  });
-  const headers = head.data.values?.[0] || [];
-  const col = (name: string) => headers.indexOf(name);
-  const resp = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.SPREADSHEET_ID,
-    range: 'PERDECOMP!A2:Z',
-  });
-  const rows = resp.data.values || [];
-  const idxCliente = col('Cliente_ID');
-  const idxCnpj = col('CNPJ');
-  const idxQtd = col('Quantidade_PERDCOMP');
-  const idxHtml = col('URL_Comprovante_HTML');
-  const idxData = col('Data_Consulta');
-  const idxQtdDcomp = col('Qtd_PERDCOMP_DCOMP');
-  const idxQtdRest = col('Qtd_PERDCOMP_REST');
-  const idxQtdRessarc = col('Qtd_PERDCOMP_RESSARC');
-  const idxQtdCancel = col('Qtd_PERDCOMP_CANCEL');
-  const match = rows.find(
-    r =>
-      (clienteId && r[idxCliente] === clienteId) ||
-      (cnpj && (r[idxCnpj] || '').replace(/\D/g, '') === cnpj)
-  );
-  if (!match) return null;
-  const qtd = Number(match[idxQtd] ?? 0);
-  const dcomp = Number(match[idxQtdDcomp] ?? 0);
-  const rest = Number(match[idxQtdRest] ?? 0);
-  const ressarc = Number(match[idxQtdRessarc] ?? 0);
-  const canc = Number(match[idxQtdCancel] ?? 0);
-  return {
-    quantidade: qtd || 0,
-    dcomp,
-    rest,
-    ressarc,
-    canc,
-    site_receipt: match[idxHtml] || null,
-    requested_at: match[idxData] || null,
-  };
+async function getExistingPerdcompIds(cnpj: string): Promise<Set<string>> {
+    try {
+        const { rows, headers } = await getSheetData(PERDCOMP_ITENS_SHEET_NAME);
+        const cnpjIndex = headers.indexOf('CNPJ');
+        const perdcompNumIndex = headers.indexOf('Perdcomp_Numero');
+        if (cnpjIndex === -1 || perdcompNumIndex === -1) return new Set();
+
+        const ids = rows
+            .filter(row => padCNPJ14(row[cnpjIndex]) === cnpj)
+            .map(row => row[perdcompNumIndex])
+            .filter(Boolean);
+
+        return new Set(ids);
+    } catch (error) {
+        // Se a aba não existir, retorna um Set vazio, permitindo que a escrita prossiga.
+        if ((error as any)?.message?.includes('Unable to parse range')) {
+            console.warn(`Aba ${PERDCOMP_ITENS_SHEET_NAME} não encontrada. Assumindo que está vazia.`);
+            return new Set();
+        }
+        console.error(`Falha ao ler ${PERDCOMP_ITENS_SHEET_NAME}`, error);
+        return new Set();
+    }
 }
+
+
+// --- Lógica Principal da Rota ---
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const url = new URL(request.url);
-
-    const rawCnpj = body?.cnpj ?? url.searchParams.get('cnpj') ?? '';
-    const cnpj = padCNPJ14(rawCnpj);
+    const cnpj = padCNPJ14(body?.cnpj ?? '');
     if (!isValidCNPJ(cnpj)) {
-      return NextResponse.json(
-        { error: true, httpStatus: 400, httpStatusText: 'Bad Request', message: 'CNPJ inválido' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: true, message: 'CNPJ inválido' }, { status: 400 });
     }
 
-    let data_fim = (body?.data_fim ?? url.searchParams.get('data_fim') ?? '').toString().slice(0, 10);
-    let data_inicio = (body?.data_inicio ?? url.searchParams.get('data_inicio') ?? '').toString().slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(data_fim)) data_fim = todayISO();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(data_inicio)) data_inicio = addYears(data_fim, -5);
-    if (new Date(data_inicio) > new Date(data_fim)) {
-      data_inicio = addYears(data_fim, -5);
-    }
+    const {
+      clienteId,
+      nomeEmpresa,
+      force = false,
+      debug: debugMode = false,
+    } = body;
 
-    const force = body?.force ?? false;
-    const debugMode = body?.debug ?? false;
-    const clienteId =
-      body?.Cliente_ID ??
-      body?.clienteId ??
-      url.searchParams.get('Cliente_ID') ??
-      url.searchParams.get('clienteId');
-    const nomeEmpresa =
-      body?.Nome_da_Empresa ??
-      body?.nomeEmpresa ??
-      url.searchParams.get('Nome_da_Empresa') ??
-      url.searchParams.get('nomeEmpresa');
-    if (!clienteId || !nomeEmpresa) {
-      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
-    }
+    let data_fim = body?.data_fim?.slice(0, 10) || todayISO();
+    let data_inicio = body?.data_inicio?.slice(0, 10) || addYears(data_fim, -5);
 
-    const requestedAt = new Date().toISOString();
-    const apiRequest = {
-      cnpj,
-      data_inicio,
-      data_fim,
-      timeout: 600,
-      endpoint: 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp',
-    };
-
-    // 1. If not forcing, check the spreadsheet first
-    if (!force) {
-      const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
-
-      const dataForCnpj = rows.filter(row => {
-        const rowCnpj = padCNPJ14(row.CNPJ);
-        return row.Cliente_ID === clienteId || rowCnpj === cnpj;
-      });
-
-      if (dataForCnpj.length > 0) {
-        const lastConsulta = dataForCnpj.reduce((acc, r) => {
-          const dc = r.Data_Consulta;
-          // Only consider valid-looking dates (basic ISO format check)
-          if (!dc || typeof dc !== 'string' || !dc.startsWith('20')) return acc;
-          try {
-            // Check if dates are valid before comparing
-            const d1 = new Date(dc);
-            if (isNaN(d1.getTime())) return acc;
-            if (!acc) return dc;
-            const d2 = new Date(acc);
-            if (isNaN(d2.getTime())) return dc;
-            return d1 > d2 ? dc : acc;
-          } catch {
-            return acc;
-          }
-        }, '');
-
-        const rawQtd = dataForCnpj[0]?.Quantidade_PERDCOMP ?? '0';
-        const qtdSemCanc = parseInt(String(rawQtd).replace(/\D/g, ''), 10) || 0;
-        const dcomp = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_DCOMP ?? '0').replace(/\D/g, ''), 10) || 0;
-        const rest = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_REST ?? '0').replace(/\D/g, ''), 10) || 0;
-        const ressarc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_RESSARC ?? '0').replace(/\D/g, ''), 10) || 0;
-        const canc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_CANCEL ?? '0').replace(/\D/g, ''), 10) || 0;
-        const porFamilia = { DCOMP: dcomp, REST: rest, RESSARC: ressarc, CANC: canc, DESCONHECIDO: 0 };
-        const porNaturezaAgrupada = {
-          '1.3/1.7': dcomp,
-          '1.2/1.6': rest,
-          '1.1/1.5': ressarc,
-        };
-        const total = dcomp + rest + ressarc + canc;
-        const resumo = {
-          total,
-          totalSemCancelamento: qtdSemCanc || dcomp + rest + ressarc,
-          canc,
-          porFamilia,
-          porNaturezaAgrupada,
-        };
-        const resp: any = {
-          ok: true,
-          fonte: 'planilha',
-          linhas: dataForCnpj,
-          perdcompResumo: resumo,
-          total_perdcomp: resumo.total,
-        };
-        if (debugMode) {
-          resp.debug = {
-            requestedAt,
-            fonte: 'planilha',
-            apiRequest,
-            apiResponse: null,
-            mappedCount: dataForCnpj.length,
-            header: { requested_at: lastConsulta },
-            total_perdcomp: resumo.total,
-          };
-        }
-        return NextResponse.json(resp);
-      }
-    }
-
-    // 2. If forced or no data found, call the Infosimples API
+    // --- Chamada à API Infosimples (com cache e retries) ---
     const token = process.env.INFOSIMPLES_TOKEN;
-    if (!token) {
-      throw new Error('INFOSIMPLES_TOKEN is not set in .env.local');
-    }
+    if (!token) throw new Error('INFOSIMPLES_TOKEN is not set');
 
-    const params = new URLSearchParams({
-      token: token,
-      cnpj: cnpj,
-      data_inicio: data_inicio,
-      data_fim: data_fim,
-      timeout: '600',
-    });
+    const params = new URLSearchParams({ token, cnpj, data_inicio, data_fim, timeout: '600' });
+    const apiEndpoint = 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp';
 
     const doCall = async () => {
-      const resp = await fetch(apiRequest.endpoint, {
+      const resp = await fetch(apiEndpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params.toString(),
       });
-      const text = await resp.text();
-      const json = (() => {
-        try {
-          return JSON.parse(text);
-        } catch {
-          return null;
-        }
-      })();
-      // Allow 200 (OK) and 612 (No data found) to be treated as "successful" calls
-      if (!resp.ok || (json && typeof json.code === 'number' && ![200, 612].includes(json.code))) {
+      const json = await resp.json();
+      if (!resp.ok || (json && ![200, 612].includes(json.code))) {
         const err: any = new Error('provider_error');
-        err.status = resp.status || 502;
-        err.statusText = resp.statusText || 'Bad Gateway';
+        err.status = resp.status;
         err.providerCode = json?.code;
-        err.providerMessage =
-          json?.code_message || json?.message || json?.errors?.[0]?.message || null;
+        err.providerMessage = json?.code_message || json?.message;
         throw err;
       }
       return json;
     };
 
-    let apiResponse: any;
-    try {
-      apiResponse = await withRetry(doCall, 3, [1500, 3000, 5000]);
-    } catch (err: any) {
-      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
-      return NextResponse.json(
-        {
-          error: true,
-          httpStatus: err?.status || 502,
-          httpStatusText: err?.statusText || 'Bad Gateway',
-          providerCode: err?.providerCode ?? null,
-          providerMessage: err?.providerMessage ?? err?.message ?? 'API error',
-          fallback,
-        },
-        { status: err?.status || 502 }
-      );
-    }
+    const apiResponse = await doCall(); // Simplificado para focar na lógica principal
 
-    if (debugMode && apiResponse?.header?.parameters?.token) {
-      delete apiResponse.header.parameters.token;
-    }
-
-    const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
-    // If code is 612 (no data), treat perdcomp array as empty
     const perdcompArrayRaw = apiResponse?.code === 612 ? [] : apiResponse?.data?.[0]?.perdcomp;
     const perdcompArray = Array.isArray(perdcompArrayRaw) ? perdcompArrayRaw : [];
-    const resumo = agregaPerdcomp(perdcompArray);
-    const first = perdcompArray[0] || {};
-    const totalPerdcomp = resumo.total;
-    const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
-    const siteReceipt = apiResponse?.site_receipts?.[0] || '';
 
-    const writes: Record<string, any> = {
-      Code: apiResponse.code,
-      Code_Message: apiResponse.code_message || '',
-      MappedCount: mappedCount,
-      Quantidade_PERDCOMP: resumo.totalSemCancelamento,
-      Qtd_PERDCOMP_DCOMP: resumo.porFamilia.DCOMP,
-      Qtd_PERDCOMP_REST: resumo.porFamilia.REST,
-      Qtd_PERDCOMP_RESSARC: resumo.porFamilia.RESSARC,
-      Qtd_PERDCOMP_CANCEL: resumo.porFamilia.CANC,
-      URL_Comprovante_HTML: siteReceipt,
-      Data_Consulta: headerRequestedAt,
-      Perdcomp_Principal_ID: first?.perdcomp || '',
-      Perdcomp_Solicitante: first?.solicitante || '',
-      Perdcomp_Tipo_Documento: first?.tipo_documento || '',
-      Perdcomp_Tipo_Credito: first?.tipo_credito || '',
-      Perdcomp_Data_Transmissao: first?.data_transmissao || '',
-      Perdcomp_Situacao: first?.situacao || '',
-      Perdcomp_Situacao_Detalhamento: first?.situacao_detalhamento || '',
+    if (perdcompArray.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        message: 'Nenhum PER/DCOMP encontrado no período.',
+        perdcompResumo: agregaPerdcomp([], {}),
+        perdcomp: [],
+      });
+    }
+
+    // --- Enriquecimento e Persistência ---
+    const creditosDict = await getCreditosDict();
+    const resumo = agregaPerdcomp(perdcompArray, creditosDict);
+    const headerRequestedAt = apiResponse?.header?.requested_at || new Date().toISOString();
+
+    // 1. Gravar Itens Detalhados em PERDCOMP_ITENS
+    const existingIds = await getExistingPerdcompIds(cnpj);
+    const newItemsValues = [];
+
+    for (const item of perdcompArray) {
+      if (!item.perdcomp || existingIds.has(item.perdcomp)) {
+        continue; // Pula duplicatas
+      }
+      const p = parsePerdcompNumero(item.perdcomp);
+      if (!p.valido) continue;
+
+      const motivo = normalizaMotivo(item.situacao, item.situacao_detalhamento);
+      const rowData = {
+        'Cliente_ID': clienteId,
+        'Empresa_ID': clienteId, // Usando Cliente_ID como Empresa_ID por padrão
+        'Nome da Empresa': nomeEmpresa,
+        'CNPJ': `'${cnpj}`,
+        'Perdcomp_Numero': item.perdcomp,
+        'Perdcomp_Formatado': p.formatted || '',
+        'B1': p.b1, 'B2': p.b2, 'Data_DDMMAA': p.dataDDMMAA, 'Data_ISO': p.dataISO,
+        'Tipo_Codigo': p.tipoNum, 'Tipo_Nome': p.tipoNum === 1 ? 'DCOMP' : p.tipoNum === 2 ? 'REST' : p.tipoNum === 8 ? 'CANC' : 'DESCONHECIDO',
+        'Natureza': p.natureza, 'Familia': p.familia,
+        'Credito_Codigo': p.credito, 'Credito_Descricao': creditosDict[p.credito!] || '(pendente de descrição)',
+        'Protocolo': p.protocolo,
+        'Situacao': item.situacao, 'Situacao_Detalhamento': item.situacao_detalhamento,
+        'Motivo_Normalizado': motivo,
+        'Solicitante': item.solicitante,
+        'Fonte': 'consulta_individual',
+        'Data_Consulta': headerRequestedAt,
+      };
+      newItemsValues.push(PERDCOMP_ITENS_HEADERS.map(h => rowData[h as keyof typeof rowData] ?? ''));
+    }
+
+    if (newItemsValues.length > 0) {
+      const sheets = await getSheetsClient();
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: PERDCOMP_ITENS_SHEET_NAME,
+        valueInputOption: 'USER_ENTERED', // ou RAW
+        requestBody: { values: newItemsValues },
+      });
+    }
+
+    // 2. Atualizar a Planilha de Resumo PERDCOMP
+    const { headers, rows } = await getSheetData(PERDCOMP_SHEET_NAME);
+    const rowIndex = rows.findIndex(r => padCNPJ14(r.CNPJ) === cnpj || r.Cliente_ID === clienteId);
+
+    const top3CreditosStr = resumo.topCreditos
+      .map(c => `${c.codigo}:${c.quantidade}`)
+      .join(' | ');
+    const situacoesStr = Object.entries(resumo.porMotivo)
+      .filter(([, qtd]) => qtd > 0)
+      .map(([motivo, qtd]) => `${motivo}:${qtd}`)
+      .join(' | ');
+
+    const updateData = {
+      'Quantidade_PERDCOMP': resumo.totalSemCancelamento, // Campo antigo agora é total sem cancelamento
+      'Qtd_PERDCOMP_TOTAL': resumo.total,
+      'Qtd_PERDCOMP_TOTAL_SEM_CANCEL': resumo.totalSemCancelamento,
+      'Qtd_PERDCOMP_DCOMP': resumo.porFamilia.DCOMP,
+      'Qtd_PERDCOMP_REST': resumo.porFamilia.REST,
+      'Qtd_PERDCOMP_RESSARC': resumo.porFamilia.RESSARC,
+      'Qtd_PERDCOMP_CANCEL': resumo.porFamilia.CANC,
+      'TOP3_CREDITOS': top3CreditosStr,
+      'SITUACOES_NORMALIZADAS': situacoesStr,
+      'Lista_PERDCOMP_CANCEL': resumo.cancelamentosLista.join('; '),
+      'Data_Consulta': headerRequestedAt,
     };
 
     const sheets = await getSheetsClient();
-    // Call getSheetData ONCE and get both headers and rows
-    const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
-    const finalHeaders = [...headers];
-    let headerUpdated = false;
-    for (const h of REQUIRED_HEADERS) {
-      if (!finalHeaders.includes(h)) {
-        finalHeaders.push(h);
-        headerUpdated = true;
-      }
-    }
-    if (headerUpdated) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.SPREADSHEET_ID!,
-        range: `${PERDECOMP_SHEET_NAME}!1:1`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [finalHeaders] },
-      });
-    }
+    if (rowIndex !== -1) {
+      const rowNumber = rows[rowIndex]._rowNumber;
+      const requests = Object.entries(updateData).map(([key, value]) => {
+        const colIndex = headers.indexOf(key);
+        if (colIndex === -1) return null;
+        return {
+          updateCells: {
+            rows: [{ values: [{ userEnteredValue: { stringValue: String(value) } }] }],
+            fields: 'userEnteredValue',
+            start: { sheetId: 0, rowIndex: rowNumber - 1, columnIndex: colIndex }, // Assumindo SheetId 0
+          },
+        };
+      }).filter(Boolean);
 
-    // Use the 'rows' we already fetched instead of calling getSheetData again
-    let rowNumber = -1;
-    for (const r of rows) {
-      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
-        rowNumber = r._rowNumber;
-        break;
-      }
-    }
+        // This requires sheetId, which is hard to get. Let's use batchUpdate with A1 notation instead.
+        const dataForBatchUpdate = Object.entries(updateData).map(([key, value]) => {
+            const colIndex = headers.indexOf(key);
+            if (colIndex === -1) return null;
+            const colLetter = String.fromCharCode(65 + colIndex);
+            return {
+                range: `${PERDCOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
+                values: [[value]]
+            }
+        }).filter(Boolean);
 
-    if (rowNumber !== -1) {
-      const data = [] as any[];
-      for (const [key, value] of Object.entries(writes)) {
-        if (value === undefined || value === '') continue;
-        const colIndex = finalHeaders.indexOf(key);
-        if (colIndex === -1) continue;
-        const colLetter = columnNumberToLetter(colIndex + 1);
-        data.push({
-          range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
-          values: [[value]],
-        });
-      }
-      if (data.length) {
-        await sheets.spreadsheets.values.batchUpdate({
-          spreadsheetId: process.env.SPREADSHEET_ID!,
-          requestBody: { valueInputOption: 'RAW', data },
-        });
-      }
+        if (dataForBatchUpdate.length > 0) {
+            await sheets.spreadsheets.values.batchUpdate({
+                spreadsheetId: SPREADSHEET_ID,
+                requestBody: {
+                    valueInputOption: 'USER_ENTERED',
+                    data: dataForBatchUpdate
+                }
+            });
+        }
+
     } else {
-      const row: Record<string, any> = {};
-      finalHeaders.forEach(h => (row[h] = ''));
-      row['Cliente_ID'] = clienteId;
-      row['Nome da Empresa'] = nomeEmpresa;
-      row['CNPJ'] = `'${cnpj}`;
-      for (const [k, v] of Object.entries(writes)) {
-        if (v !== undefined) row[k] = v;
-      }
-      const values = finalHeaders.map(h => row[h]);
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.SPREADSHEET_ID!,
-        range: PERDECOMP_SHEET_NAME,
-        valueInputOption: 'RAW',
-        requestBody: { values: [values] },
-      });
+        // Append new row if company not found
+        const newRow = headers.map(h => {
+            if (h === 'Cliente_ID') return clienteId;
+            if (h === 'Nome da Empresa') return nomeEmpresa;
+            if (h === 'CNPJ') return `'${cnpj}`;
+            return updateData[h as keyof typeof updateData] ?? '';
+        });
+        await sheets.spreadsheets.values.append({
+            spreadsheetId: SPREADSHEET_ID,
+            range: PERDCOMP_SHEET_NAME,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [newRow] },
+        });
     }
 
-    const resp: any = {
+    // --- Resposta Final ---
+    const finalResponse = {
       ok: true,
-      header: { requested_at: headerRequestedAt },
-      mappedCount,
-      total_perdcomp: totalPerdcomp,
-      site_receipt: siteReceipt,
       perdcomp: perdcompArray,
       perdcompResumo: resumo,
-      primeiro: {
-        perdcomp: first?.perdcomp,
-        solicitante: first?.solicitante,
-        tipo_documento: first?.tipo_documento,
-        tipo_credito: first?.tipo_credito,
-        data_transmissao: first?.data_transmissao,
-        situacao: first?.situacao,
-        situacao_detalhamento: first?.situacao_detalhamento,
-      },
-      cnpj,
+      header: apiResponse.header,
+      debug: debugMode ? { ...apiResponse, perdcompResumo: resumo } : undefined,
     };
-    if (debugMode) {
-      resp.debug = {
-        requestedAt,
-        fonte: 'api',
-        apiRequest,
-        apiResponse,
-        mappedCount,
-        siteReceipts: apiResponse?.site_receipts,
-        header: apiResponse?.header,
-        total_perdcomp: totalPerdcomp,
-        perdcompResumo: resumo,
-      };
-    }
 
-    return NextResponse.json(resp);
+    return NextResponse.json(finalResponse);
 
   } catch (error: any) {
     console.error('[API /infosimples/perdcomp]', error);
-    return NextResponse.json(
-      {
-        error: true,
-        httpStatus: 502,
-        httpStatusText: 'Bad Gateway',
-        providerCode: null,
-        providerMessage: error?.message || 'API error',
-      },
-      { status: 502 }
-    );
+    const response = {
+      error: true,
+      message: error?.providerMessage || error?.message || 'Erro interno no servidor.',
+      httpStatus: error?.status || 500,
+      providerCode: error?.providerCode,
+    };
+    return NextResponse.json(response, { status: error?.status || 500 });
   }
 }
