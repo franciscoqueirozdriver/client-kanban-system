@@ -258,6 +258,42 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       setEnrichTarget(null);
     }
   }
+
+  async function handleEnrichFromMain(source: 'selected' | 'query', selectedCompany?: Company, rawQuery?: string, target?: { type: 'client' | 'competitor'; index?: number }) {
+    let nome = '';
+    let cnpj = '';
+    if (source === 'selected' && selectedCompany) {
+      nome = selectedCompany.Nome_da_Empresa || '';
+      cnpj = padCNPJ14(selectedCompany.CNPJ_Empresa);
+    } else if (source === 'query' && rawQuery) {
+      nome = rawQuery.trim();
+    }
+    if (!nome && !cnpj) return;
+
+    setIsEnriching(true);
+    setEnrichTarget(target ? (target.type === 'client' ? 'client' : `competitor-${target.index}`) : null);
+    try {
+      const resp = await fetch('/api/empresas/enriquecer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, cnpj })
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json?.error || 'Falha ao enriquecer');
+      setEnrichPreview({ ...json, base: selectedCompany });
+      setShowEnrichPreview(true);
+      setModalTarget(target || null);
+    } catch (e: any) {
+      console.error(e);
+      setEnrichPreview({ error: e?.toString?.() || 'Erro ao enriquecer', base: selectedCompany });
+      setShowEnrichPreview(true);
+      setModalTarget(target || null);
+    } finally {
+      setIsEnriching(false);
+      setEnrichTarget(null);
+    }
+  }
+
   function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -299,7 +335,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     const newCompetitors = [...competitors];
     let selectedIndex = 0;
 
-    // First, fill any existing empty slots
     for (let i = 0; i < newCompetitors.length && selectedIndex < selected.length; i++) {
       if (!newCompetitors[i]) {
         const s = selected[selectedIndex++];
@@ -316,11 +351,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       }
     }
 
-    // Then, add remaining selections if there's space
     while (newCompetitors.filter(Boolean).length < MAX_COMPETITORS && selectedIndex < selected.length) {
       const s = selected[selectedIndex++];
       const lastConsultation = await checkLastConsultation(s.cnpj);
-      // Find the next available empty slot or add to the end
       const emptySlotIndex = newCompetitors.findIndex(c => !c);
       const newEntry = {
         company: {
@@ -345,7 +378,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   return (
     <div className="container mx-auto p-4 text-gray-900 dark:text-gray-100">
       <h1 className="text-3xl font-bold mb-6">Comparativo PER/DCOMP</h1>
-      {/* --- Form Section --- */}
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -355,6 +387,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
               onSelect={(company) => handleSelectCompany('client', company)}
               onClear={() => { setClient(null); setResults([]); }}
               onNoResults={(q) => handleRegisterNewFromQuery(q, { type: 'client' })}
+              onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'client' })}
+              onEnrichQuery={(q) => handleEnrichFromMain('query', undefined, q, { type: 'client' })}
+              isEnriching={isEnriching && enrichTarget === 'client'}
               initialQuery={q}
             />
             {client?.lastConsultation && (
@@ -389,6 +424,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                             onSelect={(company) => handleSelectCompany('competitor', company, index)}
                             onClear={() => handleRemoveCompetitor(index)}
                             onNoResults={(q) => handleRegisterNewFromQuery(q, { type: 'competitor', index })}
+                            onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'competitor', index })}
+                            onEnrichQuery={(q) => handleEnrichFromMain('query', undefined, q, { type: 'competitor', index })}
+                            isEnriching={isEnriching && enrichTarget === `competitor-${index}`}
                         />
                     </div>
                     <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
