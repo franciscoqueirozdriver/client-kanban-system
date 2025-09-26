@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 // --- Planilha & Colunas ---
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
-const PERDCOMP_SHEET_NAME = 'PERDCOMP';
+const PERDCOMP_SHEET_NAME = 'PERDECOMP';
 const PERDCOMP_ITENS_SHEET_NAME = 'PERDCOMP_ITENS';
 const DIC_CREDITOS_SHEET_NAME = 'DIC_CREDITOS';
 
@@ -73,16 +73,33 @@ async function getCreditosDict(): Promise<Record<string, string>> {
 
 async function getExistingPerdcompIds(cnpj: string): Promise<Set<string>> {
     try {
+        const sheets = await getSheetsClient();
+        const spreadsheet = await sheets.spreadsheets.get({
+            spreadsheetId: SPREADSHEET_ID,
+        });
+        const sheetExists = spreadsheet.data.sheets?.some(
+            s => s.properties?.title === PERDCOMP_ITENS_SHEET_NAME
+        );
+
+        if (!sheetExists) {
+            console.warn(`Aba ${PERDCOMP_ITENS_SHEET_NAME} não encontrada. Assumindo que está vazia.`);
+            return new Set();
+        }
+
         const { rows, headers } = await getSheetData(PERDCOMP_ITENS_SHEET_NAME);
         const cnpjIndex = headers.indexOf('CNPJ');
         const perdcompNumIndex = headers.indexOf('Perdcomp_Numero');
         if (cnpjIndex === -1 || perdcompNumIndex === -1) return new Set();
-        return new Set(rows.filter(row => padCNPJ14(row[cnpjIndex]) === cnpj).map(row => row[perdcompNumIndex]).filter(Boolean));
+
+        const ids = rows
+            .filter(row => padCNPJ14(row[cnpjIndex]) === cnpj)
+            .map(row => row[perdcompNumIndex])
+            .filter(Boolean);
+
+        return new Set(ids);
     } catch (error) {
-        if ((error as any)?.message?.includes('Unable to parse range')) {
-            return new Set();
-        }
-        console.error(`Falha ao ler ${PERDCOMP_ITENS_SHEET_NAME}`, error);
+        console.error(`Falha ao verificar ou ler a aba ${PERDCOMP_ITENS_SHEET_NAME}`, error);
+        // Em caso de qualquer outro erro, retorna um set vazio para não bloquear a operação principal.
         return new Set();
     }
 }
@@ -247,7 +264,13 @@ export async function POST(request: Request) {
         }
     }
 
-    const { headers, rows } = await getSheetData(PERDCOMP_SHEET_NAME);
+    const { headers, rows } = await getSheetData(PERDCOMP_SHEET_NAME).catch(err => {
+        if (err.message.includes('Unable to parse range')) {
+            console.warn(`Aba ${PERDCOMP_SHEET_NAME} está vazia ou não foi encontrada. Tratando como nova.`);
+            return { headers: [], rows: [] };
+        }
+        throw err;
+    });
     const rowIndex = rows.findIndex(r => padCNPJ14(r.CNPJ) === cnpj || r.Cliente_ID === clienteId);
 
     const top3CreditosStr = resumo.topCreditos.map(c => `${c.codigo}:${c.quantidade}`).join(' | ');
