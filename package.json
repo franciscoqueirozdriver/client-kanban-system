@@ -9,6 +9,7 @@
     "test": "jest --coverage"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.9",
     "@hello-pangea/dnd": "16.5.0",
     "@tanstack/react-table": "^8.21.3",
     "chart.js": "^4.5.0",
