@@ -1,45 +1,41 @@
 import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets.js';
-import { padCNPJ14 } from '@/utils/cnpj';
+import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const cnpj = searchParams.get('cnpj')?.trim();
+  const url = new URL(request.url);
+  const cnpj = padCNPJ14(url.searchParams.get('cnpj') ?? '');
 
-  if (!cnpj) {
-    return NextResponse.json({ message: 'Query parameter "cnpj" is required' }, { status: 400 });
+  if (!isValidCNPJ(cnpj)) {
+    return NextResponse.json({ error: 'CNPJ inválido' }, { status: 400 });
   }
 
-  const cleanCnpj = padCNPJ14(cnpj);
-
   try {
-    const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    const { rows, headers } = await getSheetData(PERDECOMP_SHEET_NAME);
 
-    const dataForCnpj = rows.filter(row => {
-      const rowCnpj = padCNPJ14(row.CNPJ);
-      return rowCnpj === cleanCnpj;
-    });
+    const cnpjColIndex = headers.indexOf('CNPJ');
+    const dateColIndex = headers.indexOf('Data_Consulta');
 
-    if (dataForCnpj.length === 0) {
-      return NextResponse.json({ lastConsultation: null });
+    if (cnpjColIndex === -1 || dateColIndex === -1) {
+      return NextResponse.json({ error: 'Colunas não encontradas na planilha.' }, { status: 500 });
     }
 
-    // Find the most recent consultation date
-    const mostRecentConsultation = dataForCnpj.reduce((latest, row) => {
-      const currentDate = new Date(row.Data_Consulta);
-      if (!latest || currentDate > new Date(latest)) {
-        return row.Data_Consulta;
-      }
-      return latest;
-    }, '' as string | null);
+    const matchedRow = rows.find(row => padCNPJ14(row[cnpjColIndex]) === cnpj);
 
-    return NextResponse.json({ lastConsultation: mostRecentConsultation });
+    if (matchedRow && matchedRow[dateColIndex]) {
+      return NextResponse.json({ lastConsultation: matchedRow[dateColIndex] });
+    }
 
-  } catch (error) {
-    console.error('[API /perdecomp/verificar]', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ message: 'Failed to verify consultation', error: errorMessage }, { status: 500 });
+    return NextResponse.json({ lastConsultation: null });
+
+  } catch (error: any) {
+    // If the sheet/range doesn't exist, it's not an error, just means no last consultation.
+    if (error?.message?.includes('Unable to parse range')) {
+        return NextResponse.json({ lastConsultation: null });
+    }
+    console.error('Error fetching from Google Sheets:', error);
+    return NextResponse.json({ error: 'Erro ao acessar a planilha.' }, { status: 500 });
   }
 }

@@ -7,7 +7,7 @@ import NewCompanyModal from '../../../components/NewCompanyModal';
 import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
-import { padCNPJ14, isValidCNPJ, normalizeDigits, isEmptyCNPJLike, isCNPJ14 } from '@/utils/cnpj';
+import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 import { PerdcompFamilia, MotivoNormalizado } from '@/utils/perdcomp';
 
 // --- Helper Types ---
@@ -162,7 +162,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
       if (res.ok) {
         const { lastConsultation } = await res.json();
-        return lastConsultation;
+        return lastConsultation || null; // FIX: Ensure null is returned for empty/falsy values
       }
       return null;
     } catch (error) {
