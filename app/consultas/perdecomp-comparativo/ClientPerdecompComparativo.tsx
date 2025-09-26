@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { FaSpinner } from 'react-icons/fa';
+import { FaSpinner, FaInfoCircle } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
 import NewCompanyModal from '../../../components/NewCompanyModal';
 import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
@@ -214,13 +214,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     })();
   }, [q]);
 
-  useEffect(() => {
-    if (client && !globalLoading && results.length === 0) {
-        handleConsult();
-    }
-  }, [client, globalLoading, results.length, handleConsult]);
-
-
   const handleSaveNewCompany = (newCompany: Company) => {
     if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
       handleSelectCompany('competitor', newCompany, modalTarget.index);
@@ -278,7 +271,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             <Autocomplete
               selectedCompany={client?.company ?? null}
               onSelect={(company) => handleSelectCompany('client', company)}
-              onClear={() => setClient(null)}
+              onClear={() => { setClient(null); setResults([]); }}
               onNoResults={(q) => handleRegisterNewFromQuery(q, { type: 'client' })}
               initialQuery={q}
             />
@@ -334,7 +327,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         <div className="mt-8 text-center">
             <button onClick={handleConsult} disabled={globalLoading || !client} className="px-8 py-3 bg-violet-600 text-white font-bold rounded-lg hover:bg-violet-700 disabled:bg-gray-400 flex items-center justify-center mx-auto">
               {globalLoading && <FaSpinner className="animate-spin mr-2" />}
-              {globalLoading ? 'Consultando...' : 'Consultar / Atualizar Comparação'}
+              {globalLoading ? 'Consultando...' : 'Consultar'}
             </button>
         </div>
       </div>
@@ -344,7 +337,14 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         {results.map(({ company, data, status, error }) => (
           <div key={company.CNPJ_Empresa} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col">
             <h3 className="font-bold text-lg truncate mb-1" title={company.Nome_da_Empresa}>{company.Nome_da_Empresa}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{padCNPJ14(company.CNPJ_Empresa)}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{padCNPJ14(company.CNPJ_Empresa)}</p>
+
+            {data?.fromCache && (
+                <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 text-xs rounded-md flex items-center gap-2">
+                    <FaInfoCircle />
+                    <span>Dados de {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : 'consulta anterior'}.</span>
+                </div>
+            )}
 
             {status === 'loading' && <div className="flex-grow flex items-center justify-center"><FaSpinner className="animate-spin text-4xl text-violet-500"/></div>}
             {status === 'error' && <div className="flex-grow flex items-center justify-center text-red-500 text-sm text-center">{buildApiErrorLabel(error)}</div>}
@@ -352,15 +352,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             {status === 'loaded' && data && data.perdcompResumo && (() => {
               const resumo = data.perdcompResumo;
               const temRegistros = resumo.totalSemCancelamento > 0;
-
-              if (data.fromCache) {
-                return (
-                  <div className="flex-grow flex flex-col items-center justify-center text-center">
-                    <p className="text-gray-600 dark:text-gray-300">Dados da última consulta em {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : 'data desconhecida'}.</p>
-                    <p className="text-gray-500 text-sm">(Desmarque "Refazer consulta" para ver detalhes)</p>
-                  </div>
-                );
-              }
 
               if (!temRegistros) {
                 return (
