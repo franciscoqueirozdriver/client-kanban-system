@@ -19,7 +19,8 @@ export async function GET(request: Request) {
     const dateColIndex = headers.indexOf('Data_Consulta');
 
     if (cnpjColIndex === -1 || dateColIndex === -1) {
-      return NextResponse.json({ error: 'Colunas não encontradas na planilha.' }, { status: 500 });
+      // This can happen if the sheet is new/empty. It's not a server error.
+      return NextResponse.json({ lastConsultation: null });
     }
 
     const matchedRow = rows.find(row => padCNPJ14(row[cnpjColIndex]) === cnpj);
