@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
 import NewCompanyModal from '../../../components/NewCompanyModal';
@@ -18,7 +18,6 @@ interface Company {
   [key: string]: any;
 }
 
-// Based on Agregado from utils/perdcomp.ts
 interface PerdcompAgregado {
   total: number;
   canc: number;
@@ -87,8 +86,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const [competitors, setCompetitors] = useState<Array<CompanySelection | null>>([]);
   const MAX_COMPETITORS = 3;
   const remainingSlots = MAX_COMPETITORS - competitors.filter(c => !!c).length;
-  const [compDialogOpen, setCompDialogOpen] = useState(false);
-  const [compFetch, setCompFetch] = useState<{loading: boolean; error: string|null; items: Array<{nome:string; cnpj:string}>}>({ loading: false, error: null, items: [] });
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -110,11 +107,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const [cancelModalData, setCancelModalData] = useState<{ count: number; list: string[] } | null>(null);
   const showDebug = false;
   const q: string = initialQ;
-
-  const handleUseSuggestion = (flat: Prefill) => {
-    setCompanyPrefill(flat);
-    setCompanyModalOpen(true);
-  };
 
   const updateResult = (cnpj: string, data: Partial<ComparisonResult>) => {
     const c14 = padCNPJ14(cnpj);
@@ -144,7 +136,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) {
+      if (!res.ok || (data.error && data.fonte !== 'planilha')) {
         throw data;
       }
 
@@ -154,6 +146,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         perdcompResumo: data.perdcompResumo,
         lastConsultation,
         siteReceipt,
+        fromCache: data.fonte === 'planilha',
       };
       updateResult(cnpj, { status: 'loaded', data: cardData, debug: showDebug ? data.debug : null });
 
@@ -162,11 +155,35 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     }
   };
 
-  function sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
+  const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
+    try {
+      const c = padCNPJ14(cnpj);
+      if (!isValidCNPJ(c)) return null;
+      const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
+      if (res.ok) {
+        const { lastConsultation } = await res.json();
+        return lastConsultation;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to check last consultation', error);
+      return null;
+    }
+  };
 
-  const handleConsult = async () => {
+  const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
+    const cnpj = padCNPJ14(company.CNPJ_Empresa);
+    const normalized = { ...company, CNPJ_Empresa: cnpj };
+    const lastConsultation = await checkLastConsultation(cnpj);
+    const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
+    if (type === 'client') {
+      setClient(selection);
+    } else if (type === 'competitor' && index !== undefined) {
+      setCompetitors(prev => prev.map((c, i) => i === index ? selection : c));
+    }
+  };
+
+  const handleConsult = useCallback(async () => {
     const allSelections = [client, ...competitors].filter((c): c is CompanySelection => c !== null);
     if (allSelections.length === 0) return;
 
@@ -178,27 +195,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       await sleep(600);
     }
     setGlobalLoading(false);
-  };
-
-  const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
-    const cnpj = padCNPJ14(company.CNPJ_Empresa);
-    const normalized = { ...company, CNPJ_Empresa: cnpj };
-    const selection: CompanySelection = { company: normalized, lastConsultation: null, forceRefresh: false };
-    if (type === 'client') {
-      setClient(selection);
-    } else if (type === 'competitor' && index !== undefined) {
-      setCompetitors(prev => prev.map((c, i) => i === index ? selection : c));
-    }
-  };
-
-  const handleSaveNewCompany = (newCompany: Company) => {
-    if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
-      handleSelectCompany('competitor', newCompany, modalTarget.index);
-    } else {
-      handleSelectCompany('client', newCompany);
-    }
-    setCompanyModalOpen(false);
-  };
+  }, [client, competitors, startDate, endDate]);
 
   useEffect(() => {
     if (!q) return;
@@ -209,16 +206,30 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
             await handleSelectCompany('client', data[0]);
-            handleConsult();
           }
         }
       } catch (err) {
         console.error('Erro ao pré-preencher busca', err);
       }
     })();
-  }, [q, handleConsult, handleSelectCompany]);
+  }, [q]);
 
-  // Other handlers (handleAddCompetitor, etc.) are omitted for brevity as they are unchanged
+  useEffect(() => {
+    if (client && !globalLoading && results.length === 0) {
+        handleConsult();
+    }
+  }, [client, globalLoading, results.length, handleConsult]);
+
+
+  const handleSaveNewCompany = (newCompany: Company) => {
+    if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
+      handleSelectCompany('competitor', newCompany, modalTarget.index);
+    } else {
+      handleSelectCompany('client', newCompany);
+    }
+    setCompanyModalOpen(false);
+  };
+
   const handleAddCompetitor = () => {
     if (competitors.length < MAX_COMPETITORS) setCompetitors([...competitors, null]);
   };
@@ -234,7 +245,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     setModalTarget(opts.target);
     setCompanyModalOpen(true);
   }
-
   async function handleRegisterNewFromQuery(query: string, target: { type: 'client' | 'competitor'; index?: number }) {
     setIsEnriching(true);
     setEnrichTarget(target.type === 'client' ? 'client' : `competitor-${target.index}`);
@@ -253,40 +263,8 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       setEnrichTarget(null);
     }
   }
-
-  async function handleEnrichFromMain(source: 'selected' | 'query', selectedCompany?: Company, rawQuery?: string, target?: { type: 'client' | 'competitor'; index?: number }) {
-    let nome = '';
-    let cnpj = '';
-    if (source === 'selected' && selectedCompany) {
-      nome = selectedCompany.Nome_da_Empresa || '';
-      cnpj = padCNPJ14(selectedCompany.CNPJ_Empresa);
-    } else if (source === 'query' && rawQuery) {
-      nome = rawQuery.trim();
-    }
-    if (!nome && !cnpj) return;
-
-    setIsEnriching(true);
-    setEnrichTarget(target ? (target.type === 'client' ? 'client' : `competitor-${target.index}`) : null);
-    try {
-      const resp = await fetch('/api/empresas/enriquecer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, cnpj })
-      });
-      const json = await resp.json();
-      if (!resp.ok) throw new Error(json?.error || 'Falha ao enriquecer');
-      setEnrichPreview({ ...json, base: selectedCompany });
-      setShowEnrichPreview(true);
-      setModalTarget(target || null);
-    } catch (e: any) {
-      console.error(e);
-      setEnrichPreview({ error: e?.toString?.() || 'Erro ao enriquecer', base: selectedCompany });
-      setShowEnrichPreview(true);
-      setModalTarget(target || null);
-    } finally {
-      setIsEnriching(false);
-      setEnrichTarget(null);
-    }
+  function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   return (
@@ -294,7 +272,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       <h1 className="text-3xl font-bold mb-6">Comparativo PER/DCOMP</h1>
       {/* --- Form Section --- */}
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        {/* Client and Date Inputs */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="font-semibold block mb-2">Cliente Principal</label>
@@ -305,6 +282,14 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
               onNoResults={(q) => handleRegisterNewFromQuery(q, { type: 'client' })}
               initialQuery={q}
             />
+            {client?.lastConsultation && (
+              <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={client.forceRefresh} onChange={(e) => setClient(c => c ? {...c, forceRefresh: e.target.checked} : null)} className="form-checkbox h-4 w-4 text-violet-600"/>
+                  <span>Refazer consulta (última em: {new Date(client.lastConsultation).toLocaleDateString()})</span>
+                </label>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -317,25 +302,35 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             </div>
           </div>
         </div>
-        {/* Competitors */}
+
         <div className="mt-6">
           <h3 className="font-semibold mb-2">Concorrentes (até {MAX_COMPETITORS})</h3>
           {competitors.map((comp, index) => (
-            <div key={index} className="mb-4 flex items-center gap-2">
-              <div className="flex-grow">
-                <Autocomplete
-                  selectedCompany={comp?.company ?? null}
-                  onSelect={(company) => handleSelectCompany('competitor', company, index)}
-                  onClear={() => handleRemoveCompetitor(index)}
-                  onNoResults={(q) => handleRegisterNewFromQuery(q, { type: 'competitor', index })}
-                />
-              </div>
-              <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
+            <div key={index} className="mb-4">
+                <div className="flex items-center gap-2">
+                    <div className="flex-grow">
+                        <Autocomplete
+                            selectedCompany={comp?.company ?? null}
+                            onSelect={(company) => handleSelectCompany('competitor', company, index)}
+                            onClear={() => handleRemoveCompetitor(index)}
+                            onNoResults={(q) => handleRegisterNewFromQuery(q, { type: 'competitor', index })}
+                        />
+                    </div>
+                    <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
+                </div>
+                {comp?.lastConsultation && (
+                    <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        <label className="flex items-center gap-2">
+                            <input type="checkbox" checked={comp.forceRefresh} onChange={(e) => handleCompetitorChange(index, { forceRefresh: e.target.checked })} className="form-checkbox h-4 w-4 text-violet-600"/>
+                            <span>Refazer consulta (última em: {new Date(comp.lastConsultation).toLocaleDateString()})</span>
+                        </label>
+                    </div>
+                )}
             </div>
           ))}
           {remainingSlots > 0 && <button onClick={handleAddCompetitor} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"> + Adicionar Concorrente </button>}
         </div>
-        {/* Action Button */}
+
         <div className="mt-8 text-center">
             <button onClick={handleConsult} disabled={globalLoading || !client} className="px-8 py-3 bg-violet-600 text-white font-bold rounded-lg hover:bg-violet-700 disabled:bg-gray-400 flex items-center justify-center mx-auto">
               {globalLoading && <FaSpinner className="animate-spin mr-2" />}
@@ -358,6 +353,15 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
               const resumo = data.perdcompResumo;
               const temRegistros = resumo.totalSemCancelamento > 0;
 
+              if (data.fromCache) {
+                return (
+                  <div className="flex-grow flex flex-col items-center justify-center text-center">
+                    <p className="text-gray-600 dark:text-gray-300">Dados da última consulta em {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : 'data desconhecida'}.</p>
+                    <p className="text-gray-500 text-sm">(Desmarque "Refazer consulta" para ver detalhes)</p>
+                  </div>
+                );
+              }
+
               if (!temRegistros) {
                 return (
                   <div className="flex-grow flex flex-col items-center justify-center text-center">
@@ -373,7 +377,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                     <span className="font-bold">{resumo.totalSemCancelamento}</span>
                   </div>
 
-                  {/* Bloco: Quantos são */}
                   <div className="pt-2 border-t">
                     <div className="font-medium mb-1">Quantos são:</div>
                     <div className="pl-2 space-y-1">
@@ -383,7 +386,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                     </div>
                   </div>
 
-                  {/* Bloco: Créditos mais usados */}
                   {resumo.topCreditos.length > 0 && (
                     <div className="pt-2 border-t">
                       <div className="font-medium mb-1">Créditos mais usados:</div>
@@ -398,7 +400,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                     </div>
                   )}
 
-                  {/* Bloco: Situações */}
                   {Object.values(resumo.porMotivo).some(v => v > 0) && (
                     <div className="pt-2 border-t">
                       <div className="font-medium mb-1">Situações (normalizadas):</div>
@@ -413,7 +414,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                     </div>
                   )}
 
-                  {/* Bloco: Cancelamentos */}
                   <div className="pt-2 border-t">
                     <button className="underline text-sm text-blue-600 hover:text-blue-800" onClick={() => setCancelModalData({ count: resumo.canc, list: resumo.cancelamentosLista })}>
                       Cancelamentos: {resumo.canc}
@@ -454,7 +454,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         onSaved={handleSaveNewCompany}
       />
 
-      {/* Other modals (Enrichment, etc.) are unchanged and omitted for brevity */}
     </div>
   );
 }
