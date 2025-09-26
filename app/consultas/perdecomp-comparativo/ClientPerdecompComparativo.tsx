@@ -86,6 +86,8 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const [competitors, setCompetitors] = useState<Array<CompanySelection | null>>([]);
   const MAX_COMPETITORS = 3;
   const remainingSlots = MAX_COMPETITORS - competitors.filter(c => !!c).length;
+  const [compDialogOpen, setCompDialogOpen] = useState(false);
+  const [compFetch, setCompFetch] = useState<{loading: boolean; error: string|null; items: Array<{nome:string; cnpj:string}>}>({ loading: false, error: null, items: [] });
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -260,6 +262,66 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  function openCompetitorDialog() {
+    if (!client || remainingSlots <= 0) return;
+    setCompDialogOpen(true);
+    setCompFetch({ loading: true, error: null, items: [] });
+
+    fetch('/api/empresas/concorrentes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: client.company.Nome_da_Empresa, max: 20 })
+    })
+    .then(async (r) => {
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || 'Falha na busca');
+      const selCnpjs = new Set(competitors.filter(Boolean).map(c => padCNPJ14(c!.company.CNPJ_Empresa)));
+      const clientCnpj = padCNPJ14(client.company.CNPJ_Empresa);
+
+      const items = (data.items || []).filter((it: any) => {
+        const c = padCNPJ14(it?.cnpj);
+        const isClient = c && clientCnpj && c === clientCnpj;
+        const already = c && selCnpjs.has(c);
+        const nameDup = competitors.filter(Boolean).some(cmp => cmp!.company.Nome_da_Empresa.toLowerCase() === String(it?.nome || '').toLowerCase());
+        return !isClient && !already && !nameDup;
+      });
+
+      setCompFetch({ loading: false, error: null, items });
+    })
+    .catch(err => setCompFetch({ loading: false, error: String(err?.message || err), items: [] }));
+  }
+
+  function closeCompetitorDialog() {
+    setCompDialogOpen(false);
+  }
+
+  function confirmCompetitors(selected: Array<{ nome:string; cnpj:string }>) {
+    const next = [...competitors];
+    let idx = 0;
+    for (let i = 0; i < next.length && idx < selected.length; i++) {
+      if (!next[i]) {
+        const s = selected[idx++];
+        handleSelectCompany('competitor', {
+            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+            Nome_da_Empresa: s.nome,
+            CNPJ_Empresa: padCNPJ14(s.cnpj),
+        }, i);
+      }
+    }
+    let currentCompetitors = next.filter(Boolean).length;
+    while (currentCompetitors < MAX_COMPETITORS && idx < selected.length) {
+      const s = selected[idx++];
+      handleSelectCompany('competitor', {
+            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+            Nome_da_Empresa: s.nome,
+            CNPJ_Empresa: padCNPJ14(s.cnpj),
+        }, next.length);
+      next.push(null); // Placeholder for the async selection
+      currentCompetitors++;
+    }
+    setCompDialogOpen(false);
+  }
+
   return (
     <div className="container mx-auto p-4 text-gray-900 dark:text-gray-100">
       <h1 className="text-3xl font-bold mb-6">Comparativo PER/DCOMP</h1>
@@ -321,7 +383,10 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                 )}
             </div>
           ))}
-          {remainingSlots > 0 && <button onClick={handleAddCompetitor} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"> + Adicionar Concorrente </button>}
+          <div className="mt-2 flex gap-2">
+            {remainingSlots > 0 && <button onClick={handleAddCompetitor} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"> + Adicionar Concorrente </button>}
+            <button onClick={openCompetitorDialog} disabled={!client || remainingSlots === 0} className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed"> Pesquisar Concorrentes </button>
+          </div>
         </div>
 
         <div className="mt-8 text-center">
@@ -418,6 +483,15 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       </div>
 
       {/* --- Modals --- */}
+      <CompetitorSearchDialog
+        isOpen={compDialogOpen}
+        onClose={closeCompetitorDialog}
+        clientName={client?.company.Nome_da_Empresa || ''}
+        limitRemaining={remainingSlots}
+        fetchState={compFetch}
+        onConfirm={confirmCompetitors}
+      />
+
       {cancelModalData && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setCancelModalData(null)}>
           <div className="bg-white rounded-xl p-4 w-full max-w-md" onClick={e => e.stopPropagation()}>
