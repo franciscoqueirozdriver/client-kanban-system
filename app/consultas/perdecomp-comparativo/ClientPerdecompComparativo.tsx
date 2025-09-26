@@ -234,11 +234,59 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     setModalTarget(opts.target);
     setCompanyModalOpen(true);
   }
+
   async function handleRegisterNewFromQuery(query: string, target: { type: 'client' | 'competitor'; index?: number }) {
-     openNewCompanyModal({ initialData: { Nome_da_Empresa: query }, warning: true, target });
+    setIsEnriching(true);
+    setEnrichTarget(target.type === 'client' ? 'client' : `competitor-${target.index}`);
+    try {
+      const r = await fetch('/api/empresas/enriquecer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: query })
+      });
+      const { suggestion } = await r.json();
+      openNewCompanyModal({ initialData: suggestion ?? { Nome_da_Empresa: query }, warning: !suggestion, target });
+    } catch {
+      openNewCompanyModal({ initialData: { Nome_da_Empresa: query }, warning: true, target });
+    } finally {
+      setIsEnriching(false);
+      setEnrichTarget(null);
+    }
   }
+
   async function handleEnrichFromMain(source: 'selected' | 'query', selectedCompany?: Company, rawQuery?: string, target?: { type: 'client' | 'competitor'; index?: number }) {
-    // Enrichment logic unchanged
+    let nome = '';
+    let cnpj = '';
+    if (source === 'selected' && selectedCompany) {
+      nome = selectedCompany.Nome_da_Empresa || '';
+      cnpj = padCNPJ14(selectedCompany.CNPJ_Empresa);
+    } else if (source === 'query' && rawQuery) {
+      nome = rawQuery.trim();
+    }
+    if (!nome && !cnpj) return;
+
+    setIsEnriching(true);
+    setEnrichTarget(target ? (target.type === 'client' ? 'client' : `competitor-${target.index}`) : null);
+    try {
+      const resp = await fetch('/api/empresas/enriquecer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, cnpj })
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json?.error || 'Falha ao enriquecer');
+      setEnrichPreview({ ...json, base: selectedCompany });
+      setShowEnrichPreview(true);
+      setModalTarget(target || null);
+    } catch (e: any) {
+      console.error(e);
+      setEnrichPreview({ error: e?.toString?.() || 'Erro ao enriquecer', base: selectedCompany });
+      setShowEnrichPreview(true);
+      setModalTarget(target || null);
+    } finally {
+      setIsEnriching(false);
+      setEnrichTarget(null);
+    }
   }
 
   return (
