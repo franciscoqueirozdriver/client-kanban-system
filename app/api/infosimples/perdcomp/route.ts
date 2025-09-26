@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
+import { getSheetData, getSheetsClient, clearSheetCache } from '../../../../lib/googleSheets.js';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 import { agregaPerdcomp, parsePerdcompNumero, normalizaMotivo, PerdcompFamilia } from '@/utils/perdcomp';
 
@@ -314,6 +314,9 @@ export async function POST(request: Request) {
             valueInputOption: 'USER_ENTERED', requestBody: { values: [newRow] },
         });
     }
+
+    // Limpa o cache da planilha principal para garantir que a próxima leitura seja nova
+    clearSheetCache(PERDCOMP_SHEET_NAME);
 
     const finalResponse = {
       ok: true, perdcomp: perdcompArray, perdcompResumo: resumo,

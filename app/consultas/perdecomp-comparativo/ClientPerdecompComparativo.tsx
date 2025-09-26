@@ -162,7 +162,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
       if (res.ok) {
         const { lastConsultation } = await res.json();
-        return lastConsultation || null; // FIX: Ensure null is returned for empty/falsy values
+        return lastConsultation || null;
       }
       return null;
     } catch (error) {
