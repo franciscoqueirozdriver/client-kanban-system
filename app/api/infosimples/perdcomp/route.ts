@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
-import { agregaPerdcomp, parsePerdcompNumero, normalizaMotivo } from '@/utils/perdcomp';
+import { agregaPerdcomp, parsePerdcompNumero, normalizaMotivo, PerdcompFamilia } from '@/utils/perdcomp';
 
 export const runtime = 'nodejs';
 
@@ -10,11 +10,7 @@ const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const PERDCOMP_SHEET_NAME = 'PERDCOMP';
 const PERDCOMP_ITENS_SHEET_NAME = 'PERDCOMP_ITENS';
 const DIC_CREDITOS_SHEET_NAME = 'DIC_CREDITOS';
-// A ser usado no futuro para enriquecer mais dados
-// const DIC_NATUREZAS_SHEET_NAME = 'DIC_NATUREZAS';
-// const DIC_TIPOS_SHEET_NAME = 'DIC_TIPOS';
 
-// Colunas esperadas na PERDCOMP_ITENS
 const PERDCOMP_ITENS_HEADERS = [
   'Cliente_ID', 'Empresa_ID', 'Nome da Empresa', 'CNPJ', 'Perdcomp_Numero', 'Perdcomp_Formatado',
   'B1', 'B2', 'Data_DDMMAA', 'Data_ISO', 'Tipo_Codigo', 'Tipo_Nome', 'Natureza', 'Familia',
@@ -22,7 +18,31 @@ const PERDCOMP_ITENS_HEADERS = [
   'Motivo_Normalizado', 'Solicitante', 'Fonte', 'Data_Consulta',
 ];
 
-// --- Funções Auxiliares ---
+// --- Funções Auxiliares (Restauradas) ---
+
+function sleep(ms: number) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function jitter(base: number) {
+    return Math.round(base * (0.8 + Math.random() * 0.4));
+}
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delays = [1500, 3000, 5000]): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      const status = err?.response?.status ?? err?.status ?? 0;
+      const shouldRetry = status >= 500 || status === 0 || err.providerCode === undefined; // Retry on 5xx, network errors, or non-provider errors
+      if (!shouldRetry || i === attempts - 1) throw err;
+      await sleep(jitter(delays[i] ?? 2000));
+    }
+  }
+  throw lastErr;
+}
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -40,16 +60,14 @@ async function getCreditosDict(): Promise<Record<string, string>> {
     const codeIndex = headers.indexOf('Credito_Codigo');
     const descIndex = headers.indexOf('Descricao');
     if (codeIndex === -1 || descIndex === -1) return {};
-
     return rows.reduce((acc, row) => {
       const code = row[codeIndex];
-      const desc = row[descIndex];
-      if (code) acc[code] = desc;
+      if (code) acc[code] = row[descIndex];
       return acc;
     }, {} as Record<string, string>);
   } catch (error) {
     console.error(`Falha ao carregar ${DIC_CREDITOS_SHEET_NAME}`, error);
-    return {}; // Retorna dicionário vazio em caso de erro
+    return {};
   }
 }
 
@@ -59,22 +77,40 @@ async function getExistingPerdcompIds(cnpj: string): Promise<Set<string>> {
         const cnpjIndex = headers.indexOf('CNPJ');
         const perdcompNumIndex = headers.indexOf('Perdcomp_Numero');
         if (cnpjIndex === -1 || perdcompNumIndex === -1) return new Set();
-
-        const ids = rows
-            .filter(row => padCNPJ14(row[cnpjIndex]) === cnpj)
-            .map(row => row[perdcompNumIndex])
-            .filter(Boolean);
-
-        return new Set(ids);
+        return new Set(rows.filter(row => padCNPJ14(row[cnpjIndex]) === cnpj).map(row => row[perdcompNumIndex]).filter(Boolean));
     } catch (error) {
-        // Se a aba não existir, retorna um Set vazio, permitindo que a escrita prossiga.
         if ((error as any)?.message?.includes('Unable to parse range')) {
-            console.warn(`Aba ${PERDCOMP_ITENS_SHEET_NAME} não encontrada. Assumindo que está vazia.`);
             return new Set();
         }
         console.error(`Falha ao ler ${PERDCOMP_ITENS_SHEET_NAME}`, error);
         return new Set();
     }
+}
+
+async function getLastPerdcompFromSheet({ cnpj, clienteId }: { cnpj?: string; clienteId?: string; }) {
+  try {
+    const { rows, headers } = await getSheetData(PERDCOMP_SHEET_NAME);
+    const idxCliente = headers.indexOf('Cliente_ID');
+    const idxCnpj = headers.indexOf('CNPJ');
+    const match = rows.find(r => (clienteId && r[idxCliente] === clienteId) || (cnpj && padCNPJ14(r[idxCnpj]) === cnpj));
+    if (!match) return null;
+
+    const dcomp = Number(match[headers.indexOf('Qtd_PERDCOMP_DCOMP')] ?? 0);
+    const rest = Number(match[headers.indexOf('Qtd_PERDCOMP_REST')] ?? 0);
+    const ressarc = Number(match[headers.indexOf('Qtd_PERDCOMP_RESSARC')] ?? 0);
+    const canc = Number(match[headers.indexOf('Qtd_PERDCOMP_CANCEL')] ?? 0);
+    const totalSemCancelamento = Number(match[headers.indexOf('Qtd_PERDCOMP_TOTAL_SEM_CANCEL')] ?? 0);
+
+    return {
+      quantidade: totalSemCancelamento || (dcomp + rest + ressarc),
+      dcomp, rest, ressarc, canc,
+      site_receipt: match[headers.indexOf('URL_Comprovante_HTML')] || null,
+      requested_at: match[headers.indexOf('Data_Consulta')] || null,
+    };
+  } catch (e) {
+    console.error("Error getting last perdcomp from sheet:", e);
+    return null;
+  }
 }
 
 
@@ -88,17 +124,49 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: true, message: 'CNPJ inválido' }, { status: 400 });
     }
 
-    const {
-      clienteId,
-      nomeEmpresa,
-      force = false,
-      debug: debugMode = false,
-    } = body;
+    const { clienteId, nomeEmpresa, force = false, debug: debugMode = false } = body;
+    if (!clienteId || !nomeEmpresa) {
+        return NextResponse.json({ message: 'clienteId e nomeEmpresa são obrigatórios.' }, { status: 400 });
+    }
 
     let data_fim = body?.data_fim?.slice(0, 10) || todayISO();
     let data_inicio = body?.data_inicio?.slice(0, 10) || addYears(data_fim, -5);
 
-    // --- Chamada à API Infosimples (com cache e retries) ---
+    // Restaurando a lógica de cache
+    if (!force) {
+        const cachedData = await getLastPerdcompFromSheet({ cnpj, clienteId });
+        if (cachedData && cachedData.requested_at) {
+             const { rows } = await getSheetData(PERDCOMP_SHEET_NAME);
+             const row = rows.find(r => padCNPJ14(r.CNPJ) === cnpj || r.Cliente_ID === clienteId);
+             if (row) {
+                const resumo = {
+                    total: Number(row.Qtd_PERDCOMP_TOTAL || 0),
+                    canc: Number(row.Qtd_PERDCOMP_CANCEL || 0),
+                    totalSemCancelamento: Number(row.Qtd_PERDCOMP_TOTAL_SEM_CANCEL || 0),
+                    porFamilia: {
+                        DCOMP: Number(row.Qtd_PERDCOMP_DCOMP || 0),
+                        REST: Number(row.Qtd_PERDCOMP_REST || 0),
+                        RESSARC: Number(row.Qtd_PERDCOMP_RESSARC || 0),
+                        CANC: Number(row.Qtd_PERDCOMP_CANCEL || 0),
+                        DESCONHECIDO: 0,
+                    } as Record<PerdcompFamilia, number>,
+                    // Outros campos do resumo podem ser reconstruídos ou armazenados se necessário
+                    topCreditos: [],
+                    porMotivo: {} as any,
+                    porNatureza: {},
+                    cancelamentosLista: (row.Lista_PERDCOMP_CANCEL || '').split('; '),
+                };
+                return NextResponse.json({
+                    ok: true,
+                    fonte: 'planilha',
+                    perdcompResumo: resumo,
+                    perdcomp: [], // Não retornamos a lista detalhada do cache
+                    header: { requested_at: cachedData.requested_at },
+                });
+             }
+        }
+    }
+
     const token = process.env.INFOSIMPLES_TOKEN;
     if (!token) throw new Error('INFOSIMPLES_TOKEN is not set');
 
@@ -122,132 +190,96 @@ export async function POST(request: Request) {
       return json;
     };
 
-    const apiResponse = await doCall(); // Simplificado para focar na lógica principal
+    let apiResponse;
+    try {
+        apiResponse = await withRetry(doCall);
+    } catch (err: any) {
+        const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
+        return NextResponse.json(
+            {
+              error: true,
+              httpStatus: err?.status || 502,
+              providerCode: err?.providerCode,
+              message: err?.providerMessage || 'API error',
+              fallback,
+            },
+            { status: err?.status || 502 }
+        );
+    }
 
     const perdcompArrayRaw = apiResponse?.code === 612 ? [] : apiResponse?.data?.[0]?.perdcomp;
     const perdcompArray = Array.isArray(perdcompArrayRaw) ? perdcompArrayRaw : [];
 
-    if (perdcompArray.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        message: 'Nenhum PER/DCOMP encontrado no período.',
-        perdcompResumo: agregaPerdcomp([], {}),
-        perdcomp: [],
-      });
-    }
-
-    // --- Enriquecimento e Persistência ---
     const creditosDict = await getCreditosDict();
     const resumo = agregaPerdcomp(perdcompArray, creditosDict);
     const headerRequestedAt = apiResponse?.header?.requested_at || new Date().toISOString();
 
-    // 1. Gravar Itens Detalhados em PERDCOMP_ITENS
-    const existingIds = await getExistingPerdcompIds(cnpj);
-    const newItemsValues: (string | number | boolean)[][] = [];
+    if (perdcompArray.length > 0) {
+        const existingIds = await getExistingPerdcompIds(cnpj);
+        const newItemsValues: (string | number | boolean)[][] = [];
 
-    for (const item of perdcompArray) {
-      if (!item.perdcomp || existingIds.has(item.perdcomp)) {
-        continue; // Pula duplicatas
-      }
-      const p = parsePerdcompNumero(item.perdcomp);
-      if (!p.valido) continue;
+        for (const item of perdcompArray) {
+          if (!item.perdcomp || existingIds.has(item.perdcomp)) continue;
+          const p = parsePerdcompNumero(item.perdcomp);
+          if (!p.valido) continue;
 
-      const motivo = normalizaMotivo(item.situacao, item.situacao_detalhamento);
-      const rowData = {
-        'Cliente_ID': clienteId,
-        'Empresa_ID': clienteId, // Usando Cliente_ID como Empresa_ID por padrão
-        'Nome da Empresa': nomeEmpresa,
-        'CNPJ': `'${cnpj}`,
-        'Perdcomp_Numero': item.perdcomp,
-        'Perdcomp_Formatado': p.formatted || '',
-        'B1': p.b1, 'B2': p.b2, 'Data_DDMMAA': p.dataDDMMAA, 'Data_ISO': p.dataISO,
-        'Tipo_Codigo': p.tipoNum, 'Tipo_Nome': p.tipoNum === 1 ? 'DCOMP' : p.tipoNum === 2 ? 'REST' : p.tipoNum === 8 ? 'CANC' : 'DESCONHECIDO',
-        'Natureza': p.natureza, 'Familia': p.familia,
-        'Credito_Codigo': p.credito, 'Credito_Descricao': creditosDict[p.credito!] || '(pendente de descrição)',
-        'Protocolo': p.protocolo,
-        'Situacao': item.situacao, 'Situacao_Detalhamento': item.situacao_detalhamento,
-        'Motivo_Normalizado': motivo,
-        'Solicitante': item.solicitante,
-        'Fonte': 'consulta_individual',
-        'Data_Consulta': headerRequestedAt,
-      };
-      newItemsValues.push(PERDCOMP_ITENS_HEADERS.map(h => rowData[h as keyof typeof rowData] ?? ''));
+          const motivo = normalizaMotivo(item.situacao, item.situacao_detalhamento);
+          const rowData: {[key: string]: any} = {
+            'Cliente_ID': clienteId, 'Empresa_ID': clienteId, 'Nome da Empresa': nomeEmpresa, 'CNPJ': `'${cnpj}`,
+            'Perdcomp_Numero': item.perdcomp, 'Perdcomp_Formatado': p.formatted || '', 'B1': p.b1, 'B2': p.b2,
+            'Data_DDMMAA': p.dataDDMMAA, 'Data_ISO': p.dataISO, 'Tipo_Codigo': p.tipoNum,
+            'Tipo_Nome': p.tipoNum === 1 ? 'DCOMP' : p.tipoNum === 2 ? 'REST' : p.tipoNum === 8 ? 'CANC' : 'DESCONHECIDO',
+            'Natureza': p.natureza, 'Familia': p.familia, 'Credito_Codigo': p.credito,
+            'Credito_Descricao': creditosDict[p.credito!] || '(pendente de descrição)',
+            'Protocolo': p.protocolo, 'Situacao': item.situacao, 'Situacao_Detalhamento': item.situacao_detalhamento,
+            'Motivo_Normalizado': motivo, 'Solicitante': item.solicitante, 'Fonte': 'consulta_individual',
+            'Data_Consulta': headerRequestedAt,
+          };
+          newItemsValues.push(PERDCOMP_ITENS_HEADERS.map(h => rowData[h] ?? ''));
+        }
+
+        if (newItemsValues.length > 0) {
+          const sheets = await getSheetsClient();
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: SPREADSHEET_ID, range: PERDCOMP_ITENS_SHEET_NAME,
+            valueInputOption: 'USER_ENTERED', requestBody: { values: newItemsValues },
+          });
+        }
     }
 
-    if (newItemsValues.length > 0) {
-      const sheets = await getSheetsClient();
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: PERDCOMP_ITENS_SHEET_NAME,
-        valueInputOption: 'USER_ENTERED', // ou RAW
-        requestBody: { values: newItemsValues },
-      });
-    }
-
-    // 2. Atualizar a Planilha de Resumo PERDCOMP
     const { headers, rows } = await getSheetData(PERDCOMP_SHEET_NAME);
     const rowIndex = rows.findIndex(r => padCNPJ14(r.CNPJ) === cnpj || r.Cliente_ID === clienteId);
 
-    const top3CreditosStr = resumo.topCreditos
-      .map(c => `${c.codigo}:${c.quantidade}`)
-      .join(' | ');
-    const situacoesStr = Object.entries(resumo.porMotivo)
-      .filter(([, qtd]) => qtd > 0)
-      .map(([motivo, qtd]) => `${motivo}:${qtd}`)
-      .join(' | ');
+    const top3CreditosStr = resumo.topCreditos.map(c => `${c.codigo}:${c.quantidade}`).join(' | ');
+    const situacoesStr = Object.entries(resumo.porMotivo).filter(([, qtd]) => qtd > 0).map(([motivo, qtd]) => `${motivo}:${qtd}`).join(' | ');
 
     const updateData = {
-      'Quantidade_PERDCOMP': resumo.totalSemCancelamento, // Campo antigo agora é total sem cancelamento
-      'Qtd_PERDCOMP_TOTAL': resumo.total,
-      'Qtd_PERDCOMP_TOTAL_SEM_CANCEL': resumo.totalSemCancelamento,
-      'Qtd_PERDCOMP_DCOMP': resumo.porFamilia.DCOMP,
-      'Qtd_PERDCOMP_REST': resumo.porFamilia.REST,
-      'Qtd_PERDCOMP_RESSARC': resumo.porFamilia.RESSARC,
-      'Qtd_PERDCOMP_CANCEL': resumo.porFamilia.CANC,
-      'TOP3_CREDITOS': top3CreditosStr,
-      'SITUACOES_NORMALIZADAS': situacoesStr,
-      'Lista_PERDCOMP_CANCEL': resumo.cancelamentosLista.join('; '),
-      'Data_Consulta': headerRequestedAt,
+      'Quantidade_PERDCOMP': resumo.totalSemCancelamento,
+      'Qtd_PERDCOMP_TOTAL': resumo.total, 'Qtd_PERDCOMP_TOTAL_SEM_CANCEL': resumo.totalSemCancelamento,
+      'Qtd_PERDCOMP_DCOMP': resumo.porFamilia.DCOMP, 'Qtd_PERDCOMP_REST': resumo.porFamilia.REST,
+      'Qtd_PERDCOMP_RESSARC': resumo.porFamilia.RESSARC, 'Qtd_PERDCOMP_CANCEL': resumo.porFamilia.CANC,
+      'TOP3_CREDITOS': top3CreditosStr, 'SITUACOES_NORMALIZADAS': situacoesStr,
+      'Lista_PERDCOMP_CANCEL': resumo.cancelamentosLista.join('; '), 'Data_Consulta': headerRequestedAt,
+      'URL_Comprovante_HTML': apiResponse?.site_receipts?.[0] || '',
     };
 
     const sheets = await getSheetsClient();
     if (rowIndex !== -1) {
       const rowNumber = rows[rowIndex]._rowNumber;
-      const requests = Object.entries(updateData).map(([key, value]) => {
-        const colIndex = headers.indexOf(key);
-        if (colIndex === -1) return null;
-        return {
-          updateCells: {
-            rows: [{ values: [{ userEnteredValue: { stringValue: String(value) } }] }],
-            fields: 'userEnteredValue',
-            start: { sheetId: 0, rowIndex: rowNumber - 1, columnIndex: colIndex }, // Assumindo SheetId 0
-          },
-        };
-      }).filter(Boolean);
+      const dataForBatchUpdate = Object.entries(updateData).map(([key, value]) => {
+          const colIndex = headers.indexOf(key);
+          if (colIndex === -1) return null;
+          const colLetter = String.fromCharCode(65 + colIndex);
+          return { range: `${PERDCOMP_SHEET_NAME}!${colLetter}${rowNumber}`, values: [[value]] }
+      }).filter((x): x is { range: string; values: any[][]; } => x !== null);
 
-        // This requires sheetId, which is hard to get. Let's use batchUpdate with A1 notation instead.
-        const dataForBatchUpdate = Object.entries(updateData).map(([key, value]) => {
-            const colIndex = headers.indexOf(key);
-            if (colIndex === -1) return null;
-            const colLetter = String.fromCharCode(65 + colIndex);
-            return {
-                range: `${PERDCOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
-                values: [[value]]
-            }
-        }).filter(Boolean);
-
-        if (dataForBatchUpdate.length > 0) {
-            await sheets.spreadsheets.values.batchUpdate({
-                spreadsheetId: SPREADSHEET_ID,
-                requestBody: {
-                    valueInputOption: 'USER_ENTERED',
-                    data: dataForBatchUpdate
-                }
-            });
-        }
-
+      if (dataForBatchUpdate.length > 0) {
+          await sheets.spreadsheets.values.batchUpdate({
+              spreadsheetId: SPREADSHEET_ID,
+              requestBody: { valueInputOption: 'USER_ENTERED', data: dataForBatchUpdate }
+          });
+      }
     } else {
-        // Append new row if company not found
         const newRow = headers.map(h => {
             if (h === 'Cliente_ID') return clienteId;
             if (h === 'Nome da Empresa') return nomeEmpresa;
@@ -255,18 +287,13 @@ export async function POST(request: Request) {
             return updateData[h as keyof typeof updateData] ?? '';
         });
         await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: PERDCOMP_SHEET_NAME,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [newRow] },
+            spreadsheetId: SPREADSHEET_ID, range: PERDCOMP_SHEET_NAME,
+            valueInputOption: 'USER_ENTERED', requestBody: { values: [newRow] },
         });
     }
 
-    // --- Resposta Final ---
     const finalResponse = {
-      ok: true,
-      perdcomp: perdcompArray,
-      perdcompResumo: resumo,
+      ok: true, perdcomp: perdcompArray, perdcompResumo: resumo,
       header: apiResponse.header,
       debug: debugMode ? { ...apiResponse, perdcompResumo: resumo } : undefined,
     };
@@ -276,10 +303,8 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('[API /infosimples/perdcomp]', error);
     const response = {
-      error: true,
-      message: error?.providerMessage || error?.message || 'Erro interno no servidor.',
-      httpStatus: error?.status || 500,
-      providerCode: error?.providerCode,
+      error: true, message: error?.providerMessage || error?.message || 'Erro interno no servidor.',
+      httpStatus: error?.status || 500, providerCode: error?.providerCode,
     };
     return NextResponse.json(response, { status: error?.status || 500 });
   }
