@@ -295,30 +295,50 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     setCompDialogOpen(false);
   }
 
-  function confirmCompetitors(selected: Array<{ nome:string; cnpj:string }>) {
-    const next = [...competitors];
-    let idx = 0;
-    for (let i = 0; i < next.length && idx < selected.length; i++) {
-      if (!next[i]) {
-        const s = selected[idx++];
-        handleSelectCompany('competitor', {
-            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+  async function confirmCompetitors(selected: Array<{ nome: string; cnpj: string }>) {
+    const newCompetitors = [...competitors];
+    let selectedIndex = 0;
+
+    // First, fill any existing empty slots
+    for (let i = 0; i < newCompetitors.length && selectedIndex < selected.length; i++) {
+      if (!newCompetitors[i]) {
+        const s = selected[selectedIndex++];
+        const lastConsultation = await checkLastConsultation(s.cnpj);
+        newCompetitors[i] = {
+          company: {
+            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
             Nome_da_Empresa: s.nome,
             CNPJ_Empresa: padCNPJ14(s.cnpj),
-        }, i);
+          },
+          lastConsultation,
+          forceRefresh: false,
+        };
       }
     }
-    let currentCompetitors = next.filter(Boolean).length;
-    while (currentCompetitors < MAX_COMPETITORS && idx < selected.length) {
-      const s = selected[idx++];
-      handleSelectCompany('competitor', {
-            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+
+    // Then, add remaining selections if there's space
+    while (newCompetitors.filter(Boolean).length < MAX_COMPETITORS && selectedIndex < selected.length) {
+      const s = selected[selectedIndex++];
+      const lastConsultation = await checkLastConsultation(s.cnpj);
+      // Find the next available empty slot or add to the end
+      const emptySlotIndex = newCompetitors.findIndex(c => !c);
+      const newEntry = {
+        company: {
+            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
             Nome_da_Empresa: s.nome,
             CNPJ_Empresa: padCNPJ14(s.cnpj),
-        }, next.length);
-      next.push(null); // Placeholder for the async selection
-      currentCompetitors++;
+        },
+        lastConsultation,
+        forceRefresh: false,
+      };
+      if (emptySlotIndex !== -1) {
+        newCompetitors[emptySlotIndex] = newEntry;
+      } else if (newCompetitors.length < MAX_COMPETITORS) {
+        newCompetitors.push(newEntry);
+      }
     }
+
+    setCompetitors(newCompetitors);
     setCompDialogOpen(false);
   }
 
