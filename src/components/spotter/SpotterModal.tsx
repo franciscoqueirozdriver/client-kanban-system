@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type {
+  ChangeEvent,
+  FormEvent,
+  InputHTMLAttributes,
+  SelectHTMLAttributes,
+} from "react";
 import { FaSearch, FaSpinner } from "react-icons/fa";
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -162,7 +168,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     }
   }, [open]);
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -219,7 +225,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     }
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrors([]);
 
@@ -243,7 +249,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     }
   };
 
-  const renderInput = (label: string, key: string, props: React.InputHTMLAttributes<HTMLInputElement> & { required?: boolean } = {}) => {
+  const renderInput = (
+    label: string,
+    key: string,
+    props: InputHTMLAttributes<HTMLInputElement> & { required?: boolean } = {},
+  ) => {
     const error = errors.find((e) => e.field === label);
     return (
       <div>
@@ -270,7 +280,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     label: string,
     key: string,
     options: string[],
-    props: React.SelectHTMLAttributes<HTMLSelectElement> & { required?: boolean } = {},
+    props: SelectHTMLAttributes<HTMLSelectElement> & { required?: boolean } = {},
   ) => {
     const error = errors.find((e) => e.field === label);
     return (
@@ -307,12 +317,12 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-h-[90vh] overflow-hidden p-0">
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
           <p className="text-sm text-muted-foreground">Confirme ou ajuste os dados antes do envio.</p>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex max-h-[calc(90vh-160px)] flex-col">
+        <form onSubmit={handleSubmit} className="flex max-h-[calc(90vh-150px)] flex-col">
           <div className="flex-1 overflow-y-auto px-6 py-5">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {renderInput("Nome do Lead", fieldMap["Nome do Lead"], { required: true })}
@@ -376,17 +386,17 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-border/60 bg-card px-6 py-4">
-            <button
+          <DialogFooter className="w-full flex-col gap-3 border-t border-border/60 bg-card px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <Button
               type="button"
               onClick={handleEnrich}
               disabled={isEnriching || isSubmitting}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
             >
               {isEnriching && <FaSpinner className="animate-spin" />}
               Enriquecer com IA
-            </button>
-            <DialogFooter className="border-t-0 bg-transparent p-0">
+            </Button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button
                 type="button"
                 variant="secondary"
@@ -401,11 +411,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                     <FaSpinner className="animate-spin" /> Enviando...
                   </span>
                 ) : (
-                  "Enviar"
+                  "Enviar ao Spotter"
                 )}
               </Button>
-            </DialogFooter>
-          </div>
+            </div>
+          </DialogFooter>
         </form>
 
         {isEnrichConfirmOpen && (
