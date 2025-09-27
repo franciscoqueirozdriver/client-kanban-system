@@ -1,13 +1,19 @@
+export function digits(value: any): string {
+  return String(value ?? '').replace(/\D/g, '');
+}
+
 export function onlyDigits(v: any) {
-  return String(v ?? '').replace(/\D/g, '');
+  return digits(v);
 }
 
 export function padCNPJ14(v: any) {
-  return onlyDigits(v).padStart(14, '0');
+  const cleaned = digits(v);
+  if (!cleaned) return '';
+  return cleaned.length > 14 ? cleaned.slice(-14) : cleaned.padStart(14, '0');
 }
 
 export function normalizeDigits(str?: string) {
-  return (str ?? '').replace(/\D/g, '');
+  return digits(str);
 }
 
 export function isEmptyCNPJLike(value?: string) {
@@ -15,8 +21,12 @@ export function isEmptyCNPJLike(value?: string) {
   return digits.length === 0 || /^0+$/.test(digits);
 }
 
-export function isCNPJ14(digits?: string) {
-  return /^\d{14}$/.test(digits ?? '');
+export function isCNPJ14(input?: string) {
+  return /^\d{14}$/.test(digits(input));
+}
+
+export function isCnpj14(input?: string) {
+  return isCNPJ14(input);
 }
 
 // Official validation (mod 11). Accepts any input and validates after padStart.

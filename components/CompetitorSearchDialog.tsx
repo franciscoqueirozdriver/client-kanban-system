@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { padCNPJ14 } from '@/utils/cnpj';
+import { useEffect, useMemo, useState } from 'react';
+import { digits, padCNPJ14 } from '@/utils/cnpj';
 
 export type CompetitorItem = { nome: string; cnpj: string };
 
@@ -14,6 +14,21 @@ interface Props {
   onConfirm: (selected: CompetitorItem[]) => void;
 }
 
+
+const sanitizeCnpj = (value: string) => {
+  const cleaned = digits(value);
+  if (!cleaned) return '';
+  return cleaned.length > 14 ? cleaned.slice(-14) : cleaned.padStart(14, '0');
+};
+
+const keyForItem = (item: CompetitorItem, fallbackIndex?: number) => {
+  const normalized = digits(item?.cnpj);
+  if (normalized) return normalized;
+  const nameKey = (item?.nome || '').trim().toLowerCase();
+  if (nameKey) return nameKey;
+  return fallbackIndex !== undefined ? `idx-${fallbackIndex}` : 'idx-unknown';
+};
+
 export default function CompetitorSearchDialog({
   isOpen,
   onClose,
@@ -22,13 +37,32 @@ export default function CompetitorSearchDialog({
   fetchState,
   onConfirm,
 }: Props) {
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Record<string, CompetitorItem>>({});
+
+  const selectedCount = useMemo(() => Object.keys(selected).length, [selected]);
 
   useEffect(() => {
     if (isOpen) {
-      setSelected(new Set());
+      setSelected({});
     }
-  }, [isOpen, fetchState.items]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const allowed = new Set(fetchState.items.map((item, index) => keyForItem(item, index)));
+    setSelected(prev => {
+      let mutated = false;
+      const next: Record<string, CompetitorItem> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        if (allowed.has(key)) {
+          next[key] = value;
+        } else {
+          mutated = true;
+        }
+      });
+      return mutated ? next : prev;
+    });
+  }, [fetchState.items, isOpen]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -38,27 +72,48 @@ export default function CompetitorSearchDialog({
     return () => window.removeEventListener('keydown', handleKey);
   }, [isOpen, onClose]);
 
-  const toggle = (idx: number) => {
+  const toggle = (item: CompetitorItem, index: number) => {
     setSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(idx)) {
-        next.delete(idx);
-      } else if (next.size < limitRemaining) {
-        next.add(idx);
+      const key = keyForItem(item, index);
+      if (prev[key]) {
+        const { [key]: _removed, ...rest } = prev;
+        return rest;
       }
-      return next;
+      const currentCount = Object.keys(prev).length;
+      if (currentCount >= limitRemaining) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [key]: {
+          nome: item.nome,
+          cnpj: sanitizeCnpj(item.cnpj),
+        },
+      };
     });
   };
 
   const handleConfirm = () => {
-    const chosen = Array.from(selected).map(i => fetchState.items[i]);
+    const chosen = fetchState.items.reduce<CompetitorItem[]>((acc, item, index) => {
+      const key = keyForItem(item, index);
+      const stored = selected[key];
+      if (stored) {
+        acc.push(stored);
+      }
+      return acc;
+    }, []);
+
+    if (chosen.length === 0) {
+      return;
+    }
+
     onConfirm(chosen);
-    setSelected(new Set());
+    setSelected({});
   };
 
   if (!isOpen) return null;
 
-  const countSelected = selected.size;
+  const countSelected = selectedCount;
   const limit = limitRemaining;
 
   return (
@@ -87,13 +142,15 @@ export default function CompetitorSearchDialog({
         {fetchState.items.length > 0 && (
           <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-[65vh] overflow-y-auto">
             {fetchState.items.map((it, idx) => {
-              const disabled = !selected.has(idx) && selected.size >= limit;
+              const key = keyForItem(it, idx);
+              const isChecked = Boolean(selected[key]);
+              const disabled = !isChecked && selectedCount >= limit;
               return (
-                <li key={idx} className="py-2 flex items-center">
+                <li key={key} className="py-2 flex items-center">
                   <input
                     type="checkbox"
-                    checked={selected.has(idx)}
-                    onChange={() => toggle(idx)}
+                    checked={isChecked}
+                    onChange={() => toggle(it, idx)}
                     disabled={disabled}
                     className="mr-2 h-4 w-4 text-violet-600 disabled:opacity-50"
                   />
@@ -129,4 +186,3 @@ export default function CompetitorSearchDialog({
     </div>
   );
 }
-
