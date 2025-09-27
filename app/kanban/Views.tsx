@@ -17,15 +17,15 @@ function ListView({ leads }: { leads: Lead[] }) {
 
   return (
     <section
-      className="grid grid-rows-[auto_1fr] min-h-0"
+      className="grid min-h-0 grid-rows-[auto_1fr]"
       style={{ height: `calc(100vh - ${VIEW_OFFSET_PX}px)` }}
     >
       {/* Row 1 — Cabeçalho fixo (não rola) */}
-      <div className="flex items-center justify-between gap-2 pb-2">
-        <h2 className="text-lg font-semibold">Leads (Lista)</h2>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 rounded-3xl border border-border bg-card px-4 py-3 shadow-soft">
+        <h2 className="text-lg font-semibold text-foreground">Leads (Lista)</h2>
+        <div className="flex items-center gap-2 text-sm">
           <button
-            className="rounded border px-3 py-2 text-sm"
+            className="rounded-full border border-border px-3 py-1.5 font-medium text-muted-foreground transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}
           >
             Densidade: {density === "compact" ? "Compacta" : "Confortável"}
@@ -37,7 +37,7 @@ function ListView({ leads }: { leads: Lead[] }) {
       {/* Row 2 — Viewport com rolagem própria (vertical e horizontal) */}
       <div
         id="list-viewport"
-        className="min-h-0 overflow-auto rounded-lg border bg-white"
+        className="min-h-0 overflow-auto rounded-3xl border border-border bg-card shadow-soft"
       >
         {/* Wrapper da tabela com scroll H quando precisar */}
         <div className="min-h-0 overflow-x-auto">
@@ -65,12 +65,12 @@ function SplitView({ leads }: { leads: Lead[] }) {
 
   return (
     <section
-      className="grid grid-rows-[auto_1fr] min-h-0"
+      className="grid min-h-0 grid-rows-[auto_1fr]"
       style={{ height: `calc(100vh - ${VIEW_OFFSET_PX}px)` }}
     >
       {/* Row 1 — Cabeçalho fixo */}
-      <div className="flex items-center justify-between gap-2 pb-2">
-        <h2 className="text-lg font-semibold">Leads (Split)</h2>
+      <div className="flex items-center justify-between gap-3 rounded-3xl border border-border bg-card px-4 py-3 shadow-soft">
+        <h2 className="text-lg font-semibold text-foreground">Leads (Split)</h2>
         <ViewToggle />
       </div>
 
@@ -83,16 +83,14 @@ function SplitView({ leads }: { leads: Lead[] }) {
         "
       >
         {/* Painel esquerdo: Lista com viewport próprio */}
-        <div
-          className="min-h-0 rounded-lg border bg-white grid grid-rows-[auto_1fr]"
-        >
+        <div className="grid min-h-0 grid-rows-[auto_1fr] rounded-3xl border border-border bg-card shadow-soft">
           {/* Controles da lista (fixos dentro do painel esquerdo) */}
-          <div className="p-3 border-b">
+          <div className="border-b border-border px-4 py-3">
             {/* Filtros/ações rápidas aqui, se quiser */}
           </div>
 
           {/* Viewport do painel esquerdo (só este rola) */}
-          <div className="min-h-0 overflow-auto p-3">
+          <div className="min-h-0 overflow-auto p-4">
             <div className="min-h-0 overflow-x-auto">
               {/* mesma ideia: largura mínima para forçar H-scroll local quando preciso */}
               <div className="min-w-[1000px]">
@@ -106,7 +104,7 @@ function SplitView({ leads }: { leads: Lead[] }) {
         </div>
 
         {/* Painel direito: Drawer/Detalhe com rolagem própria */}
-        <aside className="min-h-0 overflow-auto rounded-lg border bg-white p-3">
+        <aside className="min-h-0 overflow-auto rounded-3xl border border-border bg-card p-4 shadow-soft">
           <LeadDrawer data={leads} />
           {/* O LeadDrawer já lida com "selected" via URL; se não houver, mostra placeholder */}
         </aside>

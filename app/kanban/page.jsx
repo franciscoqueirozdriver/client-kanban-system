@@ -6,6 +6,8 @@ import KanbanColumn from '../../components/KanbanColumn';
 import Filters from '../../components/Filters';
 import ViewToggle from '@/components/view-toggle/ViewToggle';
 import Views from './Views';
+import SummaryCard from '@/components/SummaryCard';
+import Charts from '@/components/Charts';
 
 // O componente principal agora é um Client Component que faz o fetch dos dados
 function KanbanPage() {
@@ -182,11 +184,27 @@ function KanbanPage() {
   };
 
   const columnsToShow = useMemo(() => {
-    const originalColumns = filteredColumns ?? columns;
-    if (view === 'kanban') {
-      return originalColumns.filter(col => col.id !== 'Enviado para Spotter');
-    }
-    return originalColumns;
+    const priority = [
+      'Lead Selecionado',
+      'Agendado',
+      'Reunião Agendada',
+      'Reunião Realizada',
+      'Conversa Iniciada',
+      'Proposta',
+      'Negociação',
+      'Vendido',
+      'Perdido',
+    ];
+    const order = new Map(priority.map((stage, index) => [stage, index]));
+    const originalColumns = (filteredColumns ?? columns).filter(
+      (col) => col.id !== 'Enviado para Spotter',
+    );
+    const sorted = [...originalColumns].sort((a, b) => {
+      const aIndex = order.has(a.id) ? order.get(a.id) : Number.MAX_SAFE_INTEGER;
+      const bIndex = order.has(b.id) ? order.get(b.id) : Number.MAX_SAFE_INTEGER;
+      return aIndex - bIndex;
+    });
+    return view === 'kanban' ? sorted : originalColumns;
   }, [columns, filteredColumns, view]);
 
   // Transforma os dados para a tabela/lista
@@ -209,55 +227,129 @@ function KanbanPage() {
       })));
   }, [columns, filteredColumns]);
 
+  const clientsForCharts = useMemo(
+    () => (filteredColumns ?? columns).flatMap((col) => col.cards.map((card) => card.client)),
+    [columns, filteredColumns],
+  );
+
+  const summary = useMemo(() => {
+    const parseCurrency = (value) => {
+      if (!value) return 0;
+      const sanitized = String(value).replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
+      const numeric = Number.parseFloat(sanitized);
+      return Number.isNaN(numeric) ? 0 : numeric;
+    };
+
+    const totalLeads = leads.length;
+    const scheduled = leads.filter((lead) => ['Agendado', 'Reunião Agendada'].includes(lead.etapa)).length;
+    const meetings = leads.filter((lead) => ['Reunião Realizada', 'Conversa Iniciada', 'Contato Efetuado'].includes(lead.etapa)).length;
+    const won = leads.filter((lead) => ['Vendido', 'Negociação Concluída'].includes(lead.etapa)).length;
+    const totalValue = leads.reduce((sum, lead) => sum + parseCurrency(lead.valor), 0);
+    const conversion = totalLeads > 0 ? Math.round((won / totalLeads) * 100) : 0;
+
+    const formatter = new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      maximumFractionDigits: 0,
+    });
+
+    return {
+      totalLeads,
+      scheduled,
+      meetings,
+      conversion,
+      pipelineValue: formatter.format(totalValue),
+    };
+  }, [leads]);
+
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold">Leads</h1>
-        <div className="flex items-center gap-4">
-          <Filters onFilter={handleFilter} />
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-wrap items-start justify-between gap-6 rounded-3xl border border-border bg-card px-6 py-6 shadow-soft">
+        <div className="max-w-2xl space-y-3">
+          <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Painel de Consultas</p>
+          <h1 className="text-3xl font-semibold text-foreground">Pipeline de Leads</h1>
+          <p className="text-sm text-muted-foreground">
+            Monitore o avanço das oportunidades, visualize métricas chave e ajuste filtros em tempo real para priorizar conversões.
+          </p>
+        </div>
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           <ViewToggle />
+        </div>
+      </header>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard title="Leads em carteira" value={summary.totalLeads} helper="Oportunidades acompanhadas no funil" />
+        <SummaryCard title="Valor em pipeline" value={summary.pipelineValue} helper="Somatório informado pelas equipes" />
+        <SummaryCard title="Reuniões concluídas" value={summary.meetings} helper="Interações realizadas recentemente" />
+        <SummaryCard
+          title="Taxa de conversão"
+          value={`${summary.conversion}%`}
+          helper="Baseado nos negócios marcados como vendidos"
+          trend={{ direction: summary.conversion >= 30 ? 'up' : 'neutral', label: summary.scheduled ? `${summary.scheduled} agendados` : 'Sem agendamentos' }}
+        />
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
+        <Charts clients={clientsForCharts} />
+        <div className="space-y-4">
+          <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Filtros avançados</h2>
+              <p className="text-sm text-muted-foreground">
+                Refine os leads exibidos nas visões de kanban, lista e split utilizando os campos de segmento, porte e localização.
+              </p>
+            </div>
+            <div className="mt-4">
+              <Filters onFilter={handleFilter} />
+            </div>
+          </section>
+
+          {isAdmin && view === 'kanban' && (
+            <section className="rounded-3xl border border-dashed border-border/70 bg-card p-5 shadow-soft">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Exact Spotter</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Mescle oportunidades do Spotter diretamente com o kanban ativo para garantir atualização contínua dos dados.
+              </p>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <select
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  value={produto}
+                  onChange={(e) => setProduto(e.target.value)}
+                >
+                  <option value="">Selecione o produto</option>
+                  {produtos.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  onClick={handleMesclar}
+                >
+                  Mesclar Leads Spotter
+                </button>
+              </div>
+            </section>
+          )}
         </div>
       </div>
 
-      {isAdmin && view === 'kanban' && (
-        <div className="mb-4 flex items-center gap-2">
-          <select
-            className="border p-1"
-            value={produto}
-            onChange={(e) => setProduto(e.target.value)}
-          >
-            <option value="">Produto</option>
-            {produtos.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-          <button
-            className="bg-blue-500 text-white px-3 py-1 rounded"
-            onClick={handleMesclar}
-          >
-            Mesclar Leads Exact Spotter
-          </button>
-        </div>
-      )}
-
       {view === 'kanban' ? (
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div
-            id="kanban-viewport"
-            className="sticky top-[140px] h-[calc(100vh-220px)] w-full min-h-0 overflow-x-auto px-4 pb-3 pt-1 z-10"
-          >
+        <section className="rounded-3xl border border-border bg-muted/40 p-4 shadow-soft">
+          <DragDropContext onDragEnd={onDragEnd}>
             <div
-              className="flex items-stretch gap-3 w-max pr-4 select-none min-h-0"
-              role="list"
+              id="kanban-viewport"
+              className="scrollbar-thin sticky top-[140px] z-10 h-[calc(100vh-260px)] w-full min-h-0 overflow-x-auto px-4 pb-3 pt-1"
             >
-              {columnsToShow.map((col) => (
-                <KanbanColumn key={col.id} column={col} />
-              ))}
+              <div className="flex min-h-0 w-max select-none items-stretch gap-4 pr-6" role="list">
+                {columnsToShow.map((col) => (
+                  <KanbanColumn key={col.id} column={col} />
+                ))}
+              </div>
             </div>
-          </div>
-        </DragDropContext>
+          </DragDropContext>
+        </section>
       ) : (
         <Views leads={leads} />
       )}
