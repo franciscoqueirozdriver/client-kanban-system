@@ -1,50 +1,97 @@
 "use client";
-import { useEffect, useMemo } from "react";
+
+import { useEffect } from "react";
+import type { KeyboardEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/cn";
 
-const VIEWS = ["kanban", "list", "split"];
+type ViewOption = {
+  value: "kanban" | "list" | "split";
+  label: string;
+};
 
-export default function ViewToggle() {
+type ViewToggleProps = {
+  value?: ViewOption["value"];
+  onValueChange?: (value: ViewOption["value"]) => void;
+  options?: ViewOption[];
+};
+
+const DEFAULT_OPTIONS: ViewOption[] = [
+  { value: "kanban", label: "Kanban" },
+  { value: "list", label: "Lista" },
+  { value: "split", label: "Split" },
+];
+
+export default function ViewToggle({
+  value,
+  onValueChange,
+  options = DEFAULT_OPTIONS,
+}: ViewToggleProps) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
 
-  const current = search?.get("view") || (typeof window !== "undefined" && localStorage.getItem("kanban_view_pref")) || "kanban";
+  const stored =
+    typeof window !== "undefined" ? localStorage.getItem("kanban_view_pref") : null;
+  const isControlled = typeof value !== "undefined" && typeof onValueChange === "function";
+  const current = (isControlled ? value : search?.get("view") || stored || "kanban") as ViewOption["value"];
 
   useEffect(() => {
-    // persiste preferência
-    if (typeof window !== "undefined") {
+    if (!isControlled && typeof window !== "undefined") {
       localStorage.setItem("kanban_view_pref", current);
     }
-  }, [current]);
+  }, [current, isControlled]);
 
-  const setView = (v) => {
+  const setView = (next: ViewOption["value"]) => {
+    if (isControlled) {
+      onValueChange?.(next);
+      return;
+    }
+
     const sp = new URLSearchParams(search?.toString() ?? "");
-    sp.set("view", v);
+    sp.set("view", next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("kanban_view_pref", next);
+    }
     router.push(`${pathname}?${sp.toString()}`, { scroll: false });
   };
 
-  const Button = ({ v, label }) => {
-    const active = current === v;
-    return (
-      <button
-        onClick={() => setView(v)}
-        title={label}
-        className={`rounded-md px-3 py-2 text-sm border transition
-          ${active ? "bg-neutral-100 border-neutral-300" : "bg-white hover:bg-neutral-50 border-neutral-200"}
-        `}
-        aria-pressed={active}
-      >
-        {label}
-      </button>
-    );
+  const handleKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    next: ViewOption["value"]
+  ) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setView(next);
+    }
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <Button v="kanban" label="Kanban" />
-      <Button v="list" label="Lista" />
-      <Button v="split" label="Split" />
+    <div
+      role="radiogroup"
+      aria-label="Alternar visualização"
+      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 p-1"
+    >
+      {options.map((option) => {
+        const active = option.value === current;
+        return (
+          <button
+            key={option.value}
+            role="radio"
+            aria-checked={active}
+            onClick={() => setView(option.value)}
+            onKeyDown={(event) => handleKeyDown(event, option.value)}
+            className={cn(
+              "rounded-full px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              active
+                ? "bg-primary text-primary-foreground shadow-soft"
+                : "text-muted-foreground hover:bg-card",
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
 import SpotterModal from './SpotterModal';
 import { onlyDigits, isValidCNPJ } from '@/utils/cnpj';
+import { cn } from '@/lib/cn';
 
 // Remove proteção visual dos números ('+553199999999' -> +553199999999)
 function displayPhone(phone) {
@@ -263,31 +264,18 @@ export default function KanbanCard({ card, index }) {
     }
   };
 
-  const backgroundColor =
-    client.color === 'green'
-      ? '#a3ffac'
-      : client.color === 'red'
-      ? '#ffca99'
-      : client.color === 'gray'
-      ? '#e5e7eb'
-      : client.color === 'purple'
-      ? '#e9d5ff' // Light purple
-      : 'white';
+  const accentMap = {
+    green: 'hsl(var(--success))',
+    red: 'hsl(var(--danger))',
+    gray: 'hsl(var(--muted-foreground))',
+    purple: 'hsl(var(--secondary))',
+  };
 
-  const borderLeftColor =
-    client.color === 'green'
-      ? '#4caf50'
-      : client.color === 'red'
-      ? '#ff7043'
-      : client.color === 'gray'
-      ? '#9ca3af'
-      : client.color === 'purple'
-      ? '#9333ea' // Darker purple
-      : 'transparent';
+  const accentColor = accentMap[client.color] || 'hsl(var(--primary))';
 
   return (
     <Draggable draggableId={card.id} index={index}>
-      {(provided) => (
+      {(provided, snapshot) => (
         <>
         <div
           ref={provided.innerRef}
@@ -295,23 +283,35 @@ export default function KanbanCard({ card, index }) {
           {...provided.dragHandleProps}
           style={{
             ...provided.draggableProps.style,
-            backgroundColor,
-            borderLeft: `4px solid ${borderLeftColor}`,
+            '--card-accent': accentColor,
           }}
-          className={`p-2 mb-2 rounded shadow transition-colors ${loading ? 'opacity-60 pointer-events-none' : ''}`}
+          className={cn(
+            'relative mb-3 overflow-hidden rounded-2xl border border-border/70 bg-card p-4 text-sm shadow transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
+            loading && 'pointer-events-none opacity-60',
+            snapshot.isDragging && 'ring-2 ring-primary/60 shadow-soft',
+          )}
           onDoubleClick={handleDoubleClick}
           title="Dê duplo clique para enriquecer os dados desta empresa"
+          tabIndex={0}
+          aria-roledescription="Cartão do kanban"
         >
-          <h4 className="text-sm font-semibold mb-1">{client.company}</h4>
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-4 left-0 w-1 rounded-full"
+            style={{ background: 'var(--card-accent)' }}
+          />
+          <h4 className="text-base font-semibold text-foreground">
+            {client.company}
+          </h4>
 
           {(client.city || client.uf) && (
-            <p className="text-[10px] text-gray-600 mb-1">
+            <p className="mt-1 text-xs text-muted-foreground">
               {[client.city, client.uf].filter(Boolean).join(' - ')}
             </p>
           )}
 
           {client.opportunities.length > 0 && (
-            <ul className="text-[10px] list-disc ml-4 mb-1">
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-muted-foreground">
               {client.opportunities.map((o, i) => (
                 <li key={i}>{o}</li>
               ))}
@@ -319,19 +319,19 @@ export default function KanbanCard({ card, index }) {
           )}
 
           {client.contacts.map((c, i) => (
-            <div key={i} className="text-xs border-t pt-1">
-              <p className="font-medium">{c.name}</p>
-              {c.role && <p className="text-[10px]">{c.role}</p>}
+            <div key={i} className="mt-3 border-t border-dashed border-border/70 pt-3 text-xs">
+              <p className="font-semibold text-foreground">{c.name}</p>
+              {c.role && <p className="text-[11px] text-muted-foreground">{c.role}</p>}
 
               {c.email && (
-                <p className="text-[10px]">
+                <p className="mt-2 space-x-1 text-[11px]">
                   {c.email.split(';').map((em, idx) => {
                     const clean = displayEmail(em.trim());
                     return (
                       <span key={idx}>
                         <button
                           type="button"
-                          className="text-blue-600 underline"
+                          className="font-medium text-primary underline-offset-2 hover:text-primary/80 focus-visible:underline"
                           onClick={(e) => handleEmailClick(e, clean, c)}
                         >
                           {clean}
@@ -344,14 +344,14 @@ export default function KanbanCard({ card, index }) {
               )}
 
               {c.normalizedPhones && c.normalizedPhones.length > 0 && (
-                <p className="text-[10px]">
+                <p className="mt-2 space-x-1 text-[11px]">
                   {c.normalizedPhones.map((p, idx) => (
                     <span key={idx}>
                       <a
                         href={`https://web.whatsapp.com/send/?phone=${displayPhone(p)
                           .replace(/\D/g, '')
                           .replace(/^/, (d) => (d.startsWith('55') ? d : `55${d}`))}&type=phone_number&app_absent=0`}
-                        className="text-green-600 underline"
+                        className="font-medium text-success underline-offset-2 hover:text-success/80 focus-visible:underline"
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => handlePhoneClick(e, p, c)}
@@ -365,10 +365,10 @@ export default function KanbanCard({ card, index }) {
               )}
 
               {c.linkedin && (
-                <p>
+                <p className="mt-2">
                   <a
                     href={c.linkedin}
-                    className="text-blue-600 underline"
+                    className="font-medium text-accent underline-offset-4 hover:text-accent/80 focus-visible:underline"
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => handleLinkedinClick(e, c.linkedin, c)}
@@ -379,20 +379,20 @@ export default function KanbanCard({ card, index }) {
               )}
             </div>
           ))}
-          <div className="mt-2">
+          <div className="mt-4">
             <button
               onClick={() => setIsSpotterModalOpen(true)}
-              className="w-full text-center rounded-md border px-2 py-1 text-xs hover:bg-gray-50"
+              className="w-full rounded-xl border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary/60 hover:text-foreground hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               title="Enviar esta oportunidade para o Exact Spotter"
             >
               Enviar ao Spotter
             </button>
           </div>
 
-          <div className="mt-1 flex items-center justify-between text-[10px]">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[11px] text-primary">
             <button
               type="button"
-              className="text-blue-600 underline"
+              className="font-medium underline-offset-4 hover:text-primary/80 focus-visible:underline"
               onClick={handleHistoryClick}
             >
               Histórico
@@ -400,7 +400,7 @@ export default function KanbanCard({ card, index }) {
             <button
               type="button"
               onClick={() => setPerdecompOpen(true)}
-              className="text-blue-600 underline"
+              className="font-medium underline-offset-4 hover:text-primary/80 focus-visible:underline"
               aria-label="Consultar PER/DCOMP para este cliente"
               data-testid="cta-perdecomp"
               title="Consultar PER/DCOMP"
@@ -440,22 +440,22 @@ export default function KanbanCard({ card, index }) {
           }}
         />
         {isEnrichConfirmOpen && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-            <div className="bg-white rounded shadow-lg p-6 w-11/12 max-w-md mx-auto">
-              <h2 className="text-lg font-bold mb-2 text-center">Confirmar Enriquecimento</h2>
-              <p className="text-sm text-center mb-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm">
+            <div className="w-11/12 max-w-md rounded-3xl border border-border bg-card p-6 shadow-soft">
+              <h2 className="text-lg font-semibold text-center text-foreground">Confirmar Enriquecimento</h2>
+              <p className="mt-3 text-sm text-center text-muted-foreground">
                 Deseja buscar e atualizar os dados para a empresa <span className="font-bold">{client.company}</span>?
               </p>
-              <div className="flex justify-end gap-2">
+              <div className="mt-6 flex justify-end gap-3">
                 <button
                   onClick={() => setIsEnrichConfirmOpen(false)}
-                  className="px-3 py-1.5 rounded border"
+                  className="rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleEnrichConfirm}
-                  className="px-3 py-1.5 rounded bg-black text-white"
+                  className="rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   Sim, enriquecer
                 </button>
@@ -464,34 +464,34 @@ export default function KanbanCard({ card, index }) {
           </div>
         )}
         {perdecompOpen && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-            <div className="bg-white rounded shadow-lg p-6 w-11/12 max-w-md mx-auto">
-              <h2 className="text-lg font-bold mb-2 text-center">Confirmar consulta PER/DCOMP</h2>
-              <div className="text-sm mb-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm">
+            <div className="w-11/12 max-w-md rounded-3xl border border-border bg-card p-6 shadow-soft">
+              <h2 className="text-lg font-semibold text-center text-foreground">Confirmar consulta PER/DCOMP</h2>
+              <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                 <div>
-                  <span className="font-medium">Empresa:</span> {client.company || client.nome || client.Nome_da_Empresa || '—'}
+                  <span className="font-medium text-foreground">Empresa:</span> {client.company || client.nome || client.Nome_da_Empresa || '—'}
                 </div>
                 {(client.cnpj || client.CNPJ || client.CNPJ_Empresa) && (
                   <div>
-                    <span className="font-medium">CNPJ:</span>{' '}
+                    <span className="font-medium text-foreground">CNPJ:</span>{' '}
                     {client.cnpj || client.CNPJ || client.CNPJ_Empresa}
                   </div>
                 )}
-                <div className="mt-2">
-                  <span className="font-medium">Será enviado:</span>{' '}
-                  <code className="px-1 py-0.5 bg-gray-100 rounded">{queryValue || '—'}</code>
+                <div className="pt-2">
+                  <span className="font-medium text-foreground">Será enviado:</span>{' '}
+                  <code className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-foreground">{queryValue || '—'}</code>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
+              <div className="mt-6 flex justify-end gap-3">
                 <button
                   onClick={() => setPerdecompOpen(false)}
-                  className="px-3 py-1.5 rounded border"
+                  className="rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handlePerdecompConfirm}
-                  className="px-3 py-1.5 rounded bg-black text-white"
+                  className="rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   Sim, continuar
                 </button>
