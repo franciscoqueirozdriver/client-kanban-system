@@ -9,7 +9,7 @@ import type {
 } from "react";
 import { FaSearch, FaSpinner } from "react-icons/fa";
 
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
@@ -326,10 +326,12 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-hidden p-0">
+      <DialogContent aria-describedby="spotter-modal-description" className="max-h-[90vh] overflow-hidden p-0">
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
-          <DialogDescription>Confirme ou ajuste os dados antes do envio.</DialogDescription>
+          <p id="spotter-modal-description" className="text-sm text-muted-foreground">
+            Confirme ou ajuste os dados antes do envio.
+          </p>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex max-h-[calc(90vh-150px)] flex-col">
           <div className="flex-1 overflow-y-auto px-6 py-5">
