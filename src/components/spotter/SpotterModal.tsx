@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ChangeEvent,
   FormEvent,
   InputHTMLAttributes,
+  KeyboardEvent,
   SelectHTMLAttributes,
 } from "react";
 import { FaSearch, FaSpinner } from "react-icons/fa";
@@ -63,7 +64,7 @@ type SpotterModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   lead?: LeadData;
-  onSubmit: (payload: Record<string, any>) => Promise<void> | void;
+  onSubmit?: (payload: Record<string, any>) => Promise<void> | void;
   isSubmitting?: boolean;
 };
 
@@ -74,7 +75,13 @@ type FieldError = {
 
 type FormState = Record<string, string>;
 
-export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSubmitting = false }: SpotterModalProps) {
+export default function SpotterModal({
+  open,
+  onOpenChange,
+  lead,
+  onSubmit,
+  isSubmitting: isSubmittingProp,
+}: SpotterModalProps) {
   const [formData, setFormData] = useState<FormState>({});
   const [errors, setErrors] = useState<FieldError[]>([]);
   const [isEnriching, setIsEnriching] = useState(false);
@@ -82,6 +89,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [produtosList, setProdutosList] = useState<string[]>([]);
   const [mercadosList, setMercadosList] = useState<string[]>([]);
   const [prevendedoresList, setPrevendedoresList] = useState<string[]>([]);
+  const [internalSubmitting, setInternalSubmitting] = useState(false);
+  const shouldControlSubmitting = typeof isSubmittingProp !== "boolean";
+  const isSubmitting = isSubmittingProp ?? internalSubmitting;
 
   useEffect(() => {
     if (!open) return;
@@ -166,8 +176,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   useEffect(() => {
     if (!open) {
       setErrors([]);
+      if (shouldControlSubmitting) {
+        setInternalSubmitting(false);
+      }
     }
-  }, [open]);
+  }, [open, shouldControlSubmitting]);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = event.target;
@@ -226,29 +239,112 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     }
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setErrors([]);
+  const handleSubmit = useCallback(
+    async (event?: FormEvent<HTMLFormElement>) => {
+      event?.preventDefault();
+      setErrors([]);
 
-    const payloadForApi = Object.entries(formData).reduce<Record<string, any>>((acc, [formKey, value]) => {
-      const layoutKey = reversedFieldMap[formKey];
-      if (layoutKey) {
-        acc[layoutKey] = value || null;
-      }
-      return acc;
-    }, {});
+      const validationErrors: FieldError[] = [];
+      const requiredPairs: Array<{ label: string; key: string }> = [
+        { label: "Nome do Lead", key: fieldMap["Nome do Lead"] },
+        { label: "Mercado", key: fieldMap["Mercado"] },
+        { label: "Área", key: fieldMap["Área"] },
+      ];
 
-    try {
-      await onSubmit(payloadForApi);
-    } catch (error: any) {
-      const details = error?.details;
-      if (Array.isArray(details)) {
-        setErrors(details as FieldError[]);
-      } else if (error?.message) {
-        console.error("Erro no envio ao Spotter:", error);
+      for (const { label, key } of requiredPairs) {
+        const value = formData[key];
+        if (!value || String(value).trim() === "") {
+          validationErrors.push({ field: label, message: "Campo obrigatório." });
+        }
       }
-    }
-  };
+
+      const telefone = formData[fieldMap["Telefones"]] ?? "";
+      const emailContato = formData[fieldMap["E-mail Contato"]] ?? "";
+      if (!telefone.trim() && !emailContato.trim()) {
+        validationErrors.push({
+          field: "Telefones",
+          message: "Informe um telefone ou e-mail de contato.",
+        });
+        validationErrors.push({
+          field: "E-mail Contato",
+          message: "Informe um telefone ou e-mail de contato.",
+        });
+      }
+
+      if (validationErrors.length) {
+        setErrors(validationErrors);
+        alert("Preencha os campos obrigatórios antes de enviar.");
+        return;
+      }
+
+      const payloadForApi = Object.entries(formData).reduce<Record<string, any>>((acc, [formKey, value]) => {
+        const layoutKey = reversedFieldMap[formKey];
+        if (layoutKey) {
+          acc[layoutKey] = value || null;
+        }
+        return acc;
+      }, {});
+
+      try {
+        if (shouldControlSubmitting) {
+          setInternalSubmitting(true);
+        }
+
+        if (onSubmit) {
+          await onSubmit(payloadForApi);
+        } else {
+          const response = await fetch("/api/spoter/oportunidades", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payloadForApi),
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            const error = new Error(data?.error || "Falha ao enviar ao Spotter.");
+            if (Array.isArray(data?.details)) {
+              (error as any).details = data.details;
+            }
+            throw error;
+          }
+          alert("Lead enviado ao Spotter com sucesso.");
+        }
+
+        setErrors([]);
+        onOpenChange(false);
+        if (!onSubmit) {
+          // Garantir feedback quando o envio não é controlado externamente
+          console.info("SpotterModal: envio concluído com sucesso.");
+        }
+      } catch (error: any) {
+        const details = error?.details;
+        if (Array.isArray(details)) {
+          setErrors(details as FieldError[]);
+        }
+
+        const message = error?.message || "Não foi possível enviar agora.";
+        if (!onSubmit) {
+          alert(message);
+        } else {
+          console.error("Erro no envio ao Spotter:", error);
+        }
+      } finally {
+        if (shouldControlSubmitting) {
+          setInternalSubmitting(false);
+        }
+      }
+    },
+    [formData, onSubmit, onOpenChange, shouldControlSubmitting],
+  );
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        handleSubmit();
+      }
+    },
+    [handleSubmit],
+  );
 
   const renderInput = (
     label: string,
@@ -326,7 +422,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent aria-describedby="spotter-modal-description" className="max-h-[90vh] overflow-hidden p-0">
+      <DialogContent
+        aria-describedby="spotter-modal-description"
+        className="max-h-[90vh] overflow-hidden p-0"
+        onKeyDown={handleKeyDown}
+      >
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
           <p id="spotter-modal-description" className="text-sm text-muted-foreground">
@@ -370,7 +470,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               {renderSelect("Produto", fieldMap["Produto"], produtosList)}
               {renderSelect("Email Pré-vendedor", fieldMap["Email Pré-vendedor"], prevendedoresList)}
               {renderInput("Área", fieldMap["Área"], { required: true, placeholder: "Separar múltiplas por ;" })}
-              {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
+              {renderInput("Telefones", fieldMap["Telefones"], { placeholder: "Separar múltiplos por ;" })}
               {renderInput("Observação", fieldMap["Observação"])}
 
               <h3 className="col-span-full border-t border-border/60 pt-4 text-lg font-semibold text-foreground">Endereço</h3>
@@ -416,7 +516,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting || isEnriching}>
+              <Button
+                type="submit"
+                aria-label="Enviar ao Spotter"
+                disabled={isSubmitting || isEnriching}
+              >
                 {isSubmitting ? (
                   <span className="inline-flex items-center gap-2">
                     <FaSpinner className="animate-spin" /> Enviando...
