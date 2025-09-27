@@ -22,6 +22,8 @@ function buildClients(count, mapFn) {
 }
 
 describe('ClientesPage total counter', () => {
+  const formatter = new Intl.NumberFormat('pt-BR');
+
   afterEach(() => {
     jest.resetAllMocks();
   });
@@ -36,7 +38,7 @@ describe('ClientesPage total counter', () => {
 
     const counter = await screen.findByTestId('total-clientes-exibidos');
     await waitFor(() =>
-      expect(counter).toHaveTextContent('TOTAL DE CLIENTES EXIBIDOS: 4384')
+      expect(counter).toHaveTextContent(new RegExp(`Exibindo\\s*${formatter.format(4384)}`))
     );
   });
 
@@ -50,7 +52,7 @@ describe('ClientesPage total counter', () => {
 
     const counter = await screen.findByTestId('total-clientes-exibidos');
     await waitFor(() =>
-      expect(counter).toHaveTextContent('TOTAL DE CLIENTES EXIBIDOS: 1200')
+      expect(counter).toHaveTextContent(new RegExp(`Exibindo\\s*${formatter.format(1200)}`))
     );
 
     const selects = await screen.findAllByRole('combobox');
@@ -59,7 +61,7 @@ describe('ClientesPage total counter', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('total-clientes-exibidos')).toHaveTextContent(
-        'TOTAL DE CLIENTES EXIBIDOS: 950'
+        new RegExp(`Exibindo\\s*${formatter.format(950)}`)
       )
     );
   });
