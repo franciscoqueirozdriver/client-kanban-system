@@ -1,19 +1,12 @@
-"use client";
+'use client';
 
 import { useEffect, useMemo, useState } from "react";
-import type {
-  ChangeEvent,
-  FormEvent,
-  InputHTMLAttributes,
-  SelectHTMLAttributes,
-} from "react";
 import { FaSearch, FaSpinner } from "react-icons/fa";
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
-const fieldMap: Record<string, string> = {
+const fieldMap = {
   "Nome do Lead": "nomeLead",
   "Origem": "origem",
   "Sub-Origem": "subOrigem",
@@ -46,90 +39,27 @@ const fieldMap: Record<string, string> = {
   "Email Pré-vendedor": "emailPrevendedor",
 };
 
-const reversedFieldMap = Object.entries(fieldMap).reduce<Record<string, string>>((acc, [layoutKey, formKey]) => {
+const reversedFieldMap = Object.entries(fieldMap).reduce((acc, [layoutKey, formKey]) => {
   acc[formKey] = layoutKey;
   return acc;
 }, {});
-
-type LeadData = {
-  id: string;
-  nome: string;
-  empresa?: string;
-  cnpj?: string;
-  [k: string]: any;
-} | null;
-
-type SpotterModalProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  lead?: LeadData;
-  onSubmit: (payload: Record<string, any>) => Promise<void> | void;
-  isSubmitting?: boolean;
-};
-
-type FieldError = {
-  field: string;
-  message: string;
-};
-
-type FormState = Record<string, string>;
-
-type FetchPadroesResponse = {
-  produtos?: string[];
-  mercados?: string[];
-  prevendedores?: string[];
-};
-
-type SpotterLeadMeta = {
-  segment?: string;
-  opportunities?: string[];
-  company?: string;
-  contacts?: Array<{
-    name?: string;
-    nome?: string;
-    email?: string;
-    role?: string;
-    cargo?: string;
-    normalizedPhones?: string[];
-  }>;
-  normalizedPhones?: string[];
-  cnpj?: string;
-  cpf?: string;
-  document?: string;
-  uf?: string;
-  city?: string;
-  country?: string;
-  site?: string;
-  subOrigem?: string;
-  observacao?: string;
-  logradouro?: string;
-  numero?: string;
-  bairro?: string;
-  complemento?: string;
-  cep?: string;
-  tipoServComunicacao?: string;
-  idServComunicacao?: string;
-  emailPrevendedor?: string;
-  opportunitiesDescription?: string;
-};
-
-export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSubmitting = false }: SpotterModalProps) {
-  const [formData, setFormData] = useState<FormState>({});
-  const [errors, setErrors] = useState<FieldError[]>([]);
+export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSubmitting = false }) {
+  const [formData, setFormData] = useState({});
+  const [errors, setErrors] = useState([]);
   const [isEnriching, setIsEnriching] = useState(false);
   const [isEnrichConfirmOpen, setIsEnrichConfirmOpen] = useState(false);
-  const [produtosList, setProdutosList] = useState<string[]>([]);
-  const [mercadosList, setMercadosList] = useState<string[]>([]);
-  const [prevendedoresList, setPrevendedoresList] = useState<string[]>([]);
+  const [produtosList, setProdutosList] = useState([]);
+  const [mercadosList, setMercadosList] = useState([]);
+  const [prevendedoresList, setPrevendedoresList] = useState([]);
 
   useEffect(() => {
     if (!open) return;
 
     const fetchAndPrefill = async () => {
-      let fetchedMercados: string[] = [];
+      let fetchedMercados = [];
       try {
         const res = await fetch("/api/padroes");
-        const data = (await res.json()) as FetchPadroesResponse;
+        const data = await res.json();
         if (res.ok) {
           setProdutosList(Array.isArray(data.produtos) ? data.produtos : []);
           fetchedMercados = Array.isArray(data.mercados) ? data.mercados : [];
@@ -140,7 +70,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         console.error("Failed to fetch padroes", error);
       }
 
-      const client = (lead ?? undefined) as SpotterLeadMeta | undefined;
+      const client = lead ?? undefined;
       const initialMarket = client?.segment ?? "";
       const foundMarket = fetchedMercados.find((m) => m.toLowerCase() === initialMarket.toLowerCase());
       const selectedMarket = foundMarket || "N/A";
@@ -153,7 +83,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       const telefonesEmpresa =
         firstContact?.normalizedPhones?.join(";") || client?.normalizedPhones?.join(";") || "";
 
-      const initialFormState: FormState = {
+      const initialFormState = {
         [fieldMap["Nome do Lead"]]: client?.company ?? "Lead sem título",
         [fieldMap["Origem"]]: "Lista Francisco",
         [fieldMap["Mercado"]]: selectedMarket,
@@ -189,7 +119,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         [fieldMap["Email Pré-vendedor"]]: client?.emailPrevendedor ?? "",
       };
 
-      const fullForm: FormState = Object.values(fieldMap).reduce<FormState>((acc, key) => {
+      const fullForm = Object.values(fieldMap).reduce((acc, key) => {
         if (!(key in acc)) {
           acc[key] = "";
         }
@@ -209,7 +139,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     }
   }, [open]);
 
-  const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -259,18 +189,18 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         return next;
       });
       alert("Dados enriquecidos com sucesso!");
-    } catch (error: any) {
+    } catch (error) {
       alert(`Erro ao enriquecer: ${error?.message ?? error}`);
     } finally {
       setIsEnriching(false);
     }
   };
 
-  const handleSubmit = async (event?: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event) => {
     event?.preventDefault();
     setErrors([]);
 
-    const payloadForApi = Object.entries(formData).reduce<Record<string, any>>((acc, [formKey, value]) => {
+    const payloadForApi = Object.entries(formData).reduce((acc, [formKey, value]) => {
       const layoutKey = reversedFieldMap[formKey];
       if (layoutKey) {
         acc[layoutKey] = value || null;
@@ -280,21 +210,17 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
     try {
       await onSubmit(payloadForApi);
-    } catch (error: any) {
+    } catch (error) {
       const details = error?.details;
       if (Array.isArray(details)) {
-        setErrors(details as FieldError[]);
+        setErrors(details);
       } else if (error?.message) {
         console.error("Erro no envio ao Spotter:", error);
       }
     }
   };
 
-  const renderInput = (
-    label: string,
-    key: string,
-    props: InputHTMLAttributes<HTMLInputElement> & { required?: boolean } = {},
-  ) => {
+  const renderInput = (label, key, props = {}) => {
     const error = errors.find((e) => e.field === label);
     const baseClasses =
       "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
@@ -321,12 +247,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     );
   };
 
-  const renderSelect = (
-    label: string,
-    key: string,
-    options: string[],
-    props: SelectHTMLAttributes<HTMLSelectElement> & { required?: boolean } = {},
-  ) => {
+  const renderSelect = (label, key, options, props = {}) => {
     const error = errors.find((e) => e.field === label);
     const baseClasses =
       "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
@@ -382,7 +303,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
               event.preventDefault();
-              void handleSubmit();
+              handleSubmit();
             }
           }}
           className="flex max-h-[calc(90vh-150px)] flex-col"
@@ -451,25 +372,30 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           </div>
 
           <DialogFooter className="w-full flex-col gap-3 border-t border-border/60 bg-card px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <Button
+            <button
               type="button"
               onClick={handleEnrich}
               disabled={isEnriching || isSubmitting}
-              className="inline-flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
             >
               {isEnriching && <FaSpinner className="animate-spin" />}
               Enriquecer com IA
-            </Button>
+            </button>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Button
+              <button
                 type="button"
-                variant="secondary"
+                className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                 onClick={() => onOpenChange(false)}
                 disabled={isSubmitting}
               >
                 Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting || isEnriching} aria-label="Enviar ao Spotter">
+              </button>
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                disabled={isSubmitting || isEnriching}
+                aria-label="Enviar ao Spotter"
+              >
                 {isSubmitting ? (
                   <span className="inline-flex items-center gap-2">
                     <FaSpinner className="animate-spin" /> Enviando...
@@ -477,7 +403,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 ) : (
                   "Enviar ao Spotter"
                 )}
-              </Button>
+              </button>
             </div>
           </DialogFooter>
         </form>
@@ -491,12 +417,21 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 <span className="font-semibold"> {formData[fieldMap["Nome da Empresa"]] || ""}</span>?
               </p>
               <div className="mt-6 flex justify-end gap-3">
-                <Button type="button" variant="secondary" onClick={() => setIsEnrichConfirmOpen(false)}>
+                <button
+                  type="button"
+                  onClick={() => setIsEnrichConfirmOpen(false)}
+                  className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-3 py-1.5 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
                   Cancelar
-                </Button>
-                <Button type="button" onClick={handleEnrichConfirm} disabled={isEnriching}>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEnrichConfirm}
+                  disabled={isEnriching}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                >
                   {isEnriching ? <FaSpinner className="animate-spin" /> : "Sim, enriquecer"}
-                </Button>
+                </button>
               </div>
             </div>
           </div>
