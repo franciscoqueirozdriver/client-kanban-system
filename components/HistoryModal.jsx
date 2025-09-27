@@ -1,39 +1,68 @@
 'use client';
 
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+
+const formatDate = (value) => {
+  try {
+    return new Date(value).toLocaleString('pt-BR');
+  } catch {
+    return value;
+  }
+};
+
 export default function HistoryModal({ open, interactions = [], onClose }) {
-  if (!open) return null;
+  const handleClose = () => {
+    if (onClose) onClose();
+  };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-      <div className="bg-white rounded shadow-lg p-6 w-11/12 max-w-lg mx-auto">
-        <h2 className="text-lg font-bold mb-4 text-center">Histórico de Interações</h2>
-        <div className="max-h-60 overflow-y-auto text-sm mb-4">
-          {interactions.map((i, idx) => (
-            <div key={idx} className="border-b py-1">
-              <p className="font-medium">
-                {new Date(i.dataHora).toLocaleString('pt-BR')} - {i.tipo}
-              </p>
-              {i.tipo === 'Mudança de Fase' && (
-                <p className="text-xs">
-                  {i.deFase} → {i.paraFase}
-                </p>
-              )}
-              {i.observacao && (
-                <p className="text-xs text-gray-700">Obs: {i.observacao}</p>
-              )}
-              {i.mensagemUsada && (
-                <p className="text-xs text-gray-700">Mensagem: {i.mensagemUsada}</p>
-              )}
+    <Dialog open={open} onOpenChange={(value) => !value && handleClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader className="items-center text-center">
+          <DialogTitle className="text-lg font-semibold">Histórico de Interações</DialogTitle>
+        </DialogHeader>
+
+        <div className="px-6 py-5">
+          {interactions.length > 0 ? (
+            <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-2 text-sm">
+              {interactions.map((interaction, idx) => (
+                <article key={`${interaction.dataHora}-${idx}`} className="rounded-2xl border border-border/60 bg-card/60 px-4 py-3">
+                  <header className="flex flex-wrap items-center justify-between gap-1 text-xs text-muted-foreground">
+                    <span>{formatDate(interaction.dataHora)}</span>
+                    <span className="font-medium text-foreground">{interaction.tipo}</span>
+                  </header>
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    {interaction.tipo === 'Mudança de Fase' && interaction.deFase && interaction.paraFase && (
+                      <p>
+                        {interaction.deFase} → {interaction.paraFase}
+                      </p>
+                    )}
+                    {interaction.mensagemUsada && (
+                      <p>
+                        <span className="font-semibold text-foreground">Mensagem:</span> {interaction.mensagemUsada}
+                      </p>
+                    )}
+                    {interaction.observacao && (
+                      <p>
+                        <span className="font-semibold text-foreground">Observação:</span> {interaction.observacao}
+                      </p>
+                    )}
+                  </div>
+                </article>
+              ))}
             </div>
-          ))}
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhuma interação registrada para este cliente.</p>
+          )}
         </div>
-        <button
-          onClick={onClose}
-          className="px-3 py-2 bg-gray-400 text-white rounded w-full"
-        >
-          Fechar
-        </button>
-      </div>
-    </div>
+
+        <DialogFooter>
+          <Button type="button" onClick={handleClose}>
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
