@@ -1,6 +1,6 @@
 'use client';
 
-import clsx from 'clsx';
+import { cn } from '@/lib/cn';
 
 export default function SummaryCard({ title, value, helper, trend }) {
   return (
@@ -15,7 +15,7 @@ export default function SummaryCard({ title, value, helper, trend }) {
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">{title}</p>
           {trend && (
             <span
-              className={clsx(
+              className={cn(
                 'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold',
                 trend.direction === 'up'
                   ? 'bg-success/15 text-success-foreground'

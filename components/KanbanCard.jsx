@@ -7,7 +7,7 @@ import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
 import SpotterModal from './SpotterModal';
 import { onlyDigits, isValidCNPJ } from '@/utils/cnpj';
-import clsx from 'clsx';
+import { cn } from '@/lib/cn';
 
 // Remove proteção visual dos números ('+553199999999' -> +553199999999)
 function displayPhone(phone) {
@@ -285,7 +285,7 @@ export default function KanbanCard({ card, index }) {
             ...provided.draggableProps.style,
             '--card-accent': accentColor,
           }}
-          className={clsx(
+          className={cn(
             'relative mb-3 overflow-hidden rounded-2xl border border-border/70 bg-card p-4 text-sm shadow transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
             loading && 'pointer-events-none opacity-60',
             snapshot.isDragging && 'ring-2 ring-primary/60 shadow-soft',

@@ -1,7 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSelection } from "@/store/selection";
 import type { Lead } from "@/types/lead";
 import BulkActions from "./BulkActions";
 
@@ -44,11 +43,43 @@ export default function LeadsTable({
 }: LeadsTableProps) {
   const router = useRouter();
   const search = useSearchParams();
-  const { selectedIds, isSelected, toggle, setMany } = useSelection();
+  const [selectedIds, setSelectedIds] = useState<Set<Lead["id"]>>(() => new Set<Lead["id"]>());
   const [density, setDensity] = useState(search?.get("density") || "comfortable");
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState<string>("all");
   const [page, setPage] = useState(0);
+
+  const isSelected = useCallback((id: Lead["id"]) => selectedIds.has(id), [selectedIds]);
+
+  const toggle = useCallback((id: Lead["id"]) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const setMany = useCallback((ids: Lead["id"][], checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => {
+        if (checked) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set<Lead["id"]>());
+  }, []);
 
   const filtered: Lead[] = useMemo(() => {
     const result = data.filter((lead) => {
@@ -76,9 +107,11 @@ export default function LeadsTable({
 
   const rowPad = density === "compact" ? "py-1" : "py-3";
 
-  const allVisibleIds = useMemo(() => filtered.map((r) => r.id), [filtered]);
+  const allVisibleIds = useMemo<Lead["id"][]>(() => filtered.map((r) => r.id), [filtered]);
 
-  const toggleAllVisible = (checked) => setMany(allVisibleIds, checked);
+  const toggleAllVisible = (checked: boolean) => setMany(allVisibleIds, checked);
+
+  const selectedIdsArray = useMemo(() => Array.from(selectedIds), [selectedIds]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -117,6 +150,8 @@ export default function LeadsTable({
       </div>
 
       <BulkActions
+        selectedIds={selectedIdsArray}
+        onClear={clearSelection}
         onMoveStage={async (ids) => {
           // stub: troque por chamada de API em massa
           console.log("move stage → ids", ids);
@@ -134,7 +169,7 @@ export default function LeadsTable({
                 <th className="w-10 px-4 py-3">
                   <input
                     type="checkbox"
-                    checked={allVisibleIds.every((id) => selectedIds.has(id)) && allVisibleIds.length > 0}
+                    checked={allVisibleIds.every((id) => selectedIds.has(id as Lead["id"])) && allVisibleIds.length > 0}
                     onChange={(e) => toggleAllVisible(e.target.checked)}
                     aria-label="Selecionar todos"
                   />

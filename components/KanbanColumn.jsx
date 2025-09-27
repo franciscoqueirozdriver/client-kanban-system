@@ -1,7 +1,7 @@
 'use client';
 
 import { Droppable } from '@hello-pangea/dnd';
-import clsx from 'clsx';
+import { cn } from '@/lib/cn';
 import KanbanCard from './KanbanCard';
 
 export default function KanbanColumn({ column }) {
@@ -26,7 +26,7 @@ export default function KanbanColumn({ column }) {
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={clsx(
+            className={cn(
               'flex-1 min-h-0 space-y-3 overflow-y-auto px-3 pb-6 pt-4 scrollbar-thin',
               snapshot.isDraggingOver && 'bg-primary/5 ring-2 ring-inset ring-primary/30',
             )}

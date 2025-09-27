@@ -4,27 +4,27 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
-  BarChart3,
-  Building2,
-  CircleDollarSign,
-  GaugeCircle,
-  Menu,
-  Moon,
-  PanelsTopLeft,
-  Settings2,
-  Sun,
-  Users,
-} from 'lucide-react';
-import { useTheme } from 'next-themes';
-import clsx from 'clsx';
+  BarChartIcon,
+  BuildingIcon,
+  DollarCircleIcon,
+  GaugeCircleIcon,
+  MenuIcon,
+  MoonIcon,
+  PanelsIcon,
+  SettingsIcon,
+  SunIcon,
+  UsersIcon,
+} from '@/components/icons';
+import { useTheme } from '@/components/ThemeProvider';
+import { cn } from '@/lib/cn';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Dashboard', icon: GaugeCircle },
-  { href: '/clientes', label: 'Clientes', icon: Users },
-  { href: '/kanban', label: 'Consultas (Kanban)', icon: PanelsTopLeft },
-  { href: '/consultas/perdecomp-comparativo', label: 'PER/DCOMP Comparativo', icon: CircleDollarSign },
-  { href: '/reports', label: 'Relatórios', icon: BarChart3 },
-  { href: '#', label: 'Configurações', icon: Settings2 },
+  { href: '/', label: 'Dashboard', icon: GaugeCircleIcon },
+  { href: '/clientes', label: 'Clientes', icon: UsersIcon },
+  { href: '/kanban', label: 'Consultas (Kanban)', icon: PanelsIcon },
+  { href: '/consultas/perdecomp-comparativo', label: 'PER/DCOMP Comparativo', icon: DollarCircleIcon },
+  { href: '/reports', label: 'Relatórios', icon: BarChartIcon },
+  { href: '#', label: 'Configurações', icon: SettingsIcon },
 ];
 
 export default function Sidebar() {
@@ -42,7 +42,7 @@ export default function Sidebar() {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
 
-  const ThemeIcon = resolvedTheme === 'dark' ? Sun : Moon;
+  const ThemeIcon = resolvedTheme === 'dark' ? SunIcon : MoonIcon;
 
   return (
     <>
@@ -53,18 +53,18 @@ export default function Sidebar() {
         onClick={() => setOpen((prev) => !prev)}
         className="fixed left-4 top-4 z-40 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-foreground shadow-soft transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:hidden"
       >
-        <Menu className="h-5 w-5" aria-hidden="true" />
+        <MenuIcon className="h-5 w-5" aria-hidden="true" />
       </button>
-        <div
-          role="presentation"
-          onClick={() => setOpen(false)}
-          className={clsx(
-            'fixed inset-0 z-30 bg-foreground/30 backdrop-blur-sm transition-opacity md:hidden',
-            open ? 'opacity-100 pointer-events-auto' : 'pointer-events-none opacity-0',
-          )}
-        />
+      <div
+        role="presentation"
+        onClick={() => setOpen(false)}
+        className={cn(
+          'fixed inset-0 z-30 bg-foreground/30 backdrop-blur-sm transition-opacity md:hidden',
+          open ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
+        )}
+      />
       <aside
-        className={clsx(
+        className={cn(
           'fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-border bg-card/95 px-6 py-6 shadow-soft backdrop-blur-lg transition-transform duration-300 md:translate-x-0 md:bg-card',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
@@ -73,7 +73,7 @@ export default function Sidebar() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 text-lg font-semibold tracking-tight">
             <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-soft">
-              <Building2 className="h-5 w-5" aria-hidden="true" />
+              <BuildingIcon className="h-5 w-5" aria-hidden="true" />
             </span>
             Consultas
           </div>
@@ -97,7 +97,7 @@ export default function Sidebar() {
                 key={href}
                 href={href}
                 onClick={() => setOpen(false)}
-                className={clsx(
+                className={cn(
                   'group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                   active
                     ? 'bg-primary text-primary-foreground shadow-soft'

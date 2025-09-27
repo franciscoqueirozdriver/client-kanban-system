@@ -15,11 +15,11 @@ Este projeto utiliza o design system violeta com suporte a tema claro/escuro bas
 - **Cards** (`components/SummaryCard.jsx`): usam `rounded-3xl`, `shadow-soft` e gradiente suave. Ao criar novos cards, mantenha padding `p-6` e tipografia `text-sm` para cabeçalhos.
 - **Tabelas** (`components/leads-table/LeadsTable.tsx`): cabeçalho colante, zebra com `hover:bg-muted/40`, foco visível em inputs/botões. Novas colunas devem respeitar `px-4 py-3`.
 - **Kanban**: colunas em `components/KanbanColumn.jsx` e cards em `components/KanbanCard.jsx`. Use `rounded-3xl` para colunas e `rounded-2xl` para cards, sempre com `focus-visible:ring-primary`.
-- **Sidebar** (`components/Sidebar.jsx`): ícones lucide-react, toggle de tema com `next-themes`. Para novos links, acrescente ao array `NAV_ITEMS`.
+- **Sidebar** (`components/Sidebar.jsx`): ícones internos em `components/icons`, toggle de tema usando o hook `useTheme` exportado por `components/ThemeProvider`.
 
 ## Tema e dark mode
 
-- O `ThemeProvider` de `next-themes` aplica a classe `.dark`. Qualquer novo componente deve ler cores via tokens.
+- O `ThemeProvider` customizado em `components/ThemeProvider.jsx` aplica a classe `.dark` e expõe `useTheme()` com `resolvedTheme`, `theme` e `setTheme`. Leia tokens sempre via Tailwind (ex.: `bg-background`).
 - Para estados dinâmicos, defina variáveis CSS locais (ex.: `style={{ '--card-accent': ... }}`) e aplique em classe.
 
 ## Acessibilidade
@@ -36,6 +36,6 @@ Este projeto utiliza o design system violeta com suporte a tema claro/escuro bas
 
 ## Build de gráficos
 
-- `components/Charts.jsx` usa Recharts com paleta via CSS variables. Ao adicionar novas séries, utilize `fill="hsl(var(--token))"`.
+- `components/Charts.jsx` usa Chart.js (`react-chartjs-2`). Para novos datasets, leia as cores com o hook interno `useDesignTokens` e aplique-as em `backgroundColor`. Ajuste tooltips/opções no objeto `options` garantindo contraste adequado nos dois temas.
 
 Manter estes padrões garante continuidade visual e reduz retrabalho quando temas/tokens forem atualizados.
