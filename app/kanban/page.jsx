@@ -8,6 +8,7 @@ import ViewToggle from '@/components/view-toggle/ViewToggle';
 import Views from './Views';
 import SummaryCard from '@/components/SummaryCard';
 import Charts from '@/components/Charts';
+import AlertDialog from '@/components/AlertDialog';
 
 // O componente principal agora é um Client Component que faz o fetch dos dados
 function KanbanPage() {
@@ -17,6 +18,7 @@ function KanbanPage() {
   const [produto, setProduto] = useState('');
   const isAdmin = process.env.NEXT_PUBLIC_IS_ADMIN === 'true';
   const [isUpdating, setIsUpdating] = useState(false);
+  const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', description: '' });
 
   const searchParams = useSearchParams();
   const view = searchParams?.get('view') || (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) || 'kanban';
@@ -49,7 +51,7 @@ function KanbanPage() {
 
   const handleMesclar = async () => {
     if (!produto) {
-      alert('Selecione um produto');
+      setAlertInfo({ isOpen: true, title: 'Atenção', description: 'Selecione um produto para mesclar.' });
       return;
     }
     const res = await fetch('/api/mesclar-leads-exact-spotter', {
@@ -59,12 +61,20 @@ function KanbanPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || 'Erro ao mesclar');
+      setAlertInfo({
+        isOpen: true,
+        title: 'Erro ao Mesclar',
+        description: data.error || 'Ocorreu uma falha ao tentar mesclar os leads.',
+      });
       return;
     }
-    alert(
-      `Criadas: ${data.criadas}\nAtualizadas: ${data.atualizadas}\nIgnoradas: ${data.ignoradas}\nErros: ${data.erros.join(', ')}`
-    );
+    setAlertInfo({
+      isOpen: true,
+      title: 'Mesclagem Concluída',
+      description: `Criadas: ${data.criadas}, Atualizadas: ${data.atualizadas}, Ignoradas: ${
+        data.ignoradas
+      }, Erros: ${data.erros.join(', ') || 'Nenhum'}.`,
+    });
   };
 
   const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
@@ -177,7 +187,11 @@ function KanbanPage() {
       });
     } catch (err) {
       setColumns(prevColumns);
-      alert('Erro ao atualizar');
+      setAlertInfo({
+        isOpen: true,
+        title: 'Erro ao Atualizar',
+        description: 'Não foi possível mover o card. A alteração foi desfeita.',
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -263,7 +277,7 @@ function KanbanPage() {
   }, [leads]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex h-full flex-col gap-6">
       <header className="flex flex-wrap items-start justify-between gap-6 rounded-3xl border border-border bg-card px-6 py-6 shadow-soft">
         <div className="max-w-2xl space-y-3">
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Painel de Consultas</p>
@@ -336,13 +350,10 @@ function KanbanPage() {
       </div>
 
       {view === 'kanban' ? (
-        <section className="rounded-3xl border border-border bg-muted/40 p-4 shadow-soft">
+        <section className="flex min-h-0 flex-1 rounded-3xl border border-border bg-muted/40 p-4 shadow-soft">
           <DragDropContext onDragEnd={onDragEnd}>
-            <div
-              id="kanban-viewport"
-              className="scrollbar-thin sticky top-[140px] z-10 h-[calc(100vh-260px)] w-full min-h-0 overflow-x-auto px-4 pb-3 pt-1"
-            >
-              <div className="flex min-h-0 w-max select-none items-stretch gap-4 pr-6" role="list">
+            <div id="kanban-viewport" className="h-full w-full overflow-x-auto scrollbar-thin">
+              <div className="flex h-full w-max select-none items-stretch gap-4" role="list">
                 {columnsToShow.map((col) => (
                   <KanbanColumn key={col.id} column={col} />
                 ))}
@@ -351,8 +362,16 @@ function KanbanPage() {
           </DragDropContext>
         </section>
       ) : (
-        <Views leads={leads} />
+        <div className="flex-1 min-h-0">
+          <Views leads={leads} />
+        </div>
       )}
+      <AlertDialog
+        isOpen={alertInfo.isOpen}
+        onClose={() => setAlertInfo({ isOpen: false, title: '', description: '' })}
+        title={alertInfo.title}
+        description={alertInfo.description}
+      />
     </div>
   );
 }

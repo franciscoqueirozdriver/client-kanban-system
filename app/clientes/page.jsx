@@ -5,12 +5,8 @@ import ClientCard from '../../components/ClientCard';
 import Filters from '../../components/Filters';
 import NewCompanyModal from '../../components/NewCompanyModal';
 import EnrichmentPreviewDialog from '../../components/EnrichmentPreviewDialog';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
-
-async function openConfirmDialog({ title, description, confirmText, cancelText }) {
-  const msg = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
-  return window.confirm(msg) ? 'confirm' : 'cancel';
-}
 
 export default function ClientesPage() {
   const [clients, setClients] = useState([]);
@@ -23,6 +19,7 @@ export default function ClientesPage() {
   const [enrichPreview, setEnrichPreview] = useState(null);
   const [showEnrichPreview, setShowEnrichPreview] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
+  const [cnpjConfirm, setCnpjConfirm] = useState({ isOpen: false });
 
   const fetchClients = () => {
     fetch('/api/clientes')
@@ -110,16 +107,16 @@ export default function ClientesPage() {
           <div className="flex justify-center gap-4">
             <button
               onClick={() => handleOpenNewCompanyModal()}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="inline-flex items-center justify-center rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               Cadastrar Novo
             </button>
             <button
               onClick={handleEnrichQuery}
               disabled={isEnriching}
-              className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 disabled:bg-gray-400 flex items-center"
+              className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
             >
-              {isEnriching && <FaSpinner className="animate-spin mr-2" />}
+              {isEnriching && <FaSpinner className="mr-2 h-4 w-4 animate-spin" />}
               Enriquecer
             </button>
           </div>
@@ -153,20 +150,40 @@ export default function ClientesPage() {
           const cnpjFinal = await decideCNPJFinal({
             currentFormCNPJ: merged?.CNPJ_Empresa,
             enrichedCNPJ: flat?.CNPJ_Empresa ?? flat?.cnpj,
-            ask: async (matriz, filial) => {
-              const choice = await openConfirmDialog({
-                title: 'CNPJ indica Filial',
-                description: `Detectamos FILIAL (${filial}). Deseja salvar como filial mesmo?\nSe preferir Matriz, salvaremos ${matriz}.`,
-                confirmText: 'Usar Matriz',
-                cancelText: 'Manter Filial',
+            ask: (matriz, filial) => {
+              return new Promise((resolve) => {
+                setCnpjConfirm({
+                  isOpen: true,
+                  title: 'CNPJ indica Filial',
+                  description: `Detectamos FILIAL (${filial}). Deseja salvar como filial mesmo? Se preferir Matriz, salvaremos ${matriz}.`,
+                  confirmText: 'Usar Matriz',
+                  cancelText: 'Manter Filial',
+                  onConfirm: () => {
+                    setCnpjConfirm({ isOpen: false });
+                    resolve(true); // Use Matriz
+                  },
+                  onClose: () => {
+                    setCnpjConfirm({ isOpen: false });
+                    resolve(false); // Use Filial
+                  },
+                });
               });
-              return choice === 'confirm';
             },
           });
           const mergedWithCnpj = { ...merged, CNPJ_Empresa: cnpjFinal };
           handleOpenNewCompanyModal(mergedWithCnpj);
           setShowEnrichPreview(false);
         }}
+      />
+
+      <ConfirmDialog
+        isOpen={cnpjConfirm.isOpen}
+        onClose={cnpjConfirm.onClose}
+        onConfirm={cnpjConfirm.onConfirm}
+        title={cnpjConfirm.title}
+        description={cnpjConfirm.description}
+        confirmText={cnpjConfirm.confirmText}
+        cancelText={cnpjConfirm.cancelText}
       />
     </div>
   );
