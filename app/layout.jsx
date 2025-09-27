@@ -1,6 +1,6 @@
 import './globals.css';
 import Sidebar from '../components/Sidebar';
-import { ThemeProvider } from 'next-themes';
+import ThemeProvider from '@/components/ThemeProvider';
 
 export const metadata = {
   title: 'Client Kanban System',
