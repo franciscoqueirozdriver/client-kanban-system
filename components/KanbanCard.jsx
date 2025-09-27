@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
-import SpotterModal from './SpotterModal';
 import { onlyDigits, isValidCNPJ } from '@/utils/cnpj';
 import { cn } from '@/lib/cn';
 
@@ -62,7 +61,7 @@ async function fetchMessages(app) {
   }
 }
 
-export default function KanbanCard({ card, index }) {
+export default function KanbanCard({ card, index, onOpenSpotter }) {
   const [client, setClient] = useState(card.client);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
@@ -73,7 +72,6 @@ export default function KanbanCard({ card, index }) {
   const [historyData, setHistoryData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [perdecompOpen, setPerdecompOpen] = useState(false);
-  const [isSpotterModalOpen, setIsSpotterModalOpen] = useState(false);
   const [isEnrichConfirmOpen, setIsEnrichConfirmOpen] = useState(false);
   const router = useRouter();
 
@@ -381,7 +379,17 @@ export default function KanbanCard({ card, index }) {
           ))}
           <div className="mt-4">
             <button
-              onClick={() => setIsSpotterModalOpen(true)}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onOpenSpotter?.(client, {
+                  cardId: card.id,
+                  onUpdate: (update) => {
+                    setClient((prev) => ({ ...prev, ...update }));
+                  },
+                });
+              }}
               className="w-full rounded-xl border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary/60 hover:text-foreground hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               title="Enviar esta oportunidade para o Exact Spotter"
             >
@@ -430,14 +438,6 @@ export default function KanbanCard({ card, index }) {
           open={historyOpen}
           interactions={historyData}
           onClose={() => setHistoryOpen(false)}
-        />
-        <SpotterModal
-          isOpen={isSpotterModalOpen}
-          onClose={() => setIsSpotterModalOpen(false)}
-          initialData={client}
-          onSent={(update) => {
-            setClient(prev => ({ ...prev, ...update }));
-          }}
         />
         {isEnrichConfirmOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm">
