@@ -8,7 +8,6 @@ import ViewToggle from '@/components/view-toggle/ViewToggle';
 import Views from './Views';
 import SummaryCard from '@/components/SummaryCard';
 import Charts from '@/components/Charts';
-import SpotterModal from '@/components/spotter/SpotterModal';
 
 // O componente principal agora é um Client Component que faz o fetch dos dados
 function KanbanPage() {
@@ -18,65 +17,6 @@ function KanbanPage() {
   const [produto, setProduto] = useState('');
   const isAdmin = process.env.NEXT_PUBLIC_IS_ADMIN === 'true';
   const [isUpdating, setIsUpdating] = useState(false);
-  const [spotterOpen, setSpotterOpen] = useState(false);
-  const [spotterLead, setSpotterLead] = useState(null);
-  const [sending, setSending] = useState(false);
-
-  const defaultSpotterValues = useMemo(() => {
-    const lead = spotterLead?.lead;
-    if (!lead) return undefined;
-
-    const contacts = Array.isArray(lead.contacts) ? lead.contacts : [];
-    const firstContact = contacts[0] ?? null;
-    const contactEmail = typeof firstContact?.email === 'string' ? firstContact.email.split(';')[0].trim() : '';
-    const contactPhones = Array.isArray(firstContact?.normalizedPhones) ? firstContact.normalizedPhones : [];
-    const leadPhones = Array.isArray(lead.normalizedPhones) ? lead.normalizedPhones : [];
-    const combinedPhones = contactPhones.length > 0 ? contactPhones : leadPhones;
-
-    const defaults = {
-      leadName: lead.company || lead.nome || '',
-      companyName: lead.company || '',
-      market: lead.segment || '',
-      area:
-        Array.isArray(lead.opportunities) && lead.opportunities.length > 0
-          ? lead.opportunities.join('; ')
-          : lead.segment || '',
-      contactName: firstContact?.name || '',
-      contactRole: firstContact?.role || '',
-      contactEmail,
-      contactPhones: contactPhones.join(';'),
-      phone: combinedPhones[0] || '',
-      phones: combinedPhones.join(';'),
-      cnpj: lead.cnpj || '',
-      city: lead.city || '',
-      state: lead.uf || '',
-      country: lead.country || (lead.city ? 'Brasil' : ''),
-      site: lead.site || '',
-      origin: lead.origem || 'Lista Francisco',
-      subOrigin: lead.subOrigem || '',
-      product: lead.produto || '',
-      notes: lead.observacao || '',
-      funnel: lead.funil || 'Padrão',
-      stage: lead.status || 'Entrada',
-      emailPrevendedor: lead.emailPrevendedor || '',
-      ddi: '55',
-      contactDdi: '55',
-    };
-
-    return Object.entries(defaults).reduce((acc, [key, value]) => {
-      if (value === undefined || value === null || value === '') {
-        return acc;
-      }
-
-      if (Array.isArray(value)) {
-        acc[key] = value.join('; ');
-      } else {
-        acc[key] = String(value);
-      }
-
-      return acc;
-    }, {});
-  }, [spotterLead?.lead]);
 
   const searchParams = useSearchParams();
   const view = searchParams?.get('view') || (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) || 'kanban';
@@ -243,97 +183,6 @@ function KanbanPage() {
     }
   };
 
-  const updateCardInColumns = (leadId, updater) => {
-    setColumns((prev) =>
-      prev.map((col) => ({
-        ...col,
-        cards: col.cards.map((card) => {
-          if (card.client?.id === leadId) {
-            return updater(card);
-          }
-          return card;
-        }),
-      })),
-    );
-
-    setFilteredColumns((prev) => {
-      if (!prev) return prev;
-      return prev.map((col) => ({
-        ...col,
-        cards: col.cards.map((card) => {
-          if (card.client?.id === leadId) {
-            return updater(card);
-          }
-          return card;
-        }),
-      }));
-    });
-  };
-
-  const handleAbrirSpotter = (lead, meta = {}) => {
-    setSpotterLead({ lead, ...meta });
-    setSpotterOpen(true);
-  };
-
-  const handleSpotterOpenChange = (open) => {
-    setSpotterOpen(open);
-    if (!open) {
-      setSpotterLead(null);
-    }
-  };
-
-  const handleSubmitSpotter = async (payload) => {
-    if (!spotterLead?.lead) return;
-
-    setSending(true);
-    try {
-      const res = await fetch('/api/spoter/oportunidades', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (res.status === 400 && Array.isArray(data.details)) {
-          const error = new Error(data.error || `Erro ${res.status}`);
-          error.details = data.details;
-          const errorMessages = data.details.map((err) => `${err.field}: ${err.message}`).join('\n');
-          alert(`Por favor, corrija os seguintes erros:\n${errorMessages}`);
-          throw error;
-        }
-        const error = new Error(data.error || `Erro ${res.status}`);
-        alert(`Erro no processo de envio: ${error.message}`);
-        throw error;
-      }
-
-      alert(`Sucesso! Resposta da API do Spotter: ${JSON.stringify(data, null, 2)}`);
-
-      await fetch('/api/kanban', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: spotterLead.lead.id, color: 'purple', status: 'Enviado Spotter' }),
-      });
-
-      updateCardInColumns(spotterLead.lead.id, (card) => ({
-        ...card,
-        client: {
-          ...card.client,
-          color: 'purple',
-          status: 'Enviado Spotter',
-        },
-      }));
-
-      if (typeof spotterLead?.onUpdate === 'function') {
-        spotterLead.onUpdate({ color: 'purple', status: 'Enviado Spotter' });
-      }
-
-      handleSpotterOpenChange(false);
-    } finally {
-      setSending(false);
-    }
-  };
-
   const columnsToShow = useMemo(() => {
     const priority = [
       'Lead Selecionado',
@@ -495,7 +344,7 @@ function KanbanPage() {
             >
               <div className="flex min-h-0 w-max select-none items-stretch gap-4 pr-6" role="list">
                 {columnsToShow.map((col) => (
-                  <KanbanColumn key={col.id} column={col} onOpenSpotter={handleAbrirSpotter} />
+                  <KanbanColumn key={col.id} column={col} />
                 ))}
               </div>
             </div>
@@ -505,14 +354,6 @@ function KanbanPage() {
         <Views leads={leads} />
       )}
 
-      <SpotterModal
-        open={spotterOpen}
-        onOpenChange={handleSpotterOpenChange}
-        lead={spotterLead?.lead}
-        onSubmit={handleSubmitSpotter}
-        isSubmitting={sending}
-        defaultValues={defaultSpotterValues}
-      />
     </div>
   );
 }

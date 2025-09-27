@@ -4,7 +4,7 @@ import { Droppable } from '@hello-pangea/dnd';
 import { cn } from '@/lib/cn';
 import KanbanCard from './KanbanCard';
 
-export default function KanbanColumn({ column, onOpenSpotter }) {
+export default function KanbanColumn({ column }) {
   const headerId = `${column.id}-heading`;
 
   return (
@@ -38,7 +38,7 @@ export default function KanbanColumn({ column, onOpenSpotter }) {
               </div>
             ) : (
               column.cards.map((card, index) => (
-                <KanbanCard key={card.id} card={card} index={index} onOpenSpotter={onOpenSpotter} />
+                <KanbanCard key={card.id} card={card} index={index} />
               ))
             )}
             {provided.placeholder}

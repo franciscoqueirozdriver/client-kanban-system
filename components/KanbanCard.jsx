@@ -1,12 +1,13 @@
 'use client';
 import { Draggable } from '@hello-pangea/dnd';
-import { useState, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
 import { onlyDigits, isValidCNPJ } from '@/utils/cnpj';
 import { cn } from '@/lib/cn';
+import SpotterModal from '@/components/spotter/SpotterModal';
 
 // Remove proteção visual dos números ('+553199999999' -> +553199999999)
 function displayPhone(phone) {
@@ -61,7 +62,7 @@ async function fetchMessages(app) {
   }
 }
 
-export default function KanbanCard({ card, index, onOpenSpotter }) {
+export default function KanbanCard({ card, index }) {
   const [client, setClient] = useState(card.client);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessages, setModalMessages] = useState([]);
@@ -73,7 +74,43 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
   const [loading, setLoading] = useState(false);
   const [perdecompOpen, setPerdecompOpen] = useState(false);
   const [isEnrichConfirmOpen, setIsEnrichConfirmOpen] = useState(false);
+  const [openSpotter, setOpenSpotter] = useState(false);
   const router = useRouter();
+
+  const spotterDefaults = useMemo(
+    () => ({
+      leadName: client?.company ?? '',
+      company: client?.company ?? '',
+      taxId: client?.document ?? client?.cnpj ?? client?.cpf ?? '',
+      market: client?.segment ?? 'N/A',
+      area: client?.company ?? '',
+      contactEmail: client?.contacts?.[0]?.email ?? '',
+      phone: client?.contacts?.[0]?.phone ?? '',
+      city: client?.city ?? '',
+      uf: client?.uf ?? '',
+      notes: '',
+    }),
+    [client],
+  );
+
+  const handleSubmitToSpotter = useCallback(
+    async (payload) => {
+      const res = await fetch('/api/spotter/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Falha ao enviar ao Spotter.');
+
+      setClient((prev) => ({
+        ...prev,
+        color: 'purple',
+        status: 'Enviado Spotter',
+      }));
+    },
+    [],
+  );
 
   const queryValue = useMemo(() => {
     const raw =
@@ -384,14 +421,9 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                onOpenSpotter?.(client, {
-                  cardId: card.id,
-                  onUpdate: (update) => {
-                    setClient((prev) => ({ ...prev, ...update }));
-                  },
-                });
+                setOpenSpotter(true);
               }}
-              className="w-full rounded-xl border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary/60 hover:text-foreground hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               title="Enviar esta oportunidade para o Exact Spotter"
             >
               Enviar ao Spotter
@@ -439,6 +471,12 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
           open={historyOpen}
           interactions={historyData}
           onClose={() => setHistoryOpen(false)}
+        />
+        <SpotterModal
+          open={openSpotter}
+          onOpenChange={setOpenSpotter}
+          defaults={spotterDefaults}
+          onSubmit={handleSubmitToSpotter}
         />
         {isEnrichConfirmOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm">
