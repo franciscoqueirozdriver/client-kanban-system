@@ -22,6 +22,62 @@ function KanbanPage() {
   const [spotterLead, setSpotterLead] = useState(null);
   const [sending, setSending] = useState(false);
 
+  const defaultSpotterValues = useMemo(() => {
+    const lead = spotterLead?.lead;
+    if (!lead) return undefined;
+
+    const contacts = Array.isArray(lead.contacts) ? lead.contacts : [];
+    const firstContact = contacts[0] ?? null;
+    const contactEmail = typeof firstContact?.email === 'string' ? firstContact.email.split(';')[0].trim() : '';
+    const contactPhones = Array.isArray(firstContact?.normalizedPhones) ? firstContact.normalizedPhones : [];
+    const leadPhones = Array.isArray(lead.normalizedPhones) ? lead.normalizedPhones : [];
+    const combinedPhones = contactPhones.length > 0 ? contactPhones : leadPhones;
+
+    const defaults = {
+      leadName: lead.company || lead.nome || '',
+      companyName: lead.company || '',
+      market: lead.segment || '',
+      area:
+        Array.isArray(lead.opportunities) && lead.opportunities.length > 0
+          ? lead.opportunities.join('; ')
+          : lead.segment || '',
+      contactName: firstContact?.name || '',
+      contactRole: firstContact?.role || '',
+      contactEmail,
+      contactPhones: contactPhones.join(';'),
+      phone: combinedPhones[0] || '',
+      phones: combinedPhones.join(';'),
+      cnpj: lead.cnpj || '',
+      city: lead.city || '',
+      state: lead.uf || '',
+      country: lead.country || (lead.city ? 'Brasil' : ''),
+      site: lead.site || '',
+      origin: lead.origem || 'Lista Francisco',
+      subOrigin: lead.subOrigem || '',
+      product: lead.produto || '',
+      notes: lead.observacao || '',
+      funnel: lead.funil || 'Padrão',
+      stage: lead.status || 'Entrada',
+      emailPrevendedor: lead.emailPrevendedor || '',
+      ddi: '55',
+      contactDdi: '55',
+    };
+
+    return Object.entries(defaults).reduce((acc, [key, value]) => {
+      if (value === undefined || value === null || value === '') {
+        return acc;
+      }
+
+      if (Array.isArray(value)) {
+        acc[key] = value.join('; ');
+      } else {
+        acc[key] = String(value);
+      }
+
+      return acc;
+    }, {});
+  }, [spotterLead?.lead]);
+
   const searchParams = useSearchParams();
   const view = searchParams?.get('view') || (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) || 'kanban';
 
@@ -455,6 +511,7 @@ function KanbanPage() {
         lead={spotterLead?.lead}
         onSubmit={handleSubmitSpotter}
         isSubmitting={sending}
+        defaultValues={defaultSpotterValues}
       />
     </div>
   );

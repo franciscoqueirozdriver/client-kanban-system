@@ -52,6 +52,47 @@ const reversedFieldMap = Object.entries(fieldMap).reduce<Record<string, string>>
   return acc;
 }, {});
 
+const externalDefaultKeyMap: Record<string, string> = {
+  leadName: fieldMap["Nome do Lead"],
+  companyName: fieldMap["Nome da Empresa"],
+  market: fieldMap["Mercado"],
+  area: fieldMap["Área"],
+  areaList: fieldMap["Área"],
+  contactEmail: fieldMap["E-mail Contato"],
+  email: fieldMap["E-mail Contato"],
+  contactName: fieldMap["Nome Contato"],
+  contactRole: fieldMap["Cargo Contato"],
+  contactPhone: fieldMap["Telefones Contato"],
+  contactPhones: fieldMap["Telefones Contato"],
+  phone: fieldMap["Telefones"],
+  phones: fieldMap["Telefones"],
+  cnpj: fieldMap["CPF/CNPJ"],
+  origin: fieldMap["Origem"],
+  subOrigin: fieldMap["Sub-Origem"],
+  product: fieldMap["Produto"],
+  site: fieldMap["Site"],
+  country: fieldMap["País"],
+  state: fieldMap["Estado"],
+  city: fieldMap["Cidade"],
+  street: fieldMap["Logradouro"],
+  addressStreet: fieldMap["Logradouro"],
+  number: fieldMap["Número"],
+  addressNumber: fieldMap["Número"],
+  district: fieldMap["Bairro"],
+  addressDistrict: fieldMap["Bairro"],
+  complement: fieldMap["Complemento"],
+  addressComplement: fieldMap["Complemento"],
+  zip: fieldMap["CEP"],
+  postalCode: fieldMap["CEP"],
+  ddi: fieldMap["DDI"],
+  contactDdi: fieldMap["DDI Contato"],
+  notes: fieldMap["Observação"],
+  funnel: fieldMap["Funil"],
+  stage: fieldMap["Etapa"],
+  emailPrevendedor: fieldMap["Email Pré-vendedor"],
+  prevendedorEmail: fieldMap["Email Pré-vendedor"],
+};
+
 type LeadData = {
   id: string;
   nome: string;
@@ -66,6 +107,7 @@ type SpotterModalProps = {
   lead?: LeadData;
   onSubmit?: (payload: Record<string, any>) => Promise<void> | void;
   isSubmitting?: boolean;
+  defaultValues?: Record<string, any>;
 };
 
 type FieldError = {
@@ -81,6 +123,7 @@ export default function SpotterModal({
   lead,
   onSubmit,
   isSubmitting: isSubmittingProp,
+  defaultValues,
 }: SpotterModalProps) {
   const [formData, setFormData] = useState<FormState>({});
   const [errors, setErrors] = useState<FieldError[]>([]);
@@ -92,6 +135,39 @@ export default function SpotterModal({
   const [internalSubmitting, setInternalSubmitting] = useState(false);
   const shouldControlSubmitting = typeof isSubmittingProp !== "boolean";
   const isSubmitting = isSubmittingProp ?? internalSubmitting;
+
+  const normalizedDefaultValues = useMemo<FormState>(() => {
+    if (!defaultValues) return {};
+
+    return Object.entries(defaultValues).reduce<FormState>((acc, [rawKey, rawValue]) => {
+      if (rawValue === undefined || rawValue === null) {
+        return acc;
+      }
+
+      let targetKey = externalDefaultKeyMap[rawKey];
+
+      if (!targetKey && rawKey in fieldMap) {
+        targetKey = fieldMap[rawKey];
+      }
+
+      if (!targetKey && rawKey in reversedFieldMap) {
+        targetKey = rawKey;
+      }
+
+      if (!targetKey) {
+        return acc;
+      }
+
+      const value = Array.isArray(rawValue)
+        ? rawValue.join("; ")
+        : typeof rawValue === "object"
+          ? JSON.stringify(rawValue)
+          : String(rawValue);
+
+      acc[targetKey] = value;
+      return acc;
+    }, {});
+  }, [defaultValues]);
 
   useEffect(() => {
     if (!open) return;
@@ -166,12 +242,14 @@ export default function SpotterModal({
         return acc;
       }, { ...initialFormState });
 
-      setFormData(fullForm);
+      const mergedForm: FormState = { ...fullForm, ...normalizedDefaultValues };
+
+      setFormData(mergedForm);
       setErrors([]);
     };
 
     fetchAndPrefill();
-  }, [open, lead]);
+  }, [open, lead, normalizedDefaultValues]);
 
   useEffect(() => {
     if (!open) {
@@ -510,7 +588,7 @@ export default function SpotterModal({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button
                 type="button"
-                variant="secondary"
+                variant="outline"
                 onClick={() => onOpenChange(false)}
                 disabled={isSubmitting}
               >
