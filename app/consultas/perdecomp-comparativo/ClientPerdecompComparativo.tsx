@@ -7,6 +7,7 @@ import NewCompanyModal from '../../../components/NewCompanyModal';
 import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { padCNPJ14, isValidCNPJ, normalizeDigits, isEmptyCNPJLike, isCNPJ14 } from '@/utils/cnpj';
 
 // --- Helper Types ---
@@ -523,199 +524,338 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     })();
   }, [q]);
 
+  const hasResultCards = results.length > 0;
+  const statusMessage = globalLoading ? 'Consultando dados do PER/DCOMP...' : '';
+
   return (
-    <div className="container mx-auto p-4 text-gray-900 dark:text-gray-100">
-      <h1 className="text-3xl font-bold mb-6">Comparativo PER/DCOMP</h1>
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="font-semibold block mb-2">Cliente Principal</label>
-            <div className="flex items-center gap-2">
-              <div className="flex-grow">
-                <Autocomplete
-                  selectedCompany={client?.company ?? null}
-                  onSelect={(company) => handleSelectCompany('client', company)}
-                  onClear={() => setClient(null)}
-                  onNoResults={(q) => handleRegisterNewFromQuery(q, { type: 'client' })}
-                  onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'client' })}
-                  onEnrichQuery={(q) => handleEnrichFromMain('query', undefined, q, { type: 'client' })}
-                  isEnriching={isEnriching && enrichTarget === 'client'}
-                  initialQuery={q}
-                />
-              </div>
-            </div>
+    <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <header className="flex flex-wrap items-start justify-between gap-6 rounded-3xl border border-border bg-card px-6 py-6 shadow-soft">
+        <div className="max-w-2xl space-y-3">
+          <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Consultas</p>
+          <h1 className="text-3xl font-semibold text-foreground">PER/DCOMP Comparativo</h1>
+          <p className="text-sm text-muted-foreground">
+            Compare quantitativos, naturezas, créditos e cancelamentos entre empresas no período selecionado.
+          </p>
+        </div>
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          {/* espaço reservado para ações globais se necessário */}
+        </div>
+      </header>
+
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Parâmetros da comparação</h2>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-foreground">Cliente Principal</p>
+            <Autocomplete
+              selectedCompany={client?.company ?? null}
+              onSelect={(company) => handleSelectCompany('client', company)}
+              onClear={() => setClient(null)}
+              onNoResults={(query) => handleRegisterNewFromQuery(query, { type: 'client' })}
+              onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'client' })}
+              onEnrichQuery={(query) => handleEnrichFromMain('query', undefined, query, { type: 'client' })}
+              isEnriching={isEnriching && enrichTarget === 'client'}
+              initialQuery={q}
+            />
             {client?.lastConsultation && (
-              <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={client.forceRefresh} onChange={(e) => setClient(c => c ? {...c, forceRefresh: e.target.checked} : null)} className="form-checkbox h-4 w-4 text-violet-600"/>
-                  <span>Refazer consulta (última em: {new Date(client.lastConsultation).toLocaleDateString()})</span>
-                </label>
+              <div className="rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                Última consulta em {new Date(client.lastConsultation).toLocaleDateString()}
               </div>
             )}
+            {client?.lastConsultation && (
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={client.forceRefresh}
+                  onChange={(event) => setClient((c) => (c ? { ...c, forceRefresh: event.target.checked } : null))}
+                  className="h-4 w-4 rounded border border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+                <span>Refazer consulta ao atualizar</span>
+              </label>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="endDate" className="font-semibold block mb-2">Período Fim</label>
-              <input type="date" id="endDate" value={endDate} onChange={(e) => handleDateChange('end', e.target.value)} className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600" />
-            </div>
-            <div>
-              <label htmlFor="startDate" className="font-semibold block mb-2">Período Início</label>
-              <input type="date" id="startDate" value={startDate} onChange={(e) => handleDateChange('start', e.target.value)} className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600" />
-            </div>
+
+          <div className="space-y-2">
+            <label htmlFor="startDate" className="text-sm font-semibold text-foreground">
+              Período Início
+            </label>
+            <input
+              id="startDate"
+              type="date"
+              value={startDate}
+              onChange={(event) => handleDateChange('start', event.target.value)}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="endDate" className="text-sm font-semibold text-foreground">
+              Período Fim
+            </label>
+            <input
+              id="endDate"
+              type="date"
+              value={endDate}
+              onChange={(event) => handleDateChange('end', event.target.value)}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
           </div>
         </div>
-        <div className="mt-6">
-          <h3 className="font-semibold mb-2">Concorrentes (até 3)</h3>
+
+        <div className="mt-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-foreground">Concorrentes (até 3)</h3>
+            <p className="text-xs text-muted-foreground">Espaços disponíveis: {remainingSlots}</p>
+          </div>
+
           {competitors.map((comp, index) => (
-            <div key={index} className="mb-4">
-              <div className="flex items-center gap-2">
-                <div className="flex-grow">
+            <div key={index} className="rounded-2xl border border-border/60 bg-background/40 p-4 shadow-inner">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex-1">
                   <Autocomplete
                     selectedCompany={comp?.company ?? null}
                     onSelect={(company) => handleSelectCompany('competitor', company, index)}
                     onClear={() => handleRemoveCompetitor(index)}
-                    onNoResults={(q) => handleRegisterNewFromQuery(q, { type: 'competitor', index })}
+                    onNoResults={(query) => handleRegisterNewFromQuery(query, { type: 'competitor', index })}
                     onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'competitor', index })}
-                    onEnrichQuery={(q) => handleEnrichFromMain('query', undefined, q, { type: 'competitor', index })}
+                    onEnrichQuery={(query) => handleEnrichFromMain('query', undefined, query, { type: 'competitor', index })}
                     isEnriching={isEnriching && enrichTarget === `competitor-${index}`}
                   />
                 </div>
-                <button onClick={() => handleRemoveCompetitor(index)} className="text-red-500 hover:text-red-700 font-bold p-2">X</button>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveCompetitor(index)}
+                  className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold text-destructive hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label={`Remover concorrente ${index + 1}`}
+                >
+                  Remover
+                </button>
               </div>
+
               {comp?.lastConsultation && (
-                <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={comp.forceRefresh} onChange={(e) => handleCompetitorChange(index, { forceRefresh: e.target.checked })} className="form-checkbox h-4 w-4 text-violet-600"/>
-                    <span>Refazer consulta (última em: {new Date(comp.lastConsultation).toLocaleDateString()})</span>
+                <div className="mt-3 space-y-2">
+                  <div className="rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                    Última consulta em {new Date(comp.lastConsultation).toLocaleDateString()}
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={comp.forceRefresh}
+                      onChange={(event) => handleCompetitorChange(index, { forceRefresh: event.target.checked })}
+                      className="h-4 w-4 rounded border border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    />
+                    <span>Refazer consulta ao atualizar</span>
                   </label>
                 </div>
               )}
             </div>
           ))}
-          <div className="mt-2 flex gap-2">
+
+          {competitors.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Adicione concorrentes manualmente ou utilize a pesquisa automática.
+            </p>
+          )}
+
+          <div className="mt-1 flex flex-col gap-3 sm:flex-row">
             <button
-              onClick={handleAddCompetitor}
-              disabled={remainingSlots === 0 || competitors.length >= MAX_COMPETITORS}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              type="button"
+              onClick={handleConsult}
+              disabled={globalLoading || !client}
+              className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label={globalLoading ? 'Consultando PER/DCOMP' : 'Consultar PER/DCOMP'}
             >
-              + Adicionar Concorrente
+              {globalLoading && <FaSpinner className="mr-2 h-4 w-4 animate-spin" />}
+              {globalLoading ? 'Consultando...' : 'Consultar / Atualizar Comparação'}
             </button>
             <button
+              type="button"
               onClick={openCompetitorDialog}
               disabled={!client || remainingSlots === 0}
-              className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
             >
               Pesquisar Concorrentes
             </button>
+            <button
+              type="button"
+              onClick={handleAddCompetitor}
+              disabled={remainingSlots === 0 || competitors.length >= MAX_COMPETITORS}
+              className="inline-flex items-center justify-center rounded-xl border border-dashed border-border px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              + Adicionar Concorrente
+            </button>
           </div>
         </div>
-        <div className="mt-8 text-center">
-            <button onClick={handleConsult} disabled={globalLoading || !client} className="px-8 py-3 bg-violet-600 text-white font-bold rounded-lg hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center mx-auto">
-              {globalLoading && <FaSpinner className="animate-spin mr-2" />}
-              {globalLoading ? 'Consultando...' : 'Consultar / Atualizar Comparação'}
-            </button>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {results.map(({ company, data, status, error, debug }) => (
-          <div key={company.CNPJ_Empresa} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col">
-            <h3 className="font-bold text-lg truncate mb-1" title={company.Nome_da_Empresa}>{company.Nome_da_Empresa}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{padCNPJ14(company.CNPJ_Empresa)}</p>
+        <p className="sr-only" aria-live="polite">
+          {statusMessage}
+        </p>
+      </section>
 
-            {status === 'loading' && <div className="flex-grow flex items-center justify-center"><FaSpinner className="animate-spin text-4xl text-violet-500"/></div>}
-            {status === 'error' && (
-              <div className="flex-grow flex items-center justify-center text-red-500 text-sm text-center whitespace-pre-line">
-                {buildApiErrorLabel(error)}
-              </div>
-            )}
-            {status === 'loaded' && data && (() => {
-              const resumo = data.perdcompResumo;
-              const temRegistros = (resumo?.totalSemCancelamento ?? 0) > 0;
-              return (
-                <div className="flex-grow flex flex-col">
-                  {error && (
-                    <p className="text-red-500 text-sm whitespace-pre-line mb-2">{buildApiErrorLabel(error)}</p>
-                  )}
-                  {data.fromCache && (
-                    <p className="text-xs text-yellow-600 mb-2">
-                      Mostrando dados da última consulta em {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : ''} (falha {error?.httpStatus} hoje)
-                    </p>
-                  )}
-                  {data.lastConsultation && <p className="text-xs text-gray-400 mb-2">Última consulta: {new Date(data.lastConsultation).toLocaleDateString()}</p>}
-                  <div className="space-y-3 text-sm mb-4 flex-grow">
-                    <div className="flex justify-between"><span>Quantidade:</span> <span className="font-bold">{resumo?.totalSemCancelamento ?? 0}</span></div>
-                    <div className="flex justify-between"><span>Valor Total:</span> <span className="font-bold">R$ 0,00</span></div>
-                    {temRegistros && (
-                      <div className="mt-2 text-sm">
-                        <div className="font-medium">Quantos são:</div>
-                        {Object.entries(resumo?.porNaturezaAgrupada || {}).map(([cod, qtd]) => (
-                          <div key={cod} className="flex justify-between">
-                            <span>
-                              {cod === '1.3/1.7'
-                                ? '1.3/1.7 = DCOMP (Declarações de Compensação)'
-                                : cod === '1.2/1.6'
-                                ? '1.2/1.6 = REST (Pedidos de Restituição)'
-                                : cod === '1.1/1.5'
-                                ? '1.1/1.5 = RESSARC (Pedidos de Ressarcimento)'
-                                : cod}
-                            </span>
-                            <span>{qtd}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-2">
-                      <button className="underline text-sm" onClick={() => { setCancelCount(resumo?.canc ?? resumo?.porFamilia?.CANC ?? 0); setOpenCancel(true); }}>
-                        Cancelamentos
-                      </button>
-                    </div>
-                  </div>
-                  {data.siteReceipt && (
-                    <div className="mb-4">
-                      <h4 className="font-semibold mb-1 text-sm">Comprovantes:</h4>
-                      <div className="text-xs">
-                        <a href={data.siteReceipt} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">HTML</a>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            {status === 'loaded' && (() => {
+      <section className="rounded-3xl border border-border bg-muted/40 p-4 shadow-soft">
+        {hasResultCards ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {results.map(({ company, data, status, error, debug }) => {
               const resumo = data?.perdcompResumo;
               const temRegistros = (resumo?.totalSemCancelamento ?? 0) > 0;
-              return !temRegistros ? (
-                <div className="flex-grow flex flex-col items-center justify-center text-center">
-                  <p className="text-gray-500">Nenhum PER/DCOMP encontrado no período.</p>
-                </div>
-              ) : null;
-            })()}
-            {showDebug && status === 'loaded' && debug && (
-              <button
-                onClick={() => { setPreviewPayload({ company, debug }); setPreviewOpen(true); }}
-                className="mt-2 w-full px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-              >
-                Ver retorno da API
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
+              const cancelamentos = resumo?.canc ?? resumo?.porFamilia?.CANC ?? 0;
+              const ultimaConsulta = data?.lastConsultation || null;
 
-      {openCancel && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-4 w-full max-w-md">
-            <div className="text-lg font-semibold mb-2">Cancelamentos</div>
-            <div>Quantidade: <strong>{cancelCount}</strong></div>
-            <div className="mt-3 text-right">
-              <button className="px-3 py-1 rounded bg-gray-200" onClick={() => setOpenCancel(false)}>
-                Fechar
-              </button>
-            </div>
+              return (
+                <article
+                  key={company.CNPJ_Empresa}
+                  className="group relative flex h-full flex-col rounded-3xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg"
+                >
+                  <header className="mb-2">
+                    <h3 className="text-lg font-semibold text-foreground" title={company.Nome_da_Empresa}>
+                      {company.Nome_da_Empresa}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">{padCNPJ14(company.CNPJ_Empresa)}</p>
+                    {ultimaConsulta && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Última consulta: {new Date(ultimaConsulta).toLocaleDateString()}
+                      </p>
+                    )}
+                  </header>
+
+                  <div className="flex flex-1 flex-col">
+                    {status === 'loading' && (
+                      <div className="flex flex-1 items-center justify-center text-primary">
+                        <FaSpinner className="h-6 w-6 animate-spin" aria-hidden="true" />
+                      </div>
+                    )}
+
+                    {status === 'error' && (
+                      <div className="flex flex-1 items-center justify-center text-center text-sm text-destructive">
+                        {buildApiErrorLabel(error)}
+                      </div>
+                    )}
+
+                    {status === 'loaded' && data && (
+                      <>
+                        {error && (
+                          <p className="text-sm text-destructive">
+                            {buildApiErrorLabel(error)}
+                          </p>
+                        )}
+                        {data.fromCache && (
+                          <p className="text-xs text-amber-600">
+                            Mostrando dados da última consulta em{' '}
+                            {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : ''}
+                          </p>
+                        )}
+
+                        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                          <div className="contents">
+                            <dt className="text-muted-foreground">Quantidade:</dt>
+                            <dd className="text-right font-medium">{resumo?.totalSemCancelamento ?? data.quantity ?? 0}</dd>
+                          </div>
+                          <div className="contents">
+                            <dt className="text-muted-foreground">Valor Total:</dt>
+                            <dd className="text-right font-medium">R$ 0,00</dd>
+                          </div>
+                        </dl>
+
+                        {temRegistros ? (
+                          <div className="mt-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantos são:</p>
+                            <ul className="mt-2 space-y-1 text-sm">
+                              {Object.entries(resumo?.porNaturezaAgrupada || {}).map(([cod, qtd]) => (
+                                <li key={cod} className="flex items-center justify-between gap-4">
+                                  <span className="text-muted-foreground">
+                                    {cod === '1.3/1.7'
+                                      ? '1.3/1.7 = DCOMP (Declarações de Compensação)'
+                                      : cod === '1.2/1.6'
+                                      ? '1.2/1.6 = REST (Pedidos de Restituição)'
+                                      : cod === '1.1/1.5'
+                                      ? '1.1/1.5 = RESSARC (Pedidos de Ressarcimento)'
+                                      : cod}
+                                  </span>
+                                  <span className="font-medium">{qtd}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-2xl border border-dashed border-border bg-card/40 p-4 text-center text-sm text-muted-foreground">
+                            Nenhum PER/DCOMP encontrado no período.
+                          </div>
+                        )}
+
+                        <div className="mt-4 flex flex-wrap items-center gap-4">
+                          <button
+                            type="button"
+                            className="text-sm font-semibold text-primary hover:underline"
+                            onClick={() => {
+                              setCancelCount(cancelamentos);
+                              setOpenCancel(true);
+                            }}
+                          >
+                            Cancelamentos
+                          </button>
+                          {data.siteReceipt && (
+                            <a
+                              className="text-sm text-muted-foreground hover:underline"
+                              href={data.siteReceipt}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              HTML
+                            </a>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {showDebug && status === 'loaded' && debug && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreviewPayload({ company, debug });
+                        setPreviewOpen(true);
+                      }}
+                      className="mt-4 inline-flex items-center justify-center rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Ver retorno da API
+                    </button>
+                  )}
+                </article>
+              );
+            })}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="rounded-2xl border border-dashed border-border bg-card/40 p-6 text-center text-sm text-muted-foreground" aria-live="polite">
+            Nenhum resultado para os filtros aplicados.
+          </div>
+        )}
+      </section>
+
+      <Dialog open={openCancel} onOpenChange={setOpenCancel}>
+        <DialogContent aria-describedby="cancel-desc" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancelamentos</DialogTitle>
+            <p id="cancel-desc" className="text-sm text-muted-foreground">
+              Itens cancelados no período considerado.
+            </p>
+          </DialogHeader>
+
+          <div className="px-6 pb-4 text-sm text-foreground">
+            Quantidade: <span className="font-semibold">{cancelCount}</span>
+          </div>
+
+          <DialogFooter className="border-t border-border/60 bg-card px-6 py-4">
+            <button
+              type="button"
+              onClick={() => setOpenCancel(false)}
+              className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              Fechar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <EnrichmentPreviewDialog
         isOpen={showEnrichPreview}
