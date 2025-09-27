@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { digits, padCNPJ14 } from '@/utils/cnpj';
+import { formatCNPJ, padCNPJ14 } from '@/utils/cnpj';
 
 export type CompetitorItem = { nome: string; cnpj: string };
 
@@ -15,14 +15,10 @@ interface Props {
 }
 
 
-const sanitizeCnpj = (value: string) => {
-  const cleaned = digits(value);
-  if (!cleaned) return '';
-  return cleaned.length > 14 ? cleaned.slice(-14) : cleaned.padStart(14, '0');
-};
+const sanitizeCnpj = (value: string) => padCNPJ14(value);
 
 const keyForItem = (item: CompetitorItem, fallbackIndex?: number) => {
-  const normalized = digits(item?.cnpj);
+  const normalized = padCNPJ14(item?.cnpj);
   if (normalized) return normalized;
   const nameKey = (item?.nome || '').trim().toLowerCase();
   if (nameKey) return nameKey;
@@ -156,7 +152,7 @@ export default function CompetitorSearchDialog({
                   />
                   <div className="flex flex-col">
                     <span className="font-semibold">{it.nome}</span>
-                    <span className="text-xs font-mono text-gray-500">{it.cnpj ? padCNPJ14(it.cnpj) : '(sem CNPJ)'}</span>
+                    <span className="text-xs font-mono text-gray-500">{it.cnpj ? formatCNPJ(it.cnpj) : '(sem CNPJ)'}</span>
                   </div>
                 </li>
               );

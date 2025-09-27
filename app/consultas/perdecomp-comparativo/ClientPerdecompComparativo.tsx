@@ -8,7 +8,7 @@ import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { padCNPJ14, isValidCNPJ, normalizeDigits, isEmptyCNPJLike, isCNPJ14 } from '@/utils/cnpj';
+import { padCNPJ14, isValidCNPJ, normalizeDigits, isEmptyCNPJLike, isCNPJ14, normalizeCNPJ } from '@/utils/cnpj';
 
 // --- Helper Types ---
 interface Company {
@@ -339,15 +339,38 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       const selCnpjs = new Set(competitors.filter(Boolean).map(c => padCNPJ14(c!.company.CNPJ_Empresa)));
       const clientCnpj = padCNPJ14(client.company.CNPJ_Empresa);
 
-      const items = (data.items || []).filter((it: any) => {
-        const c = padCNPJ14(it?.cnpj);
-        const isClient = c && clientCnpj && c === clientCnpj;
-        const already = c && selCnpjs.has(c);
-        const nameDup = competitors.filter(Boolean).some(cmp => cmp!.company.Nome_da_Empresa.toLowerCase() === String(it?.nome || '').toLowerCase());
+      const normalizedItems = (data.items || []).map((raw: any) => {
+        const nome = String(raw?.nome ?? '').trim();
+        return {
+          nome,
+          cnpj: normalizeCNPJ(raw?.cnpj),
+        };
+      });
+
+      const filtered = normalizedItems.filter(it => {
+        const c = it.cnpj;
+        const isClient = Boolean(c && clientCnpj && c === clientCnpj);
+        const already = Boolean(c && selCnpjs.has(c));
+        const nameDup = Boolean(
+          it.nome && competitors.filter(Boolean).some(
+            cmp => cmp!.company.Nome_da_Empresa.trim().toLowerCase() === it.nome.toLowerCase()
+          )
+        );
         return !isClient && !already && !nameDup;
       });
 
-      setCompFetch({ loading: false, error: null, items });
+      const deduped: Array<{ nome: string; cnpj: string }> = [];
+      const seen = new Set<string>();
+
+      for (const item of filtered) {
+        const key = item.cnpj || item.nome.toLowerCase();
+        if (!key) continue;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(item);
+      }
+
+      setCompFetch({ loading: false, error: null, items: deduped });
     })
     .catch(err => setCompFetch({ loading: false, error: String(err?.message || err), items: [] }));
   }
