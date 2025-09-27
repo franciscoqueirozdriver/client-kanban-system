@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import ClientCard from '../../components/ClientCard';
 import Filters from '../../components/Filters';
 import NewCompanyModal from '../../components/NewCompanyModal';
 import EnrichmentPreviewDialog from '../../components/EnrichmentPreviewDialog';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
+import SummaryCard from '@/components/SummaryCard';
 
 async function openConfirmDialog({ title, description, confirmText, cancelText }) {
   const msg = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
@@ -90,47 +91,153 @@ export default function ClientesPage() {
     fetchClients();
   };
 
+  const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
+
+  const summary = useMemo(() => {
+    const base = filtered;
+    const contacts = base.reduce(
+      (total, client) => total + (Array.isArray(client?.contacts) ? client.contacts.length : 0),
+      0,
+    );
+    const segments = new Set(
+      base
+        .map((client) => (client?.segment || '').trim())
+        .filter((segmento) => segmento.length > 0),
+    );
+    const states = new Set(
+      base
+        .map((client) => (client?.uf || '').trim())
+        .filter((uf) => uf.length > 0),
+    );
+
+    return {
+      visible: base.length,
+      total: clients.length,
+      contacts,
+      segments: segments.size,
+      states: states.size,
+    };
+  }, [filtered, clients.length]);
+
+  const formatNumber = (value) => numberFormatter.format(value);
+  const hasActiveQuery = query.trim().length > 0;
+  const showEmptyState = filtered.length === 0 && hasActiveQuery;
+
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex">
-        <div
-          className="ml-auto text-2xl md:text-3xl font-semibold tracking-tight"
-          aria-label="Total de clientes exibidos"
-          data-testid="total-clientes-exibidos"
-          title="Quantidade de clientes atualmente exibidos, após a aplicação de filtros"
-        >
-          TOTAL DE CLIENTES EXIBIDOS: <span className="tabular-nums">{filtered.length}</span>
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-wrap items-start justify-between gap-6 rounded-3xl border border-border bg-card px-6 py-6 shadow-soft">
+        <div className="max-w-2xl space-y-3">
+          <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Gestão</p>
+          <h1 className="text-3xl font-semibold text-foreground">Clientes</h1>
+          <p className="text-sm text-muted-foreground">Liste, filtre e gerencie clientes e contatos.</p>
         </div>
-      </div>
-      <Filters onFilter={handleFilter} />
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={() => handleOpenNewCompanyModal()}
+            className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-soft transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            Novo cliente
+          </button>
+          <button
+            type="button"
+            onClick={handleEnrichQuery}
+            disabled={!hasActiveQuery || isEnriching}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isEnriching && <FaSpinner className="h-4 w-4 animate-spin" />}
+            Enriquecer busca
+          </button>
+        </div>
+      </header>
 
-      {filtered.length === 0 && query && (
-        <div className="text-center py-10">
-          <p className="mb-4">Nenhum cliente encontrado para "<strong>{query}</strong>".</p>
-          <div className="flex justify-center gap-4">
-            <button
-              onClick={() => handleOpenNewCompanyModal()}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Cadastrar Novo
-            </button>
-            <button
-              onClick={handleEnrichQuery}
-              disabled={isEnriching}
-              className="px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 disabled:bg-gray-400 flex items-center"
-            >
-              {isEnriching && <FaSpinner className="animate-spin mr-2" />}
-              Enriquecer
-            </button>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          title="Clientes exibidos"
+          value={formatNumber(summary.visible)}
+          helper={`Filtrados a partir de ${formatNumber(summary.total)} cadastros`}
+        />
+        <SummaryCard
+          title="Contatos vinculados"
+          value={formatNumber(summary.contacts)}
+          helper="Soma de contatos associados aos clientes listados"
+        />
+        <SummaryCard
+          title="Segmentos ativos"
+          value={formatNumber(summary.segments)}
+          helper="Segmentos únicos encontrados na seleção"
+        />
+        <SummaryCard
+          title="Estados presentes"
+          value={formatNumber(summary.states)}
+          helper="Distribuição geográfica dos clientes filtrados"
+        />
+      </section>
+
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Filtros e pesquisa</h2>
+            <p className="text-sm text-muted-foreground">
+              Utilize os filtros abaixo para refinar a visualização de clientes por segmento, porte ou localização.
+            </p>
           </div>
+          <Filters onFilter={handleFilter} />
         </div>
-      )}
+      </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((client) => (
-          <ClientCard key={client.id} client={client} />
-        ))}
-      </div>
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold text-foreground">Clientes cadastrados</h2>
+              <p className="text-sm text-muted-foreground">
+                {formatNumber(filtered.length)} de {formatNumber(clients.length)} registros exibidos.
+              </p>
+            </div>
+            <span
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-1 text-sm font-medium text-muted-foreground shadow-soft"
+              aria-label="Total de clientes exibidos"
+              data-testid="total-clientes-exibidos"
+            >
+              Exibindo
+              <span className="tabular-nums text-foreground">{formatNumber(filtered.length)}</span>
+            </span>
+          </div>
+
+          {showEmptyState ? (
+            <div className="space-y-6 rounded-2xl border border-dashed border-border/70 bg-muted/40 p-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Nenhum cliente encontrado para <span className="font-semibold text-foreground">“{query}”</span>.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleOpenNewCompanyModal()}
+                  className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  Cadastrar novo cliente
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEnrichQuery}
+                  disabled={isEnriching}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isEnriching && <FaSpinner className="h-4 w-4 animate-spin" />}
+                  Enriquecer dados
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((client) => (
+                <ClientCard key={client.id} client={client} />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       <NewCompanyModal
         isOpen={companyModalOpen}

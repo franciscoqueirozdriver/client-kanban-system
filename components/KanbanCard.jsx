@@ -380,6 +380,7 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
           <div className="mt-4">
             <button
               type="button"
+              data-spotter-button="true"
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();

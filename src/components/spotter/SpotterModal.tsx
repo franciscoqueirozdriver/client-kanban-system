@@ -9,8 +9,9 @@ import type {
 } from "react";
 import { FaSearch, FaSpinner } from "react-icons/fa";
 
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 
 const fieldMap: Record<string, string> = {
   "Nome do Lead": "nomeLead",
@@ -255,6 +256,8 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     props: InputHTMLAttributes<HTMLInputElement> & { required?: boolean } = {},
   ) => {
     const error = errors.find((e) => e.field === label);
+    const baseClasses =
+      "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
     return (
       <div>
         <label htmlFor={key} className="mb-1 block text-sm font-medium text-foreground">
@@ -267,9 +270,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           value={formData[key] ?? ""}
           onChange={handleChange}
           {...props}
-          className={`w-full rounded border bg-background p-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-            error ? "border-red-500" : "border-border"
-          } ${props.className ?? ""}`}
+          className={cn(
+            baseClasses,
+            error ? "border-red-500" : "border-border",
+            props.className,
+          )}
         />
         {error && <p className="mt-1 text-xs text-red-500">{error.message}</p>}
       </div>
@@ -283,6 +288,8 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     props: SelectHTMLAttributes<HTMLSelectElement> & { required?: boolean } = {},
   ) => {
     const error = errors.find((e) => e.field === label);
+    const baseClasses =
+      "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
     return (
       <div>
         <label htmlFor={key} className="mb-1 block text-sm font-medium text-foreground">
@@ -295,9 +302,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           value={formData[key] ?? ""}
           onChange={handleChange}
           {...props}
-          className={`w-full rounded border bg-background p-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-            error ? "border-red-500" : "border-border"
-          } ${props.className ?? ""}`}
+          className={cn(
+            baseClasses,
+            error ? "border-red-500" : "border-border",
+            props.className,
+          )}
         >
           <option value="">Selecione...</option>
           {options.map((opt) => (
@@ -320,7 +329,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       <DialogContent className="max-h-[90vh] overflow-hidden p-0">
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
-          <p className="text-sm text-muted-foreground">Confirme ou ajuste os dados antes do envio.</p>
+          <DialogDescription>Confirme ou ajuste os dados antes do envio.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex max-h-[calc(90vh-150px)] flex-col">
           <div className="flex-1 overflow-y-auto px-6 py-5">

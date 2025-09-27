@@ -32,16 +32,18 @@ export default function ExportButton({ data, filters }) {
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap items-center gap-3">
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="px-3 py-1 bg-blue-600 text-white rounded"
+        className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-soft transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         Gerar PDF
       </button>
       <button
+        type="button"
         onClick={exportExcel}
-        className="px-3 py-1 bg-green-600 text-white rounded"
+        className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         Exportar Excel
       </button>
