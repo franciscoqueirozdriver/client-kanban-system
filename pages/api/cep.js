@@ -1,4 +1,4 @@
-import { lookupCep } from '../../lib/cep.js';
+import { lookupCep } from '@/lib/cep.js';
 
 export default async function handler(req, res) {
   const cep = req.method === 'GET' ? req.query.cep : req.body?.cep;

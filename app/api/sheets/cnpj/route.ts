@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { updateRowByIndex, _findRowNumberByClienteId, getSheetData } from '../../../../lib/googleSheets';
-import { normalizeCnpj } from '../../../../lib/normalizers';
+import { updateRowByIndex, _findRowNumberByClienteId, getSheetData } from '@/lib/googleSheets';
+import { normalizeCnpj } from '@/lib/normalizers';
 
 export const runtime = 'nodejs';
 

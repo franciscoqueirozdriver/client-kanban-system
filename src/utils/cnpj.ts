@@ -1,4 +1,4 @@
-import { normalizeCnpj as canonicalNormalizeCnpj } from '../../lib/normalizers';
+import { normalizeCnpj as canonicalNormalizeCnpj } from '@/lib/normalizers';
 
 /**
  * @deprecated Use `normalizeCnpj` from `lib/normalizers` instead. This function only extracts digits.

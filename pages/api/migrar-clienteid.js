@@ -1,4 +1,4 @@
-import { getSheetsClient, withRetry } from '../../lib/googleSheets';
+import { getSheetsClient, withRetry } from '@/lib/googleSheets';
 
 const SHEETS = ['Sheet1', 'layout_importacao_empresas', 'Leads Exact Spotter'];
 

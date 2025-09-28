@@ -1,4 +1,4 @@
-import { getSheetData, getSheetsClient } from '../lib/googleSheets';
+import { getSheetData, getSheetsClient } from '@/lib/googleSheets';
 import {
   normalizeCnpj as canonicalNormalizeCnpj,
   generatePerdcompId,
@@ -6,7 +6,7 @@ import {
   isValidPerdcompIdPattern,
   isValidCnpjPattern,
   zeroPad,
-} from '../lib/normalizers';
+} from '@/lib/normalizers';
 import { promises as fs } from 'fs';
 import { stringify } from 'csv-stringify/sync';
 

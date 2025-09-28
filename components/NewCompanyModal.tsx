@@ -2,8 +2,8 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { FaSpinner, FaSearch } from 'react-icons/fa';
-import type { CompanySuggestion } from '../lib/perplexity';
-import { normalizeCnpj, isValidCnpjPattern } from '../lib/normalizers';
+import type { CompanySuggestion } from '@/lib/perplexity';
+import { normalizeCnpj, isValidCnpjPattern } from '@/lib/normalizers';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 
 // --- Local Helpers to replace deprecated utils ---

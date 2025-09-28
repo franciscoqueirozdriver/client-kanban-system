@@ -1,4 +1,4 @@
-import { getSheetCached } from '../../lib/googleSheets';
+import { getSheetCached } from '@/lib/googleSheets';
 
 export default async function handler(req, res) {
   try {

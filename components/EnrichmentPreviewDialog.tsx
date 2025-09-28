@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import ConfirmDialog from './ConfirmDialog';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 import { isFilial, toMatrizCNPJ } from '@/utils/cnpj-matriz';
-import { normalizeCnpj as canonicalNormalizeCnpj } from '../lib/normalizers';
+import { normalizeCnpj as canonicalNormalizeCnpj } from '@/lib/normalizers';
 
 const formatCnpj = (v: string): string => {
     try {

@@ -1,8 +1,8 @@
 /** @jest-environment node */
 import handler from './kanban';
-import { findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
+import { findRowIndexById, updateRowByIndex } from '@/lib/googleSheets';
 
-jest.mock('../../lib/googleSheets', () => ({
+jest.mock('@/lib/googleSheets', () => ({
   getSheetCached: jest.fn(),
   findRowIndexById: jest.fn(),
   updateRowByIndex: jest.fn(),

@@ -1,5 +1,5 @@
-import { getSheet, updateRow } from '../../lib/googleSheets';
-import { buildReport, mapToRows } from '../../lib/report';
+import { getSheet, updateRow } from '@/lib/googleSheets';
+import { buildReport, mapToRows } from '@/lib/report';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 

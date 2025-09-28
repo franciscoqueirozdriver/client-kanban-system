@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets';
-import { normalizeCnpj } from '../../../../lib/normalizers';
+import { getSheetData } from '@/lib/googleSheets';
+import { normalizeCnpj } from '@/lib/normalizers';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 

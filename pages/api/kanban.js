@@ -1,5 +1,5 @@
-import { getSheet, getSheetCached, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
-import { normalizePhones } from '../../lib/report';
+import { getSheet, getSheetCached, findRowIndexById, updateRowByIndex } from '@/lib/googleSheets';
+import { normalizePhones } from '@/lib/report';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
 function protectPhoneValue(value) {

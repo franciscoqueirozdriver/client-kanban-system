@@ -1,5 +1,5 @@
-import { getSheet, updateRow } from '../../lib/googleSheets';
-import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
+import { getSheet, updateRow } from '@/lib/googleSheets';
+import { buildReport, mapToRows, markPrintedRows } from '@/lib/report';
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {

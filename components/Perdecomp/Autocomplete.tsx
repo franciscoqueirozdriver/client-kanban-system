@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { normalizeCnpj, isValidCnpjPattern } from '../../lib/normalizers';
+import { normalizeCnpj, isValidCnpjPattern } from '@/lib/normalizers';
 
 // --- Local Helpers to replace deprecated utils ---
 const onlyDigits = (v: string | null | undefined): string => (v ?? '').replace(/\D/g, '');

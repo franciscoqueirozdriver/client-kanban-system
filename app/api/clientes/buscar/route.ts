@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets';
-import { normalizeCnpj } from '../../../../lib/normalizers';
+import { getSheetData } from '@/lib/googleSheets';
+import { normalizeCnpj } from '@/lib/normalizers';
 
 const SHEET_NAME = 'Leads Exact Spotter';
 const RESULT_LIMIT = 20;

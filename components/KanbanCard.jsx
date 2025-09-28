@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
-import { isValidCnpjPattern } from '../lib/normalizers';
+import { isValidCnpjPattern } from '@/lib/normalizers';
 import { cn } from '@/lib/cn';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';

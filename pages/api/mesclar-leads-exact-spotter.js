@@ -1,4 +1,4 @@
-import { getSheetsClient, getSheetData, withRetry, chunk } from '../../lib/googleSheets';
+import { getSheetsClient, getSheetData, withRetry, chunk } from '@/lib/googleSheets';
 
 const SHEET_LAYOUT = 'layout_importacao_empresas';
 const SHEET_SHEET1 = 'Sheet1';

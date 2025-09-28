@@ -10400,8 +10400,8 @@ Pasta base: /home/Alessandra/client-kanban-system
         📁 api
         📄 clientes.js
         └── Conteúdo:
-            import { getSheetCached, appendRow, updateRow } from '../../lib/googleSheets';
-            import { normalizePhones } from '../../lib/report';
+            import { getSheetCached, appendRow, updateRow } from '@/lib/googleSheets';
+            import { normalizePhones } from '@/lib/report';
 
             function groupRows(rows) {
               const [header, ...data] = rows;
@@ -10522,8 +10522,8 @@ Pasta base: /home/Alessandra/client-kanban-system
         ──────────────────────────────
         📄 kanban.js
         └── Conteúdo:
-            import { getSheetCached, updateRow } from '../../lib/googleSheets';
-            import { normalizePhones } from '../../lib/report';
+            import { getSheetCached, updateRow } from '@/lib/googleSheets';
+            import { normalizePhones } from '@/lib/report';
 
             function groupRows(rows) {
               const [header, ...data] = rows;
@@ -10752,8 +10752,8 @@ Pasta base: /home/Alessandra/client-kanban-system
         ──────────────────────────────
         📄 pdf.js
         └── Conteúdo:
-            import { getSheet, updateRow } from '../../lib/googleSheets';
-            import { buildReport, mapToRows } from '../../lib/report';
+            import { getSheet, updateRow } from '@/lib/googleSheets';
+            import { buildReport, mapToRows } from '@/lib/report';
             import { jsPDF } from 'jspdf';
             import autoTable from 'jspdf-autotable';
 
@@ -10806,8 +10806,8 @@ Pasta base: /home/Alessandra/client-kanban-system
         ──────────────────────────────
         📄 reports.js
         └── Conteúdo:
-            import { getSheet, updateRow } from '../../lib/googleSheets';
-            import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
+            import { getSheet, updateRow } from '@/lib/googleSheets';
+            import { buildReport, mapToRows, markPrintedRows } from '@/lib/report';
 
             export default async function handler(req, res) {
               if (req.method === 'GET') {
@@ -10860,7 +10860,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         ──────────────────────────────
         📄 test-gsheet.js
         └── Conteúdo:
-            import { getSheetCached } from '../../lib/googleSheets';
+            import { getSheetCached } from '@/lib/googleSheets';
 
             export default async function handler(req, res) {
               try {

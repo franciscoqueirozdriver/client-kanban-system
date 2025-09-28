@@ -1,8 +1,8 @@
 /** @jest-environment node */
 import handler from './clientes';
-import { getSheetCached } from '../../lib/googleSheets';
+import { getSheetCached } from '@/lib/googleSheets';
 
-jest.mock('../../lib/googleSheets', () => ({
+jest.mock('@/lib/googleSheets', () => ({
   getSheetCached: jest.fn()
 }));
 

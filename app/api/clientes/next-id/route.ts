@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getNextClienteId } from '../../../../lib/googleSheets';
+import { getNextClienteId } from '@/lib/googleSheets';
 
 export const dynamic = 'force-dynamic'; // Prevent caching of this route
 

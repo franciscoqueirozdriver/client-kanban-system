@@ -10,7 +10,7 @@ import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import { decideCNPJFinalBeforeQuery } from '@/helpers/decideCNPJ';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { normalizeCnpj as canonicalNormalizeCnpj, isValidCnpjPattern } from '../../../../lib/normalizers';
+import { normalizeCnpj as canonicalNormalizeCnpj, isValidCnpjPattern } from '@/lib/normalizers';
 import { fmtCNPJ } from '@/utils/cnpj-matriz';
 
 
