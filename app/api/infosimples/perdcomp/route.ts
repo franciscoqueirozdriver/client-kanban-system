@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '@/lib/googleSheets';
-import { normalizeCnpj, isValidCnpjPattern, generatePerdcompId } from '@/lib/normalizers';
+import { normalizeCnpj, isValidCnpjPattern, generatePerdcompId, isValidPerdcompIdPattern } from '@/lib/normalizers';
 import { agregaPerdcomp } from '@/utils/perdcomp';
 
 export const runtime = 'nodejs';
