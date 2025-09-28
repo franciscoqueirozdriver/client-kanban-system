@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { updateRowByIndex } from '@/lib/sheets';
-import { _findRowNumberByClienteId, getSheetData } from '@/lib/sheets-helpers';
-import { onlyDigits } from '@/utils/cnpj-matriz';
+import { updateRowByIndex, _findRowNumberByClienteId, getSheetData } from '../../../../lib/googleSheets';
+import { normalizeCnpj } from '../../../../lib/normalizers';
 
 export const runtime = 'nodejs';
 
@@ -21,12 +20,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const cnpjNum = onlyDigits(String(cnpj));
-    if (cnpjNum.length !== 14) {
-      return NextResponse.json(
-        { error: 'CNPJ deve conter 14 dígitos' },
-        { status: 400 },
-      );
+    let cnpjNum;
+    try {
+      cnpjNum = normalizeCnpj(cnpj);
+    } catch (error: any) {
+      return NextResponse.json({ error: 'CNPJ inválido', details: error.message }, { status: 400 });
     }
 
     const results: Array<Record<string, any>> = [];

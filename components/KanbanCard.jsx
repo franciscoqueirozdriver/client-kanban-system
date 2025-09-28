@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
-import { onlyDigits, isValidCNPJ } from '@/utils/cnpj';
+import { isValidCnpjPattern } from '../lib/normalizers';
 import { cn } from '@/lib/cn';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -83,8 +83,9 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
       client?.CNPJ ||
       client?.CNPJ_Empresa ||
       '';
+    const onlyDigits = (v) => (v || '').replace(/\D/g, '');
     const clean = onlyDigits(raw);
-    if (clean.length === 14 && isValidCNPJ(clean)) return clean;
+    if (isValidCnpjPattern(clean)) return clean;
     const name =
       client?.company ||
       client?.nome ||

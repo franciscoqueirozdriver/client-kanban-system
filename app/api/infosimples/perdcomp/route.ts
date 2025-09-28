@@ -306,15 +306,22 @@ export async function POST(request: Request) {
       });
     }
 
-    let rowNumber = -1;
+    let existingRow: any = null;
     for (const r of rows) {
         if (r.Cliente_ID === clienteId || (normalizeCnpj(r.CNPJ) === cnpj)) {
-            rowNumber = r._rowNumber;
+            existingRow = r;
             break;
         }
     }
 
-    if (rowNumber !== -1) {
+    if (existingRow) {
+      const rowNumber = existingRow._rowNumber;
+
+      // Ensure Perdcomp_ID exists and is valid, if not, generate one for the update.
+      if (!isValidPerdcompIdPattern(existingRow.Perdcomp_ID)) {
+          writes['Perdcomp_ID'] = generatePerdcompId();
+      }
+
       const data = [] as any[];
       for (const [key, value] of Object.entries(writes)) {
         if (value === undefined || value === '') continue;

@@ -316,7 +316,8 @@ async function fetchAllClienteIds(): Promise<string[]> {
 }
 
 export async function getNextClienteId(): Promise<string> {
-  return canonicalNextClienteId(fetchAllClienteIds);
+  // Pass the fetcher function as a callback to be executed by the normalizer.
+  return canonicalNextClienteId(() => fetchAllClienteIds());
 }
 
 const SHEETS_TO_SEARCH = ['Leads Exact Spotter', 'layout_importacao_empresas', 'Sheet1', 'PERDECOMP'];
@@ -359,6 +360,10 @@ export async function findByName(name: string): Promise<SheetRow | null> {
 }
 
 export async function appendToSheets(payload: any): Promise<void> {
+    // 1. Generate the new Cliente_ID centrally.
+    const newClienteId = await getNextClienteId();
+    const payloadWithId = { ...payload, Cliente_ID: newClienteId };
+
     const sheets = await getSheetsClient();
     const spreadsheetId = process.env.SPREADSHEET_ID;
 
@@ -371,7 +376,8 @@ export async function appendToSheets(payload: any): Promise<void> {
     const errors: string[] = [];
     for (const sheet of sheetProcessOrder) {
         try {
-            const rowData = sheet.builder(payload);
+            // 2. Use the payload with the guaranteed correct ID.
+            const rowData = sheet.builder(payloadWithId);
             readCache.delete(`sheetData:${sheet.name}`);
             await sheets.spreadsheets.values.append({
                 spreadsheetId,

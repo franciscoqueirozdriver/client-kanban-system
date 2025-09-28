@@ -10,8 +10,24 @@ import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import { decideCNPJFinalBeforeQuery } from '@/helpers/decideCNPJ';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ensureValidCnpj, formatCnpj, normalizeCnpj, onlyDigits, isCnpj, isEmptyCNPJLike } from '@/utils/cnpj';
+import { normalizeCnpj as canonicalNormalizeCnpj, isValidCnpjPattern } from '../../../../lib/normalizers';
 import { fmtCNPJ } from '@/utils/cnpj-matriz';
+
+
+// --- Local Helpers to replace deprecated utils ---
+const onlyDigits = (v: string | null | undefined): string => (v ?? '').replace(/\D/g, '');
+const formatCnpj = (v: string): string => {
+    try {
+        return canonicalNormalizeCnpj(v).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    } catch {
+        return v; // Return original on formatting error
+    }
+};
+const isEmptyCNPJLike = (value?: string): boolean => {
+  const d = onlyDigits(String(value ?? ''));
+  return d.length === 0 || /^0+$/.test(d);
+};
+
 
 // --- Helper Types ---
 interface Company {
@@ -156,7 +172,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const showDebug = false;
   const q: string = initialQ;
 
-  // chamado pelo preview ao clicar "Usar e abrir cadastro"
   const handleUseSuggestion = (flat: Prefill) => {
     setCompanyPrefill(flat);
     setCompanyModalOpen(true);
@@ -199,9 +214,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   };
 
   const updateResult = (cnpj: string, data: Partial<ComparisonResult>) => {
-    const c14 = normalizeCnpj(cnpj);
+    const c14 = canonicalNormalizeCnpj(cnpj);
     if (!c14) return;
-    setResults(prev => prev.map(r => (normalizeCnpj(r.company.CNPJ_Empresa) === c14 ? { ...r, ...data } : r)));
+    setResults(prev => prev.map(r => (canonicalNormalizeCnpj(r.company.CNPJ_Empresa) === c14 ? { ...r, ...data } : r)));
   };
 
   const openMatrizFilialConfirmModal = useCallback(
@@ -234,7 +249,8 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     const { company, forceRefresh } = selection;
     let normalizedCnpj: string;
     try {
-      normalizedCnpj = ensureValidCnpj(company.CNPJ_Empresa);
+      normalizedCnpj = canonicalNormalizeCnpj(company.CNPJ_Empresa);
+      if(!isValidCnpjPattern(normalizedCnpj)) throw new Error('CNPJ format is invalid after normalization.');
     } catch (error: any) {
       updateResult(company.CNPJ_Empresa, { status: 'error', error: { message: error?.message || 'CNPJ inválido. Verifique e tente novamente.' } });
       return;
@@ -318,7 +334,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           providerMessage: data?.providerMessage,
           message: data?.message,
         };
-        // Special handling for non-critical "no data" error when we have fallback data
         const isNoDataError = errorObj.providerCode === 612;
 
         if (data.fallback) {
@@ -326,22 +341,11 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           const rest = data.fallback.rest ?? 0;
           const ressarc = data.fallback.ressarc ?? 0;
           const canc = data.fallback.canc ?? 0;
-          const porFamilia = {
-            DCOMP: dcomp,
-            REST: rest,
-            RESSARC: ressarc,
-            CANC: canc,
-            DESCONHECIDO: 0,
-          };
-          const porNaturezaAgrupada = {
-            '1.3/1.7': dcomp,
-            '1.2/1.6': rest,
-            '1.1/1.5': ressarc,
-          };
+          const porFamilia = { DCOMP: dcomp, REST: rest, RESSARC: ressarc, CANC: canc, DESCONHECIDO: 0 };
+          const porNaturezaAgrupada = { '1.3/1.7': dcomp, '1.2/1.6': rest, '1.1/1.5': ressarc };
           const resumo = {
             total: dcomp + rest + ressarc + canc,
-            totalSemCancelamento:
-              data.fallback.quantidade ?? dcomp + rest + ressarc,
+            totalSemCancelamento: data.fallback.quantidade ?? dcomp + rest + ressarc,
             canc,
             porFamilia,
             porNaturezaAgrupada,
@@ -353,7 +357,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             fromCache: true,
             perdcompResumo: resumo,
           };
-          // Do not show a scary error message for a simple "no data found"
           updateResult(finalCNPJ, { status: 'loaded', data: cardData, error: isNoDataError ? null : errorObj });
         } else {
           updateResult(finalCNPJ, { status: 'error', error: errorObj });
@@ -362,23 +365,10 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       }
 
       const firstLinha = Array.isArray(data.linhas) ? data.linhas[0] : undefined;
-      const mappedCount =
-        data.mappedCount ??
-        data.debug?.mappedCount ??
-        (Array.isArray(data.linhas) ? data.linhas.length : 0);
-      const totalPerdcomp =
-        data.total_perdcomp ??
-        data.debug?.total_perdcomp ??
-        0;
-      const siteReceipt =
-        (data.site_receipt ??
-          data.debug?.siteReceipts?.[0] ??
-          firstLinha?.URL_Comprovante_HTML) || null;
-      const lastConsultation =
-        data.header?.requested_at ||
-        data.debug?.header?.requested_at ||
-        firstLinha?.Data_Consulta ||
-        null;
+      const mappedCount = data.mappedCount ?? data.debug?.mappedCount ?? (Array.isArray(data.linhas) ? data.linhas.length : 0);
+      const totalPerdcomp = data.total_perdcomp ?? data.debug?.total_perdcomp ?? 0;
+      const siteReceipt = (data.site_receipt ?? data.debug?.siteReceipts?.[0] ?? firstLinha?.URL_Comprovante_HTML) || null;
+      const lastConsultation = data.header?.requested_at || data.debug?.header?.requested_at || firstLinha?.Data_Consulta || null;
       const resumo = data.perdcompResumo;
       const cardData: CardData = {
         quantity: resumo?.totalSemCancelamento ?? Math.max(totalPerdcomp, mappedCount),
@@ -407,7 +397,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     if (allSelections.length === 0) return;
 
     setGlobalLoading(true);
-    setResults(allSelections.map(s => ({ company: { ...s.company, CNPJ_Empresa: normalizeCnpj(s.company.CNPJ_Empresa) }, data: null, status: 'idle', debug: null })));
+    setResults(allSelections.map(s => ({ company: { ...s.company, CNPJ_Empresa: canonicalNormalizeCnpj(s.company.CNPJ_Empresa) }, data: null, status: 'idle', debug: null })));
 
     for (const sel of allSelections) {
       try {
@@ -448,11 +438,10 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         setCompFetch({ loading: true, error: null, items: [] });
       }
 
-      const digits = (value: string) => (value || '').replace(/\D+/g, '');
       const blocked = new Set<string>();
       const blockedNames = new Set<string>();
       if (client?.company?.CNPJ_Empresa) {
-        const norm = digits(client.company.CNPJ_Empresa);
+        const norm = onlyDigits(client.company.CNPJ_Empresa);
         if (norm) blocked.add(norm);
       }
       if (client?.company?.Nome_da_Empresa) {
@@ -460,7 +449,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         if (key) blockedNames.add(key);
       }
       competitors.forEach(existing => {
-        const cnpj = existing?.company?.CNPJ_Empresa ? digits(existing.company.CNPJ_Empresa) : '';
+        const cnpj = existing?.company?.CNPJ_Empresa ? onlyDigits(existing.company.CNPJ_Empresa) : '';
         if (cnpj) blocked.add(cnpj);
         const nameKey = String(existing?.company?.Nome_da_Empresa ?? '').trim().toLowerCase();
         if (nameKey) blockedNames.add(nameKey);
@@ -487,7 +476,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           const nomeLimpo = String(raw?.nome || '').trim();
           if (nomeLimpo.length <= 1) return;
 
-          const cnpj = digits(String(raw?.cnpj || ''));
+          const cnpj = onlyDigits(String(raw?.cnpj || ''));
           if (cnpj && blocked.has(cnpj)) return;
 
           if (cnpj) {
@@ -537,14 +526,28 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     setCompDialogOpen(false);
   }
 
-  function confirmCompetitors(selected: Array<{ nome: string; cnpj: string }>) {
+  const fetchNextId = async (): Promise<string> => {
+    const res = await fetch('/api/clientes/next-id');
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to fetch next ID' }));
+        console.error('Error fetching next ID:', err);
+        throw new Error(err.error || 'API Error');
+    }
+    const { nextId } = await res.json();
+    if (!nextId) {
+        throw new Error('Invalid response from next-id endpoint');
+    }
+    return nextId;
+  };
+
+  async function confirmCompetitors(selected: Array<{ nome: string; cnpj: string }>) {
     const sanitized: Array<{ nome: string; cnpj: string }> = [];
     for (const item of selected) {
       const nome = String(item?.nome ?? '').trim();
       if (!nome) continue;
       const cleaned = onlyDigits(item?.cnpj ?? '');
       if (cleaned) {
-        if (!isCnpj(cleaned)) {
+        if (!isValidCnpjPattern(cleaned)) {
           alert('CNPJ inválido');
           return;
         }
@@ -562,7 +565,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     const existingKeys = new Set<string>();
     competitors.forEach(existing => {
       if (!existing) return;
-      const cnpj = normalizeCnpj(existing.company.CNPJ_Empresa);
+      const cnpj = canonicalNormalizeCnpj(existing.company.CNPJ_Empresa);
       if (cnpj) {
         existingKeys.add(cnpj);
         return;
@@ -571,7 +574,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       if (key) existingKeys.add(key);
     });
     if (client?.company?.CNPJ_Empresa) {
-      const cnpj = normalizeCnpj(client.company.CNPJ_Empresa);
+      const cnpj = canonicalNormalizeCnpj(client.company.CNPJ_Empresa);
       if (cnpj) existingKeys.add(cnpj);
     }
 
@@ -589,41 +592,53 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       return;
     }
 
-    const next = [...competitors];
-    let idx = 0;
-    for (let i = 0; i < next.length && idx < filtered.length; i++) {
-      if (!next[i]) {
-        const s = filtered[idx++];
-        next[i] = {
-          company: {
-            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
-            Nome_da_Empresa: s.nome,
-            CNPJ_Empresa: s.cnpj,
-          },
-          lastConsultation: null,
-          forceRefresh: false,
-        };
-      }
+    setGlobalLoading(true); // Show a spinner while we fetch IDs
+
+    try {
+        const next = [...competitors];
+        let idx = 0;
+        for (let i = 0; i < next.length && idx < filtered.length; i++) {
+          if (!next[i]) {
+            const s = filtered[idx++];
+            const newId = await fetchNextId(); // Fetch new ID from the API
+            next[i] = {
+              company: {
+                Cliente_ID: newId, // Use the correct, sequential ID
+                Nome_da_Empresa: s.nome,
+                CNPJ_Empresa: s.cnpj,
+              },
+              lastConsultation: null,
+              forceRefresh: false,
+            };
+          }
+        }
+        while (next.length < MAX_COMPETITORS && idx < filtered.length) {
+          const s = filtered[idx++];
+          const newId = await fetchNextId(); // Fetch new ID from the API
+          next.push({
+            company: {
+              Cliente_ID: newId, // Use the correct, sequential ID
+              Nome_da_Empresa: s.nome,
+              CNPJ_Empresa: s.cnpj,
+            },
+            lastConsultation: null,
+            forceRefresh: false,
+          });
+        }
+        setCompetitors(next.slice(0, MAX_COMPETITORS));
+    } catch (error) {
+        alert('Falha ao gerar novos IDs para os concorrentes. Por favor, tente novamente.');
+        console.error(error);
+    } finally {
+        setGlobalLoading(false);
+        setCompDialogOpen(false);
     }
-    while (next.length < MAX_COMPETITORS && idx < filtered.length) {
-      const s = filtered[idx++];
-      next.push({
-        company: {
-          Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
-          Nome_da_Empresa: s.nome,
-          CNPJ_Empresa: s.cnpj,
-        },
-        lastConsultation: null,
-        forceRefresh: false,
-      });
-    }
-    setCompetitors(next.slice(0, MAX_COMPETITORS));
-    setCompDialogOpen(false);
   }
 
   const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
     try {
-      const c = ensureValidCnpj(cnpj);
+      const c = canonicalNormalizeCnpj(cnpj);
+      if (!isValidCnpjPattern(c)) return null;
       const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
       if (res.ok) {
         const { lastConsultation } = await res.json();
@@ -643,8 +658,8 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       const val = String(sug[k] ?? '').trim();
       if (k === 'CNPJ_Empresa') {
         const curDigits = onlyDigits(cur);
-        const valDigits = normalizeCnpj(val);
-        if (isEmptyCNPJLike(curDigits) && isCnpj(valDigits)) {
+        const valDigits = canonicalNormalizeCnpj(val);
+        if (isEmptyCNPJLike(curDigits) && isValidCnpjPattern(valDigits)) {
           out[k] = valDigits;
         }
       } else if (!cur && val) {
@@ -685,7 +700,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     let cnpj = '';
     if (source === 'selected' && selectedCompany) {
       nome = selectedCompany.Nome_da_Empresa || '';
-      cnpj = normalizeCnpj(selectedCompany.CNPJ_Empresa);
+      cnpj = canonicalNormalizeCnpj(selectedCompany.CNPJ_Empresa);
     } else if (source === 'query' && rawQuery) {
       nome = rawQuery.trim();
     }
@@ -716,9 +731,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   }
 
   const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
-    const cnpj = normalizeCnpj(company.CNPJ_Empresa);
+    const cnpj = canonicalNormalizeCnpj(company.CNPJ_Empresa);
     const normalized = { ...company, CNPJ_Empresa: cnpj };
-    const lastConsultation = isCnpj(cnpj) ? await checkLastConsultation(cnpj) : null;
+    const lastConsultation = isValidCnpjPattern(cnpj) ? await checkLastConsultation(cnpj) : null;
     const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
     if (type === 'client') {
       setClient(selection);
@@ -896,7 +911,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
               onClick={handleConsult}
               disabled={globalLoading || !client}
               className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-              aria-label={globalLoading ? 'Consultando PER/DCOMP' : 'Consultar PER/DCOMP'}
+              aria-label={globalLoading ? 'Consultando PER/DCOMP' : 'Consultar / Atualizar Comparação'}
             >
               {globalLoading && <FaSpinner className="mr-2 h-4 w-4 animate-spin" />}
               {globalLoading ? 'Consultando...' : 'Consultar / Atualizar Comparação'}
@@ -1101,8 +1116,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         error={enrichPreview?.error ? String(enrichPreview.error) : undefined}
         onConfirm={(flat) => {
           const merged = enrichPreview?.base ? mergeEmptyFields(enrichPreview.base, flat) : flat;
-          // The CNPJ decision is now made inside the dialog, so we just use the result (flat).
-          // However, we still need to merge other fields.
           const finalData = { ...merged, CNPJ_Empresa: flat.CNPJ_Empresa };
           handleUseSuggestion(finalData);
           setModalWarning(!enrichPreview?.suggestion);

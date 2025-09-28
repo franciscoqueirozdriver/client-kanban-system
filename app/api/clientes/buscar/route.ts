@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets';
-import { padCNPJ14, onlyDigits } from '@/utils/cnpj';
+import { normalizeCnpj } from '../../../../lib/normalizers';
 
 const SHEET_NAME = 'Leads Exact Spotter';
 const RESULT_LIMIT = 20;
+
+const onlyDigits = (v: string | null | undefined) => (v ?? '').replace(/\D/g, '');
 
 // Normalizer function as specified
 const norm = (s: string) =>
@@ -61,7 +63,7 @@ export async function GET(request: Request) {
       return {
         Cliente_ID: row['Cliente_ID'],
         Nome_da_Empresa: nomeRaw,
-        CNPJ_Empresa: padCNPJ14(cnpjRaw),
+        CNPJ_Empresa: normalizeCnpj(cnpjRaw),
         score,
         nomeLength: nomeRaw.length,
       };

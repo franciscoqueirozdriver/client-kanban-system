@@ -1,24 +1,29 @@
 import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets';
-import { padCNPJ14 } from '@/utils/cnpj';
+import { normalizeCnpj } from '../../../../lib/normalizers';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cnpj = searchParams.get('cnpj')?.trim();
+  const rawCnpj = searchParams.get('cnpj')?.trim();
 
-  if (!cnpj) {
+  if (!rawCnpj) {
     return NextResponse.json({ message: 'Query parameter "cnpj" is required' }, { status: 400 });
   }
 
-  const cleanCnpj = padCNPJ14(cnpj);
+  let cleanCnpj;
+  try {
+    cleanCnpj = normalizeCnpj(rawCnpj);
+  } catch (error: any) {
+    return NextResponse.json({ message: 'Invalid CNPJ format', error: error.message }, { status: 400 });
+  }
 
   try {
     const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
 
     const dataForCnpj = rows.filter(row => {
-      const rowCnpj = padCNPJ14(row.CNPJ);
+      const rowCnpj = normalizeCnpj(row.CNPJ);
       return rowCnpj === cleanCnpj;
     });
 
