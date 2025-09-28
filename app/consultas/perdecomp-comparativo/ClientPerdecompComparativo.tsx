@@ -7,8 +7,11 @@ import NewCompanyModal from '../../../components/NewCompanyModal';
 import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
+import ConfirmDialog from '../../../components/ConfirmDialog';
+import { decideCNPJFinalBeforeQuery } from '@/helpers/decideCNPJ';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ensureValidCnpj, formatCnpj, normalizeCnpj, onlyDigits, isCnpj, isEmptyCNPJLike } from '@/utils/cnpj';
+import { fmtCNPJ } from '@/utils/cnpj-matriz';
 
 // --- Helper Types ---
 interface Company {
@@ -139,6 +142,12 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const [enrichTarget, setEnrichTarget] = useState<string | null>(null);
   const [enrichPreview, setEnrichPreview] = useState<any>(null);
   const [showEnrichPreview, setShowEnrichPreview] = useState(false);
+  const [cnpjConfirmState, setCnpjConfirmState] = useState<{
+    isOpen: boolean;
+    matriz?: string;
+    filial?: string;
+    resolve?: (value: boolean) => void;
+  }>({ isOpen: false });
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPayload, setPreviewPayload] = useState<{ company: Company; debug: ApiDebug } | null>(null);
@@ -195,22 +204,103 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     setResults(prev => prev.map(r => (normalizeCnpj(r.company.CNPJ_Empresa) === c14 ? { ...r, ...data } : r)));
   };
 
+  const openMatrizFilialConfirmModal = useCallback(
+    (matriz: string, filial: string): Promise<boolean> =>
+      new Promise(resolve => {
+        setCnpjConfirmState({ isOpen: true, matriz, filial, resolve });
+      }),
+    [],
+  );
+
+  const renderMatrizFilialConfirmDescription = () => {
+    if (!cnpjConfirmState.matriz || !cnpjConfirmState.filial) return null;
+    const filialFmt = fmtCNPJ(cnpjConfirmState.filial);
+    const matrizFmt = fmtCNPJ(cnpjConfirmState.matriz);
+
+    return (
+      <>
+        <p>
+          Detectamos que o CNPJ <strong>{filialFmt}</strong> é de uma FILIAL.
+        </p>
+        <p className="mt-2">Deseja utilizar o CNPJ da filial mesmo assim?</p>
+        <p className="mt-2">
+          Se optar por "Usar Matriz", salvaremos o CNPJ <strong>{matrizFmt}</strong>.
+        </p>
+      </>
+    );
+  };
+
   const runConsultation = async (selection: CompanySelection) => {
     const { company, forceRefresh } = selection;
-    let cnpj: string;
+    let normalizedCnpj: string;
     try {
-      cnpj = ensureValidCnpj(company.CNPJ_Empresa);
+      normalizedCnpj = ensureValidCnpj(company.CNPJ_Empresa);
     } catch (error: any) {
       updateResult(company.CNPJ_Empresa, { status: 'error', error: { message: error?.message || 'CNPJ inválido. Verifique e tente novamente.' } });
       return;
     }
-    updateResult(cnpj, { status: 'loading' });
+
+    let finalCNPJ = normalizedCnpj;
+    try {
+      finalCNPJ = await decideCNPJFinalBeforeQuery({
+        clienteId: company.Cliente_ID,
+        cnpjAtual: normalizedCnpj,
+        ask: openMatrizFilialConfirmModal,
+      });
+    } catch (error) {
+      console.error('Falha ao decidir uso de matriz ou filial antes da consulta', error);
+      finalCNPJ = normalizedCnpj;
+    }
+
+    const companyWithFinalCnpj: Company = { ...company, CNPJ_Empresa: finalCNPJ };
+
+    if (finalCNPJ !== company.CNPJ_Empresa) {
+      setClient(prev => {
+        if (!prev || prev.company.Cliente_ID !== company.Cliente_ID) return prev;
+        return { ...prev, company: { ...prev.company, CNPJ_Empresa: finalCNPJ } };
+      });
+      setCompetitors(prev =>
+        prev.map(sel =>
+          sel && sel.company.Cliente_ID === company.Cliente_ID
+            ? { ...sel, company: { ...sel.company, CNPJ_Empresa: finalCNPJ } }
+            : sel,
+        ),
+      );
+    }
+
+    setResults(prev =>
+      prev.map(r =>
+        r.company.Cliente_ID === company.Cliente_ID
+          ? { ...r, company: { ...r.company, CNPJ_Empresa: finalCNPJ } }
+          : r,
+      ),
+    );
+
+    updateResult(finalCNPJ, { status: 'loading' });
+
+    try {
+      const persistRes = await fetch('/api/sheets/cnpj', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clienteId: company.Cliente_ID, cnpj: finalCNPJ }),
+      });
+      if (!persistRes.ok) {
+        const body = await persistRes.json().catch(() => null);
+        console.error('[Persist CNPJ] Falha ao atualizar planilha', {
+          status: persistRes.status,
+          body,
+        });
+      }
+    } catch (error) {
+      console.error('[Persist CNPJ] Erro inesperado ao atualizar planilha', error);
+    }
+
     try {
       const res = await fetch('/api/infosimples/perdcomp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cnpj,
+          cnpj: finalCNPJ,
           data_inicio: startDate,
           data_fim: endDate,
           force: forceRefresh,
@@ -264,9 +354,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             perdcompResumo: resumo,
           };
           // Do not show a scary error message for a simple "no data found"
-          updateResult(cnpj, { status: 'loaded', data: cardData, error: isNoDataError ? null : errorObj });
+          updateResult(finalCNPJ, { status: 'loaded', data: cardData, error: isNoDataError ? null : errorObj });
         } else {
-          updateResult(cnpj, { status: 'error', error: errorObj });
+          updateResult(finalCNPJ, { status: 'error', error: errorObj });
         }
         return;
       }
@@ -296,15 +386,15 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         siteReceipt,
         perdcompResumo: resumo,
       };
-      updateResult(cnpj, { status: 'loaded', data: cardData, debug: showDebug ? data.debug ?? null : null });
+      updateResult(finalCNPJ, { status: 'loaded', data: cardData, debug: showDebug ? data.debug ?? null : null });
 
       if (showDebug && forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
-        setPreviewPayload({ company, debug: data.debug ?? null });
+        setPreviewPayload({ company: companyWithFinalCnpj, debug: data.debug ?? null });
         setPreviewOpen(true);
       }
 
     } catch (e: any) {
-      updateResult(cnpj, { status: 'error', error: { message: e.message } });
+      updateResult(finalCNPJ, { status: 'error', error: { message: e.message } });
     }
   };
 
@@ -1026,6 +1116,22 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         fetchState={compFetch}
         onSearch={handleSearchCompetitors}
         onConfirm={confirmCompetitors}
+      />
+
+      <ConfirmDialog
+        isOpen={cnpjConfirmState.isOpen}
+        onClose={() => {
+          cnpjConfirmState.resolve?.(false);
+          setCnpjConfirmState({ isOpen: false });
+        }}
+        onConfirm={() => {
+          cnpjConfirmState.resolve?.(true);
+          setCnpjConfirmState({ isOpen: false });
+        }}
+        title="CNPJ indica Filial"
+        description={renderMatrizFilialConfirmDescription()}
+        confirmText="Usar Matriz"
+        cancelText="Manter Filial"
       />
 
       <NewCompanyModal
