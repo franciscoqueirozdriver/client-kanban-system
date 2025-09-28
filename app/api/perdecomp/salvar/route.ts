@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { appendSheetData } from '../../../../lib/googleSheets.js';
+import { appendSheetData } from '../../../../lib/googleSheets';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets.js';
+import { getSheetData } from '../../../../lib/googleSheets';
 import { padCNPJ14 } from '@/utils/cnpj';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
