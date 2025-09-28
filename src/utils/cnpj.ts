@@ -37,7 +37,7 @@ export const formatCnpj = (v: string) =>
 export const digits = (value: any) => onlyDigits(String(value ?? ''));
 export const normalizeDigits = digits;
 export const normalizeCNPJ = normalizeCnpj;
-export const padCNPJ14 = normalizeCnpj;
+export const padCNPJ14 = (input?: string) => normalizeCnpj(input ?? '');
 export const formatCNPJ = formatCnpj;
 export const isCNPJ14 = (input?: string) => normalizeCnpj(input ?? '').length === 14;
 export const isCnpj14 = isCNPJ14;
