@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
 import NewCompanyModal from '../../../components/NewCompanyModal';
@@ -103,8 +103,19 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const [competitors, setCompetitors] = useState<Array<CompanySelection | null>>([]);
   const MAX_COMPETITORS = 3;
   const remainingSlots = MAX_COMPETITORS - competitors.filter(c => !!c).length;
+  const blockedCnpjs = useMemo(() => {
+    const values: string[] = [];
+    if (client?.company?.CNPJ_Empresa) {
+      values.push(client.company.CNPJ_Empresa);
+    }
+    competitors.forEach(comp => {
+      if (comp?.company?.CNPJ_Empresa) {
+        values.push(comp.company.CNPJ_Empresa);
+      }
+    });
+    return values;
+  }, [client, competitors]);
   const [compDialogOpen, setCompDialogOpen] = useState(false);
-  const [compFetch, setCompFetch] = useState<{loading: boolean; error: string|null; items: Array<{nome:string; cnpj:string}>}>({ loading: false, error: null, items: [] });
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -329,46 +340,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   function openCompetitorDialog() {
     if (!client || remainingSlots <= 0) return;
     setCompDialogOpen(true);
-    setCompFetch({ loading: true, error: null, items: [] });
-
-    fetch('/api/empresas/concorrentes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: client.company.Nome_da_Empresa, max: 20 })
-    })
-    .then(async (r) => {
-      const data = await r.json();
-      if (!r.ok) throw new Error(data?.error || 'Falha na busca');
-      const selCnpjs = new Set(
-        competitors
-          .filter(Boolean)
-          .map(c => normalizeCnpj(c!.company.CNPJ_Empresa))
-          .filter(Boolean)
-      );
-      const clientCnpj = normalizeCnpj(client.company.CNPJ_Empresa);
-
-      const toItem = (raw: any): { nome: string; cnpj: string } => {
-        const nome = String(raw?.nome ?? raw?.name ?? '').trim();
-        const cnpj = normalizeCnpj(raw?.cnpj ?? raw?.documento ?? raw?.cnpj_numero ?? '');
-        return { nome, cnpj };
-      };
-
-      const candidates = (data.items || []).map(toItem);
-
-      const dedup = new Map<string, { nome: string; cnpj: string }>();
-      for (const item of candidates) {
-        if (!item.cnpj || !isCnpj(item.cnpj)) continue;
-        if (!item.nome) continue;
-        if (clientCnpj && item.cnpj === clientCnpj) continue;
-        if (selCnpjs.has(item.cnpj)) continue;
-        if (!dedup.has(item.cnpj)) {
-          dedup.set(item.cnpj, { nome: item.nome, cnpj: item.cnpj });
-        }
-      }
-
-      setCompFetch({ loading: false, error: null, items: Array.from(dedup.values()) });
-    })
-    .catch(err => setCompFetch({ loading: false, error: String(err?.message || err), items: [] }));
   }
 
   function closeCompetitorDialog() {
@@ -906,8 +877,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         isOpen={compDialogOpen}
         onClose={closeCompetitorDialog}
         clientName={client?.company.Nome_da_Empresa || ''}
+        clientCnpj={client?.company.CNPJ_Empresa}
         limitRemaining={remainingSlots}
-        fetchState={compFetch}
+        blockedCnpjs={blockedCnpjs}
         onConfirm={confirmCompetitors}
       />
 
