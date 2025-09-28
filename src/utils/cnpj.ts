@@ -39,7 +39,7 @@ export const normalizeDigits = digits;
 export const normalizeCNPJ = normalizeCnpj;
 export const padCNPJ14 = (input?: string) => normalizeCnpj(input ?? '');
 export const formatCNPJ = formatCnpj;
-export const isCNPJ14 = (input?: string) => normalizeCnpj(input ?? '').length === 14;
+export const isCNPJ14 = (input?: string) => isCnpj(String(input ?? ''));
 export const isCnpj14 = isCNPJ14;
 export const isValidCNPJ = (input: any) => isCnpj(String(input ?? ''));
 export const isEmptyCNPJLike = (value?: string) => {

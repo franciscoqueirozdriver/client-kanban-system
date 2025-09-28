@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import Autocomplete from '../../../components/Perdecomp/Autocomplete';
 import NewCompanyModal from '../../../components/NewCompanyModal';
@@ -79,6 +79,12 @@ type Prefill = {
   Area?: string;
 };
 
+type CompetitorFetchState = {
+  loading: boolean;
+  error: string | null;
+  items: Array<{ nome: string; cnpj: string }>;
+};
+
 function buildApiErrorLabel(e: any) {
   const parts: string[] = [];
   if (e?.httpStatus) {
@@ -116,6 +122,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     return values;
   }, [client, competitors]);
   const [compDialogOpen, setCompDialogOpen] = useState(false);
+  const [compFetch, setCompFetch] = useState<CompetitorFetchState>({ loading: false, error: null, items: [] });
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -337,29 +344,166 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     setCompetitors(prev => prev.map((c, i) => i === index ? { ...c!, ...data } : c));
   };
 
+  const fetchCompetitorsByName = useCallback(
+    async (companyName: string, { setAsBase = false }: { setAsBase?: boolean } = {}) => {
+      const nome = (companyName || '').trim();
+      if (!nome) {
+        if (setAsBase) {
+          setCompFetch({ loading: false, error: null, items: [] });
+        }
+        return [] as Array<{ nome: string; cnpj: string }>;
+      }
+
+      if (setAsBase) {
+        setCompFetch({ loading: true, error: null, items: [] });
+      }
+
+      const digits = (value: string) => (value || '').replace(/\D+/g, '');
+      const blocked = new Set<string>();
+      const blockedNames = new Set<string>();
+      if (client?.company?.CNPJ_Empresa) {
+        const norm = digits(client.company.CNPJ_Empresa);
+        if (norm) blocked.add(norm);
+      }
+      if (client?.company?.Nome_da_Empresa) {
+        const key = String(client.company.Nome_da_Empresa).trim().toLowerCase();
+        if (key) blockedNames.add(key);
+      }
+      competitors.forEach(existing => {
+        const cnpj = existing?.company?.CNPJ_Empresa ? digits(existing.company.CNPJ_Empresa) : '';
+        if (cnpj) blocked.add(cnpj);
+        const nameKey = String(existing?.company?.Nome_da_Empresa ?? '').trim().toLowerCase();
+        if (nameKey) blockedNames.add(nameKey);
+      });
+
+      try {
+        const response = await fetch('/api/empresas/concorrentes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome, max: 20 }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const json = await response.json().catch(() => ({}));
+        const items = Array.isArray(json?.items) ? json.items : [];
+        const seenCnpjs = new Set<string>();
+        const seenNames = new Set<string>();
+        const cleaned: Array<{ nome: string; cnpj: string }> = [];
+
+        items.forEach((raw: any) => {
+          const nomeLimpo = String(raw?.nome || '').trim();
+          if (nomeLimpo.length <= 1) return;
+
+          const cnpj = digits(String(raw?.cnpj || ''));
+          if (cnpj && blocked.has(cnpj)) return;
+
+          if (cnpj) {
+            if (seenCnpjs.has(cnpj)) return;
+            seenCnpjs.add(cnpj);
+            cleaned.push({ nome: nomeLimpo, cnpj });
+            return;
+          }
+
+          const key = nomeLimpo.toLowerCase();
+          if (blockedNames.has(key)) return;
+          if (seenNames.has(key)) return;
+          seenNames.add(key);
+          cleaned.push({ nome: nomeLimpo, cnpj: '' });
+        });
+
+        if (setAsBase) {
+          setCompFetch({ loading: false, error: null, items: cleaned });
+        }
+
+        return cleaned;
+      } catch (error) {
+        console.error('Falha ao buscar concorrentes', error);
+        if (setAsBase) {
+          setCompFetch({ loading: false, error: 'Falha ao buscar concorrentes', items: [] });
+        }
+        throw new Error('Falha ao buscar concorrentes');
+      }
+    },
+    [client, competitors],
+  );
+
+  const handleSearchCompetitors = useCallback(
+    (term: string) => fetchCompetitorsByName(term, { setAsBase: false }),
+    [fetchCompetitorsByName],
+  );
+
   function openCompetitorDialog() {
     if (!client || remainingSlots <= 0) return;
     setCompDialogOpen(true);
+    fetchCompetitorsByName(client.company.Nome_da_Empresa, { setAsBase: true }).catch(() => {
+      // erros já tratados em fetchCompetitorsByName
+    });
   }
 
   function closeCompetitorDialog() {
     setCompDialogOpen(false);
   }
 
-  function confirmCompetitors(selected: Array<{ nome:string; cnpj:string }>) {
-    let validated: Array<{ nome: string; cnpj: string }>;
-    try {
-      validated = selected.map(s => ({ nome: s.nome, cnpj: ensureValidCnpj(s.cnpj) }));
-    } catch (error: any) {
-      alert(error?.message || 'CNPJ inválido');
+  function confirmCompetitors(selected: Array<{ nome: string; cnpj: string }>) {
+    const sanitized: Array<{ nome: string; cnpj: string }> = [];
+    for (const item of selected) {
+      const nome = String(item?.nome ?? '').trim();
+      if (!nome) continue;
+      const cleaned = onlyDigits(item?.cnpj ?? '');
+      if (cleaned) {
+        if (!isCnpj(cleaned)) {
+          alert('CNPJ inválido');
+          return;
+        }
+        sanitized.push({ nome, cnpj: cleaned });
+      } else {
+        sanitized.push({ nome, cnpj: '' });
+      }
+    }
+
+    if (sanitized.length === 0) {
+      setCompDialogOpen(false);
+      return;
+    }
+
+    const existingKeys = new Set<string>();
+    competitors.forEach(existing => {
+      if (!existing) return;
+      const cnpj = normalizeCnpj(existing.company.CNPJ_Empresa);
+      if (cnpj) {
+        existingKeys.add(cnpj);
+        return;
+      }
+      const key = String(existing.company.Nome_da_Empresa || '').trim().toLowerCase();
+      if (key) existingKeys.add(key);
+    });
+    if (client?.company?.CNPJ_Empresa) {
+      const cnpj = normalizeCnpj(client.company.CNPJ_Empresa);
+      if (cnpj) existingKeys.add(cnpj);
+    }
+
+    const filtered: Array<{ nome: string; cnpj: string }> = [];
+    const seen = new Set<string>();
+    sanitized.forEach(item => {
+      const key = item.cnpj || item.nome.toLowerCase();
+      if (existingKeys.has(key) || seen.has(key)) return;
+      seen.add(key);
+      filtered.push(item);
+    });
+
+    if (filtered.length === 0) {
+      setCompDialogOpen(false);
       return;
     }
 
     const next = [...competitors];
     let idx = 0;
-    for (let i = 0; i < next.length && idx < validated.length; i++) {
+    for (let i = 0; i < next.length && idx < filtered.length; i++) {
       if (!next[i]) {
-        const s = validated[idx++];
+        const s = filtered[idx++];
         next[i] = {
           company: {
             Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
@@ -371,8 +515,8 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         };
       }
     }
-    while (next.length < MAX_COMPETITORS && idx < validated.length) {
-      const s = validated[idx++];
+    while (next.length < MAX_COMPETITORS && idx < filtered.length) {
+      const s = filtered[idx++];
       next.push({
         company: {
           Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
@@ -877,9 +1021,10 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         isOpen={compDialogOpen}
         onClose={closeCompetitorDialog}
         clientName={client?.company.Nome_da_Empresa || ''}
-        clientCnpj={client?.company.CNPJ_Empresa}
         limitRemaining={remainingSlots}
         blockedCnpjs={blockedCnpjs}
+        fetchState={compFetch}
+        onSearch={handleSearchCompetitors}
         onConfirm={confirmCompetitors}
       />
 
