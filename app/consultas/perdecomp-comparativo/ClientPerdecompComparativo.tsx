@@ -925,9 +925,12 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         </p>
       </section>
 
-      <section className="rounded-3xl border border-border bg-muted/40 p-4 shadow-soft">
+      <section className="relative -mx-2 rounded-3xl border border-border bg-muted/40 p-4 shadow-soft">
         {hasResultCards ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div
+            className="flex gap-4 overflow-x-auto px-2 py-2 snap-x snap-mandatory scrollbar-thin"
+            aria-label="Resultados da comparação PER/DCOMP"
+          >
             {results.map(({ company, data, status, error, debug }) => {
               const resumo = data?.perdcompResumo;
               const temRegistros = (resumo?.totalSemCancelamento ?? 0) > 0;
@@ -937,7 +940,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
               return (
                 <article
                   key={company.CNPJ_Empresa}
-                  className="group relative flex h-full flex-col rounded-3xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg"
+                  className="group relative flex h-full shrink-0 grow-0 basis-[360px] flex-col rounded-3xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg snap-start max-w-[420px] md:basis-[420px]"
                 >
                   <header className="mb-2">
                     <h3 className="text-lg font-semibold text-foreground" title={company.Nome_da_Empresa}>
