@@ -14,7 +14,7 @@ jest.mock('googleapis', () => ({
   },
 }));
 
-const gs = require('./googleSheets');
+import * as gs from './googleSheets';
 
 describe('findRowIndexById', () => {
   beforeEach(() => {

@@ -1,15 +1,34 @@
-import { google } from 'googleapis';
+import { google, sheets_v4 } from 'googleapis';
 import https from 'https';
+import {
+  normalizeCnpj as canonicalNormalizeCnpj,
+  nextClienteId as canonicalNextClienteId,
+  isValidCnpjPattern,
+} from './normalizers';
+
+// --- Type Definitions ---
+interface SheetRow {
+  _rowNumber: number;
+  [key: string]: any;
+}
+
+interface SheetData {
+  headers: string[];
+  rows: SheetRow[];
+}
+
+interface UpdateRowPayload {
+  sheetName: string;
+  rowIndex: number;
+  updates: Record<string, any>;
+}
 
 // --- Cache & Auth ---
 
-const readCache = new Map();
-let sheetsClientPromise;
+const readCache = new Map<string, { time: number; data: any }>();
+let sheetsClientPromise: Promise<sheets_v4.Sheets> | undefined;
 
-/**
- * Returns a singleton Google Sheets client with keep-alive enabled.
- */
-async function getSheetsClient() {
+async function getSheetsClient(): Promise<sheets_v4.Sheets> {
   if (!sheetsClientPromise) {
     sheetsClientPromise = (async () => {
       const { GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY } = process.env;
@@ -25,163 +44,62 @@ async function getSheetsClient() {
         key: GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
       });
+
       const httpAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
-      google.options({ auth, httpAgent });
+
+      google.options({ auth, httpAgent } as any);
+
       await auth.authorize();
-      return google.sheets({ version: 'v4', auth });
+
+      return google.sheets({ version: 'v4' });
     })();
   }
   return sheetsClientPromise;
 }
 
-/**
- * Retry helper for Google API calls. Retries on transient errors with
- * exponential backoff and jitter.
- */
-export async function withRetry(fn, tries = 4) {
-  let attempt = 0;
-  let lastErr;
-  while (attempt < tries) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastErr = err;
-      const status = err?.code || err?.response?.status || 0;
-      const transient = [429, 500, 502, 503, 504];
-      if (!transient.includes(status) || attempt === tries - 1) {
-        throw err;
-      }
-      const delay = Math.pow(2, attempt) * 500 + Math.random() * 1000;
-      await new Promise((r) => setTimeout(r, delay));
-      attempt++;
+// --- Helper Functions ---
+
+export async function withRetry<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
+    let attempt = 0;
+    let lastErr: any;
+    while (attempt < tries) {
+        try {
+            return await fn();
+        } catch (err: any) {
+            lastErr = err;
+            const status = err?.code || err?.response?.status || 0;
+            const transient = [429, 500, 502, 503, 504];
+            if (!transient.includes(status) || attempt === tries - 1) {
+                throw err;
+            }
+            const delay = Math.pow(2, attempt) * 500 + Math.random() * 1000;
+            await new Promise((r) => setTimeout(r, delay));
+            attempt++;
+        }
     }
-  }
-  throw lastErr;
+    throw lastErr;
 }
 
-export function chunk(arr, size) {
-  const out = [];
-  for (let i = 0; i < arr.length; i += size) {
-    out.push(arr.slice(i, i + size));
-  }
-  return out;
-}
-
-// --- Generic Sheet Interaction ---
-
-export async function getSheetData(sheetName, range = 'A:ZZ', spreadsheetId = process.env.SPREADSHEET_ID) {
-  const key = `sheetData:${sheetName}:${range}`;
-  const cached = readCache.get(key);
-  if (cached && Date.now() - cached.time < 10000) {
-    return cached.data;
-  }
-
-  const sheets = await getSheetsClient();
-  const res = await withRetry(() =>
-    sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${sheetName}!${range}`,
-    })
-  );
-  const rows = res.data.values || [];
-  if (rows.length === 0) return { headers: [], rows: [] };
-
-  const rawHeaders = rows[0];
-  const headers = rawHeaders.map((h) => (h || '').toString().trim());
-
-  const data = rows.slice(1).map((row, idx) => {
-    const obj = { _rowNumber: idx + 2 };
-    headers.forEach((h, i) => {
-      if (h) obj[h] = row[i] ?? '';
-    });
-    return obj;
-  });
-
-  const result = { headers, rows: data };
-  readCache.set(key, { time: Date.now(), data: result });
-  return result;
-}
-
-export async function findRowIndexById(sheetName, headersRow, idColumnName, idValue) {
-  if (!process.env.SPREADSHEET_ID) {
-    throw new Error('SPREADSHEET_ID is not set');
-  }
-  const normalizedId = String(idValue || '').trim();
-  const { headers, rows } = await getSheetData(sheetName, `A${headersRow}:ZZ`);
-  const idIdx = headers.indexOf(idColumnName);
-  if (idIdx === -1) return -1;
-  for (const row of rows) {
-    const cell = String(row[idColumnName] || '').trim();
-    if (cell === normalizedId) {
-      return row._rowNumber;
+export function chunk<T>(arr: T[], size: number): T[][] {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) {
+        out.push(arr.slice(i, i + size));
     }
-  }
-  return -1;
+    return out;
 }
 
-export async function updateRowByIndex({ sheetName, rowIndex, updates }) {
-  const spreadsheetId = process.env.SPREADSHEET_ID;
-  if (!spreadsheetId) {
-    throw new Error('SPREADSHEET_ID is not set');
-  }
-  const sheets = await getSheetsClient();
-  const { headers, rows } = await getSheetData(sheetName);
-  const headerMap = {};
-  headers.forEach((h, i) => (headerMap[h] = i));
-  const currentRow = rows.find((r) => r._rowNumber === rowIndex) || {};
-  const data = [];
-  Object.entries(updates || {}).forEach(([col, value]) => {
-    const idx = headerMap[col];
-    if (idx === undefined) return;
-    const colLetter = columnNumberToLetter(idx + 1);
-    const range = `${sheetName}!${colLetter}${rowIndex}:${colLetter}${rowIndex}`;
-    data.push({ range, values: [[value]] });
-    console.log('[updateRowByIndex]', {
-      sheetName,
-      rowIndex,
-      campoAtualizado: col,
-      valorAntigo: currentRow[col] ?? '',
-      valorNovo: value,
-      rangeUsado: range,
-    });
-  });
-  if (!data.length) return;
-  await withRetry(() =>
-    sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        valueInputOption: 'RAW',
-        data,
-      },
-    })
-  );
-}
-
-export async function _findRowNumberByClienteId(sheetName, clienteId) {
-    const { rows } = await getSheetData(sheetName);
-    const rowIndex = rows.findIndex(row => row.Cliente_ID === clienteId);
-    return rowIndex !== -1 ? rows[rowIndex]._rowNumber : -1;
-}
-
-
-// --- Data Transformation Helpers ---
-
-function normalizeText(str) {
+function normalizeText(str: string | null | undefined): string {
     return (str || '').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-function normalizeCnpj(cnpj) {
-    return (cnpj || '').toString().replace(/\D/g, '');
-}
-
-function normalizeUF(uf) {
+function normalizeUF(uf: string | null | undefined): string {
   if (!uf) return '';
-  const map = { AC:'AC',AL:'AL',AP:'AP',AM:'AM',BA:'BA',CE:'CE',DF:'DF',ES:'ES',GO:'GO',MA:'MA',MT:'MT',MS:'MS',MG:'MG',PA:'PA',PB:'PB',PR:'PR',PE:'PE',PI:'PI',RJ:'RJ',RN:'RN',RS:'RS',RO:'RO',RR:'RR',SC:'SC',SP:'SP',SE:'SE',TO:'TO',ACRE:'AC',ALAGOAS:'AL',AMAPA:'AP',AMAZONAS:'AM',BAHIA:'BA',CEARA:'CE','DISTRITO FEDERAL':'DF','ESPIRITO SANTO':'ES',GOIAS:'GO',MARANHAO:'MA','MATO GROSSO':'MT','MATO GROSSO DO SUL':'MS','MINAS GERAIS':'MG',PARA:'PA',PARAIBA:'PB',PARANA:'PR',PERNAMBUCO:'PE',PIAUI:'PI','RIO DE JANEIRO':'RJ','RIO GRANDE DO NORTE':'RN','RIO GRANDE DO SUL':'RS',RONDONIA:'RO',RORAIMA:'RR','SANTA CATARINA':'SC','SAO PAULO':'SP',SERGIPE:'SE',TOCANTINS:'TO' };
+  const map: Record<string, string> = { AC:'AC',AL:'AL',AP:'AP',AM:'AM',BA:'BA',CE:'CE',DF:'DF',ES:'ES',GO:'GO',MA:'MA',MT:'MT',MS:'MS',MG:'MG',PA:'PA',PB:'PB',PR:'PR',PE:'PE',PI:'PI',RJ:'RJ',RN:'RN',RS:'RS',RO:'RO',RR:'RR',SC:'SC',SP:'SP',SE:'SE',TO:'TO',ACRE:'AC',ALAGOAS:'AL',AMAPA:'AP',AMAZONAS:'AM',BAHIA:'BA',CEARA:'CE','DISTRITO FEDERAL':'DF','ESPIRITO SANTO':'ES',GOIAS:'GO',MARANHAO:'MA','MATO GROSSO':'MT','MATO GROSSO DO SUL':'MS','MINAS GERAIS':'MG',PARA:'PA',PARAIBA:'PB',PARANA:'PR',PERNAMBUCO:'PE',PIAUI:'PI','RIO DE JANEIRO':'RJ','RIO GRANDE DO NORTE':'RN','RIO GRANDE DO SUL':'RS',RONDONIA:'RO',RORAIMA:'RR','SANTA CATARINA':'SC','SAO PAULO':'SP',SERGIPE:'SE',TOCANTINS:'TO' };
   const cleaned = normalizeText(uf).toUpperCase();
   return map[cleaned] || '';
 }
 
-function normalizePhoneNumber(phone = '', ddi = '') {
+function normalizePhoneNumber(phone: string = '', ddi: string = ''): string {
     let digits = phone.replace(/\D/g, '');
     if (!digits) return '';
     const ddiDigits = ddi.replace(/\D/g, '');
@@ -195,7 +113,7 @@ function normalizePhoneNumber(phone = '', ddi = '') {
     return digits;
 }
 
-function distributeContactPhones(phonesString = '') {
+function distributeContactPhones(phonesString: string = ''): Record<string, string> {
     const phones = phonesString.split(';').map(p => p.trim()).filter(Boolean);
     return {
         Work: phones[0] || '',
@@ -205,11 +123,11 @@ function distributeContactPhones(phonesString = '') {
     };
 }
 
-function isValidEmail(email = '') {
+function isValidEmail(email: string = ''): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function columnNumberToLetter(columnNumber) {
+function columnNumberToLetter(columnNumber: number): string {
   let temp, letter = '';
   while (columnNumber > 0) {
     temp = (columnNumber - 1) % 26;
@@ -219,10 +137,44 @@ function columnNumberToLetter(columnNumber) {
   return letter;
 }
 
+// --- Generic Sheet Interaction ---
 
-// --- Row Builders for Each Sheet Layout ---
+export async function getSheetData(sheetName: string, range = 'A:ZZ', spreadsheetId: string = process.env.SPREADSHEET_ID!): Promise<SheetData> {
+    const key = `sheetData:${sheetName}:${range}`;
+    const cached = readCache.get(key);
+    if (cached && Date.now() - cached.time < 10000) {
+        return cached.data;
+    }
 
-function buildLeadsExactSpotterRow(payload) {
+    const sheets = await getSheetsClient();
+    const res = await withRetry(() =>
+        sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: `${sheetName}!${range}`,
+        })
+    );
+    const rows = res.data.values || [];
+    if (rows.length === 0) return { headers: [], rows: [] };
+
+    const rawHeaders = rows[0];
+    const headers = rawHeaders.map((h: any) => (h || '').toString().trim());
+
+    const data = rows.slice(1).map((row: any[], idx: number) => {
+        const obj: SheetRow = { _rowNumber: idx + 2 };
+        headers.forEach((h: string, i: number) => {
+            if (h) obj[h] = row[i] ?? '';
+        });
+        return obj;
+    });
+
+    const result = { headers, rows: data };
+    readCache.set(key, { time: Date.now(), data: result });
+    return result;
+}
+
+// --- Row Builders with Normalization ---
+
+function buildLeadsExactSpotterRow(payload: any): any[] {
     const { Empresa, Contato, Comercial } = payload;
     const columnOrder = [
         'Cliente_ID', 'Nome do Lead', 'Origem', 'Sub-Origem', 'Mercado', 'Produto', 'Site', 'País', 'Estado', 'Cidade',
@@ -231,10 +183,10 @@ function buildLeadsExactSpotterRow(payload) {
         'Tipo do Serv. Comunicação', 'ID do Serv. Comunicação', 'Área', 'Nome da Empresa', 'Etapa', 'Funil'
     ];
 
-    const row = columnOrder.map(col => {
+    return columnOrder.map(col => {
         switch(col) {
             case 'Cliente_ID': return payload.Cliente_ID;
-            case 'Nome do Lead': return Empresa.Nome_da_Empresa; // As per spec
+            case 'Nome do Lead': return Empresa.Nome_da_Empresa;
             case 'Origem': return Comercial.Origem;
             case 'Sub-Origem': return Comercial.Sub_Origem;
             case 'Mercado': return Comercial.Mercado;
@@ -251,7 +203,7 @@ function buildLeadsExactSpotterRow(payload) {
             case 'DDI': return Empresa.DDI_Empresa;
             case 'Telefones': return Empresa.Telefones_Empresa;
             case 'Observação': return Empresa.Observacao_Empresa;
-            case 'CPF/CNPJ': return normalizeCnpj(Empresa.CNPJ_Empresa);
+            case 'CPF/CNPJ': return canonicalNormalizeCnpj(Empresa.CNPJ_Empresa);
             case 'Nome Contato': return Contato.Nome_Contato;
             case 'E-mail Contato': return Contato.Email_Contato;
             case 'Cargo Contato': return Contato.Cargo_Contato;
@@ -266,10 +218,9 @@ function buildLeadsExactSpotterRow(payload) {
             default: return '';
         }
     });
-    return row;
 }
 
-function buildLayoutImportacaoRow(payload) {
+function buildLayoutImportacaoRow(payload: any): any[] {
     const { Empresa } = payload;
     const columnOrder = [
         'Cliente_ID', 'Nome da Empresa', 'Site Empresa', 'País Empresa', 'Estado Empresa', 'Cidade Empresa',
@@ -290,7 +241,7 @@ function buildLayoutImportacaoRow(payload) {
             case 'Bairro Empresa': return Empresa.Bairro_Empresa;
             case 'Complemento Empresa': return Empresa.Complemento_Empresa;
             case 'CEP Empresa': return Empresa.CEP_Empresa;
-            case 'CNPJ Empresa': return normalizeCnpj(Empresa.CNPJ_Empresa);
+            case 'CNPJ Empresa': return canonicalNormalizeCnpj(Empresa.CNPJ_Empresa);
             case 'DDI Empresa': return Empresa.DDI_Empresa;
             case 'Telefones Empresa': return Empresa.Telefones_Empresa;
             case 'Observação Empresa': return Empresa.Observacao_Empresa;
@@ -299,7 +250,7 @@ function buildLayoutImportacaoRow(payload) {
     });
 }
 
-function buildSheet1Row(payload) {
+function buildSheet1Row(payload: any): any[] {
     const { Empresa, Contato, Comercial } = payload;
     const contactPhones = distributeContactPhones(Contato.Telefones_Contato);
 
@@ -307,7 +258,7 @@ function buildSheet1Row(payload) {
         'Negócio - Título', 'Negócio - Valor', 'Negócio - Organização', 'Negócio - Pessoa de contato', 'Negócio - Data de fechamento esperada', 'Negócio - Data da próxima atividade', 'Negócio - Proprietário', 'Negócio - Etapa', 'Negócio - Fonte do Lead', 'Negócio - Qualificação Lead (Closer)', 'Negócio - Qualificação do Lead (SDR)', 'Negócio - Motivo da perda', 'Negócio - Data de criação do negócio', 'Negócio - SDR Responsável', 'Negócio - Ganho em', 'Negócio - Data de perda', 'Negócio - VLR Mensalidade', 'Negócio - VLR Implantação', 'Negócio - Ranking', 'Negócio - Negócio fechado em', 'Negócio - [Closer] Lead é o Decisor?', 'Negócio - Atividades concluídas', 'Negócio - Atividades para fazer', 'Negócio - Criador', 'Negócio - Data atualizada', 'Negócio - Data da última atividade', 'Negócio - Etiqueta', 'Negócio - Funil', 'Negócio - Moeda de VLR Mensalidade', 'Negócio - Moeda de VLR Implantação', 'Negócio - Canal de origem', 'Negócio - MRR', 'Negócio - Valor de produtos', 'Negócio - Valor ponderado', 'Negócio - Moeda', 'Negócio - ID', 'Negócio - ID de origem', 'Negócio - ID do canal de origem', 'Negócio - Nome do produto', 'Negócio - Número de mensagens de e-mail', 'Negócio - Origem', 'Negócio - Probabilidade', 'Negócio - ACV', 'Negócio - ARR', 'Negócio - Quantidade de produtos', 'Negócio - Telefone do Closer', 'Negócio - Tempo de Implantação', 'Negócio - Total de atividades', 'Negócio - UTM CAMPAIGN', 'Negócio - UTM CONTENT', 'Negócio - UTM MEDIUM', 'Negócio - UTM_SOURCE', 'Negócio - UTM_TERM', 'Negócio - Visível para', 'Negócio - Última alteração de etapa', 'Negócio - Último e-mail enviado', 'Negócio - Último e-mail recebido', 'Pessoa - Cargo', 'Pessoa - Email - Work', 'Pessoa - Email - Home', 'Pessoa - Email - Other', 'Pessoa - End. Linkedin', 'Pessoa - Phone - Work', 'Pessoa - Phone - Home', 'Pessoa - Phone - Mobile', 'Pessoa - Phone - Other', 'Pessoa - Telefone', 'Pessoa - Celular', 'Organização - Nome', 'Organização - Segmento', 'Organização - Tamanho da empresa', 'Negócio - Status', 'ddd', 'uf', 'cidade_estimada', 'fonte_localizacao', 'Status_Kanban', 'Cor_Card', 'Data_Ultima_Movimentacao', 'Impresso_Lista', 'Telefone Normalizado', 'Cliente_ID'
     ];
 
-    const rowData = {
+    const rowData: Record<string, any> = {
         'Cliente_ID': payload.Cliente_ID,
         'Negócio - Título': Empresa.Nome_da_Empresa,
         'Negócio - Organização': Empresa.Nome_da_Empresa,
@@ -337,42 +288,49 @@ function buildSheet1Row(payload) {
     return columnOrder.map(col => rowData[col] || '');
 }
 
-
 // --- Main Public Functions ---
 
-export async function getNextClienteId() {
-  readCache.delete(`sheetData:Leads Exact Spotter`);
-  const { rows } = await getSheetData('Leads Exact Spotter');
-  let maxId = 0;
-  for (const row of rows) {
-    const clienteId = row['Cliente_ID'];
-    if (clienteId && typeof clienteId === 'string') {
-      // Handle both "CLI-" and "CLT-" prefixes
-      if (clienteId.startsWith('CLI-') || clienteId.startsWith('CLT-')) {
-        const num = parseInt(clienteId.substring(4), 10);
-        if (!isNaN(num) && num > maxId) {
-          maxId = num;
+const SHEETS_FOR_CLIENTE_ID = ['Leads Exact Spotter', 'layout_importacao_empresas', 'Sheet1', 'PERDECOMP'];
+
+async function fetchAllClienteIds(): Promise<string[]> {
+    const allIds = new Set<string>();
+    for (const sheetName of SHEETS_FOR_CLIENTE_ID) {
+        try {
+            readCache.delete(`sheetData:${sheetName}:A:A`);
+            const { rows } = await getSheetData(sheetName, 'A:A');
+            for (const row of rows) {
+                const clienteId = row['Cliente_ID'];
+                if (clienteId) {
+                    allIds.add(clienteId);
+                }
+            }
+        } catch (err: any) {
+            if (err.message.includes('Unable to parse range')) {
+                console.warn(`Sheet "${sheetName}" not found or empty while fetching Cliente_IDs. Skipping.`);
+            } else {
+                console.error(`Error fetching Cliente_IDs from sheet "${sheetName}":`, err);
+            }
         }
-      }
     }
-  }
-  // Generate new IDs with the correct "CLT-" prefix and no zero-padding
-  return `CLT-${maxId + 1}`;
+    return Array.from(allIds);
 }
 
-const SHEETS_TO_SEARCH = ['Leads Exact Spotter', 'layout_importacao_empresas', 'Sheet1'];
+export async function getNextClienteId(): Promise<string> {
+  return canonicalNextClienteId(fetchAllClienteIds);
+}
 
-export async function findByCnpj(cnpj) {
-  const normalizedCnpjToFind = normalizeCnpj(cnpj);
-  if (!normalizedCnpjToFind) return null;
+const SHEETS_TO_SEARCH = ['Leads Exact Spotter', 'layout_importacao_empresas', 'Sheet1', 'PERDECOMP'];
+
+export async function findByCnpj(cnpj: string): Promise<(SheetRow & { _sheetName: string }) | null> {
+  const normalizedCnpjToFind = canonicalNormalizeCnpj(cnpj);
+  if (!isValidCnpjPattern(normalizedCnpjToFind)) return null;
 
   for (const sheetName of SHEETS_TO_SEARCH) {
-    // Invalidate cache to ensure fresh data for checks
     readCache.delete(`sheetData:${sheetName}`);
     const { rows } = await getSheetData(sheetName);
     for (const row of rows) {
       const rowCnpj = row['CNPJ Empresa'] || row['CPF/CNPJ'];
-      if (normalizeCnpj(rowCnpj) === normalizedCnpjToFind) {
+      if (canonicalNormalizeCnpj(rowCnpj) === normalizedCnpjToFind) {
         return { ...row, _sheetName: sheetName };
       }
     }
@@ -380,7 +338,7 @@ export async function findByCnpj(cnpj) {
   return null;
 }
 
-export async function findByName(name) {
+export async function findByName(name: string): Promise<SheetRow | null> {
   const normalizedNameToFind = normalizeText(name);
   if (!normalizedNameToFind) return null;
 
@@ -390,9 +348,8 @@ export async function findByName(name) {
     for (const row of rows) {
       const rowName = row['Nome da Empresa'] || row['Nome do Lead'];
       if (normalizeText(rowName) === normalizedNameToFind) {
-        const rowCnpj = normalizeCnpj(row['CNPJ Empresa'] || row['CPF/CNPJ']);
+        const rowCnpj = canonicalNormalizeCnpj(row['CNPJ Empresa'] || row['CPF/CNPJ']);
         if (!rowCnpj) {
-          // Return the full row data for pre-filling the form
           return row;
         }
       }
@@ -401,18 +358,17 @@ export async function findByName(name) {
   return null;
 }
 
-export async function appendToSheets(payload) {
+export async function appendToSheets(payload: any): Promise<void> {
     const sheets = await getSheetsClient();
     const spreadsheetId = process.env.SPREADSHEET_ID;
 
-    // Use an array to guarantee the order of operations as requested.
     const sheetProcessOrder = [
         { name: 'Leads Exact Spotter', builder: buildLeadsExactSpotterRow },
         { name: 'layout_importacao_empresas', builder: buildLayoutImportacaoRow },
         { name: 'Sheet1', builder: buildSheet1Row },
     ];
 
-    const errors = [];
+    const errors: string[] = [];
     for (const sheet of sheetProcessOrder) {
         try {
             const rowData = sheet.builder(payload);
@@ -423,7 +379,7 @@ export async function appendToSheets(payload) {
                 valueInputOption: 'USER_ENTERED',
                 requestBody: { values: [rowData] },
             });
-        } catch (err) {
+        } catch (err: any) {
             console.error(`Falha ao escrever na aba "${sheet.name}":`, err.message);
             errors.push(`Falha ao escrever na aba "${sheet.name}"`);
         }
@@ -437,11 +393,62 @@ export async function appendToSheets(payload) {
 
 // --- Legacy Functions for Backward Compatibility ---
 
-// Re-export getSheetsClient for pages that use it directly
 export { getSheetsClient };
 
-// Generic append for simple data structures (used by older APIs)
-export async function appendSheetData(sheetName, rowsToAppend) {
+export async function findRowIndexById(sheetName: string, headersRow: number, idColumnName: string, idValue: any): Promise<number> {
+    if (!process.env.SPREADSHEET_ID) {
+        throw new Error('SPREADSHEET_ID is not set');
+    }
+    const normalizedId = String(idValue || '').trim();
+    const { headers, rows } = await getSheetData(sheetName, `A${headersRow}:ZZ`);
+    const idIdx = headers.indexOf(idColumnName);
+    if (idIdx === -1) return -1;
+    for (const row of rows) {
+        const cell = String(row[idColumnName] || '').trim();
+        if (cell === normalizedId) {
+            return row._rowNumber;
+        }
+    }
+    return -1;
+}
+
+export async function updateRowByIndex({ sheetName, rowIndex, updates }: UpdateRowPayload): Promise<void> {
+    const spreadsheetId = process.env.SPREADSHEET_ID;
+    if (!spreadsheetId) {
+        throw new Error('SPREADSHEET_ID is not set');
+    }
+    const sheets = await getSheetsClient();
+    const { headers, rows } = await getSheetData(sheetName);
+    const headerMap: Record<string, number> = {};
+    headers.forEach((h, i) => (headerMap[h] = i));
+    const currentRow = rows.find((r) => r._rowNumber === rowIndex) || {};
+    const data: any[] = [];
+    Object.entries(updates || {}).forEach(([col, value]) => {
+        const idx = headerMap[col];
+        if (idx === undefined) return;
+        const colLetter = columnNumberToLetter(idx + 1);
+        const range = `${sheetName}!${colLetter}${rowIndex}:${colLetter}${rowIndex}`;
+        data.push({ range, values: [[value]] });
+    });
+    if (!data.length) return;
+    await withRetry(() =>
+        sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+                valueInputOption: 'RAW',
+                data,
+            },
+        })
+    );
+}
+
+export async function _findRowNumberByClienteId(sheetName: string, clienteId: string): Promise<number> {
+    const { rows } = await getSheetData(sheetName);
+    const rowIndex = rows.findIndex(row => row.Cliente_ID === clienteId);
+    return rowIndex !== -1 ? rows[rowIndex]._rowNumber : -1;
+}
+
+export async function appendSheetData(sheetName: string, rowsToAppend: any[][]): Promise<void> {
   if (!sheetName || !rowsToAppend || rowsToAppend.length === 0) {
     throw new Error('sheetName and rowsToAppend are required.');
   }
@@ -459,10 +466,6 @@ export async function appendSheetData(sheetName, rowsToAppend) {
     );
   }
 }
-
-// The following functions are simplified reimplementations of what was there before
-// to ensure other pages don't break. They might not be perfectly efficient
-// but will prevent build failures.
 
 async function _getRawSheet(sheetName = 'Sheet1') {
     const sheets = await getSheetsClient();
@@ -493,13 +496,13 @@ export async function getHistorySheetCached() {
     return getSheetCached('Historico_Interacoes');
 }
 
-export async function updateRow(rowNumber, data) {
+export async function updateRow(rowNumber: number, data: Record<string, any>): Promise<void> {
     const sheets = await getSheetsClient();
     const { headers } = await getSheetData('Sheet1');
-    const headerMap = {};
+    const headerMap: Record<string, number> = {};
     headers.forEach((h, i) => (headerMap[h] = i));
 
-    const updates = [];
+    const updates: any[] = [];
     for (const key in data) {
         const colIndex = headerMap[key];
         if (colIndex !== undefined) {
@@ -521,10 +524,7 @@ export async function updateRow(rowNumber, data) {
     }
 }
 
-export async function appendRow(data) {
-    // Define the canonical column order to ensure data is written to the correct column
-    // regardless of the physical order in the spreadsheet. This is the same order
-    // used by the `buildSheet1Row` function.
+export async function appendRow(data: Record<string, any>): Promise<void> {
     const columnOrder = [
         'Cliente_ID', 'Negócio - Título', 'Negócio - Origem / Canal de origem', 'Negócio - Fonte do Lead',
         'Organização - Segmento', 'Negócio - Nome do produto', 'País', 'uf', 'cidade_estimada',
@@ -532,22 +532,21 @@ export async function appendRow(data) {
         'Pessoa - Email - Other', 'Pessoa - Cargo', 'Pessoa - Phone - Work', 'Pessoa - Phone - Home',
         'Pessoa - Phone - Mobile', 'Pessoa - Phone - Other', 'Organização - Nome', 'Funil'
     ];
-    // Build the row array based on the canonical order, not the physical sheet order.
     const row = columnOrder.map(header => data[header] || '');
     return appendSheetData('Sheet1', [row]);
 }
 
-export async function appendHistoryRow(data) {
+export async function appendHistoryRow(data: Record<string, any>): Promise<void> {
     const { headers } = await getSheetData('Historico_Interacoes');
     const row = headers.map(header => data[header] || '');
     return appendSheetData('Historico_Interacoes', [row]);
 }
 
-export async function updateInSheets(clienteId, payload) {
+export async function updateInSheets(clienteId: string, payload: any): Promise<void> {
     const sheets = await getSheetsClient();
     const spreadsheetId = process.env.SPREADSHEET_ID;
 
-    const sheetBuilders = {
+    const sheetBuilders: Record<string, (p: any) => any[]> = {
         'Leads Exact Spotter': buildLeadsExactSpotterRow,
         'layout_importacao_empresas': buildLayoutImportacaoRow,
         'Sheet1': buildSheet1Row,
