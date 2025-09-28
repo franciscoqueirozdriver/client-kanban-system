@@ -8,7 +8,7 @@ import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { padCNPJ14, isValidCNPJ, normalizeDigits, isEmptyCNPJLike, isCNPJ14, normalizeCNPJ } from '@/utils/cnpj';
+import { ensureValidCnpj, formatCnpj, normalizeCnpj, onlyDigits, isCnpj, isEmptyCNPJLike } from '@/utils/cnpj';
 
 // --- Helper Types ---
 interface Company {
@@ -172,15 +172,18 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   };
 
   const updateResult = (cnpj: string, data: Partial<ComparisonResult>) => {
-    const c14 = padCNPJ14(cnpj);
-    setResults(prev => prev.map(r => padCNPJ14(r.company.CNPJ_Empresa) === c14 ? { ...r, ...data } : r));
+    const c14 = normalizeCnpj(cnpj);
+    if (!c14) return;
+    setResults(prev => prev.map(r => (normalizeCnpj(r.company.CNPJ_Empresa) === c14 ? { ...r, ...data } : r)));
   };
 
   const runConsultation = async (selection: CompanySelection) => {
     const { company, forceRefresh } = selection;
-    const cnpj = padCNPJ14(company.CNPJ_Empresa);
-    if (!isValidCNPJ(cnpj)) {
-      updateResult(cnpj, { status: 'error', error: { message: 'CNPJ inválido. Verifique e tente novamente.' } });
+    let cnpj: string;
+    try {
+      cnpj = ensureValidCnpj(company.CNPJ_Empresa);
+    } catch (error: any) {
+      updateResult(company.CNPJ_Empresa, { status: 'error', error: { message: error?.message || 'CNPJ inválido. Verifique e tente novamente.' } });
       return;
     }
     updateResult(cnpj, { status: 'loading' });
@@ -296,7 +299,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     if (allSelections.length === 0) return;
 
     setGlobalLoading(true);
-    setResults(allSelections.map(s => ({ company: { ...s.company, CNPJ_Empresa: padCNPJ14(s.company.CNPJ_Empresa) }, data: null, status: 'idle', debug: null })));
+    setResults(allSelections.map(s => ({ company: { ...s.company, CNPJ_Empresa: normalizeCnpj(s.company.CNPJ_Empresa) }, data: null, status: 'idle', debug: null })));
 
     for (const sel of allSelections) {
       try {
@@ -336,41 +339,34 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     .then(async (r) => {
       const data = await r.json();
       if (!r.ok) throw new Error(data?.error || 'Falha na busca');
-      const selCnpjs = new Set(competitors.filter(Boolean).map(c => padCNPJ14(c!.company.CNPJ_Empresa)));
-      const clientCnpj = padCNPJ14(client.company.CNPJ_Empresa);
+      const selCnpjs = new Set(
+        competitors
+          .filter(Boolean)
+          .map(c => normalizeCnpj(c!.company.CNPJ_Empresa))
+          .filter(Boolean)
+      );
+      const clientCnpj = normalizeCnpj(client.company.CNPJ_Empresa);
 
-      const normalizedItems = (data.items || []).map((raw: any) => {
-        const nome = String(raw?.nome ?? '').trim();
-        return {
-          nome,
-          cnpj: normalizeCNPJ(raw?.cnpj),
-        };
-      });
+      const toItem = (raw: any): { nome: string; cnpj: string } => {
+        const nome = String(raw?.nome ?? raw?.name ?? '').trim();
+        const cnpj = normalizeCnpj(raw?.cnpj ?? raw?.documento ?? raw?.cnpj_numero ?? '');
+        return { nome, cnpj };
+      };
 
-      const filtered = normalizedItems.filter(it => {
-        const c = it.cnpj;
-        const isClient = Boolean(c && clientCnpj && c === clientCnpj);
-        const already = Boolean(c && selCnpjs.has(c));
-        const nameDup = Boolean(
-          it.nome && competitors.filter(Boolean).some(
-            cmp => cmp!.company.Nome_da_Empresa.trim().toLowerCase() === it.nome.toLowerCase()
-          )
-        );
-        return !isClient && !already && !nameDup;
-      });
+      const candidates = (data.items || []).map(toItem);
 
-      const deduped: Array<{ nome: string; cnpj: string }> = [];
-      const seen = new Set<string>();
-
-      for (const item of filtered) {
-        const key = item.cnpj || item.nome.toLowerCase();
-        if (!key) continue;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        deduped.push(item);
+      const dedup = new Map<string, { nome: string; cnpj: string }>();
+      for (const item of candidates) {
+        if (!item.cnpj || !isCnpj(item.cnpj)) continue;
+        if (!item.nome) continue;
+        if (clientCnpj && item.cnpj === clientCnpj) continue;
+        if (selCnpjs.has(item.cnpj)) continue;
+        if (!dedup.has(item.cnpj)) {
+          dedup.set(item.cnpj, { nome: item.nome, cnpj: item.cnpj });
+        }
       }
 
-      setCompFetch({ loading: false, error: null, items: deduped });
+      setCompFetch({ loading: false, error: null, items: Array.from(dedup.values()) });
     })
     .catch(err => setCompFetch({ loading: false, error: String(err?.message || err), items: [] }));
   }
@@ -380,29 +376,37 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   }
 
   function confirmCompetitors(selected: Array<{ nome:string; cnpj:string }>) {
+    let validated: Array<{ nome: string; cnpj: string }>;
+    try {
+      validated = selected.map(s => ({ nome: s.nome, cnpj: ensureValidCnpj(s.cnpj) }));
+    } catch (error: any) {
+      alert(error?.message || 'CNPJ inválido');
+      return;
+    }
+
     const next = [...competitors];
     let idx = 0;
-    for (let i = 0; i < next.length && idx < selected.length; i++) {
+    for (let i = 0; i < next.length && idx < validated.length; i++) {
       if (!next[i]) {
-        const s = selected[idx++];
+        const s = validated[idx++];
         next[i] = {
           company: {
-            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
             Nome_da_Empresa: s.nome,
-            CNPJ_Empresa: padCNPJ14(s.cnpj),
+            CNPJ_Empresa: s.cnpj,
           },
           lastConsultation: null,
           forceRefresh: false,
         };
       }
     }
-    while (next.length < MAX_COMPETITORS && idx < selected.length) {
-      const s = selected[idx++];
+    while (next.length < MAX_COMPETITORS && idx < validated.length) {
+      const s = validated[idx++];
       next.push({
         company: {
-          Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g,'').slice(0,20)}`,
+          Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
           Nome_da_Empresa: s.nome,
-          CNPJ_Empresa: padCNPJ14(s.cnpj),
+          CNPJ_Empresa: s.cnpj,
         },
         lastConsultation: null,
         forceRefresh: false,
@@ -414,7 +418,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
 
   const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
     try {
-      const c = padCNPJ14(cnpj);
+      const c = ensureValidCnpj(cnpj);
       const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
       if (res.ok) {
         const { lastConsultation } = await res.json();
@@ -433,9 +437,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       const cur = String(out[k] ?? '').trim();
       const val = String(sug[k] ?? '').trim();
       if (k === 'CNPJ_Empresa') {
-        const curDigits = normalizeDigits(cur);
-        const valDigits = normalizeDigits(val);
-        if (isEmptyCNPJLike(curDigits) && isCNPJ14(valDigits)) {
+        const curDigits = onlyDigits(cur);
+        const valDigits = normalizeCnpj(val);
+        if (isEmptyCNPJLike(curDigits) && isCnpj(valDigits)) {
           out[k] = valDigits;
         }
       } else if (!cur && val) {
@@ -476,7 +480,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     let cnpj = '';
     if (source === 'selected' && selectedCompany) {
       nome = selectedCompany.Nome_da_Empresa || '';
-      cnpj = padCNPJ14(selectedCompany.CNPJ_Empresa);
+      cnpj = normalizeCnpj(selectedCompany.CNPJ_Empresa);
     } else if (source === 'query' && rawQuery) {
       nome = rawQuery.trim();
     }
@@ -507,9 +511,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   }
 
   const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
-    const cnpj = padCNPJ14(company.CNPJ_Empresa);
+    const cnpj = normalizeCnpj(company.CNPJ_Empresa);
     const normalized = { ...company, CNPJ_Empresa: cnpj };
-    const lastConsultation = await checkLastConsultation(cnpj);
+    const lastConsultation = isCnpj(cnpj) ? await checkLastConsultation(cnpj) : null;
     const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
     if (type === 'client') {
       setClient(selection);
@@ -734,7 +738,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                     <h3 className="text-lg font-semibold text-foreground" title={company.Nome_da_Empresa}>
                       {company.Nome_da_Empresa}
                     </h3>
-                    <p className="text-xs text-muted-foreground">{padCNPJ14(company.CNPJ_Empresa)}</p>
+                    <p className="text-xs text-muted-foreground">{formatCnpj(company.CNPJ_Empresa)}</p>
                     {ultimaConsulta && (
                       <p className="mt-1 text-xs text-muted-foreground">
                         Última consulta: {new Date(ultimaConsulta).toLocaleDateString()}

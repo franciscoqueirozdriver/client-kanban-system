@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { formatCNPJ, padCNPJ14 } from '@/utils/cnpj';
+import { ensureValidCnpj, formatCnpj, normalizeCnpj } from '@/utils/cnpj';
 
 export type CompetitorItem = { nome: string; cnpj: string };
 
@@ -14,16 +14,7 @@ interface Props {
   onConfirm: (selected: CompetitorItem[]) => void;
 }
 
-
-const sanitizeCnpj = (value: string) => padCNPJ14(value);
-
-const keyForItem = (item: CompetitorItem, fallbackIndex?: number) => {
-  const normalized = padCNPJ14(item?.cnpj);
-  if (normalized) return normalized;
-  const nameKey = (item?.nome || '').trim().toLowerCase();
-  if (nameKey) return nameKey;
-  return fallbackIndex !== undefined ? `idx-${fallbackIndex}` : 'idx-unknown';
-};
+const sanitizeCnpj = (value: string) => normalizeCnpj(value);
 
 export default function CompetitorSearchDialog({
   isOpen,
@@ -45,11 +36,16 @@ export default function CompetitorSearchDialog({
 
   useEffect(() => {
     if (!isOpen) return;
-    const allowed = new Set(fetchState.items.map((item, index) => keyForItem(item, index)));
+    const allowed = new Set(
+      fetchState.items
+        .map(item => sanitizeCnpj(item.cnpj))
+        .filter((key): key is string => Boolean(key))
+    );
     setSelected(prev => {
       let mutated = false;
       const next: Record<string, CompetitorItem> = {};
       Object.entries(prev).forEach(([key, value]) => {
+        if (!key) return;
         if (allowed.has(key)) {
           next[key] = value;
         } else {
@@ -68,9 +64,10 @@ export default function CompetitorSearchDialog({
     return () => window.removeEventListener('keydown', handleKey);
   }, [isOpen, onClose]);
 
-  const toggle = (item: CompetitorItem, index: number) => {
+  const toggle = (item: CompetitorItem) => {
     setSelected(prev => {
-      const key = keyForItem(item, index);
+      const key = sanitizeCnpj(item.cnpj);
+      if (!key) return prev;
       if (prev[key]) {
         const { [key]: _removed, ...rest } = prev;
         return rest;
@@ -83,28 +80,28 @@ export default function CompetitorSearchDialog({
         ...prev,
         [key]: {
           nome: item.nome,
-          cnpj: sanitizeCnpj(item.cnpj),
+          cnpj: key,
         },
       };
     });
   };
 
   const handleConfirm = () => {
-    const chosen = fetchState.items.reduce<CompetitorItem[]>((acc, item, index) => {
-      const key = keyForItem(item, index);
-      const stored = selected[key];
-      if (stored) {
-        acc.push(stored);
+    try {
+      const chosen = Object.values(selected).map(it => ({
+        nome: it.nome,
+        cnpj: ensureValidCnpj(it.cnpj),
+      }));
+
+      if (chosen.length === 0) {
+        return;
       }
-      return acc;
-    }, []);
 
-    if (chosen.length === 0) {
-      return;
+      onConfirm(chosen);
+      setSelected({});
+    } catch (error: any) {
+      alert(error?.message || 'CNPJ inválido');
     }
-
-    onConfirm(chosen);
-    setSelected({});
   };
 
   if (!isOpen) return null;
@@ -137,8 +134,9 @@ export default function CompetitorSearchDialog({
 
         {fetchState.items.length > 0 && (
           <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-[65vh] overflow-y-auto">
-            {fetchState.items.map((it, idx) => {
-              const key = keyForItem(it, idx);
+            {fetchState.items.map(it => {
+              const key = sanitizeCnpj(it.cnpj);
+              if (!key) return null;
               const isChecked = Boolean(selected[key]);
               const disabled = !isChecked && selectedCount >= limit;
               return (
@@ -146,13 +144,13 @@ export default function CompetitorSearchDialog({
                   <input
                     type="checkbox"
                     checked={isChecked}
-                    onChange={() => toggle(it, idx)}
+                    onChange={() => toggle(it)}
                     disabled={disabled}
                     className="mr-2 h-4 w-4 text-violet-600 disabled:opacity-50"
                   />
                   <div className="flex flex-col">
                     <span className="font-semibold">{it.nome}</span>
-                    <span className="text-xs font-mono text-gray-500">{it.cnpj ? formatCNPJ(it.cnpj) : '(sem CNPJ)'}</span>
+                    <span className="text-xs font-mono text-gray-500">{formatCnpj(it.cnpj)}</span>
                   </div>
                 </li>
               );
