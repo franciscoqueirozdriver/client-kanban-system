@@ -8,11 +8,11 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const nome = (body?.nome || '').trim();
     const max  = body?.max ?? 20;
-    if (!nome) return NextResponse.json({ error: 'nome obrigatório' }, { status: 400 });
+    if (!nome) return NextResponse.json({ items: [] }, { status: 200 });
 
     const { items, debug } = await findCompetitors({ nome, max });
-    return NextResponse.json({ items, debug }, { status: 200 });
+    return NextResponse.json({ items: Array.isArray(items) ? items : [], debug }, { status: 200 });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Erro ao buscar concorrentes' }, { status: 400 });
+    return NextResponse.json({ items: [], error: e?.message || 'Erro ao buscar concorrentes' }, { status: 200 });
   }
 }

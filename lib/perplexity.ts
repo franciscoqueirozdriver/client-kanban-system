@@ -1,4 +1,5 @@
 // lib/perplexity.ts
+import { isCnpj, onlyDigits } from '@/utils/cnpj';
 export type CompanySuggestion = {
   Nome_da_Empresa?: string;
   Site_Empresa?: string;
@@ -177,14 +178,12 @@ export async function findCompetitors(input: { nome: string; max?: number }): Pr
 Liste os ${max} principais concorrentes da empresa "${nome}" no Brasil.
 Retorne ESTRITAMENTE um array JSON de objetos no formato:
 [
-  {"nome": "<Nome da empresa>", "cnpj": "<apenas números, 14 dígitos; se desconhecido, string vazia>"}
+  {"nome": "<Nome da empresa>", "cnpj": "<apenas números com 14 dígitos; se não encontrado ou inválido, use \"\">"}
 ]
 
-Regras importantes:
-- Para cada concorrente, faça o seu melhor para encontrar o CNPJ oficial. A qualidade do CNPJ é crucial.
-- O campo "cnpj" deve conter somente dígitos (0-9), com 14 dígitos. Se o CNPJ oficial tiver menos de 14, complete com zeros à esquerda.
-- Se, após uma busca exaustiva, o CNPJ de um concorrente não for encontrado, retorne "cnpj": "" (uma string vazia) para esse concorrente. Não invente números.
-- Não inclua comentários, Markdown ou texto fora do JSON.
+Regras:
+- NÃO invente CNPJ. Se não encontrar, devolva "".
+- NÃO inclua nada além do JSON.
 `.trim();
 
   const resp = await fetch(endpoint, {
@@ -216,25 +215,29 @@ Regras importantes:
     try { parsed = JSON.parse(js); } catch { parsed = []; }
   }
 
-  const digits = (s?: string) => (s || '').replace(/\D/g, '');
-  const pad14  = (d: string) => (d.length === 0 ? '' : d.length <= 14 ? d.padStart(14, '0') : '');
+  const rawList = Array.isArray(parsed) ? parsed : [];
+  const seen = new Set<string>();
+  const items: Array<{ nome: string; cnpj: string }> = [];
 
-  const items = (Array.isArray(parsed) ? parsed : []).map((it: any) => {
-    const nome = String(it?.nome || '').trim();
-    const cnpj = pad14(digits(String(it?.cnpj || '')));
-    return { nome, cnpj };
-  })
-  // limpar vazios de nome e dedup por CNPJ/nome
-  .filter(x => x.nome)
-  .filter((x, idx, arr) => {
-    const key = (x.cnpj || '') + '|' + x.nome.toLowerCase();
-    return idx === arr.findIndex(y => ((y.cnpj || '') + '|' + y.nome.toLowerCase()) === key);
-  })
-  .slice(0, max);
+  for (const entry of rawList) {
+    const nome = String(entry?.nome ?? '').trim();
+    if (!nome) continue;
+
+    let cnpj = onlyDigits(String(entry?.cnpj ?? ''));
+    if (cnpj && !isCnpj(cnpj)) {
+      cnpj = '';
+    }
+
+    const key = cnpj || nome.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({ nome, cnpj });
+    if (items.length >= max) break;
+  }
 
   return {
     items,
-    debug: { promptPreview: userPrompt.slice(0, 800), rawContent: content }
+    debug: { promptPreview: userPrompt.slice(0, 800), rawContent: content, model, temperature }
   };
 }
 

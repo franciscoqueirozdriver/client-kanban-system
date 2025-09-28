@@ -1,132 +1,327 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { padCNPJ14 } from '@/utils/cnpj';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FaSpinner } from 'react-icons/fa';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { formatCnpj, normalizeCnpj } from '@/utils/cnpj';
 
 export type CompetitorItem = { nome: string; cnpj: string };
+
+type Suggestion = CompetitorItem & { key: string };
+
+type FetchState = {
+  loading: boolean;
+  error: string | null;
+  items: CompetitorItem[];
+};
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   clientName: string;
   limitRemaining: number;
-  fetchState: { loading: boolean; error?: string | null; items: CompetitorItem[] };
+  blockedCnpjs: string[];
+  fetchState: FetchState;
+  onSearch: (term: string) => Promise<CompetitorItem[]>;
   onConfirm: (selected: CompetitorItem[]) => void;
 }
+
+const digits = (value: string) => (value || '').replace(/\D+/g, '');
 
 export default function CompetitorSearchDialog({
   isOpen,
   onClose,
   clientName,
   limitRemaining,
+  blockedCnpjs,
   fetchState,
+  onSearch,
   onConfirm,
 }: Props) {
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Record<string, Suggestion>>({});
+  const [baseItems, setBaseItems] = useState<Suggestion[]>([]);
+  const [searchItems, setSearchItems] = useState<Suggestion[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const blockedSet = useMemo(() => {
+    const set = new Set<string>();
+    blockedCnpjs
+      .map(value => normalizeCnpj(value))
+      .filter((value): value is string => Boolean(value))
+      .forEach(value => set.add(value));
+    return set;
+  }, [blockedCnpjs]);
+
+  const mapToSuggestions = useCallback(
+    (list: CompetitorItem[]) => {
+      const suggestions: Suggestion[] = [];
+      const seenCnpjs = new Set<string>();
+      const seenNames = new Set<string>();
+
+      list.forEach((item, index) => {
+        const nome = String(item?.nome ?? '').trim();
+        if (!nome) return;
+
+        const cnpj = digits(String(item?.cnpj ?? ''));
+        if (cnpj && blockedSet.has(cnpj)) return;
+
+        if (cnpj) {
+          if (seenCnpjs.has(cnpj)) return;
+          seenCnpjs.add(cnpj);
+          suggestions.push({ key: cnpj, nome, cnpj });
+          return;
+        }
+
+        const lower = nome.toLowerCase();
+        if (seenNames.has(lower)) return;
+        seenNames.add(lower);
+        suggestions.push({ key: `name:${lower || index}`, nome, cnpj: '' });
+      });
+
+      return suggestions;
+    },
+    [blockedSet],
+  );
 
   useEffect(() => {
-    if (isOpen) {
-      setSelected(new Set());
+    if (!isOpen) return;
+    const mapped = mapToSuggestions(fetchState.items || []);
+    setBaseItems(mapped);
+  }, [fetchState.items, isOpen, mapToSuggestions]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelected({});
+      setSearchTerm('');
+      setSearchItems([]);
+      setSearchLoading(false);
+      setSearchError(null);
+      return;
     }
-  }, [isOpen, fetchState.items]);
+  }, [isOpen]);
 
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [isOpen, onClose]);
+    if (!isOpen) return;
+    const trimmed = searchTerm.trim();
+    if (!trimmed) {
+      setSearchItems([]);
+      setSearchLoading(false);
+      setSearchError(null);
+      return;
+    }
 
-  const toggle = (idx: number) => {
+    let cancelled = false;
+    setSearchLoading(true);
+    setSearchError(null);
+
+    const timeout = setTimeout(() => {
+      onSearch(trimmed)
+        .then(results => {
+          if (cancelled) return;
+          setSearchItems(mapToSuggestions(results));
+          setSearchLoading(false);
+        })
+        .catch(error => {
+          if (cancelled) return;
+          setSearchItems([]);
+          setSearchError(error?.message || 'Falha ao buscar concorrentes.');
+          setSearchLoading(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [searchTerm, isOpen, onSearch, mapToSuggestions]);
+
+  const trimmedSearch = searchTerm.trim();
+  const displayItems = trimmedSearch ? searchItems : baseItems;
+  const loading = trimmedSearch ? searchLoading : fetchState.loading;
+  const error = trimmedSearch ? searchError : fetchState.error;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const allowed = new Set(displayItems.map(item => item.key));
     setSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(idx)) {
-        next.delete(idx);
-      } else if (next.size < limitRemaining) {
-        next.add(idx);
+      let mutated = false;
+      const next: Record<string, Suggestion> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        if (allowed.has(key)) {
+          next[key] = value;
+        } else {
+          mutated = true;
+        }
+      });
+      return mutated ? next : prev;
+    });
+  }, [displayItems, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (blockedSet.size === 0) return;
+    setSelected(prev => {
+      let mutated = false;
+      const next: Record<string, Suggestion> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const norm = normalizeCnpj(value.cnpj);
+        if (norm && blockedSet.has(norm)) {
+          mutated = true;
+        } else {
+          next[key] = value;
+        }
+      });
+      return mutated ? next : prev;
+    });
+  }, [blockedSet, isOpen]);
+
+  const toggle = (item: Suggestion) => {
+    setSelected(prev => {
+      const key = item.key;
+      if (!key) return prev;
+
+      if (prev[key]) {
+        const { [key]: _removed, ...rest } = prev;
+        return rest;
       }
-      return next;
+
+      const currentCount = Object.keys(prev).length;
+      if (currentCount >= limitRemaining) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [key]: item,
+      };
     });
   };
 
-  const handleConfirm = () => {
-    const chosen = Array.from(selected).map(i => fetchState.items[i]);
+  const handleConfirm = useCallback(() => {
+    const chosen = Object.values(selected).map(item => ({
+      nome: item.nome,
+      cnpj: digits(item.cnpj),
+    }));
+
+    if (chosen.length === 0) {
+      return;
+    }
+
     onConfirm(chosen);
-    setSelected(new Set());
-  };
+    setSelected({});
+    setSearchTerm('');
+    setSearchItems([]);
+    setSearchError(null);
+    onClose();
+  }, [selected, onConfirm, onClose]);
 
-  if (!isOpen) return null;
-
-  const countSelected = selected.size;
+  const countSelected = Object.keys(selected).length;
   const limit = limitRemaining;
 
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex" onClick={onClose}>
-      <div
-        className="absolute top-0 right-0 h-full w-full max-w-2xl bg-white dark:bg-gray-900 p-4 shadow-xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">Sugestões de Concorrentes para {clientName}</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-500 rounded"
-          >
-            ✕
-          </button>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-2xl" aria-labelledby="competitor-dialog-title">
+        <DialogHeader>
+          <DialogTitle id="competitor-dialog-title">Sugestões de Concorrentes</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Baseado em {clientName ? clientName : 'empresa selecionada'}.
+          </p>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground" htmlFor="competitor-search">
+              Busca rápida
+            </label>
+            <input
+              id="competitor-search"
+              type="text"
+              value={searchTerm}
+              onChange={event => setSearchTerm(event.target.value)}
+              placeholder="Digite um nome de empresa"
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+          </div>
+
+          <div className="max-h-[60vh] overflow-y-auto rounded-2xl border border-border bg-background/40">
+            {loading && (
+              <div className="flex items-center justify-center gap-2 px-4 py-6 text-sm text-muted-foreground" aria-live="polite">
+                <FaSpinner className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Carregando sugestões...
+              </div>
+            )}
+
+            {!loading && error && (
+              <div className="px-4 py-6 text-sm text-destructive" aria-live="polite">
+                {error}
+              </div>
+            )}
+
+            {!loading && !error && displayItems.length === 0 && (
+              <div className="px-4 py-6 text-sm text-muted-foreground" aria-live="polite">
+                Nenhuma sugestão encontrada.
+              </div>
+            )}
+
+            {!loading && !error && displayItems.length > 0 && (
+              <ul className="divide-y divide-border/60">
+                {displayItems.map((item, index) => {
+                  const key = item.key || `item-${index}`;
+                  const isChecked = Boolean(selected[key]);
+                  const disabled = !isChecked && countSelected >= limit;
+                  return (
+                    <li key={key} className="flex items-center gap-3 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggle({ ...item, key })}
+                        disabled={disabled}
+                        className="h-4 w-4 rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-foreground">{item.nome}</span>
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {item.cnpj ? formatCnpj(item.cnpj) : 'CNPJ indisponível'}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
 
-        {fetchState.loading && <p className="mb-4">Carregando...</p>}
-        {fetchState.error && <p className="mb-4 text-red-500">{fetchState.error}</p>}
-
-        {!fetchState.loading && !fetchState.error && fetchState.items.length === 0 && (
-          <p className="mb-4 text-sm text-gray-500">Nenhuma sugestão disponível.</p>
-        )}
-
-        {fetchState.items.length > 0 && (
-          <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-[65vh] overflow-y-auto">
-            {fetchState.items.map((it, idx) => {
-              const disabled = !selected.has(idx) && selected.size >= limit;
-              return (
-                <li key={idx} className="py-2 flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(idx)}
-                    onChange={() => toggle(idx)}
-                    disabled={disabled}
-                    className="mr-2 h-4 w-4 text-violet-600 disabled:opacity-50"
-                  />
-                  <div className="flex flex-col">
-                    <span className="font-semibold">{it.nome}</span>
-                    <span className="text-xs font-mono text-gray-500">{it.cnpj ? padCNPJ14(it.cnpj) : '(sem CNPJ)'}</span>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-
-        <div className="mt-4 flex justify-between items-center">
-          <span className="text-sm">Selecionados {countSelected} de {limit}</span>
-          <div className="space-x-2">
+        <DialogFooter className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-sm text-muted-foreground">Selecionados {countSelected} de {limit}</span>
+          <div className="flex gap-2">
             <button
+              type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              disabled={loading}
             >
               Cancelar
             </button>
             <button
+              type="button"
               onClick={handleConfirm}
               disabled={countSelected === 0}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
             >
               Adicionar selecionados
             </button>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
-

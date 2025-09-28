@@ -1,12 +1,14 @@
 'use client';
 import { Draggable } from '@hello-pangea/dnd';
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
 import { onlyDigits, isValidCNPJ } from '@/utils/cnpj';
 import { cn } from '@/lib/cn';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 // Remove proteção visual dos números ('+553199999999' -> +553199999999)
 function displayPhone(phone) {
@@ -391,7 +393,7 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
                   },
                 });
               }}
-              className="w-full rounded-xl border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary/60 hover:text-foreground hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               title="Enviar esta oportunidade para o Exact Spotter"
             >
               Enviar ao Spotter
@@ -440,66 +442,65 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
           interactions={historyData}
           onClose={() => setHistoryOpen(false)}
         />
-        {isEnrichConfirmOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm">
-            <div className="w-11/12 max-w-md rounded-3xl border border-border bg-card p-6 shadow-soft">
-              <h2 className="text-lg font-semibold text-center text-foreground">Confirmar Enriquecimento</h2>
-              <p className="mt-3 text-sm text-center text-muted-foreground">
-                Deseja buscar e atualizar os dados para a empresa <span className="font-bold">{client.company}</span>?
-              </p>
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  onClick={() => setIsEnrichConfirmOpen(false)}
-                  className="rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleEnrichConfirm}
-                  className="rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  Sim, enriquecer
-                </button>
-              </div>
+        <Dialog open={isEnrichConfirmOpen} onOpenChange={setIsEnrichConfirmOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader className="items-center text-center">
+              <DialogTitle>Confirmar Enriquecimento</DialogTitle>
+            </DialogHeader>
+            <div className="px-6 py-5 text-sm text-muted-foreground">
+              Deseja buscar e atualizar os dados para a empresa{' '}
+              <span className="font-semibold text-foreground">{client.company}</span>?
             </div>
-          </div>
-        )}
-        {perdecompOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm">
-            <div className="w-11/12 max-w-md rounded-3xl border border-border bg-card p-6 shadow-soft">
-              <h2 className="text-lg font-semibold text-center text-foreground">Confirmar consulta PER/DCOMP</h2>
-              <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEnrichConfirmOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleEnrichConfirm} disabled={loading}>
+                Sim, enriquecer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={perdecompOpen} onOpenChange={setPerdecompOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader className="items-center text-center">
+              <DialogTitle>Confirmar consulta PER/DCOMP</DialogTitle>
+            </DialogHeader>
+            <div className="px-6 py-5 space-y-2 text-sm text-muted-foreground">
+              <div>
+                <span className="font-medium text-foreground">Empresa:</span>{' '}
+                {client.company || client.nome || client.Nome_da_Empresa || '—'}
+              </div>
+              {(client.cnpj || client.CNPJ || client.CNPJ_Empresa) && (
                 <div>
-                  <span className="font-medium text-foreground">Empresa:</span> {client.company || client.nome || client.Nome_da_Empresa || '—'}
+                  <span className="font-medium text-foreground">CNPJ:</span>{' '}
+                  {client.cnpj || client.CNPJ || client.CNPJ_Empresa}
                 </div>
-                {(client.cnpj || client.CNPJ || client.CNPJ_Empresa) && (
-                  <div>
-                    <span className="font-medium text-foreground">CNPJ:</span>{' '}
-                    {client.cnpj || client.CNPJ || client.CNPJ_Empresa}
-                  </div>
-                )}
-                <div className="pt-2">
-                  <span className="font-medium text-foreground">Será enviado:</span>{' '}
-                  <code className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-foreground">{queryValue || '—'}</code>
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  onClick={() => setPerdecompOpen(false)}
-                  className="rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handlePerdecompConfirm}
-                  className="rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  Sim, continuar
-                </button>
+              )}
+              <div className="pt-2">
+                <span className="font-medium text-foreground">Será enviado:</span>{' '}
+                <code className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-foreground">{queryValue || '—'}</code>
               </div>
             </div>
-          </div>
-        )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPerdecompOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handlePerdecompConfirm}>
+                Sim, continuar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         </>
       )}
     </Draggable>
