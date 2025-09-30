@@ -69,13 +69,13 @@ function useSearchQuery() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setQuery(searchParams.get('q') ?? '');
+    setQuery(searchParams?.get('q') ?? '');
     setHydrated(true);
   }, [searchParams]);
 
   useEffect(() => {
     if (!hydrated) return;
-    const currentString = searchParams.toString();
+    const currentString = searchParams?.toString?.() ?? '';
     const params = new URLSearchParams(currentString);
     if (query.trim()) {
       params.set('q', query.trim());
