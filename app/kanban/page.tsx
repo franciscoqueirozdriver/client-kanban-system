@@ -274,23 +274,23 @@ function KanbanPage() {
 
   const filterOptions = filterOptionsForMultiSelect;
 
-  function handleOpenSpotter(arg?: string | Card | ClientRecord) {
-    try {
-      if (typeof window === 'undefined') return;
+  function handleOpenSpotter(arg?: string | ClientRecord) {
+    if (typeof window === 'undefined') return;
 
-      const resolvedClient: ClientRecord | undefined =
-        typeof arg === 'string'
-          ? { id: arg, company: '' }
-          : (arg && 'client' in (arg as Card) ? (arg as Card).client : (arg as ClientRecord));
+    let empresa = '';
+    let id = '';
 
-      const empresa = resolvedClient?.company ?? '';
-      const id = resolvedClient?.id ?? '';
-      const url = `/spotter?empresa=${encodeURIComponent(empresa)}&id=${encodeURIComponent(id)}`;
-
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch (error) {
-      console.error('Falha ao abrir Spotter', error);
+    if (typeof arg === 'string') {
+      id = arg;
+    } else if (arg) {
+      id = arg.id ?? '';
+      empresa = arg.company ?? '';
     }
+
+    if (!id && !empresa) return;
+
+    const url = `/spotter?empresa=${encodeURIComponent(empresa)}&id=${encodeURIComponent(id)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   return (
@@ -335,7 +335,11 @@ function KanbanPage() {
           <DragDropContext onDragEnd={onDragEnd}>
             <div className="flex flex-wrap gap-4" role="list">
               {filteredColumns.map((column) => (
-                <KanbanColumn key={column.id} column={column} onOpenSpotter={handleOpenSpotter} />
+                <KanbanColumn
+                  key={column.id}
+                  column={column}
+                  onOpenSpotter={handleOpenSpotter}
+                />
               ))}
             </div>
           </DragDropContext>
