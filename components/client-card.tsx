@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import HistoryModal from './HistoryModal';
+import HistoryModal, { type Interaction } from './HistoryModal';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -56,7 +56,7 @@ const accentPalette: Record<string, string> = {
 export default function ClientCard({ client: initialClient, onOpenSpotter }: ClientCardProps) {
   const [client, setClient] = useState<ClientRecord>(initialClient);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [historyData, setHistoryData] = useState<Interaction[]>([]);
   const [perdecompOpen, setPerdecompOpen] = useState(false);
   const router = useRouter();
 
@@ -82,7 +82,7 @@ export default function ClientCard({ client: initialClient, onOpenSpotter }: Cli
 
   async function handleHistoryClick() {
     const response = await fetch(`/api/interacoes?clienteId=${client.id}`);
-    const history = await response.json();
+    const history = (await response.json()) as Interaction[];
     setHistoryData(history);
     setHistoryOpen(true);
   }
