@@ -5,7 +5,7 @@ import {
   findByName,
   appendToSheets,
   updateInSheets, // Import the new update function
-} from '@/lib/googleSheets';
+} from '../../../../lib/googleSheets';
 
 // --- Helper Functions ---
 

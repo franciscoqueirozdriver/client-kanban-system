@@ -1,4 +1,4 @@
-import { getSheetData } from '@/lib/googleSheets';
+import { getSheetData } from '../../lib/googleSheets';
 
 // Simple in-memory cache
 const cache = { time: 0, data: null };

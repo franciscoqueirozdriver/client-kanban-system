@@ -3,15 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { normalizeCnpj as canonicalNormalizeCnpj } from '@/lib/normalizers';
-
-const formatCnpj = (v: string): string => {
-    try {
-        return canonicalNormalizeCnpj(v).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-    } catch {
-        return v; // Return original on formatting error
-    }
-};
+import { formatCnpj, normalizeCnpj } from '@/utils/cnpj';
 
 export type CompetitorItem = { nome: string; cnpj: string };
 
@@ -56,7 +48,7 @@ export default function CompetitorSearchDialog({
   const blockedSet = useMemo(() => {
     const set = new Set<string>();
     blockedCnpjs
-      .map(value => canonicalNormalizeCnpj(value))
+      .map(value => normalizeCnpj(value))
       .filter((value): value is string => Boolean(value))
       .forEach(value => set.add(value));
     return set;
@@ -174,7 +166,7 @@ export default function CompetitorSearchDialog({
       let mutated = false;
       const next: Record<string, Suggestion> = {};
       Object.entries(prev).forEach(([key, value]) => {
-        const norm = canonicalNormalizeCnpj(value.cnpj);
+        const norm = normalizeCnpj(value.cnpj);
         if (norm && blockedSet.has(norm)) {
           mutated = true;
         } else {

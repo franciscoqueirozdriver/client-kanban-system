@@ -1,4 +1,4 @@
-import { getSheetsClient, getSheetData } from '@/lib/googleSheets';
+import { getSheetsClient, getSheetData } from '../../lib/googleSheets';
 
 const SHEET_NAME = 'Sheet1';
 const KEY = 'Cliente_ID';

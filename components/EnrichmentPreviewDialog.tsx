@@ -3,16 +3,7 @@
 import React, { useState } from 'react';
 import ConfirmDialog from './ConfirmDialog';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
-import { isFilial, toMatrizCNPJ } from '@/utils/cnpj-matriz';
-import { normalizeCnpj as canonicalNormalizeCnpj } from '@/lib/normalizers';
-
-const formatCnpj = (v: string): string => {
-    try {
-        return canonicalNormalizeCnpj(v).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-    } catch {
-        return v; // Return original on formatting error
-    }
-};
+import { isFilial, toMatrizCNPJ, fmtCNPJ, onlyDigits } from '@/utils/cnpj-matriz';
 
 interface Prefill {
   Nome_da_Empresa?: string;
@@ -95,8 +86,8 @@ export default function EnrichmentPreviewDialog({
 
   const renderConfirmDescription = () => {
     if (!confirmState.matriz || !confirmState.filial) return '';
-    const filialFmt = formatCnpj(confirmState.filial);
-    const matrizFmt = formatCnpj(toMatrizCNPJ(confirmState.filial));
+    const filialFmt = fmtCNPJ(confirmState.filial);
+    const matrizFmt = fmtCNPJ(toMatrizCNPJ(confirmState.filial));
 
     return (
       <>

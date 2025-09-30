@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSheetData, getSheetsClient } from '@/lib/googleSheets';
-import { normalizeCnpj, isValidCnpjPattern, generatePerdcompId, isValidPerdcompIdPattern } from '@/lib/normalizers';
+import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
+import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 import { agregaPerdcomp } from '@/utils/perdcomp';
 
 export const runtime = 'nodejs';
@@ -98,7 +98,7 @@ async function getLastPerdcompFromSheet({
   const match = rows.find(
     r =>
       (clienteId && r[idxCliente] === clienteId) ||
-      (cnpj && normalizeCnpj(r[idxCnpj]) === cnpj)
+      (cnpj && (r[idxCnpj] || '').replace(/\D/g, '') === cnpj)
   );
   if (!match) return null;
   const qtd = Number(match[idxQtd] ?? 0);
@@ -123,16 +123,10 @@ export async function POST(request: Request) {
     const url = new URL(request.url);
 
     const rawCnpj = body?.cnpj ?? url.searchParams.get('cnpj') ?? '';
-    let cnpj = '';
-    try {
-        cnpj = normalizeCnpj(rawCnpj);
-    } catch (error: any) {
-        return NextResponse.json({ error: true, message: error.message }, { status: 400 });
-    }
-
-    if (!isValidCnpjPattern(cnpj)) {
+    const cnpj = padCNPJ14(rawCnpj);
+    if (!isValidCNPJ(cnpj)) {
       return NextResponse.json(
-        { error: true, httpStatus: 400, httpStatusText: 'Bad Request', message: 'CNPJ inválido ou ausente' },
+        { error: true, httpStatus: 400, httpStatusText: 'Bad Request', message: 'CNPJ inválido' },
         { status: 400 }
       );
     }
@@ -170,20 +164,22 @@ export async function POST(request: Request) {
       endpoint: 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp',
     };
 
+    // 1. If not forcing, check the spreadsheet first
     if (!force) {
       const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
 
       const dataForCnpj = rows.filter(row => {
-        const rowCnpj = normalizeCnpj(row.CNPJ);
-        return row.Cliente_ID === clienteId || (rowCnpj && rowCnpj === cnpj);
+        const rowCnpj = padCNPJ14(row.CNPJ);
+        return row.Cliente_ID === clienteId || rowCnpj === cnpj;
       });
 
       if (dataForCnpj.length > 0) {
-        // ... (rest of the logic for returning cached data is unchanged)
         const lastConsulta = dataForCnpj.reduce((acc, r) => {
           const dc = r.Data_Consulta;
+          // Only consider valid-looking dates (basic ISO format check)
           if (!dc || typeof dc !== 'string' || !dc.startsWith('20')) return acc;
           try {
+            // Check if dates are valid before comparing
             const d1 = new Date(dc);
             if (isNaN(d1.getTime())) return acc;
             if (!acc) return dc;
@@ -202,17 +198,42 @@ export async function POST(request: Request) {
         const ressarc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_RESSARC ?? '0').replace(/\D/g, ''), 10) || 0;
         const canc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_CANCEL ?? '0').replace(/\D/g, ''), 10) || 0;
         const porFamilia = { DCOMP: dcomp, REST: rest, RESSARC: ressarc, CANC: canc, DESCONHECIDO: 0 };
-        const porNaturezaAgrupada = { '1.3/1.7': dcomp, '1.2/1.6': rest, '1.1/1.5': ressarc };
+        const porNaturezaAgrupada = {
+          '1.3/1.7': dcomp,
+          '1.2/1.6': rest,
+          '1.1/1.5': ressarc,
+        };
         const total = dcomp + rest + ressarc + canc;
-        const resumo = { total, totalSemCancelamento: qtdSemCanc || dcomp + rest + ressarc, canc, porFamilia, porNaturezaAgrupada };
-        const resp: any = { ok: true, fonte: 'planilha', linhas: dataForCnpj, perdcompResumo: resumo, total_perdcomp: resumo.total };
+        const resumo = {
+          total,
+          totalSemCancelamento: qtdSemCanc || dcomp + rest + ressarc,
+          canc,
+          porFamilia,
+          porNaturezaAgrupada,
+        };
+        const resp: any = {
+          ok: true,
+          fonte: 'planilha',
+          linhas: dataForCnpj,
+          perdcompResumo: resumo,
+          total_perdcomp: resumo.total,
+        };
         if (debugMode) {
-          resp.debug = { requestedAt, fonte: 'planilha', apiRequest, apiResponse: null, mappedCount: dataForCnpj.length, header: { requested_at: lastConsulta }, total_perdcomp: resumo.total };
+          resp.debug = {
+            requestedAt,
+            fonte: 'planilha',
+            apiRequest,
+            apiResponse: null,
+            mappedCount: dataForCnpj.length,
+            header: { requested_at: lastConsulta },
+            total_perdcomp: resumo.total,
+          };
         }
         return NextResponse.json(resp);
       }
     }
 
+    // 2. If forced or no data found, call the Infosimples API
     const token = process.env.INFOSIMPLES_TOKEN;
     if (!token) {
       throw new Error('INFOSIMPLES_TOKEN is not set in .env.local');
@@ -229,17 +250,27 @@ export async function POST(request: Request) {
     const doCall = async () => {
       const resp = await fetch(apiRequest.endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
         body: params.toString(),
       });
       const text = await resp.text();
-      const json = (() => { try { return JSON.parse(text); } catch { return null; } })();
+      const json = (() => {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      })();
+      // Allow 200 (OK) and 612 (No data found) to be treated as "successful" calls
       if (!resp.ok || (json && typeof json.code === 'number' && ![200, 612].includes(json.code))) {
         const err: any = new Error('provider_error');
         err.status = resp.status || 502;
         err.statusText = resp.statusText || 'Bad Gateway';
         err.providerCode = json?.code;
-        err.providerMessage = json?.code_message || json?.message || json?.errors?.[0]?.message || null;
+        err.providerMessage =
+          json?.code_message || json?.message || json?.errors?.[0]?.message || null;
         throw err;
       }
       return json;
@@ -250,7 +281,17 @@ export async function POST(request: Request) {
       apiResponse = await withRetry(doCall, 3, [1500, 3000, 5000]);
     } catch (err: any) {
       const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
-      return NextResponse.json({ error: true, httpStatus: err?.status || 502, httpStatusText: err?.statusText || 'Bad Gateway', providerCode: err?.providerCode ?? null, providerMessage: err?.providerMessage ?? err?.message ?? 'API error', fallback }, { status: err?.status || 502 });
+      return NextResponse.json(
+        {
+          error: true,
+          httpStatus: err?.status || 502,
+          httpStatusText: err?.statusText || 'Bad Gateway',
+          providerCode: err?.providerCode ?? null,
+          providerMessage: err?.providerMessage ?? err?.message ?? 'API error',
+          fallback,
+        },
+        { status: err?.status || 502 }
+      );
     }
 
     if (debugMode && apiResponse?.header?.parameters?.token) {
@@ -258,6 +299,7 @@ export async function POST(request: Request) {
     }
 
     const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
+    // If code is 612 (no data), treat perdcomp array as empty
     const perdcompArrayRaw = apiResponse?.code === 612 ? [] : apiResponse?.data?.[0]?.perdcomp;
     const perdcompArray = Array.isArray(perdcompArrayRaw) ? perdcompArrayRaw : [];
     const resumo = agregaPerdcomp(perdcompArray);
@@ -267,7 +309,6 @@ export async function POST(request: Request) {
     const siteReceipt = apiResponse?.site_receipts?.[0] || '';
 
     const writes: Record<string, any> = {
-      Perdcomp_ID: generatePerdcompId(), // Generate new canonical ID
       Code: apiResponse.code,
       Code_Message: apiResponse.code_message || '',
       MappedCount: mappedCount,
@@ -278,7 +319,7 @@ export async function POST(request: Request) {
       Qtd_PERDCOMP_CANCEL: resumo.porFamilia.CANC,
       URL_Comprovante_HTML: siteReceipt,
       Data_Consulta: headerRequestedAt,
-      Perdcomp_Principal_ID: first?.perdcomp || '', // Keep original API ID as Principal
+      Perdcomp_Principal_ID: first?.perdcomp || '',
       Perdcomp_Solicitante: first?.solicitante || '',
       Perdcomp_Tipo_Documento: first?.tipo_documento || '',
       Perdcomp_Tipo_Credito: first?.tipo_credito || '',
@@ -288,6 +329,7 @@ export async function POST(request: Request) {
     };
 
     const sheets = await getSheetsClient();
+    // Call getSheetData ONCE and get both headers and rows
     const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
     const finalHeaders = [...headers];
     let headerUpdated = false;
@@ -306,22 +348,16 @@ export async function POST(request: Request) {
       });
     }
 
-    let existingRow: any = null;
+    // Use the 'rows' we already fetched instead of calling getSheetData again
+    let rowNumber = -1;
     for (const r of rows) {
-        if (r.Cliente_ID === clienteId || (normalizeCnpj(r.CNPJ) === cnpj)) {
-            existingRow = r;
-            break;
-        }
+      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
+        rowNumber = r._rowNumber;
+        break;
+      }
     }
 
-    if (existingRow) {
-      const rowNumber = existingRow._rowNumber;
-
-      // Ensure Perdcomp_ID exists and is valid, if not, generate one for the update.
-      if (!isValidPerdcompIdPattern(existingRow.Perdcomp_ID)) {
-          writes['Perdcomp_ID'] = generatePerdcompId();
-      }
-
+    if (rowNumber !== -1) {
       const data = [] as any[];
       for (const [key, value] of Object.entries(writes)) {
         if (value === undefined || value === '') continue;
@@ -344,7 +380,7 @@ export async function POST(request: Request) {
       finalHeaders.forEach(h => (row[h] = ''));
       row['Cliente_ID'] = clienteId;
       row['Nome da Empresa'] = nomeEmpresa;
-      row['CNPJ'] = cnpj; // Write normalized CNPJ without apostrophe
+      row['CNPJ'] = `'${cnpj}`;
       for (const [k, v] of Object.entries(writes)) {
         if (v !== undefined) row[k] = v;
       }
@@ -352,7 +388,7 @@ export async function POST(request: Request) {
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.SPREADSHEET_ID!,
         range: PERDECOMP_SHEET_NAME,
-        valueInputOption: 'RAW', // Use RAW to avoid auto-conversion of numbers/dates
+        valueInputOption: 'RAW',
         requestBody: { values: [values] },
       });
     }
@@ -377,7 +413,17 @@ export async function POST(request: Request) {
       cnpj,
     };
     if (debugMode) {
-      resp.debug = { requestedAt, fonte: 'api', apiRequest, apiResponse, mappedCount, siteReceipts: apiResponse?.site_receipts, header: apiResponse?.header, total_perdcomp: totalPerdcomp, perdcompResumo: resumo };
+      resp.debug = {
+        requestedAt,
+        fonte: 'api',
+        apiRequest,
+        apiResponse,
+        mappedCount,
+        siteReceipts: apiResponse?.site_receipts,
+        header: apiResponse?.header,
+        total_perdcomp: totalPerdcomp,
+        perdcompResumo: resumo,
+      };
     }
 
     return NextResponse.json(resp);
@@ -385,7 +431,13 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('[API /infosimples/perdcomp]', error);
     return NextResponse.json(
-      { error: true, httpStatus: 502, httpStatusText: 'Bad Gateway', providerCode: null, providerMessage: error?.message || 'API error' },
+      {
+        error: true,
+        httpStatus: 502,
+        httpStatusText: 'Bad Gateway',
+        providerCode: null,
+        providerMessage: error?.message || 'API error',
+      },
       { status: 502 }
     );
   }

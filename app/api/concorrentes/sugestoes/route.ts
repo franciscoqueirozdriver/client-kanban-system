@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { findCompetitors } from '@/lib/perplexity';
+import { onlyDigits } from '@/utils/cnpj';
 
 export const runtime = 'nodejs';
-
-const onlyDigits = (v: string | null | undefined) => (v ?? '').replace(/\D/g, '');
 
 export async function POST(req: Request) {
   try {

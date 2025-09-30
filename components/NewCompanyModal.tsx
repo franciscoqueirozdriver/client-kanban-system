@@ -2,16 +2,10 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { FaSpinner, FaSearch } from 'react-icons/fa';
-import type { CompanySuggestion } from '@/lib/perplexity';
-import { normalizeCnpj, isValidCnpjPattern } from '@/lib/normalizers';
+import type { CompanySuggestion } from '../lib/perplexity';
+import { onlyDigits, padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
+import { isEmptyCNPJLike } from '@/utils/cnpj-matriz';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
-
-// --- Local Helpers to replace deprecated utils ---
-const onlyDigits = (v: string | null | undefined): string => (v ?? '').replace(/\D/g, '');
-const isEmptyCNPJLike = (value?: string): boolean => {
-  const d = onlyDigits(String(value ?? ''));
-  return d.length === 0 || /^0+$/.test(d);
-};
 
 // --- Types ---
 interface CompanyData {
@@ -80,7 +74,7 @@ function normalizePhones(s?: string) {
 function applySuggestionToForm(current: CompanyForm, suggestion: Partial<CompanyForm>, onlyEmpty = true): CompanyForm {
   const s: Partial<CompanyForm> = { ...suggestion };
 
-  if (s.CNPJ_Empresa) s.CNPJ_Empresa = normalizeCnpj(s.CNPJ_Empresa);
+  if (s.CNPJ_Empresa) s.CNPJ_Empresa = padCNPJ14(s.CNPJ_Empresa);
   if (s.Estado_Empresa) s.Estado_Empresa = normalizeUF(s.Estado_Empresa);
   if (s.Telefones_Empresa) s.Telefones_Empresa = normalizePhones(s.Telefones_Empresa);
   if (s.Telefones_Contato) s.Telefones_Contato = normalizePhones(s.Telefones_Contato);
@@ -177,8 +171,8 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
         ask: async () => false,
       });
       const digits = onlyDigits(decided);
-      const cnpj = isEmptyCNPJLike(digits) ? '' : normalizeCnpj(digits);
-      if (cnpj && !isValidCnpjPattern(cnpj)) {
+      const cnpj = isEmptyCNPJLike(digits) ? '' : padCNPJ14(digits);
+      if (cnpj && !isValidCNPJ(cnpj)) {
         setIsLoading(false);
         setError('CNPJ inválido. Verifique e tente novamente.');
         return;
@@ -279,7 +273,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                     <div>
                       <label htmlFor="cnpj-empresa" className="block text-sm font-medium mb-1">CNPJ Empresa</label>
                       <div className="flex items-center gap-2">
-                      <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={formData.CNPJ_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: onlyDigits(e.target.value) }))} onBlur={() => setFormData(prev => ({ ...prev, CNPJ_Empresa: normalizeCnpj(prev.CNPJ_Empresa ?? '') }))} className="flex-grow w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={formData.CNPJ_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: onlyDigits(e.target.value) }))} onBlur={() => setFormData(prev => ({ ...prev, CNPJ_Empresa: padCNPJ14(prev.CNPJ_Empresa ?? '') }))} className="flex-grow w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
                         <button
                           type="button"
                           onClick={() => {

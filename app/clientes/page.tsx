@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import ClientCard from '../../components/ClientCard';
 import Filters from '../../components/Filters';
@@ -7,16 +7,46 @@ import NewCompanyModal from '../../components/NewCompanyModal';
 import EnrichmentPreviewDialog from '../../components/EnrichmentPreviewDialog';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 import SummaryCard from '@/components/SummaryCard';
+import { useFilterState } from '@/hooks/useFilterState';
 
-async function openConfirmDialog({ title, description, confirmText, cancelText }) {
+// Types
+interface Client {
+  id: string;
+  company: string;
+  segment?: string;
+  size?: string;
+  uf?: string;
+  city?: string;
+  contacts?: any[];
+  opportunities?: string[];
+  [key: string]: any;
+}
+
+interface FilterOptions {
+  segmento: string[];
+  porte: string[];
+  uf: string[];
+  cidade: string[];
+}
+
+async function openConfirmDialog({ title, description, confirmText, cancelText }: { title: string, description: string, confirmText: string, cancelText: string }) {
   const msg = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
   return window.confirm(msg) ? 'confirm' : 'cancel';
 }
 
-export default function ClientesPage() {
-  const [clients, setClients] = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [query, setQuery] = useState('');
+function ClientesPageComponent() {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [allOptions, setAllOptions] = useState<FilterOptions>({ segmento: [], porte: [], uf: [], cidade: [] });
+
+  const { state: filters, update: onFilterChange } = useFilterState({
+    query: [],
+    segmento: [],
+    porte: [],
+    uf: [],
+    cidade: [],
+  });
+
+  const query = useMemo(() => filters.query?.[0] || '', [filters.query]);
 
   // State for modals
   const [companyModalOpen, setCompanyModalOpen] = useState(false);
@@ -30,7 +60,7 @@ export default function ClientesPage() {
       .then((res) => res.json())
       .then((data) => {
         setClients(data.clients);
-        setFiltered(data.clients);
+        setAllOptions(data.filters);
       });
   };
 
@@ -38,23 +68,39 @@ export default function ClientesPage() {
     fetchClients();
   }, []);
 
-  const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
-    setQuery(query); // Keep track of the query for the "no results" case
-    let result = clients.filter((client) => {
-      if (segmento && segmento.trim() && (client.segment || '').trim().toLowerCase() !== segmento.trim().toLowerCase()) return false;
-      if (porte && porte.length > 0 && !porte.map(p => p.toLowerCase()).includes((client.size || '').trim().toLowerCase())) return false;
-      if (uf && uf.trim() && (client.uf || '').trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
-      if (cidade && cidade.trim() && (client.city || '').trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
+  const filteredClients = useMemo(() => {
+    return clients.filter((client) => {
+      if (filters.segmento.length > 0 && !filters.segmento.includes((client.segment || '').trim())) return false;
+      if (filters.porte.length > 0 && !filters.porte.includes((client.size || '').trim())) return false;
+      if (filters.uf.length > 0 && !filters.uf.includes((client.uf || '').trim())) return false;
+      if (filters.cidade.length > 0 && !filters.cidade.includes((client.city || '').trim())) return false;
+
       if (query) {
         const q = query.toLowerCase();
         const matchName = (client.company || '').toLowerCase().includes(q);
-        const matchContact = (client.contacts || []).some((c) => (c.name || c.nome || '').toLowerCase().includes(q));
-        const matchOpp = (client.opportunities || []).some((o) => (o || '').toLowerCase().includes(q));
+        const matchContact = (client.contacts || []).some((c: any) => (c.name || c.nome || '').toLowerCase().includes(q));
+        const matchOpp = (client.opportunities || []).some((o: string) => (o || '').toLowerCase().includes(q));
         if (!matchName && !matchContact && !matchOpp) return false;
       }
       return true;
     });
-    setFiltered(result);
+  }, [clients, filters, query]);
+
+  const filterOptionsForMultiSelect = useMemo(() => {
+    return {
+      segmento: allOptions.segmento.map(s => ({ label: s, value: s })),
+      porte: allOptions.porte.map(p => ({ label: p, value: p })),
+      uf: allOptions.uf.map(u => ({ label: u, value: u })),
+      cidade: allOptions.cidade.map(c => ({ label: c, value: c })),
+    };
+  }, [allOptions]);
+
+  const handleFilterChange = (key: string, value: string | string[]) => {
+      if (key === 'query') {
+        onFilterChange('query', [value as string]);
+      } else {
+        onFilterChange(key, value as string[]);
+      }
   };
 
   const handleEnrichQuery = async () => {
@@ -70,7 +116,7 @@ export default function ClientesPage() {
       if (!resp.ok) throw new Error(json?.error || 'Falha ao enriquecer');
       setEnrichPreview({ ...json, base: { Nome_da_Empresa: query } });
       setShowEnrichPreview(true);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setEnrichPreview({ error: e?.toString?.() || 'Erro ao enriquecer', base: { Nome_da_Empresa: query } });
       setShowEnrichPreview(true);
@@ -87,27 +133,22 @@ export default function ClientesPage() {
   const handleSaveNewCompany = () => {
     setCompanyModalOpen(false);
     setCompanyPrefill(null);
-    // Refetch clients to show the new one
     fetchClients();
   };
 
   const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
 
   const summary = useMemo(() => {
-    const base = filtered;
+    const base = filteredClients;
     const contacts = base.reduce(
       (total, client) => total + (Array.isArray(client?.contacts) ? client.contacts.length : 0),
       0,
     );
     const segments = new Set(
-      base
-        .map((client) => (client?.segment || '').trim())
-        .filter((segmento) => segmento.length > 0),
+      base.map((client) => (client?.segment || '').trim()).filter(Boolean)
     );
     const states = new Set(
-      base
-        .map((client) => (client?.uf || '').trim())
-        .filter((uf) => uf.length > 0),
+      base.map((client) => (client?.uf || '').trim()).filter(Boolean)
     );
 
     return {
@@ -117,11 +158,11 @@ export default function ClientesPage() {
       segments: segments.size,
       states: states.size,
     };
-  }, [filtered, clients.length]);
+  }, [filteredClients, clients.length]);
 
-  const formatNumber = (value) => numberFormatter.format(value);
+  const formatNumber = (value: number) => numberFormatter.format(value);
   const hasActiveQuery = query.trim().length > 0;
-  const showEmptyState = filtered.length === 0 && hasActiveQuery;
+  const showEmptyState = filteredClients.length === 0 && hasActiveQuery;
 
   return (
     <div className="flex flex-col gap-6">
@@ -132,19 +173,10 @@ export default function ClientesPage() {
           <p className="text-sm text-muted-foreground">Liste, filtre e gerencie clientes e contatos.</p>
         </div>
         <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-          <button
-            type="button"
-            onClick={() => handleOpenNewCompanyModal()}
-            className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-soft transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
+          <button type="button" onClick={() => handleOpenNewCompanyModal()} className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-soft transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
             Novo cliente
           </button>
-          <button
-            type="button"
-            onClick={handleEnrichQuery}
-            disabled={!hasActiveQuery || isEnriching}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <button type="button" onClick={handleEnrichQuery} disabled={!hasActiveQuery || isEnriching} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60">
             {isEnriching && <FaSpinner className="h-4 w-4 animate-spin" />}
             Enriquecer busca
           </button>
@@ -152,26 +184,10 @@ export default function ClientesPage() {
       </header>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          title="Clientes exibidos"
-          value={formatNumber(summary.visible)}
-          helper={`Filtrados a partir de ${formatNumber(summary.total)} cadastros`}
-        />
-        <SummaryCard
-          title="Contatos vinculados"
-          value={formatNumber(summary.contacts)}
-          helper="Soma de contatos associados aos clientes listados"
-        />
-        <SummaryCard
-          title="Segmentos ativos"
-          value={formatNumber(summary.segments)}
-          helper="Segmentos únicos encontrados na seleção"
-        />
-        <SummaryCard
-          title="Estados presentes"
-          value={formatNumber(summary.states)}
-          helper="Distribuição geográfica dos clientes filtrados"
-        />
+        <SummaryCard title="Clientes exibidos" value={formatNumber(summary.visible)} helper={`Filtrados a partir de ${formatNumber(summary.total)} cadastros`} />
+        <SummaryCard title="Contatos vinculados" value={formatNumber(summary.contacts)} helper="Soma de contatos associados aos clientes listados" />
+        <SummaryCard title="Segmentos ativos" value={formatNumber(summary.segments)} helper="Segmentos únicos encontrados na seleção" />
+        <SummaryCard title="Estados presentes" value={formatNumber(summary.states)} helper="Distribuição geográfica dos clientes filtrados" />
       </section>
 
       <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
@@ -182,7 +198,11 @@ export default function ClientesPage() {
               Utilize os filtros abaixo para refinar a visualização de clientes por segmento, porte ou localização.
             </p>
           </div>
-          <Filters onFilter={handleFilter} />
+          <Filters
+            filters={{...filters, query}}
+            options={filterOptionsForMultiSelect}
+            onFilterChange={handleFilterChange}
+          />
         </div>
       </section>
 
@@ -192,16 +212,12 @@ export default function ClientesPage() {
             <div className="space-y-1">
               <h2 className="text-lg font-semibold text-foreground">Clientes cadastrados</h2>
               <p className="text-sm text-muted-foreground">
-                {formatNumber(filtered.length)} de {formatNumber(clients.length)} registros exibidos.
+                {formatNumber(filteredClients.length)} de {formatNumber(clients.length)} registros exibidos.
               </p>
             </div>
-            <span
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-1 text-sm font-medium text-muted-foreground shadow-soft"
-              aria-label="Total de clientes exibidos"
-              data-testid="total-clientes-exibidos"
-            >
+            <span className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-1 text-sm font-medium text-muted-foreground shadow-soft">
               Exibindo
-              <span className="tabular-nums text-foreground">{formatNumber(filtered.length)}</span>
+              <span className="tabular-nums text-foreground">{formatNumber(filteredClients.length)}</span>
             </span>
           </div>
 
@@ -210,28 +226,10 @@ export default function ClientesPage() {
               <p className="text-sm text-muted-foreground">
                 Nenhum cliente encontrado para <span className="font-semibold text-foreground">“{query}”</span>.
               </p>
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleOpenNewCompanyModal()}
-                  className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  Cadastrar novo cliente
-                </button>
-                <button
-                  type="button"
-                  onClick={handleEnrichQuery}
-                  disabled={isEnriching}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isEnriching && <FaSpinner className="h-4 w-4 animate-spin" />}
-                  Enriquecer dados
-                </button>
-              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((client) => (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {filteredClients.map((client) => (
                 <ClientCard key={client.id} client={client} />
               ))}
             </div>
@@ -239,23 +237,9 @@ export default function ClientesPage() {
         </div>
       </section>
 
-      <NewCompanyModal
-        isOpen={companyModalOpen}
-        initialData={companyPrefill || undefined}
-        onClose={() => {
-          setCompanyModalOpen(false);
-          setCompanyPrefill(null);
-        }}
-        onSaved={handleSaveNewCompany}
-      />
+      <NewCompanyModal isOpen={companyModalOpen} initialData={companyPrefill || undefined} onClose={() => { setCompanyModalOpen(false); setCompanyPrefill(null); }} onSaved={handleSaveNewCompany} />
 
-      <EnrichmentPreviewDialog
-        isOpen={showEnrichPreview}
-        onClose={() => setShowEnrichPreview(false)}
-        suggestionFlat={enrichPreview?.suggestion || null}
-        rawJson={enrichPreview?.debug?.parsedJson}
-        error={enrichPreview?.error ? String(enrichPreview.error) : undefined}
-        onConfirm={async (flat) => {
+      <EnrichmentPreviewDialog isOpen={showEnrichPreview} onClose={() => setShowEnrichPreview(false)} suggestionFlat={enrichPreview?.suggestion || null} rawJson={enrichPreview?.debug?.parsedJson} error={enrichPreview?.error ? String(enrichPreview.error) : undefined} onConfirm={async (flat) => {
           const merged = { ...enrichPreview.base, ...flat };
           const cnpjFinal = await decideCNPJFinal({
             currentFormCNPJ: merged?.CNPJ_Empresa,
@@ -279,3 +263,10 @@ export default function ClientesPage() {
   );
 }
 
+export default function ClientesPage() {
+    return (
+        <Suspense fallback={<div>Carregando filtros...</div>}>
+            <ClientesPageComponent />
+        </Suspense>
+    )
+}
