@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import KanbanColumn from '@/components/KanbanColumn';
 import Filters, { type ActiveFilters, type FilterOptions } from '@/components/Filters';
 import ViewToggle from '@/components/view-toggle/ViewToggle';
@@ -52,14 +52,17 @@ const filterDefaults: ActiveFilters = {
   vendedor: []
 };
 
+/**
+ * Hook para sincronizar a busca textual "q" com a URL
+ * sem depender de useSearchParams().toString() (que tem dado falsos positivos de null).
+ * Preserva os demais parâmetros já presentes na URL.
+ */
 function useSearchQuery() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const queryParam = useQueryParam('q');
   const [query, setQuery] = useState(queryParam);
   const [hydrated, setHydrated] = useState(false);
-  const paramsString = useMemo(() => searchParams.toString(), [searchParams]);
 
   useEffect(() => {
     setQuery(queryParam);
@@ -69,7 +72,8 @@ function useSearchQuery() {
   useEffect(() => {
     if (!hydrated) return;
 
-    const params = new URLSearchParams(paramsString);
+    const currentSearch = typeof window !== 'undefined' ? window.location.search : '';
+    const params = new URLSearchParams(currentSearch);
     const trimmed = query.trim();
 
     if (trimmed) {
@@ -80,12 +84,12 @@ function useSearchQuery() {
 
     const nextParamsString = params.toString();
     const next = `${pathname}${nextParamsString ? `?${nextParamsString}` : ''}`;
-    const current = `${pathname}${paramsString ? `?${paramsString}` : ''}`;
+    const current = `${pathname}${currentSearch ? `${currentSearch}` : ''}`;
 
     if (next !== current) {
       router.replace(next, { scroll: false });
     }
-  }, [hydrated, pathname, paramsString, query, router]);
+  }, [hydrated, pathname, query, router]);
 
   return { query, setQuery };
 }
@@ -96,8 +100,12 @@ function KanbanPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const { state: filters, replace: replaceFilters, reset } = useFilterState<ActiveFilters>(filterDefaults);
   const { query, setQuery } = useSearchQuery();
-  const searchParams = useSearchParams();
-  const view = searchParams?.get('view') || (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) || 'kanban';
+
+  const viewParam = useQueryParam('view');
+  const view =
+    viewParam ||
+    (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) ||
+    'kanban';
 
   useEffect(() => {
     async function fetchColumns() {
@@ -115,8 +123,12 @@ function KanbanPage() {
   }, []);
 
   const filterOptionsForMultiSelect = useMemo<FilterOptions>(() => {
-    const mapToOptions = (values?: string[]) => (values || []).map((value) => ({ label: value, value }));
-    const phaseOptions = columns.map((column) => ({ label: column.title, value: column.id }));
+    const mapToOptions = (values?: string[]) =>
+      (values || []).map((value) => ({ label: value, value }));
+    const phaseOptions = columns.map((column) => ({
+      label: column.title,
+      value: column.id
+    }));
     return {
       segmento: mapToOptions(allOptions.segmento),
       porte: mapToOptions(allOptions.porte),
@@ -135,17 +147,27 @@ function KanbanPage() {
 
   const filteredColumns = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
+
     const filterCard = (card: Card, column: Column) => {
       const client = card.client;
+
       if (filters.segmento.length && !filters.segmento.includes((client.segment || '').trim())) return false;
       if (filters.porte.length && !filters.porte.includes((client.size || '').trim())) return false;
       if (filters.uf.length && !filters.uf.includes((client.uf || '').trim())) return false;
       if (filters.cidade.length && !filters.cidade.includes((client.city || '').trim())) return false;
-      if (filters.erp.length && !filters.erp.includes((client.erp as string || '').trim())) return false;
-      if (filters.origem.length && !filters.origem.includes((client.fonte as string || '').trim())) return false;
-      if (filters.vendedor.length && !filters.vendedor.includes((client.owner as string || '').trim())) return false;
+      if (filters.erp.length && !filters.erp.includes(((client.erp as string) || '').trim())) return false;
+      if (filters.origem.length && !filters.origem.includes(((client.fonte as string) || '').trim())) return false;
+      if (filters.vendedor.length && !filters.vendedor.includes(((client.owner as string) || '').trim())) return false;
+
       const statusValue = (client.status || '').trim();
-      if (filters.fase.length && !filters.fase.includes(statusValue) && !filters.fase.includes(column.id) && !filters.fase.includes(column.title)) return false;
+      if (
+        filters.fase.length &&
+        !filters.fase.includes(statusValue) &&
+        !filters.fase.includes(column.id) &&
+        !filters.fase.includes(column.title)
+      ) {
+        return false;
+      }
 
       if (!normalizedQuery) return true;
 
@@ -157,8 +179,11 @@ function KanbanPage() {
               .some((value: string) => value.toLowerCase().includes(normalizedQuery))
           )
         : false;
+
       const opportunityMatch = Array.isArray(client.opportunities)
-        ? client.opportunities.some((opportunity) => (opportunity || '').toLowerCase().includes(normalizedQuery))
+        ? client.opportunities.some((opportunity) =>
+            (opportunity || '').toLowerCase().includes(normalizedQuery)
+          )
         : false;
 
       return baseName.includes(normalizedQuery) || contactMatch || opportunityMatch;
@@ -178,8 +203,12 @@ function KanbanPage() {
     ).length;
     const lostCards = allCards.filter((card) => card.client.status === 'Perdido');
     const lost = lostCards.length;
-    const scheduled = allCards.filter((card) => ['Agendado', 'Reunião Agendada'].includes(card.client.status)).length;
-    const won = allCards.filter((card) => ['Vendido', 'Negociação Concluída'].includes(card.client.status)).length;
+    const scheduled = allCards.filter((card) =>
+      ['Agendado', 'Reunião Agendada'].includes(card.client.status)
+    ).length;
+    const won = allCards.filter((card) =>
+      ['Vendido', 'Negociação Concluída'].includes(card.client.status)
+    ).length;
     const conversion = totalLeads > 0 ? Math.round((won / totalLeads) * 100) : 0;
 
     return { totalLeads, meetings, lost, scheduled, conversion };
@@ -192,7 +221,11 @@ function KanbanPage() {
 
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
-    if (result.destination.droppableId === result.source.droppableId && result.destination.index === result.source.index) return;
+    if (
+      result.destination.droppableId === result.source.droppableId &&
+      result.destination.index === result.source.index
+    )
+      return;
     if (isUpdating) return;
 
     const { source, destination, draggableId } = result;
@@ -291,7 +324,6 @@ function KanbanPage() {
       ) : (
         <Views leads={filteredColumns.flatMap((column) => column.cards.map((card) => card.client))} />
       )}
-
     </div>
   );
 }
