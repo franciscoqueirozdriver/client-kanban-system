@@ -56,7 +56,7 @@ export default function ReportsPage() {
   const [rows, setRows] = useState([]);
   const [maxLeads, setMaxLeads] = useState(30);
   const [options, setOptions] = useState({});
-  const { state: filters, update, reset } = useFilterState(filterDefaults);
+  const { state: filters, replace: replaceFilters, reset } = useFilterState(filterDefaults);
   const { query, setQuery } = useSearchQuery();
 
   useEffect(() => {
@@ -83,14 +83,7 @@ export default function ReportsPage() {
   }, [options]);
 
   const handleFilterChange = (next) => {
-    Object.keys(next).forEach((key) => {
-      const incoming = next[key] || [];
-      const current = filters[key] || [];
-      const changed = incoming.length !== current.length || incoming.some((value, index) => value !== current[index]);
-      if (changed) {
-        update(key, incoming);
-      }
-    });
+    replaceFilters(next);
   };
 
   useEffect(() => {

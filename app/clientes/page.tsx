@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { FaSpinner } from 'react-icons/fa';
 import ClientCard from '@/components/client-card';
-import Filters, { type ActiveFilters, type FilterKey, type FilterOptions } from '@/components/Filters';
+import Filters, { type ActiveFilters, type FilterOptions } from '@/components/Filters';
 import NewCompanyModal from '@/components/NewCompanyModal';
 import EnrichmentPreviewDialog from '@/components/EnrichmentPreviewDialog';
 import SummaryCard from '@/components/SummaryCard';
@@ -102,7 +102,7 @@ function ClientesPageComponent() {
   const [showEnrichPreview, setShowEnrichPreview] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
 
-  const { state: filters, update, reset } = useFilterState(filterDefaults);
+  const { state: filters, replace: replaceFilters, reset } = useFilterState<ActiveFilters>(filterDefaults);
   const { query, setQuery } = useSearchQuery();
 
   useEffect(() => {
@@ -130,13 +130,7 @@ function ClientesPageComponent() {
   }, [options]);
 
   const handleFilterChange = (next: ActiveFilters) => {
-    (Object.keys(next) as FilterKey[]).forEach((key) => {
-      const incoming = next[key] ?? [];
-      const current = filters[key] ?? [];
-      if (incoming.length !== current.length || incoming.some((value, index) => value !== current[index])) {
-        update(key, incoming);
-      }
-    });
+    replaceFilters(next);
   };
 
   const filteredClients = useMemo(() => {

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import KanbanColumn from '@/components/KanbanColumn';
-import Filters, { type ActiveFilters, type FilterKey, type FilterOptions } from '@/components/Filters';
+import Filters, { type ActiveFilters, type FilterOptions } from '@/components/Filters';
 import ViewToggle from '@/components/view-toggle/ViewToggle';
 import Views from './Views';
 import SummaryCard from '@/components/SummaryCard';
@@ -88,7 +88,7 @@ function KanbanPage() {
   const [columns, setColumns] = useState<Column[]>([]);
   const [allOptions, setAllOptions] = useState<Record<string, string[]>>({});
   const [isUpdating, setIsUpdating] = useState(false);
-  const { state: filters, update, reset } = useFilterState(filterDefaults);
+  const { state: filters, replace: replaceFilters, reset } = useFilterState<ActiveFilters>(filterDefaults);
   const { query, setQuery } = useSearchQuery();
   const searchParams = useSearchParams();
   const view = searchParams?.get('view') || (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) || 'kanban';
@@ -124,13 +124,7 @@ function KanbanPage() {
   }, [allOptions, columns]);
 
   const handleFilterChange = (next: ActiveFilters) => {
-    (Object.keys(next) as FilterKey[]).forEach((key) => {
-      const incoming = next[key] ?? [];
-      const current = filters[key] ?? [];
-      if (incoming.length !== current.length || incoming.some((value, index) => value !== current[index])) {
-        update(key, incoming);
-      }
-    });
+    replaceFilters(next);
   };
 
   const filteredColumns = useMemo(() => {
