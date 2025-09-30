@@ -64,20 +64,19 @@ async function openConfirmDialog({
 function useSearchQuery() {
   const router = useRouter();
   const pathname = usePathname();
-  const qs = useSearchParams();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState('');
   const [hydrated, setHydrated] = useState(false);
-  const qsString = qs.toString();
 
   useEffect(() => {
-    const initial = new URLSearchParams(qsString).get('q') ?? '';
-    setQuery(initial);
+    setQuery(searchParams.get('q') ?? '');
     setHydrated(true);
-  }, [qsString]);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!hydrated) return;
-    const params = new URLSearchParams(qsString);
+    const currentString = searchParams.toString();
+    const params = new URLSearchParams(currentString);
     if (query.trim()) {
       params.set('q', query.trim());
     } else {
@@ -85,11 +84,11 @@ function useSearchQuery() {
     }
     const paramsString = params.toString();
     const next = `${pathname}${paramsString ? `?${paramsString}` : ''}`;
-    const current = `${pathname}${qsString ? `?${qsString}` : ''}`;
+    const current = `${pathname}${currentString ? `?${currentString}` : ''}`;
     if (next !== current) {
       router.replace(next, { scroll: false });
     }
-  }, [hydrated, pathname, query, router, qsString]);
+  }, [hydrated, pathname, query, router, searchParams]);
 
   return { query, setQuery };
 }
