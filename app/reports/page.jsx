@@ -7,6 +7,7 @@ import ReportTable from '@/components/ReportTable';
 import ExportButton from '@/components/ExportButton';
 import SummaryCard from '@/components/SummaryCard';
 import { useFilterState } from '@/hooks/useFilterState';
+import { useQueryParam } from '@/hooks/useQueryParam';
 
 const filterDefaults = {
   segmento: [],
@@ -22,32 +23,37 @@ const filterDefaults = {
 function useSearchQuery() {
   const router = useRouter();
   const pathname = usePathname();
-  const qs = useSearchParams();
-  const [query, setQuery] = useState('');
+  const searchParams = useSearchParams();
+  const queryParam = useQueryParam('q');
+  const [query, setQuery] = useState(queryParam);
   const [hydrated, setHydrated] = useState(false);
-  const qsString = qs.toString();
+  const paramsString = useMemo(() => searchParams.toString(), [searchParams]);
 
   useEffect(() => {
-    const initial = new URLSearchParams(qsString).get('q') ?? '';
-    setQuery(initial);
+    setQuery(queryParam);
     setHydrated(true);
-  }, [qsString]);
+  }, [queryParam]);
 
   useEffect(() => {
     if (!hydrated) return;
-    const params = new URLSearchParams(qsString);
-    if (query.trim()) {
-      params.set('q', query.trim());
+
+    const params = new URLSearchParams(paramsString);
+    const trimmed = query.trim();
+
+    if (trimmed) {
+      params.set('q', trimmed);
     } else {
       params.delete('q');
     }
-    const paramsString = params.toString();
-    const next = `${pathname}${paramsString ? `?${paramsString}` : ''}`;
-    const current = `${pathname}${qsString ? `?${qsString}` : ''}`;
+
+    const nextParamsString = params.toString();
+    const next = `${pathname}${nextParamsString ? `?${nextParamsString}` : ''}`;
+    const current = `${pathname}${paramsString ? `?${paramsString}` : ''}`;
+
     if (next !== current) {
       router.replace(next, { scroll: false });
     }
-  }, [hydrated, pathname, query, router, qsString]);
+  }, [hydrated, pathname, paramsString, query, router]);
 
   return { query, setQuery };
 }
