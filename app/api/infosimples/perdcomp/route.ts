@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
-import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 import { agregaPerdcomp } from '@/utils/perdcomp';
+import { normalizeCnpj, isValidCnpjPattern, generatePerdcompId } from '../../../../lib/normalizers.js';
 
 export const runtime = 'nodejs';
 
@@ -98,7 +98,7 @@ async function getLastPerdcompFromSheet({
   const match = rows.find(
     r =>
       (clienteId && r[idxCliente] === clienteId) ||
-      (cnpj && (r[idxCnpj] || '').replace(/\D/g, '') === cnpj)
+      (cnpj && normalizeCnpj(r[idxCnpj]) === cnpj)
   );
   if (!match) return null;
   const qtd = Number(match[idxQtd] ?? 0);
@@ -123,8 +123,8 @@ export async function POST(request: Request) {
     const url = new URL(request.url);
 
     const rawCnpj = body?.cnpj ?? url.searchParams.get('cnpj') ?? '';
-    const cnpj = padCNPJ14(rawCnpj);
-    if (!isValidCNPJ(cnpj)) {
+    const cnpj = normalizeCnpj(rawCnpj);
+    if (!isValidCnpjPattern(cnpj)) {
       return NextResponse.json(
         { error: true, httpStatus: 400, httpStatusText: 'Bad Request', message: 'CNPJ inválido' },
         { status: 400 }
@@ -169,7 +169,7 @@ export async function POST(request: Request) {
       const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
 
       const dataForCnpj = rows.filter(row => {
-        const rowCnpj = padCNPJ14(row.CNPJ);
+        const rowCnpj = normalizeCnpj(row.CNPJ);
         return row.Cliente_ID === clienteId || rowCnpj === cnpj;
       });
 
@@ -351,7 +351,7 @@ export async function POST(request: Request) {
     // Use the 'rows' we already fetched instead of calling getSheetData again
     let rowNumber = -1;
     for (const r of rows) {
-      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
+      if (r.Cliente_ID === clienteId || normalizeCnpj(r.CNPJ) === cnpj) {
         rowNumber = r._rowNumber;
         break;
       }
@@ -372,15 +372,16 @@ export async function POST(request: Request) {
       if (data.length) {
         await sheets.spreadsheets.values.batchUpdate({
           spreadsheetId: process.env.SPREADSHEET_ID!,
-          requestBody: { valueInputOption: 'RAW', data },
+          requestBody: { valueInputOption: 'USER_ENTERED', data },
         });
       }
     } else {
       const row: Record<string, any> = {};
       finalHeaders.forEach(h => (row[h] = ''));
+      row['Perdcomp_ID'] = generatePerdcompId();
       row['Cliente_ID'] = clienteId;
       row['Nome da Empresa'] = nomeEmpresa;
-      row['CNPJ'] = `'${cnpj}`;
+      row['CNPJ'] = cnpj;
       for (const [k, v] of Object.entries(writes)) {
         if (v !== undefined) row[k] = v;
       }
@@ -388,7 +389,7 @@ export async function POST(request: Request) {
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.SPREADSHEET_ID!,
         range: PERDECOMP_SHEET_NAME,
-        valueInputOption: 'RAW',
+        valueInputOption: 'USER_ENTERED',
         requestBody: { values: [values] },
       });
     }
