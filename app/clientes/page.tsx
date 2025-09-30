@@ -29,6 +29,13 @@ interface FilterOptions {
   cidade: string[];
 }
 
+interface EnrichPreviewState {
+  suggestion?: any;
+  debug?: any;
+  error?: string;
+  base?: any;
+}
+
 async function openConfirmDialog({ title, description, confirmText, cancelText }: { title: string, description: string, confirmText: string, cancelText: string }) {
   const msg = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
   return window.confirm(msg) ? 'confirm' : 'cancel';
@@ -50,8 +57,8 @@ function ClientesPageComponent() {
 
   // State for modals
   const [companyModalOpen, setCompanyModalOpen] = useState(false);
-  const [companyPrefill, setCompanyPrefill] = useState(null);
-  const [enrichPreview, setEnrichPreview] = useState(null);
+  const [companyPrefill, setCompanyPrefill] = useState<any>(null);
+  const [enrichPreview, setEnrichPreview] = useState<EnrichPreviewState | null>(null);
   const [showEnrichPreview, setShowEnrichPreview] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
 
