@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
-import CardSurface from '@/components/cards/CardSurface';
 import { onlyDigits, isValidCNPJ } from '@/utils/cnpj';
 import { cn } from '@/lib/cn';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -19,17 +18,6 @@ function displayPhone(phone) {
 function displayEmail(email) {
   return String(email || '').replace(/^'+/, '');
 }
-
-function resolveAccentColor(color) {
-  const accentMap = {
-    green: 'hsl(var(--success))',
-    red: 'hsl(var(--danger))',
-    gray: 'hsl(var(--muted-foreground))',
-    purple: 'hsl(var(--secondary))',
-  };
-  return accentMap[color] || 'hsl(var(--primary))';
-}
-
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -131,124 +119,42 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
     setHistoryOpen(true);
   };
 
-  const handlePerdecompConfirm = () => {
-    const base = '/consultas/perdecomp-comparativo';
-    const url = `${base}?q=${encodeURIComponent(queryValue)}`;
-    setPerdecompOpen(false);
-    router.push(url);
-  };
-
-  const handleDoubleClick = () => {
-    if (loading) return;
-    setIsEnrichConfirmOpen(true);
-  };
-
-  const handleEnrichConfirm = async () => {
-    setIsEnrichConfirmOpen(false);
-    try {
-      setLoading(true);
-      const payload = {
-        clienteId: client?.id,
-        nome: client?.company || client?.nome || '',
-        estado: client?.uf || '',
-        cidade: client?.city || '',
-        cep: client?.cep || '',
-        overwrite: false,
-      };
-
-      let res = await fetch('/api/enriquecer-empresa', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      let json = await res.json();
-
-      if (json.exists) {
-        const proceed = confirm('Este cliente já existe em outra lista. Deseja sobrescrever os dados com o enriquecimento?');
-        if (!proceed) {
-          setLoading(false);
-          return;
-        }
-        res = await fetch('/api/enriquecer-empresa', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...payload, overwrite: true }),
-        });
-        json = await res.json();
-      }
-
-      if (!json.ok) {
-        throw new Error(json.error || 'Falha ao enriquecer empresa');
-      }
-
-      await fetch('/api/kanban', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: client.id, status: 'Lead Importado', color: 'gray' }),
-      });
-      setClient((prev) => ({ ...prev, ...json.data, status: 'Lead Importado', color: 'gray' }));
-
-      console.log('Enriquecimento concluído:', json.data);
-      alert('Dados da empresa enriquecidos e salvos na planilha.');
-    } catch (err) {
-      console.error('Erro no enriquecimento:', err);
-      alert(`Erro ao enriquecer: ${err?.message || err}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePhoneClick = async (e, phone, contact) => {
-    e.preventDefault();
-    const digits = displayPhone(phone).replace(/\D/g, '');
-    if (!digits) return;
-    const number = digits.startsWith('55') ? digits : `55${digits}`;
-    const messages = await fetchMessages('whatsapp');
-    if (messages.length > 0) {
-      openModal(messages, ({ titulo, mensagem }) => {
-        const finalMsg = encodeURIComponent(
-          replacePlaceholders(mensagem, { client, contact, phone })
-        );
-        const url = `https://web.whatsapp.com/send/?phone=${number}&text=${finalMsg}&type=phone_number&app_absent=0`;
-        openObservation(async (obs) => {
-          await logInteraction({ tipo: 'WhatsApp', canal: phone, mensagemUsada: titulo, observacao: obs });
-          window.open(url, '_blank');
-        });
-      });
-    } else {
-      const url = `https://web.whatsapp.com/send/?phone=${number}&type=phone_number&app_absent=0`;
-      openObservation(async (obs) => {
-        await logInteraction({ tipo: 'WhatsApp', canal: phone, observacao: obs });
-        window.open(url, '_blank');
-      });
-    }
-  };
-
-  const handleEmailClick = async (e, email, contact) => {
-    e.preventDefault();
-    const phone = contact.mobile || contact.phone || '';
-    const cleanEmail = displayEmail(email);
+  const handleEmailClick = async (event, email, contact) => {
+    event.preventDefault();
     const messages = await fetchMessages('email');
     if (messages.length > 0) {
       openModal(messages, ({ titulo, mensagem }) => {
-        const subject = encodeURIComponent(
-          replacePlaceholders(titulo, { client, contact, phone })
-        );
-        const body = encodeURIComponent(
-          replacePlaceholders(mensagem, { client, contact, phone })
-        );
-        const url = `mailto:${cleanEmail}?subject=${subject}&body=${body}`;
+        const finalMsg = replacePlaceholders(mensagem, { client, contact, phone: null });
         openObservation(async (obs) => {
-          await logInteraction({ tipo: 'E-mail', canal: cleanEmail, mensagemUsada: titulo, observacao: obs });
-          window.location.href = url;
+          await logInteraction({ tipo: 'Email', canal: email, mensagemUsada: titulo, observacao: obs });
+          window.open(`mailto:${email}?subject=${encodeURIComponent(titulo)}&body=${encodeURIComponent(finalMsg)}`);
         });
       });
     } else {
-      const url = `mailto:${cleanEmail}`;
       openObservation(async (obs) => {
-        await logInteraction({ tipo: 'E-mail', canal: cleanEmail, observacao: obs });
-        window.location.href = url;
+        await logInteraction({ tipo: 'Email', canal: email, observacao: obs });
+        window.open(`mailto:${email}`);
+      });
+    }
+  };
+
+  const handlePhoneClick = async (event, phone, contact) => {
+    event.preventDefault();
+    const digits = onlyDigits(phone);
+    const normalized = digits.length === 13 && digits.startsWith('55') ? digits : `55${digits}`;
+    const messages = await fetchMessages('whatsapp');
+    if (messages.length > 0) {
+      openModal(messages, ({ titulo, mensagem }) => {
+        const finalMsg = encodeURIComponent(replacePlaceholders(mensagem, { client, contact, phone }));
+        openObservation(async (obs) => {
+          await logInteraction({ tipo: 'WhatsApp', canal: normalized, mensagemUsada: titulo, observacao: obs });
+          window.open(`https://wa.me/${normalized}?text=${finalMsg}`, '_blank');
+        });
+      });
+    } else {
+      openObservation(async (obs) => {
+        await logInteraction({ tipo: 'WhatsApp', canal: normalized, observacao: obs });
+        window.open(`https://wa.me/${normalized}`, '_blank');
       });
     }
   };
@@ -276,29 +182,62 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
     }
   };
 
-  const accentColor = resolveAccentColor(client.color);
+  const accentMap = {
+    green: 'hsl(var(--success))',
+    red: 'hsl(var(--danger))',
+    gray: 'hsl(var(--muted-foreground))',
+    purple: 'hsl(var(--secondary))',
+  };
+
+  const accentColor = accentMap[client.color] || 'hsl(var(--primary))';
+
+  const handleDoubleClick = () => {
+    setIsEnrichConfirmOpen(true);
+  };
+
+  const handleEnrichConfirm = async () => {
+    setIsEnrichConfirmOpen(false);
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/empresas/enriquecer?cnpj=${queryValue}`);
+      if (!response.ok) throw new Error('Falha ao enriquecer');
+      const payload = await response.json();
+      setClient((prev) => ({ ...prev, ...payload }));
+      await logInteraction({ tipo: 'Enriquecimento', observacao: 'Dados atualizados via PER/DCOMP' });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Draggable draggableId={card.id} index={index}>
       {(provided, snapshot) => (
         <>
-          <CardSurface
-            ref={provided.innerRef}
-            accentColor={accentColor}
-            {...provided.draggableProps}
-            {...provided.dragHandleProps}
-            style={provided.draggableProps.style}
-            className={cn(
-              'mb-3 select-none transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md',
-              loading && 'pointer-events-none opacity-60',
-              snapshot.isDragging && 'ring-2 ring-primary/60 shadow-soft',
-            )}
-            onDoubleClick={handleDoubleClick}
-            title="Dê duplo clique para enriquecer os dados desta empresa"
-            tabIndex={0}
-            aria-roledescription="Cartão do kanban"
-          >
-
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          {...provided.dragHandleProps}
+          style={{
+            ...provided.draggableProps.style,
+            '--card-accent': accentColor,
+          }}
+          className={cn(
+            'relative mb-3 overflow-hidden rounded-2xl border border-border/70 bg-card p-4 text-sm shadow transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
+            loading && 'pointer-events-none opacity-60',
+            snapshot.isDragging && 'ring-2 ring-primary/60 shadow-soft',
+          )}
+          onDoubleClick={handleDoubleClick}
+          title="Dê duplo clique para enriquecer os dados desta empresa"
+          tabIndex={0}
+          aria-roledescription="Cartão do kanban"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-4 left-0 w-1 rounded-full"
+            style={{ background: 'var(--card-accent)' }}
+          />
           <h4 className="text-base font-semibold text-foreground">
             {client.company}
           </h4>
@@ -363,27 +302,6 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
                 </p>
               )}
 
-              {c.phone && !c.normalizedPhones && (
-                <p className="mt-2 text-[11px] text-muted-foreground">{displayPhone(c.phone)}</p>
-              )}
-
-              <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  onClick={(e) => handleEmailClick(e, null, c)}
-                >
-                  Enviar mensagem
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  onClick={(e) => handlePhoneClick(e, (c.normalizedPhones && c.normalizedPhones[0]) || c.phone, c)}
-                >
-                  WhatsApp
-                </button>
-              </div>
-
               {c.linkedin && (
                 <p className="mt-2">
                   <a
@@ -399,7 +317,6 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
               )}
             </div>
           ))}
-
           <div className="mt-4">
             <button
               type="button"
@@ -440,7 +357,7 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
               Consultar PER/DCOMP
             </button>
           </div>
-        </CardSurface>
+        </div>
         <MessageModal
           open={modalOpen}
           messages={modalMessages}

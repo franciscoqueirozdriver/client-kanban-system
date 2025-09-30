@@ -1,18 +1,16 @@
 'use client';
 
-import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Suspense, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-
-import Filters from '@/components/Filters';
+import { DragDropContext, DropResult } from '@hello-pangea/dnd';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import KanbanColumn from '@/components/KanbanColumn';
-import SummaryCard from '@/components/SummaryCard';
-import SpotterModal from '@/components/spotter/SpotterModal';
+import Filters, { type ActiveFilters, type FilterKey, type FilterOptions } from '@/components/Filters';
 import ViewToggle from '@/components/view-toggle/ViewToggle';
 import Views from './Views';
+import SummaryCard from '@/components/SummaryCard';
 import { useFilterState } from '@/hooks/useFilterState';
 
-interface Client {
+interface ClientRecord {
   id: string;
   company: string;
   segment?: string;
@@ -27,12 +25,13 @@ interface Client {
   dataMov?: string;
   fonte?: string;
   owner?: string;
-  [key: string]: any;
+  erp?: string;
+  [key: string]: unknown;
 }
 
 interface Card {
   id: string;
-  client: Client;
+  client: ClientRecord;
 }
 
 interface Column {
@@ -41,106 +40,155 @@ interface Column {
   cards: Card[];
 }
 
-interface FilterOptions {
-  segmento: { label: string; value: string }[];
-  porte: { label: string; value: string }[];
-  uf: { label: string; value: string }[];
-  cidade: { label: string; value: string }[];
+const filterDefaults: ActiveFilters = {
+  segmento: [],
+  porte: [],
+  uf: [],
+  cidade: [],
+  erp: [],
+  fase: [],
+  origem: [],
+  vendedor: []
+};
+
+function useSearchQuery() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const qs = useSearchParams();
+  const [query, setQuery] = useState('');
+  const [hydrated, setHydrated] = useState(false);
+  const qsString = qs.toString();
+
+  useEffect(() => {
+    const initial = new URLSearchParams(qsString).get('q') ?? '';
+    setQuery(initial);
+    setHydrated(true);
+  }, [qsString]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const params = new URLSearchParams(qsString);
+    if (query.trim()) {
+      params.set('q', query.trim());
+    } else {
+      params.delete('q');
+    }
+    const paramsString = params.toString();
+    const next = `${pathname}${paramsString ? `?${paramsString}` : ''}`;
+    const current = `${pathname}${qsString ? `?${qsString}` : ''}`;
+    if (next !== current) {
+      router.replace(next, { scroll: false });
+    }
+  }, [hydrated, pathname, query, router, qsString]);
+
+  return { query, setQuery };
 }
 
 function KanbanPage() {
   const [columns, setColumns] = useState<Column[]>([]);
-  const [allOptions, setAllOptions] = useState<Omit<FilterOptions, 'query'>>({ segmento: [], porte: [], uf: [], cidade: [] });
+  const [allOptions, setAllOptions] = useState<Record<string, string[]>>({});
   const [isUpdating, setIsUpdating] = useState(false);
-  const [spotterOpen, setSpotterOpen] = useState(false);
-  const [spotterLead, setSpotterLead] = useState<any>(null);
-  const [sending, setSending] = useState(false);
-
-  const { state: filterState, update: handleFilterUpdate, reset } = useFilterState({
-    query: [],
-    segmento: [],
-    porte: [],
-    uf: [],
-    cidade: [],
-  });
-
-  const filters = useMemo(
-    () => ({
-      segmento: filterState.segmento,
-      porte: filterState.porte,
-      uf: filterState.uf,
-      cidade: filterState.cidade,
-    }),
-    [filterState.segmento, filterState.porte, filterState.uf, filterState.cidade],
-  );
-
-  const query = useMemo(() => filterState.query?.[0] || '', [filterState.query]);
-
+  const { state: filters, update, reset } = useFilterState(filterDefaults);
+  const { query, setQuery } = useSearchQuery();
   const searchParams = useSearchParams();
-  const view =
-    searchParams?.get('view') ||
-    (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) ||
-    'kanban';
-
-  const fetchColumns = async () => {
-    const res = await fetch('/api/kanban');
-    const data = await res.json();
-    setColumns(data);
-  };
-
-  const fetchFilterOptions = async () => {
-    const res = await fetch('/api/clientes');
-    const data = await res.json();
-    setAllOptions(data.filters);
-  };
+  const view = searchParams?.get('view') || (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) || 'kanban';
 
   useEffect(() => {
+    async function fetchColumns() {
+      const response = await fetch('/api/kanban');
+      const data = await response.json();
+      setColumns(data);
+    }
+    async function fetchFilterOptions() {
+      const response = await fetch('/api/clientes');
+      const data = await response.json();
+      setAllOptions(data.filters || {});
+    }
     fetchColumns();
     fetchFilterOptions();
   }, []);
 
-  const filteredColumns = useMemo(() => {
-    if (!filterState.query.length && !filters.segmento.length && !filters.porte.length && !filters.uf.length && !filters.cidade.length) {
-      return columns;
-    }
+  const filterOptionsForMultiSelect = useMemo<FilterOptions>(() => {
+    const mapToOptions = (values?: string[]) => (values || []).map((value) => ({ label: value, value }));
+    const phaseOptions = columns.map((column) => ({ label: column.title, value: column.id }));
+    return {
+      segmento: mapToOptions(allOptions.segmento),
+      porte: mapToOptions(allOptions.porte),
+      uf: mapToOptions(allOptions.uf),
+      cidade: mapToOptions(allOptions.cidade),
+      erp: mapToOptions(allOptions.erp),
+      origem: mapToOptions(allOptions.origem),
+      vendedor: mapToOptions(allOptions.vendedor),
+      fase: phaseOptions
+    };
+  }, [allOptions, columns]);
 
-    return columns.map((col) => ({
-      ...col,
-      cards: col.cards.filter((card) => {
-        const client = card.client;
-        if (filters.segmento.length > 0 && !filters.segmento.includes((client.segment || '').trim())) return false;
-        if (filters.porte.length > 0 && !filters.porte.includes((client.size || '').trim())) return false;
-        if (filters.uf.length > 0 && !filters.uf.includes((client.uf || '').trim())) return false;
-        if (filters.cidade.length > 0 && !filters.cidade.includes((client.city || '').trim())) return false;
-
-        if (query) {
-          const q = query.toLowerCase();
-          const matchName = (client.company || '').toLowerCase().includes(q);
-          const matchContact = (client.contacts || []).some((c: any) => (c.name || c.nome || '').toLowerCase().includes(q));
-          const matchOpp = (client.opportunities || []).some((o: string) => (o || '').toLowerCase().includes(q));
-          if (!matchName && !matchContact && !matchOpp) return false;
-        }
-        return true;
-      }),
-    }));
-  }, [columns, filterState.query, filters, query]);
-
-  const handleFilterChange = (key: string, value: string | string[]) => {
-    if (key === 'query') {
-      handleFilterUpdate('query', [value as string]);
-    } else {
-      handleFilterUpdate(key, value as string[]);
-    }
+  const handleFilterChange = (next: ActiveFilters) => {
+    (Object.keys(next) as FilterKey[]).forEach((key) => {
+      const incoming = next[key] ?? [];
+      const current = filters[key] ?? [];
+      if (incoming.length !== current.length || incoming.some((value, index) => value !== current[index])) {
+        update(key, incoming);
+      }
+    });
   };
 
-  const filterOptionsForMultiSelect = useMemo(() => {
-    return {
-      segmento: allOptions.segmento.map((s) => ({ label: s, value: s })),
-      porte: allOptions.porte.map((p) => ({ label: p, value: p })),
-      uf: allOptions.uf.map((u) => ({ label: u, value: u })),
-      cidade: allOptions.cidade.map((c) => ({ label: c, value: c })),
+  const filteredColumns = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const filterCard = (card: Card, column: Column) => {
+      const client = card.client;
+      if (filters.segmento.length && !filters.segmento.includes((client.segment || '').trim())) return false;
+      if (filters.porte.length && !filters.porte.includes((client.size || '').trim())) return false;
+      if (filters.uf.length && !filters.uf.includes((client.uf || '').trim())) return false;
+      if (filters.cidade.length && !filters.cidade.includes((client.city || '').trim())) return false;
+      if (filters.erp.length && !filters.erp.includes((client.erp as string || '').trim())) return false;
+      if (filters.origem.length && !filters.origem.includes((client.fonte as string || '').trim())) return false;
+      if (filters.vendedor.length && !filters.vendedor.includes((client.owner as string || '').trim())) return false;
+      const statusValue = (client.status || '').trim();
+      if (filters.fase.length && !filters.fase.includes(statusValue) && !filters.fase.includes(column.id) && !filters.fase.includes(column.title)) return false;
+
+      if (!normalizedQuery) return true;
+
+      const baseName = (client.company || '').toLowerCase();
+      const contactMatch = Array.isArray(client.contacts)
+        ? client.contacts.some((contact: any) =>
+            [contact?.name, contact?.nome, contact?.email]
+              .filter(Boolean)
+              .some((value: string) => value.toLowerCase().includes(normalizedQuery))
+          )
+        : false;
+      const opportunityMatch = Array.isArray(client.opportunities)
+        ? client.opportunities.some((opportunity) => (opportunity || '').toLowerCase().includes(normalizedQuery))
+        : false;
+
+      return baseName.includes(normalizedQuery) || contactMatch || opportunityMatch;
     };
-  }, [allOptions]);
+
+    return columns.map((column) => ({
+      ...column,
+      cards: column.cards.filter((card) => filterCard(card, column))
+    }));
+  }, [columns, filters, query]);
+
+  const summary = useMemo(() => {
+    const allCards = filteredColumns.flatMap((column) => column.cards);
+    const totalLeads = allCards.length;
+    const meetings = allCards.filter((card) =>
+      ['Reunião Realizada', 'Conversa Iniciada', 'Contato Efetuado'].includes(card.client.status)
+    ).length;
+    const lostCards = allCards.filter((card) => card.client.status === 'Perdido');
+    const lost = lostCards.length;
+    const scheduled = allCards.filter((card) => ['Agendado', 'Reunião Agendada'].includes(card.client.status)).length;
+    const won = allCards.filter((card) => ['Vendido', 'Negociação Concluída'].includes(card.client.status)).length;
+    const conversion = totalLeads > 0 ? Math.round((won / totalLeads) * 100) : 0;
+
+    return { totalLeads, meetings, lost, scheduled, conversion };
+  }, [filteredColumns]);
+
+  const handleReset = () => {
+    reset();
+    setQuery('');
+  };
 
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
@@ -149,8 +197,8 @@ function KanbanPage() {
 
     const { source, destination, draggableId } = result;
     const allCols = [...columns];
-    const sourceCol = allCols.find((c) => c.id === source.droppableId);
-    const destCol = allCols.find((c) => c.id === destination.droppableId);
+    const sourceCol = allCols.find((column) => column.id === source.droppableId);
+    const destCol = allCols.find((column) => column.id === destination.droppableId);
 
     if (!sourceCol || !destCol) return;
 
@@ -176,28 +224,22 @@ function KanbanPage() {
       await fetch('/api/kanban', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor }),
+        body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor })
       });
-      await fetchColumns();
-    } catch (err) {
-      fetchColumns();
-      alert('Erro ao atualizar');
+      const response = await fetch('/api/kanban');
+      const data = await response.json();
+      setColumns(data);
+    } catch (error) {
+      console.error(error);
+      const response = await fetch('/api/kanban');
+      const data = await response.json();
+      setColumns(data);
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const summary = useMemo(() => {
-    const allCards = (filteredColumns || columns).flatMap((col) => col.cards);
-    const totalLeads = allCards.length;
-    const scheduled = allCards.filter((c) => ['Agendado', 'Reunião Agendada'].includes(c.client.status)).length;
-    const meetings = allCards.filter((c) => ['Reunião Realizada', 'Conversa Iniciada', 'Contato Efetuado'].includes(c.client.status)).length;
-    const lost = allCards.filter((c) => c.client.status === 'Perdido').length;
-    const won = allCards.filter((c) => ['Vendido', 'Negociação Concluída'].includes(c.client.status)).length;
-    const conversion = totalLeads > 0 ? Math.round((won / totalLeads) * 100) : 0;
-
-    return { totalLeads, scheduled, meetings, conversion, lost };
-  }, [columns, filteredColumns]);
+  const filterOptions = filterOptionsForMultiSelect;
 
   return (
     <div className="flex flex-col gap-6 overflow-x-hidden">
@@ -220,45 +262,36 @@ function KanbanPage() {
       </section>
 
       <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Filtros avançados</h2>
-          <p className="text-sm text-muted-foreground">Refine os leads exibidos utilizando os campos abaixo.</p>
-        </div>
-        <div className="mt-4">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Filtros avançados</h2>
+            <p className="text-sm text-muted-foreground">Refine os leads exibidos utilizando os campos abaixo.</p>
+          </div>
           <Filters
             filters={filters}
             searchQuery={query}
-            options={filterOptionsForMultiSelect}
+            options={filterOptions}
             onFilterChange={handleFilterChange}
-            onReset={reset}
+            onSearchChange={setQuery}
+            onReset={handleReset}
           />
         </div>
       </section>
 
       {view === 'kanban' ? (
-        <section className="rounded-3xl border border-border bg-muted/40 p-4 shadow-soft min-w-0 overflow-x-auto">
+        <section className="rounded-3xl border border-border bg-muted/40 p-4 shadow-soft">
           <DragDropContext onDragEnd={onDragEnd}>
-            <div className="w-full">
-              <div className="flex min-h-0 w-max select-none items-stretch gap-4 pr-6" role="list">
-                {(filteredColumns || columns).map((col) => (
-                  <KanbanColumn key={col.id} column={col} onOpenSpotter={() => {}} />
-                ))}
-              </div>
+            <div className="flex flex-wrap gap-4" role="list">
+              {filteredColumns.map((column) => (
+                <KanbanColumn key={column.id} column={column} />
+              ))}
             </div>
           </DragDropContext>
         </section>
       ) : (
-        <Views leads={(filteredColumns || columns).flatMap((col) => col.cards.map((card) => card.client))} />
+        <Views leads={filteredColumns.flatMap((column) => column.cards.map((card) => card.client))} />
       )}
 
-      <SpotterModal
-        open={spotterOpen}
-        setOpen={setSpotterOpen}
-        lead={spotterLead}
-        setLead={setSpotterLead}
-        sending={sending}
-        setSending={setSending}
-      />
     </div>
   );
 }

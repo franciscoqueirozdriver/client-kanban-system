@@ -1,8 +1,15 @@
 'use client';
 
-import { cn } from '@/lib/cn';
+import type { ReactNode } from 'react';
 
-export default function SummaryCard({ title, value, helper, trend = null }) {
+export type SummaryCardProps = {
+  title: ReactNode;
+  value: ReactNode;
+  helper?: ReactNode;
+  trend?: ReactNode;
+};
+
+export default function SummaryCard({ title, value, helper, trend }: SummaryCardProps) {
   return (
     <article
       className="group relative overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg focus-within:-translate-y-0.5 focus-within:shadow-lg"
@@ -11,25 +18,12 @@ export default function SummaryCard({ title, value, helper, trend = null }) {
     >
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/12 via-secondary/5 to-accent/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100" />
       <div className="relative flex flex-col gap-3">
-        <header className="flex items-center justify-between gap-3">
+        <header className="flex items-center gap-3">
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">{title}</p>
-          {trend && (
-            <span
-              className={cn(
-                'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold',
-                trend.direction === 'up'
-                  ? 'bg-success/15 text-success-foreground'
-                  : trend.direction === 'down'
-                  ? 'bg-danger/15 text-danger-foreground'
-                  : 'bg-muted text-muted-foreground',
-              )}
-            >
-              {trend.label}
-            </span>
-          )}
         </header>
         <p className="text-3xl font-semibold tracking-tight text-foreground">{value}</p>
-        {helper && <p className="text-sm text-muted-foreground">{helper}</p>}
+        {helper ? <div className="text-sm text-muted-foreground">{helper}</div> : null}
+        {trend ? <div className="text-xs text-muted-foreground">{trend}</div> : null}
       </div>
     </article>
   );

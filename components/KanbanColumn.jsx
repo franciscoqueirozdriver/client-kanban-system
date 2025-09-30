@@ -9,7 +9,7 @@ export default function KanbanColumn({ column, onOpenSpotter }) {
 
   return (
     <section
-      className="flex h-full min-h-0 w-[280px] flex-none flex-col rounded-3xl border border-border bg-muted/40 backdrop-blur"
+      className="flex h-full min-h-0 flex-1 basis-full flex-col rounded-3xl border border-border bg-muted/40 backdrop-blur sm:basis-[20rem] lg:basis-[22rem]"
       aria-labelledby={headerId}
       role="listitem"
     >
@@ -28,7 +28,7 @@ export default function KanbanColumn({ column, onOpenSpotter }) {
             {...provided.droppableProps}
             className={cn(
               'flex-1 min-h-0 space-y-3 overflow-y-auto px-3 pb-6 pt-4 scrollbar-thin',
-              snapshot.isDraggingOver && 'bg-primary/5 ring-2 ring-inset ring-primary/30',
+              snapshot.isDraggingOver && 'bg-primary/5 ring-2 ring-inset ring-primary/30'
             )}
             aria-live="polite"
           >

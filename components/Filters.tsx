@@ -1,122 +1,100 @@
 'use client';
 
-import MultiSelect, { MultiSelectOption } from './ui/multi-select';
+import { useMemo } from 'react';
+import MultiSelect, { type Option } from './ui/multi-select';
+import { Button } from '@/components/ui/button';
 
-interface FilterOptions {
-  segmento: MultiSelectOption[];
-  porte: MultiSelectOption[];
-  uf: MultiSelectOption[];
-  cidade: MultiSelectOption[];
-}
+export type FilterKey =
+  | 'segmento'
+  | 'porte'
+  | 'uf'
+  | 'cidade'
+  | 'erp'
+  | 'fase'
+  | 'origem'
+  | 'vendedor';
 
-interface ActiveFilters {
-  segmento: string[];
-  porte: string[];
-  uf: string[];
-  cidade: string[];
-}
+export type ActiveFilters = Record<FilterKey, string[]>;
+
+export type FilterOptions = Partial<Record<FilterKey, Option[]>>;
 
 interface FiltersProps {
   filters: ActiveFilters;
   searchQuery: string;
   options: FilterOptions;
-  onFilterChange: (key: keyof ActiveFilters | 'query', value: string | string[]) => void;
+  onFilterChange: (next: ActiveFilters) => void;
+  onSearchChange?: (query: string) => void;
   onReset?: () => void;
 }
 
-export default function Filters({ filters, searchQuery, options, onFilterChange, onReset }: FiltersProps) {
-  const inputClassName =
-    'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shadow-soft';
+export default function Filters({
+  filters,
+  searchQuery,
+  options,
+  onFilterChange,
+  onSearchChange,
+  onReset
+}: FiltersProps) {
+  const searchPlaceholder = 'Buscar por empresa, contato ou oportunidade';
+
+  const filterEntries = useMemo(() => {
+    const config: { key: FilterKey; label: string; placeholder: string }[] = [
+      { key: 'segmento', label: 'Segmento', placeholder: 'Todos os segmentos' },
+      { key: 'porte', label: 'Porte', placeholder: 'Todos os portes' },
+      { key: 'uf', label: 'UF', placeholder: 'Todos os estados' },
+      { key: 'cidade', label: 'Cidade', placeholder: 'Todas as cidades' },
+      { key: 'erp', label: 'ERP', placeholder: 'Todos os ERPs' },
+      { key: 'fase', label: 'Fase do funil', placeholder: 'Todas as fases' },
+      { key: 'origem', label: 'Origem do lead', placeholder: 'Todas as origens' },
+      { key: 'vendedor', label: 'Responsável', placeholder: 'Todos os responsáveis' },
+    ];
+    return config.filter((entry) => options[entry.key]?.length);
+  }, [options]);
+
+  function handleSelect(key: FilterKey, values: string[]) {
+    onFilterChange({ ...filters, [key]: values });
+  }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <label htmlFor="filter-query" className="text-sm font-medium text-muted-foreground">
-            Busca rápida
-          </label>
-          <input
-            id="filter-query"
-            type="text"
-            value={searchQuery}
-            onChange={(event) => onFilterChange('query', event.target.value)}
-            placeholder="Buscar por empresa, contato ou oportunidade"
-            className={inputClassName}
-            autoComplete="off"
-          />
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2">
+        <label htmlFor="filters-search" className="text-sm font-medium text-muted-foreground">
+          Busca rápida
+        </label>
+        <input
+          id="filters-search"
+          type="search"
+          value={searchQuery}
+          onChange={(event) => onSearchChange?.(event.target.value)}
+          placeholder={searchPlaceholder}
+          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        />
+      </div>
+
+      {filterEntries.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {filterEntries.map(({ key, label, placeholder }) => (
+            <div key={key} className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">{label}</label>
+              <MultiSelect
+                options={options[key] ?? []}
+                value={filters[key] ?? []}
+                onChange={(values) => handleSelect(key, values)}
+                placeholder={placeholder}
+                className="h-10"
+              />
+            </div>
+          ))}
         </div>
-        {onReset && (
-          <button
-            type="button"
-            onClick={onReset}
-            className="inline-flex h-10 items-center rounded-xl border border-border px-4 text-sm font-medium text-muted-foreground transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
+      ) : null}
+
+      {onReset ? (
+        <div className="flex justify-end">
+          <Button type="button" variant="ghost" onClick={onReset} className="text-sm font-medium">
             Limpar filtros
-          </button>
-        )}
-      </div>
-
-      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
-        <div className="flex min-w-0 flex-col gap-2">
-          <label id="filter-segmento-label" htmlFor="filter-segmento" className="text-sm font-medium text-muted-foreground">
-            Segmento
-          </label>
-          <MultiSelect
-            id="filter-segmento"
-            labelledBy="filter-segmento-label"
-            options={options.segmento}
-            value={filters.segmento}
-            onChange={(selected) => onFilterChange('segmento', selected)}
-            placeholder="Todos os segmentos"
-            className="h-11"
-          />
+          </Button>
         </div>
-
-        <div className="flex min-w-0 flex-col gap-2">
-          <label id="filter-porte-label" htmlFor="filter-porte" className="text-sm font-medium text-muted-foreground">
-            Porte
-          </label>
-          <MultiSelect
-            id="filter-porte"
-            labelledBy="filter-porte-label"
-            options={options.porte}
-            value={filters.porte}
-            onChange={(selected) => onFilterChange('porte', selected)}
-            placeholder="Todos os portes"
-            className="h-11"
-          />
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-2">
-          <label id="filter-uf-label" htmlFor="filter-uf" className="text-sm font-medium text-muted-foreground">
-            UF
-          </label>
-          <MultiSelect
-            id="filter-uf"
-            labelledBy="filter-uf-label"
-            options={options.uf}
-            value={filters.uf}
-            onChange={(selected) => onFilterChange('uf', selected)}
-            placeholder="Todos os estados"
-            className="h-11"
-          />
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-2">
-          <label id="filter-cidade-label" htmlFor="filter-cidade" className="text-sm font-medium text-muted-foreground">
-            Cidade
-          </label>
-          <MultiSelect
-            id="filter-cidade"
-            labelledBy="filter-cidade-label"
-            options={options.cidade}
-            value={filters.cidade}
-            onChange={(selected) => onFilterChange('cidade', selected)}
-            placeholder="Todas as cidades"
-            className="h-11"
-          />
-        </div>
-      </div>
+      ) : null}
     </div>
   );
 }

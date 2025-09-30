@@ -1,17 +1,17 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { FaSpinner } from 'react-icons/fa';
-
-import ClientCard from '@/components/ClientCard';
-import Filters from '@/components/Filters';
-import EnrichmentPreviewDialog from '@/components/EnrichmentPreviewDialog';
+import ClientCard from '@/components/client-card';
+import Filters, { type ActiveFilters, type FilterKey, type FilterOptions } from '@/components/Filters';
 import NewCompanyModal from '@/components/NewCompanyModal';
+import EnrichmentPreviewDialog from '@/components/EnrichmentPreviewDialog';
 import SummaryCard from '@/components/SummaryCard';
-import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 import { useFilterState } from '@/hooks/useFilterState';
+import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 
-interface Client {
+interface ClientRecord {
   id: string;
   company: string;
   segment?: string;
@@ -20,172 +20,246 @@ interface Client {
   city?: string;
   contacts?: any[];
   opportunities?: string[];
-  [key: string]: any;
+  color?: string;
+  [key: string]: unknown;
 }
 
-interface FilterOptions {
-  segmento: string[];
-  porte: string[];
-  uf: string[];
-  cidade: string[];
+interface ClientsResponse {
+  clients: ClientRecord[];
+  filters: Record<string, string[]>;
 }
 
-interface EnrichPreviewState {
-  suggestion?: any;
-  debug?: any;
+type EnrichPreview = {
   error?: string;
-  base?: any;
-}
+  base?: { Nome_da_Empresa?: string };
+  data?: unknown;
+};
+
+const filterDefaults: ActiveFilters = {
+  segmento: [],
+  porte: [],
+  uf: [],
+  cidade: [],
+  erp: [],
+  fase: [],
+  origem: [],
+  vendedor: []
+};
 
 async function openConfirmDialog({
   title,
   description,
   confirmText,
-  cancelText,
+  cancelText
 }: {
   title: string;
   description: string;
   confirmText: string;
   cancelText: string;
 }) {
-  const msg = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
-  return window.confirm(msg) ? 'confirm' : 'cancel';
+  const message = `${title}\n\n${description}\n\n[OK] ${confirmText}\n[Cancelar] ${cancelText}`;
+  return window.confirm(message) ? 'confirm' : 'cancel';
+}
+
+function useSearchQuery() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const qs = useSearchParams();
+  const [query, setQuery] = useState('');
+  const [hydrated, setHydrated] = useState(false);
+  const qsString = qs.toString();
+
+  useEffect(() => {
+    const initial = new URLSearchParams(qsString).get('q') ?? '';
+    setQuery(initial);
+    setHydrated(true);
+  }, [qsString]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const params = new URLSearchParams(qsString);
+    if (query.trim()) {
+      params.set('q', query.trim());
+    } else {
+      params.delete('q');
+    }
+    const paramsString = params.toString();
+    const next = `${pathname}${paramsString ? `?${paramsString}` : ''}`;
+    const current = `${pathname}${qsString ? `?${qsString}` : ''}`;
+    if (next !== current) {
+      router.replace(next, { scroll: false });
+    }
+  }, [hydrated, pathname, query, router, qsString]);
+
+  return { query, setQuery };
 }
 
 function ClientesPageComponent() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [allOptions, setAllOptions] = useState<FilterOptions>({ segmento: [], porte: [], uf: [], cidade: [] });
-
-  const { state: filterState, update: handleFilterUpdate, reset } = useFilterState({
-    query: [],
-    segmento: [],
-    porte: [],
-    uf: [],
-    cidade: [],
-  });
-
-  const filters = useMemo(
-    () => ({
-      segmento: filterState.segmento,
-      porte: filterState.porte,
-      uf: filterState.uf,
-      cidade: filterState.cidade,
-    }),
-    [filterState.segmento, filterState.porte, filterState.uf, filterState.cidade],
-  );
-
-  const query = useMemo(() => filterState.query?.[0] || '', [filterState.query]);
-
+  const [clients, setClients] = useState<ClientRecord[]>([]);
+  const [options, setOptions] = useState<Record<string, string[]>>({});
   const [companyModalOpen, setCompanyModalOpen] = useState(false);
   const [companyPrefill, setCompanyPrefill] = useState<any>(null);
-  const [enrichPreview, setEnrichPreview] = useState<EnrichPreviewState | null>(null);
+  const [enrichPreview, setEnrichPreview] = useState<EnrichPreview | null>(null);
   const [showEnrichPreview, setShowEnrichPreview] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
 
-  const fetchClients = () => {
-    fetch('/api/clientes')
-      .then((res) => res.json())
-      .then((data) => {
-        setClients(data.clients);
-        setAllOptions(data.filters);
-      });
-  };
+  const { state: filters, update, reset } = useFilterState(filterDefaults);
+  const { query, setQuery } = useSearchQuery();
 
   useEffect(() => {
-    fetchClients();
+    async function loadClients() {
+      const response = await fetch('/api/clientes');
+      const json: ClientsResponse = await response.json();
+      setClients(json.clients);
+      setOptions(json.filters || {});
+    }
+    loadClients();
   }, []);
 
-  const filteredClients = useMemo(() => {
-    return clients.filter((client) => {
-      if (filters.segmento.length > 0 && !filters.segmento.includes((client.segment || '').trim())) return false;
-      if (filters.porte.length > 0 && !filters.porte.includes((client.size || '').trim())) return false;
-      if (filters.uf.length > 0 && !filters.uf.includes((client.uf || '').trim())) return false;
-      if (filters.cidade.length > 0 && !filters.cidade.includes((client.city || '').trim())) return false;
+  const filterOptionsForMultiSelect = useMemo<FilterOptions>(() => {
+    const mapToOptions = (values?: string[]) => (values || []).map((value) => ({ label: value, value }));
+    return {
+      segmento: mapToOptions(options.segmento),
+      porte: mapToOptions(options.porte),
+      uf: mapToOptions(options.uf),
+      cidade: mapToOptions(options.cidade),
+      erp: mapToOptions(options.erp),
+      fase: mapToOptions(options.fase),
+      origem: mapToOptions(options.origem),
+      vendedor: mapToOptions(options.vendedor)
+    };
+  }, [options]);
 
-      if (query) {
-        const q = query.toLowerCase();
-        const matchName = (client.company || '').toLowerCase().includes(q);
-        const matchContact = (client.contacts || []).some((c: any) => (c.name || c.nome || '').toLowerCase().includes(q));
-        const matchOpp = (client.opportunities || []).some((o: string) => (o || '').toLowerCase().includes(q));
-        if (!matchName && !matchContact && !matchOpp) return false;
+  const handleFilterChange = (next: ActiveFilters) => {
+    (Object.keys(next) as FilterKey[]).forEach((key) => {
+      const incoming = next[key] ?? [];
+      const current = filters[key] ?? [];
+      if (incoming.length !== current.length || incoming.some((value, index) => value !== current[index])) {
+        update(key, incoming);
       }
-      return true;
+    });
+  };
+
+  const filteredClients = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return clients.filter((client) => {
+      const matchesSegment = !filters.segmento.length || filters.segmento.includes((client.segment || '').trim());
+      if (!matchesSegment) return false;
+      const matchesSize = !filters.porte.length || filters.porte.includes((client.size || '').trim());
+      if (!matchesSize) return false;
+      const matchesUf = !filters.uf.length || filters.uf.includes((client.uf || '').trim());
+      if (!matchesUf) return false;
+      const matchesCity = !filters.cidade.length || filters.cidade.includes((client.city || '').trim());
+      if (!matchesCity) return false;
+      const matchesErp = !filters.erp.length || filters.erp.includes((client.erp as string || '').trim());
+      if (!matchesErp) return false;
+      const matchesStage = !filters.fase.length || filters.fase.includes((client.status as string || '').trim());
+      if (!matchesStage) return false;
+      const matchesOrigin = !filters.origem.length || filters.origem.includes((client.fonte as string || '').trim());
+      if (!matchesOrigin) return false;
+      const matchesOwner = !filters.vendedor.length || filters.vendedor.includes((client.owner as string || '').trim());
+      if (!matchesOwner) return false;
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const baseName = (client.company || '').toLowerCase();
+      const contactMatch = Array.isArray(client.contacts)
+        ? client.contacts.some((contact: any) =>
+            [contact?.name, contact?.nome, contact?.email]
+              .filter(Boolean)
+              .some((value: string) => value.toLowerCase().includes(normalizedQuery))
+          )
+        : false;
+      const opportunityMatch = Array.isArray(client.opportunities)
+        ? client.opportunities.some((opportunity) => (opportunity || '').toLowerCase().includes(normalizedQuery))
+        : false;
+
+      return (
+        baseName.includes(normalizedQuery) ||
+        contactMatch ||
+        opportunityMatch
+      );
     });
   }, [clients, filters, query]);
-
-  const filterOptionsForMultiSelect = useMemo(() => {
-    return {
-      segmento: allOptions.segmento.map((s) => ({ label: s, value: s })),
-      porte: allOptions.porte.map((p) => ({ label: p, value: p })),
-      uf: allOptions.uf.map((u) => ({ label: u, value: u })),
-      cidade: allOptions.cidade.map((c) => ({ label: c, value: c })),
-    };
-  }, [allOptions]);
-
-  const handleFilterChange = (key: string, value: string | string[]) => {
-    if (key === 'query') {
-      handleFilterUpdate('query', [value as string]);
-    } else {
-      handleFilterUpdate(key, value as string[]);
-    }
-  };
-
-  const handleEnrichQuery = async () => {
-    if (!query) return;
-    setIsEnriching(true);
-    try {
-      const resp = await fetch('/api/empresas/enriquecer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: query }),
-      });
-      const json = await resp.json();
-      if (!resp.ok) throw new Error(json?.error || 'Falha ao enriquecer');
-      setEnrichPreview({ ...json, base: { Nome_da_Empresa: query } });
-      setShowEnrichPreview(true);
-    } catch (error: any) {
-      console.error(error);
-      setEnrichPreview({ error: error?.toString?.() || 'Erro ao enriquecer', base: { Nome_da_Empresa: query } });
-      setShowEnrichPreview(true);
-    } finally {
-      setIsEnriching(false);
-    }
-  };
-
-  const handleOpenNewCompanyModal = (initialData = {}) => {
-    setCompanyPrefill(initialData);
-    setCompanyModalOpen(true);
-  };
-
-  const handleSaveNewCompany = () => {
-    setCompanyModalOpen(false);
-    setCompanyPrefill(null);
-    fetchClients();
-  };
 
   const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
 
   const summary = useMemo(() => {
-    const base = filteredClients;
-    const contacts = base.reduce(
-      (total, client) => total + (Array.isArray(client?.contacts) ? client.contacts.length : 0),
-      0,
-    );
-    const segments = new Set(base.map((client) => (client?.segment || '').trim()).filter(Boolean));
-    const states = new Set(base.map((client) => (client?.uf || '').trim()).filter(Boolean));
+    const contacts = filteredClients.reduce((total, client) => {
+      const value = Array.isArray(client.contacts) ? client.contacts.length : 0;
+      return total + value;
+    }, 0);
+
+    const segments = new Set(filteredClients.map((client) => (client.segment || '').trim()).filter(Boolean));
+    const states = new Set(filteredClients.map((client) => (client.uf || '').trim()).filter(Boolean));
 
     return {
-      visible: base.length,
+      visible: filteredClients.length,
       total: clients.length,
       contacts,
       segments: segments.size,
-      states: states.size,
+      states: states.size
     };
-  }, [filteredClients, clients.length]);
+  }, [clients.length, filteredClients]);
 
-  const formatNumber = (value: number) => numberFormatter.format(value);
   const hasActiveQuery = query.trim().length > 0;
   const showEmptyState = filteredClients.length === 0 && hasActiveQuery;
+
+  const formatNumber = (value: number) => numberFormatter.format(value);
+
+  const previewPayload = enrichPreview?.data as any;
+  const suggestionFlat = previewPayload?.suggestion ?? previewPayload ?? null;
+  const rawJsonPreview = previewPayload?.debug?.parsedJson ?? previewPayload?.rawJson ?? previewPayload ?? null;
+
+  async function handleEnrichQuery() {
+    if (!hasActiveQuery) return;
+    setIsEnriching(true);
+    try {
+      const response = await fetch('/api/empresas/enriquecer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: query })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Falha ao enriquecer');
+      }
+      setEnrichPreview({ data: payload, base: { Nome_da_Empresa: query } });
+      setShowEnrichPreview(true);
+    } catch (error: any) {
+      console.error(error);
+      setEnrichPreview({
+        error: error?.toString?.() || 'Erro ao enriquecer',
+        base: { Nome_da_Empresa: query }
+      });
+      setShowEnrichPreview(true);
+    } finally {
+      setIsEnriching(false);
+    }
+  }
+
+  function handleOpenNewCompanyModal(initialData = {}) {
+    setCompanyPrefill(initialData);
+    setCompanyModalOpen(true);
+  }
+
+  function handleSaveNewCompany() {
+    setCompanyModalOpen(false);
+    setCompanyPrefill(null);
+    fetch('/api/clientes')
+      .then((res) => res.json())
+      .then((json: ClientsResponse) => {
+        setClients(json.clients);
+        setOptions(json.filters || {});
+      });
+  }
+
+  function handleReset() {
+    reset();
+    setQuery('');
+  }
 
   return (
     <div className="flex flex-col gap-6 overflow-x-hidden">
@@ -209,7 +283,7 @@ function ClientesPageComponent() {
             disabled={!hasActiveQuery || isEnriching}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isEnriching && <FaSpinner className="h-4 w-4 animate-spin" />}
+            {isEnriching ? <FaSpinner className="h-4 w-4 animate-spin" /> : null}
             Enriquecer busca
           </button>
         </div>
@@ -251,7 +325,8 @@ function ClientesPageComponent() {
             searchQuery={query}
             options={filterOptionsForMultiSelect}
             onFilterChange={handleFilterChange}
-            onReset={reset}
+            onSearchChange={setQuery}
+            onReset={handleReset}
           />
         </div>
       </section>
@@ -278,7 +353,7 @@ function ClientesPageComponent() {
               </p>
             </div>
           ) : (
-            <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredClients.map((client) => (
                 <ClientCard key={client.id} client={client} />
               ))}
@@ -300,23 +375,24 @@ function ClientesPageComponent() {
       <EnrichmentPreviewDialog
         isOpen={showEnrichPreview}
         onClose={() => setShowEnrichPreview(false)}
-        suggestionFlat={enrichPreview?.suggestion || null}
-        rawJson={enrichPreview?.debug?.parsedJson}
-        error={enrichPreview?.error ? String(enrichPreview.error) : undefined}
+        suggestionFlat={suggestionFlat}
+        baseCompany={(enrichPreview?.base as any) ?? null}
+        rawJson={rawJsonPreview}
+        error={enrichPreview?.error}
         onConfirm={async (flat) => {
-          const merged = { ...enrichPreview?.base, ...flat };
+          const merged = { ...(enrichPreview?.base ?? {}), ...flat };
           const cnpjFinal = await decideCNPJFinal({
-            currentFormCNPJ: merged?.CNPJ_Empresa,
-            enrichedCNPJ: flat?.CNPJ_Empresa ?? flat?.cnpj,
+            currentFormCNPJ: (enrichPreview?.base as any)?.CNPJ_Empresa,
+            enrichedCNPJ: (flat as any)?.CNPJ_Empresa ?? (flat as any)?.cnpj,
             ask: async (matriz, filial) => {
               const choice = await openConfirmDialog({
                 title: 'CNPJ indica Filial',
                 description: `Detectamos FILIAL (${filial}). Deseja salvar como filial mesmo?\nSe preferir Matriz, salvaremos ${matriz}.`,
                 confirmText: 'Usar Matriz',
-                cancelText: 'Manter Filial',
+                cancelText: 'Manter Filial'
               });
               return choice === 'confirm';
-            },
+            }
           });
           const mergedWithCnpj = { ...merged, CNPJ_Empresa: cnpjFinal };
           handleOpenNewCompanyModal(mergedWithCnpj);
