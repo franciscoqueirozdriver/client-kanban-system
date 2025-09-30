@@ -274,6 +274,25 @@ function KanbanPage() {
 
   const filterOptions = filterOptionsForMultiSelect;
 
+  function handleOpenSpotter(arg?: string | Card | ClientRecord) {
+    try {
+      if (typeof window === 'undefined') return;
+
+      const resolvedClient: ClientRecord | undefined =
+        typeof arg === 'string'
+          ? { id: arg, company: '' }
+          : (arg && 'client' in (arg as Card) ? (arg as Card).client : (arg as ClientRecord));
+
+      const empresa = resolvedClient?.company ?? '';
+      const id = resolvedClient?.id ?? '';
+      const url = `/spotter?empresa=${encodeURIComponent(empresa)}&id=${encodeURIComponent(id)}`;
+
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error('Falha ao abrir Spotter', error);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 overflow-x-hidden">
       <header className="flex flex-wrap items-start justify-between gap-6 rounded-3xl border border-border bg-card px-6 py-6 shadow-soft">
@@ -316,7 +335,7 @@ function KanbanPage() {
           <DragDropContext onDragEnd={onDragEnd}>
             <div className="flex flex-wrap gap-4" role="list">
               {filteredColumns.map((column) => (
-                <KanbanColumn key={column.id} column={column} />
+                <KanbanColumn key={column.id} column={column} onOpenSpotter={handleOpenSpotter} />
               ))}
             </div>
           </DragDropContext>
