@@ -56,7 +56,7 @@ function KanbanPage() {
   const [spotterLead, setSpotterLead] = useState<any>(null);
   const [sending, setSending] = useState(false);
 
-  const { state: filters, update: handleFilterUpdate, reset } = useFilterState({
+  const { state: filterState, update: handleFilterUpdate, reset } = useFilterState({
     query: [],
     segmento: [],
     porte: [],
@@ -64,7 +64,17 @@ function KanbanPage() {
     cidade: [],
   });
 
-  const query = useMemo(() => filters.query?.[0] || '', [filters.query]);
+  const filters = useMemo(
+    () => ({
+      segmento: filterState.segmento,
+      porte: filterState.porte,
+      uf: filterState.uf,
+      cidade: filterState.cidade,
+    }),
+    [filterState.segmento, filterState.porte, filterState.uf, filterState.cidade],
+  );
+
+  const query = useMemo(() => filterState.query?.[0] || '', [filterState.query]);
 
   const searchParams = useSearchParams();
   const view =
@@ -90,7 +100,7 @@ function KanbanPage() {
   }, []);
 
   const filteredColumns = useMemo(() => {
-    if (!filters.query.length && !filters.segmento.length && !filters.porte.length && !filters.uf.length && !filters.cidade.length) {
+    if (!filterState.query.length && !filters.segmento.length && !filters.porte.length && !filters.uf.length && !filters.cidade.length) {
       return columns;
     }
 
@@ -113,7 +123,7 @@ function KanbanPage() {
         return true;
       }),
     }));
-  }, [columns, filters, query]);
+  }, [columns, filterState.query, filters, query]);
 
   const handleFilterChange = (key: string, value: string | string[]) => {
     if (key === 'query') {
@@ -215,7 +225,13 @@ function KanbanPage() {
           <p className="text-sm text-muted-foreground">Refine os leads exibidos utilizando os campos abaixo.</p>
         </div>
         <div className="mt-4">
-          <Filters filters={{ ...filters, query }} options={filterOptionsForMultiSelect} onFilterChange={handleFilterChange} onReset={reset} />
+          <Filters
+            filters={filters}
+            searchQuery={query}
+            options={filterOptionsForMultiSelect}
+            onFilterChange={handleFilterChange}
+            onReset={reset}
+          />
         </div>
       </section>
 

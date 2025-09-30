@@ -10,7 +10,6 @@ interface FilterOptions {
 }
 
 interface ActiveFilters {
-  query: string;
   segmento: string[];
   porte: string[];
   uf: string[];
@@ -19,12 +18,13 @@ interface ActiveFilters {
 
 interface FiltersProps {
   filters: ActiveFilters;
+  searchQuery: string;
   options: FilterOptions;
-  onFilterChange: (key: keyof ActiveFilters, value: string | string[]) => void;
+  onFilterChange: (key: keyof ActiveFilters | 'query', value: string | string[]) => void;
   onReset?: () => void;
 }
 
-export default function Filters({ filters, options, onFilterChange, onReset }: FiltersProps) {
+export default function Filters({ filters, searchQuery, options, onFilterChange, onReset }: FiltersProps) {
   const inputClassName =
     'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shadow-soft';
 
@@ -38,7 +38,7 @@ export default function Filters({ filters, options, onFilterChange, onReset }: F
           <input
             id="filter-query"
             type="text"
-            value={filters.query}
+            value={searchQuery}
             onChange={(event) => onFilterChange('query', event.target.value)}
             placeholder="Buscar por empresa, contato ou oportunidade"
             className={inputClassName}

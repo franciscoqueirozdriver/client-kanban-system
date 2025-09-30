@@ -56,7 +56,7 @@ function ClientesPageComponent() {
   const [clients, setClients] = useState<Client[]>([]);
   const [allOptions, setAllOptions] = useState<FilterOptions>({ segmento: [], porte: [], uf: [], cidade: [] });
 
-  const { state: filters, update: handleFilterUpdate, reset } = useFilterState({
+  const { state: filterState, update: handleFilterUpdate, reset } = useFilterState({
     query: [],
     segmento: [],
     porte: [],
@@ -64,7 +64,17 @@ function ClientesPageComponent() {
     cidade: [],
   });
 
-  const query = useMemo(() => filters.query?.[0] || '', [filters.query]);
+  const filters = useMemo(
+    () => ({
+      segmento: filterState.segmento,
+      porte: filterState.porte,
+      uf: filterState.uf,
+      cidade: filterState.cidade,
+    }),
+    [filterState.segmento, filterState.porte, filterState.uf, filterState.cidade],
+  );
+
+  const query = useMemo(() => filterState.query?.[0] || '', [filterState.query]);
 
   const [companyModalOpen, setCompanyModalOpen] = useState(false);
   const [companyPrefill, setCompanyPrefill] = useState<any>(null);
@@ -236,7 +246,13 @@ function ClientesPageComponent() {
               Utilize os filtros abaixo para refinar a visualização de clientes por segmento, porte ou localização.
             </p>
           </div>
-          <Filters filters={{ ...filters, query }} options={filterOptionsForMultiSelect} onFilterChange={handleFilterChange} onReset={reset} />
+          <Filters
+            filters={filters}
+            searchQuery={query}
+            options={filterOptionsForMultiSelect}
+            onFilterChange={handleFilterChange}
+            onReset={reset}
+          />
         </div>
       </section>
 
