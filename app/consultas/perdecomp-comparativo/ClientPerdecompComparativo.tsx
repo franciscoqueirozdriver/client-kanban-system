@@ -69,6 +69,7 @@ type Prefill = {
   Complemento_Empresa?: string;
   CEP_Empresa?: string;
   CNPJ_Empresa?: string;
+  cnpj?: string;
   DDI_Empresa?: string;
   Telefones_Empresa?: string;
   Observacao_Empresa?: string;

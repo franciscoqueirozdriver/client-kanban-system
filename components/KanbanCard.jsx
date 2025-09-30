@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import MessageModal from './MessageModal';
 import ObservationModal from './ObservationModal';
 import HistoryModal from './HistoryModal';
+import CardSurface from '@/components/cards/CardSurface';
 import { onlyDigits, isValidCNPJ } from '@/utils/cnpj';
 import { cn } from '@/lib/cn';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -18,6 +19,17 @@ function displayPhone(phone) {
 function displayEmail(email) {
   return String(email || '').replace(/^'+/, '');
 }
+
+function resolveAccentColor(color) {
+  const accentMap = {
+    green: 'hsl(var(--success))',
+    red: 'hsl(var(--danger))',
+    gray: 'hsl(var(--muted-foreground))',
+    purple: 'hsl(var(--secondary))',
+  };
+  return accentMap[color] || 'hsl(var(--primary))';
+}
+
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -264,42 +276,29 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
     }
   };
 
-  const accentMap = {
-    green: 'hsl(var(--success))',
-    red: 'hsl(var(--danger))',
-    gray: 'hsl(var(--muted-foreground))',
-    purple: 'hsl(var(--secondary))',
-  };
-
-  const accentColor = accentMap[client.color] || 'hsl(var(--primary))';
+  const accentColor = resolveAccentColor(client.color);
 
   return (
     <Draggable draggableId={card.id} index={index}>
       {(provided, snapshot) => (
         <>
-        <div
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          {...provided.dragHandleProps}
-          style={{
-            ...provided.draggableProps.style,
-            '--card-accent': accentColor,
-          }}
-          className={cn(
-            'relative mb-3 overflow-hidden rounded-2xl border border-border/70 bg-card p-4 text-sm shadow transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
-            loading && 'pointer-events-none opacity-60',
-            snapshot.isDragging && 'ring-2 ring-primary/60 shadow-soft',
-          )}
-          onDoubleClick={handleDoubleClick}
-          title="Dê duplo clique para enriquecer os dados desta empresa"
-          tabIndex={0}
-          aria-roledescription="Cartão do kanban"
-        >
-          <span
-            aria-hidden="true"
-            className="absolute inset-y-4 left-0 w-1 rounded-full"
-            style={{ background: 'var(--card-accent)' }}
-          />
+          <CardSurface
+            ref={provided.innerRef}
+            accentColor={accentColor}
+            {...provided.draggableProps}
+            {...provided.dragHandleProps}
+            style={provided.draggableProps.style}
+            className={cn(
+              'mb-3 select-none transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md',
+              loading && 'pointer-events-none opacity-60',
+              snapshot.isDragging && 'ring-2 ring-primary/60 shadow-soft',
+            )}
+            onDoubleClick={handleDoubleClick}
+            title="Dê duplo clique para enriquecer os dados desta empresa"
+            tabIndex={0}
+            aria-roledescription="Cartão do kanban"
+          >
+
           <h4 className="text-base font-semibold text-foreground">
             {client.company}
           </h4>
@@ -364,6 +363,27 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
                 </p>
               )}
 
+              {c.phone && !c.normalizedPhones && (
+                <p className="mt-2 text-[11px] text-muted-foreground">{displayPhone(c.phone)}</p>
+              )}
+
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  onClick={(e) => handleEmailClick(e, null, c)}
+                >
+                  Enviar mensagem
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  onClick={(e) => handlePhoneClick(e, (c.normalizedPhones && c.normalizedPhones[0]) || c.phone, c)}
+                >
+                  WhatsApp
+                </button>
+              </div>
+
               {c.linkedin && (
                 <p className="mt-2">
                   <a
@@ -379,6 +399,7 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
               )}
             </div>
           ))}
+
           <div className="mt-4">
             <button
               type="button"
@@ -419,7 +440,7 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
               Consultar PER/DCOMP
             </button>
           </div>
-        </div>
+        </CardSurface>
         <MessageModal
           open={modalOpen}
           messages={modalMessages}

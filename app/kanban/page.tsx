@@ -1,16 +1,17 @@
 'use client';
+
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
-import { useEffect, useState, useMemo, Suspense } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import KanbanColumn from '../../components/KanbanColumn';
-import Filters from '../../components/Filters';
-import ViewToggle from '@/components/view-toggle/ViewToggle';
-import Views from './Views';
+
+import Filters from '@/components/Filters';
+import KanbanColumn from '@/components/KanbanColumn';
 import SummaryCard from '@/components/SummaryCard';
 import SpotterModal from '@/components/spotter/SpotterModal';
+import ViewToggle from '@/components/view-toggle/ViewToggle';
+import Views from './Views';
 import { useFilterState } from '@/hooks/useFilterState';
 
-// --- Types ---
 interface Client {
   id: string;
   company: string;
@@ -47,7 +48,6 @@ interface FilterOptions {
   cidade: { label: string; value: string }[];
 }
 
-// --- Main Page Component ---
 function KanbanPage() {
   const [columns, setColumns] = useState<Column[]>([]);
   const [allOptions, setAllOptions] = useState<Omit<FilterOptions, 'query'>>({ segmento: [], porte: [], uf: [], cidade: [] });
@@ -56,17 +56,31 @@ function KanbanPage() {
   const [spotterLead, setSpotterLead] = useState<any>(null);
   const [sending, setSending] = useState(false);
 
-  const { state: filters, update: onFilterChange } = useFilterState({
+  const { state: filterState, update: handleFilterUpdate, reset } = useFilterState({
     query: [],
     segmento: [],
     porte: [],
     uf: [],
     cidade: [],
   });
-  const query = useMemo(() => filters.query?.[0] || '', [filters.query]);
+
+  const filters = useMemo(
+    () => ({
+      segmento: filterState.segmento,
+      porte: filterState.porte,
+      uf: filterState.uf,
+      cidade: filterState.cidade,
+    }),
+    [filterState.segmento, filterState.porte, filterState.uf, filterState.cidade],
+  );
+
+  const query = useMemo(() => filterState.query?.[0] || '', [filterState.query]);
 
   const searchParams = useSearchParams();
-  const view = searchParams?.get('view') || (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) || 'kanban';
+  const view =
+    searchParams?.get('view') ||
+    (typeof window !== 'undefined' && localStorage.getItem('kanban_view_pref')) ||
+    'kanban';
 
   const fetchColumns = async () => {
     const res = await fetch('/api/kanban');
@@ -75,9 +89,9 @@ function KanbanPage() {
   };
 
   const fetchFilterOptions = async () => {
-      const res = await fetch('/api/clientes');
-      const data = await res.json();
-      setAllOptions(data.filters);
+    const res = await fetch('/api/clientes');
+    const data = await res.json();
+    setAllOptions(data.filters);
   };
 
   useEffect(() => {
@@ -86,13 +100,13 @@ function KanbanPage() {
   }, []);
 
   const filteredColumns = useMemo(() => {
-    if (!filters.query.length && !filters.segmento.length && !filters.porte.length && !filters.uf.length && !filters.cidade.length) {
+    if (!filterState.query.length && !filters.segmento.length && !filters.porte.length && !filters.uf.length && !filters.cidade.length) {
       return columns;
     }
 
-    return columns.map(col => ({
+    return columns.map((col) => ({
       ...col,
-      cards: col.cards.filter(card => {
+      cards: col.cards.filter((card) => {
         const client = card.client;
         if (filters.segmento.length > 0 && !filters.segmento.includes((client.segment || '').trim())) return false;
         if (filters.porte.length > 0 && !filters.porte.includes((client.size || '').trim())) return false;
@@ -107,24 +121,24 @@ function KanbanPage() {
           if (!matchName && !matchContact && !matchOpp) return false;
         }
         return true;
-      })
+      }),
     }));
-  }, [columns, filters, query]);
+  }, [columns, filterState.query, filters, query]);
 
   const handleFilterChange = (key: string, value: string | string[]) => {
-      if (key === 'query') {
-        onFilterChange('query', [value as string]);
-      } else {
-        onFilterChange(key, value as string[]);
-      }
+    if (key === 'query') {
+      handleFilterUpdate('query', [value as string]);
+    } else {
+      handleFilterUpdate(key, value as string[]);
+    }
   };
 
   const filterOptionsForMultiSelect = useMemo(() => {
     return {
-      segmento: allOptions.segmento.map(s => ({ label: s, value: s })),
-      porte: allOptions.porte.map(p => ({ label: p, value: p })),
-      uf: allOptions.uf.map(u => ({ label: u, value: u })),
-      cidade: allOptions.cidade.map(c => ({ label: c, value: c })),
+      segmento: allOptions.segmento.map((s) => ({ label: s, value: s })),
+      porte: allOptions.porte.map((p) => ({ label: p, value: p })),
+      uf: allOptions.uf.map((u) => ({ label: u, value: u })),
+      cidade: allOptions.cidade.map((c) => ({ label: c, value: c })),
     };
   }, [allOptions]);
 
@@ -135,8 +149,8 @@ function KanbanPage() {
 
     const { source, destination, draggableId } = result;
     const allCols = [...columns];
-    const sourceCol = allCols.find(c => c.id === source.droppableId);
-    const destCol = allCols.find(c => c.id === destination.droppableId);
+    const sourceCol = allCols.find((c) => c.id === source.droppableId);
+    const destCol = allCols.find((c) => c.id === destination.droppableId);
 
     if (!sourceCol || !destCol) return;
 
@@ -166,7 +180,6 @@ function KanbanPage() {
       });
       await fetchColumns();
     } catch (err) {
-      // Revert on error
       fetchColumns();
       alert('Erro ao atualizar');
     } finally {
@@ -175,19 +188,19 @@ function KanbanPage() {
   };
 
   const summary = useMemo(() => {
-    const allCards = (filteredColumns || columns).flatMap(col => col.cards);
+    const allCards = (filteredColumns || columns).flatMap((col) => col.cards);
     const totalLeads = allCards.length;
-    const scheduled = allCards.filter(c => ['Agendado', 'Reunião Agendada'].includes(c.client.status)).length;
-    const meetings = allCards.filter(c => ['Reunião Realizada', 'Conversa Iniciada', 'Contato Efetuado'].includes(c.client.status)).length;
-    const lost = allCards.filter(c => c.client.status === 'Perdido').length;
-    const won = allCards.filter(c => ['Vendido', 'Negociação Concluída'].includes(c.client.status)).length;
+    const scheduled = allCards.filter((c) => ['Agendado', 'Reunião Agendada'].includes(c.client.status)).length;
+    const meetings = allCards.filter((c) => ['Reunião Realizada', 'Conversa Iniciada', 'Contato Efetuado'].includes(c.client.status)).length;
+    const lost = allCards.filter((c) => c.client.status === 'Perdido').length;
+    const won = allCards.filter((c) => ['Vendido', 'Negociação Concluída'].includes(c.client.status)).length;
     const conversion = totalLeads > 0 ? Math.round((won / totalLeads) * 100) : 0;
 
     return { totalLeads, scheduled, meetings, conversion, lost };
   }, [columns, filteredColumns]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 overflow-x-hidden">
       <header className="flex flex-wrap items-start justify-between gap-6 rounded-3xl border border-border bg-card px-6 py-6 shadow-soft">
         <div className="max-w-2xl space-y-3">
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Painel de Consultas</p>
@@ -206,26 +219,26 @@ function KanbanPage() {
         <SummaryCard title="Taxa de conversão" value={`${summary.conversion}%`} helper="Baseado em negócios vendidos" />
       </section>
 
-      <div className="grid gap-4">
-        <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Filtros avançados</h2>
-            <p className="text-sm text-muted-foreground">Refine os leads exibidos utilizando os campos abaixo.</p>
-          </div>
-          <div className="mt-4">
-            <Filters
-              filters={{...filters, query}}
-              options={filterOptionsForMultiSelect}
-              onFilterChange={handleFilterChange}
-            />
-          </div>
-        </section>
-      </div>
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Filtros avançados</h2>
+          <p className="text-sm text-muted-foreground">Refine os leads exibidos utilizando os campos abaixo.</p>
+        </div>
+        <div className="mt-4">
+          <Filters
+            filters={filters}
+            searchQuery={query}
+            options={filterOptionsForMultiSelect}
+            onFilterChange={handleFilterChange}
+            onReset={reset}
+          />
+        </div>
+      </section>
 
       {view === 'kanban' ? (
-        <section className="rounded-3xl border border-border bg-muted/40 p-4 shadow-soft min-w-0 overflow-x-hidden">
+        <section className="rounded-3xl border border-border bg-muted/40 p-4 shadow-soft min-w-0 overflow-x-auto">
           <DragDropContext onDragEnd={onDragEnd}>
-            <div className="w-full overflow-x-auto">
+            <div className="w-full">
               <div className="flex min-h-0 w-max select-none items-stretch gap-4 pr-6" role="list">
                 {(filteredColumns || columns).map((col) => (
                   <KanbanColumn key={col.id} column={col} onOpenSpotter={() => {}} />
@@ -235,8 +248,17 @@ function KanbanPage() {
           </DragDropContext>
         </section>
       ) : (
-        <Views leads={(filteredColumns || columns).flatMap(col => col.cards.map(card => card.client))} />
+        <Views leads={(filteredColumns || columns).flatMap((col) => col.cards.map((card) => card.client))} />
       )}
+
+      <SpotterModal
+        open={spotterOpen}
+        setOpen={setSpotterOpen}
+        lead={spotterLead}
+        setLead={setSpotterLead}
+        sending={sending}
+        setSending={setSending}
+      />
     </div>
   );
 }
