@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/cn';
 
-export default function SummaryCard({ title, value, helper, trend }) {
+export default function SummaryCard({ title, value, helper, trend = null }) {
   return (
     <article
       className="group relative overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg focus-within:-translate-y-0.5 focus-within:shadow-lg"
