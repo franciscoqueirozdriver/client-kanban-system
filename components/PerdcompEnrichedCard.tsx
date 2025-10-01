@@ -157,14 +157,10 @@ export default function PerdcompEnrichedCard({
             )}
 
             {/* Métricas básicas */}
-            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1 text-sm">
               <div className="contents">
                 <dt className="text-muted-foreground">Quantidade:</dt>
                 <dd className="text-right font-medium">{resumo?.totalSemCancelamento ?? data.quantity ?? 0}</dd>
-              </div>
-              <div className="contents">
-                <dt className="text-muted-foreground">Valor Total:</dt>
-                <dd className="text-right font-medium">R$ 0,00</dd>
               </div>
             </dl>
 
@@ -198,24 +194,57 @@ export default function PerdcompEnrichedCard({
             )}
 
             {temRegistros ? (
-              <div className="mt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantos são:</p>
-                <ul className="mt-2 space-y-1 text-sm">
-                  {Object.entries(resumo?.porNaturezaAgrupada || {}).map(([cod, qtd]) => (
-                    <li key={cod} className="flex items-center justify-between gap-4">
-                      <span className="text-muted-foreground">
-                        {cod === '1.3/1.7'
-                          ? '1.3/1.7 = DCOMP (Declarações de Compensação)'
-                          : cod === '1.2/1.6'
-                          ? '1.2/1.6 = REST (Pedidos de Restituição)'
-                          : cod === '1.1/1.5'
-                          ? '1.1/1.5 = RESSARC (Pedidos de Ressarcimento)'
-                          : cod}
-                      </span>
-                      <span className="font-medium">{qtd}</span>
-                    </li>
-                  ))}
-                </ul>
+              <div className="mt-4 space-y-4">
+                {/* Quantos são */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantos são:</p>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {Object.entries(resumo?.porNaturezaAgrupada || {}).map(([cod, qtd]) => (
+                      <li key={cod} className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">
+                          {cod === '1.3/1.7'
+                            ? 'DCOMP (Declarações de Compensação)'
+                            : cod === '1.2/1.6'
+                            ? 'REST (Pedidos de Restituição)'
+                            : cod === '1.1/1.5'
+                            ? 'RESSARC (Pedidos de Ressarcimento)'
+                            : cod}
+                        </span>
+                        <span className="font-medium">{qtd}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Por tipo de naturezas */}
+                {analiseEnriquecida?.distribuicaoPorNatureza && Object.keys(analiseEnriquecida.distribuicaoPorNatureza).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Por tipo de naturezas:</p>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {Object.entries(analiseEnriquecida.distribuicaoPorNatureza).map(([natureza, qtd]) => (
+                        <li key={natureza} className="flex items-center justify-between gap-4">
+                          <span className="text-muted-foreground">{natureza}</span>
+                          <span className="font-medium">{qtd}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Por tipo de Crédito */}
+                {analiseEnriquecida?.distribuicaoPorCredito && Object.keys(analiseEnriquecida.distribuicaoPorCredito).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Por tipo de Crédito:</p>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {Object.entries(analiseEnriquecida.distribuicaoPorCredito).map(([credito, qtd]) => (
+                        <li key={credito} className="flex items-center justify-between gap-4">
+                          <span className="text-muted-foreground">{credito}</span>
+                          <span className="font-medium">{qtd}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-dashed border-border bg-card/40 p-4 text-center text-sm text-muted-foreground">

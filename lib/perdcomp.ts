@@ -211,6 +211,8 @@ export function analisarPortfolioPerdcomp(perdcomps: string[]): {
   totalRegistros: number;
   distribuicaoPorTipo: Record<string, number>;
   distribuicaoPorCategoria: Record<string, number>;
+  distribuicaoPorNatureza: Record<string, number>;
+  distribuicaoPorCredito: Record<string, number>;
   nivelRiscoGeral: 'BAIXO' | 'MEDIO' | 'ALTO';
   recomendacoesPrioritarias: string[];
   oportunidadesIdentificadas: string[];
@@ -220,6 +222,8 @@ export function analisarPortfolioPerdcomp(perdcomps: string[]): {
   
   const distribuicaoPorTipo: Record<string, number> = {};
   const distribuicaoPorCategoria: Record<string, number> = {};
+  const distribuicaoPorNatureza: Record<string, number> = {};
+  const distribuicaoPorCredito: Record<string, number> = {};
   const riscos: string[] = [];
   const recomendacoes = new Set<string>();
   const oportunidades = new Set<string>();
@@ -232,6 +236,14 @@ export function analisarPortfolioPerdcomp(perdcomps: string[]): {
     // Distribuição por categoria
     const categoria = analise.categoria || 'Genérico';
     distribuicaoPorCategoria[categoria] = (distribuicaoPorCategoria[categoria] || 0) + 1;
+    
+    // Distribuição por natureza
+    const natureza = analise.natureza ? `Natureza ${analise.natureza}` : 'Não identificada';
+    distribuicaoPorNatureza[natureza] = (distribuicaoPorNatureza[natureza] || 0) + 1;
+    
+    // Distribuição por crédito
+    const credito = analise.descricaoCredito || 'Não identificado';
+    distribuicaoPorCredito[credito] = (distribuicaoPorCredito[credito] || 0) + 1;
     
     // Coleta de riscos
     if (analise.nivelRisco) {
@@ -262,6 +274,8 @@ export function analisarPortfolioPerdcomp(perdcomps: string[]): {
     totalRegistros: validos.length,
     distribuicaoPorTipo,
     distribuicaoPorCategoria,
+    distribuicaoPorNatureza,
+    distribuicaoPorCredito,
     nivelRiscoGeral,
     recomendacoesPrioritarias: Array.from(recomendacoes).slice(0, 5),
     oportunidadesIdentificadas: Array.from(oportunidades).slice(0, 5),
