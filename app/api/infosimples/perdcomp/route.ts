@@ -217,6 +217,7 @@ export async function POST(request: Request) {
           linhas: dataForCnpj,
           perdcompResumo: resumo,
           total_perdcomp: resumo.total,
+          perdcompCodigos: [], // Códigos individuais não disponíveis na planilha
         };
         if (debugMode) {
           resp.debug = {
@@ -401,6 +402,7 @@ export async function POST(request: Request) {
       site_receipt: siteReceipt,
       perdcomp: perdcompArray,
       perdcompResumo: resumo,
+      perdcompCodigos: perdcompArray.map((item: any) => item.perdcomp).filter(Boolean),
       primeiro: {
         perdcomp: first?.perdcomp,
         solicitante: first?.solicitante,

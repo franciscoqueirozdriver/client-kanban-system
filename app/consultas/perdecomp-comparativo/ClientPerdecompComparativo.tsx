@@ -23,9 +23,9 @@ interface Company {
 }
 
 interface CardData {
-  lastConsultation: string | null;
   quantity: number;
-  siteReceipt?: string | null;
+  lastConsultation: string | null;
+  siteReceipt: string | null;
   fromCache?: boolean;
   perdcompResumo?: {
     total: number;
@@ -355,6 +355,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             siteReceipt: data.fallback.site_receipt ?? null,
             fromCache: true,
             perdcompResumo: resumo,
+            perdcompCodigos: [], // Fallback não tem códigos individuais
           };
           // Do not show a scary error message for a simple "no data found"
           updateResult(finalCNPJ, { status: 'loaded', data: cardData, error: isNoDataError ? null : errorObj });
@@ -383,12 +384,13 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         firstLinha?.Data_Consulta ||
         null;
       const resumo = data.perdcompResumo;
-      const cardData: CardData = {
-        quantity: resumo?.totalSemCancelamento ?? Math.max(totalPerdcomp, mappedCount),
-        lastConsultation,
-        siteReceipt,
-        perdcompResumo: resumo,
-      };
+          const cardData: CardData = {
+            quantity: resumo?.totalSemCancelamento ?? Math.max(totalPerdcomp, mappedCount),
+            lastConsultation,
+            siteReceipt,
+            perdcompResumo: resumo,
+            perdcompCodigos: data.perdcompCodigos || [],
+          };
       updateResult(finalCNPJ, { status: 'loaded', data: cardData, debug: showDebug ? data.debug ?? null : null });
 
       if (showDebug && forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
