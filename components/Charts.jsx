@@ -231,19 +231,34 @@ export default function Charts({ clients = [] }) {
     [colors],
   );
 
-  // Retorna apenas uma mensagem informativa, removendo os gráficos específicos
   return (
-    <section className="rounded-3xl border border-border bg-card p-6 shadow-soft">
-      <div className="text-center">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-          Análise de Dados
+    <section className="grid gap-4 md:grid-cols-2">
+      <div className="rounded-3xl border border-border bg-card p-4 shadow-soft">
+        <h3 className="px-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Distribuição por etapa</h3>
+        <div className="mt-3 h-72">
+          {phasesData.every((phase) => phase.total === 0) ? (
+            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Sem dados suficientes para exibir o gráfico.
+            </p>
+          ) : (
+            <Bar data={barData} options={barOptions} aria-label="Distribuição de leads por etapa" />
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-border bg-card p-4 shadow-soft">
+        <h3 className="px-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Segmentos mais frequentes
         </h3>
-        <p className="text-sm text-muted-foreground">
-          Os gráficos "Segmentos mais frequentes" e "Distribuição por etapa" foram removidos conforme solicitado.
-        </p>
-        <p className="text-xs text-muted-foreground mt-2">
-          Para análises detalhadas, utilize os filtros e visualizações disponíveis nas outras seções.
-        </p>
+        <div className="mt-3 h-72">
+          {segmentsData.length === 0 ? (
+            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Sem segmentos cadastrados.
+            </p>
+          ) : (
+            <Doughnut data={doughnutData} options={doughnutOptions} aria-label="Segmentos mais frequentes" />
+          )}
+        </div>
       </div>
     </section>
   );

@@ -211,6 +211,12 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
     }
   };
 
+  const handlePerdecompConfirm = () => {
+    setPerdecompOpen(false);
+    const url = `/consultas/perdecomp-comparativo?q=${encodeURIComponent(queryValue)}`;
+    router.push(url);
+  };
+
   return (
     <Draggable draggableId={card.id} index={index}>
       {(provided, snapshot) => (

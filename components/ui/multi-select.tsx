@@ -67,7 +67,7 @@ export default function MultiSelect({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-72 p-0">
+      <PopoverContent className="w-72 p-0 bg-card border border-border shadow-lg">
         <Command>
           <CommandInput placeholder="Buscar..." />
           <CommandEmpty>{emptyText}</CommandEmpty>
