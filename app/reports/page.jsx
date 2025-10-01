@@ -27,7 +27,7 @@ function useSearchQuery() {
   const queryParam = useQueryParam('q');
   const [query, setQuery] = useState(queryParam);
   const [hydrated, setHydrated] = useState(false);
-  const paramsString = useMemo(() => searchParams.toString(), [searchParams]);
+  const paramsString = useMemo(() => searchParams?.toString() ?? '', [searchParams]);
 
   useEffect(() => {
     setQuery(queryParam);
