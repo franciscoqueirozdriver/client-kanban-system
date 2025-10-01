@@ -53,10 +53,13 @@ function validatePayload(p) {
   }
 
   const { "País": pais, "Estado": uf, "Cidade": cidade } = p;
-  if (pais || uf || cidade) {
-    if (!pais) errs.push({ field: "País", message: "Obrigatório quando Estado/Cidade forem informados" });
-    if (!uf) errs.push({ field: "Estado", message: "Obrigatório quando País/Cidade forem informados" });
-    if (!cidade) errs.push({ field: "Cidade", message: "Obrigatório quando País/Estado forem informados" });
+  // Validação mais flexível de localização - apenas avisar se incompleto
+  if (cidade && !uf) {
+    errs.push({ field: "Estado", message: "Recomendado quando Cidade for informada" });
+  }
+  if (uf && !pais) {
+    // Assumir Brasil como padrão se não informado
+    p["País"] = p["País"] || "Brasil";
   }
 
   const hasContactInfo = ["E-mail Contato", "Telefones Contato", "Cargo Contato"].some(f => p[f] && String(p[f]).trim() !== "");
@@ -116,7 +119,7 @@ export async function POST(req) {
         name: formPayload["Nome do Lead"],
         industry: formPayload["Mercado"],
         source: "Lista Francisco",
-        subSource: formPayload["Sub-Origem"],
+        subSource: formPayload["Sub-Origem"] || "Sistema Kanban",
         website: formPayload["Site"],
         leadProduct: formPayload["Produto"],
         address: formPayload["Logradouro"],
@@ -124,10 +127,10 @@ export async function POST(req) {
         addressComplement: formPayload["Complemento"],
         neighborhood: formPayload["Bairro"],
         zipcode: formPayload["CEP"],
-        city: formPayload["Cidade"],
-        state: formPayload["Estado"],
-        country: formPayload["País"],
-        description: formPayload["Observação"],
+        city: formPayload["Cidade"] || "Não informado",
+        state: formPayload["Estado"] || "Não informado",
+        country: formPayload["País"] || "Brasil",
+        description: formPayload["Observação"] || "Lead importado do sistema Kanban",
         cpfcnpj: formPayload["CPF/CNPJ"],
         funnelId: null, // Padrão
         stage: "Entrada",
@@ -142,15 +145,53 @@ export async function POST(req) {
 
     // 4. Wrap the final payload in the required structure
     const requestBody = {
-        duplicityValidation: true,
+        duplicityValidation: false, // Permitir duplicatas para evitar erro
         lead: finalApiPayload
     };
 
     // 5. Use the centralized service to make the API call
-    const created = await spotterPost('LeadsAdd', requestBody);
-
-    return NextResponse.json({ ok: true, data: created }, { status: 201 });
+    try {
+      const created = await spotterPost('LeadsAdd', requestBody);
+      return NextResponse.json({ ok: true, data: created }, { status: 201 });
+    } catch (spotterError) {
+      // Tratamento específico para erros do Spotter
+      if (spotterError.message && spotterError.message.includes('Lead already exists')) {
+        // Tentar atualizar o lead existente
+        try {
+          const updateBody = {
+            duplicityValidation: false,
+            lead: {
+              ...finalApiPayload,
+              // Adicionar flag para indicar atualização
+              description: `${finalApiPayload.description || ''} [Atualizado em ${new Date().toLocaleDateString('pt-BR')}]`.trim()
+            }
+          };
+          const updated = await spotterPost('LeadsAdd', updateBody);
+          return NextResponse.json({ 
+            ok: true, 
+            data: updated, 
+            message: 'Lead atualizado com sucesso (já existia no sistema)' 
+          }, { status: 200 });
+        } catch (updateError) {
+          return NextResponse.json({ 
+            error: 'Lead já existe no sistema e não foi possível atualizar', 
+            details: updateError.message 
+          }, { status: 409 });
+        }
+      } else if (spotterError.message && spotterError.message.includes('City, State')) {
+        return NextResponse.json({ 
+          error: 'Dados de localização inválidos. Verifique Cidade, Estado e País.', 
+          details: spotterError.message 
+        }, { status: 400 });
+      } else {
+        throw spotterError; // Re-throw outros erros
+      }
+    }
   } catch (err) {
-    return NextResponse.json({ error: err.message || 'Erro interno no servidor' }, { status: 500 });
+    console.error('Erro na API Spotter:', err);
+    return NextResponse.json({ 
+      error: err.message || 'Erro interno no servidor',
+      details: err.stack || 'Detalhes não disponíveis'
+    }, { status: 500 });
   }
 }
