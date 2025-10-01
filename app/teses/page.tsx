@@ -270,18 +270,17 @@ export default function TesesPage() {
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 space-y-3">
-                        <div className="flex items-center gap-3">
-                          <h3 className="font-semibold text-lg">{tese.Tese_ID}</h3>
-                          <Badge className={cn('text-xs', statusColors[tese.Status as keyof typeof statusColors])}>
-                            {tese.Status}
-                          </Badge>
-                          <Badge className={cn('text-xs', grauRiscoColors[tese['Grau de Risco'] as keyof typeof grauRiscoColors])}>
-                            {tese['Grau de Risco']}
-                          </Badge>
-                        </div>
-                        
                         <div>
-                          <h4 className="font-medium text-foreground">{tese.Tema}</h4>
+                          <h3 className="font-semibold text-lg text-foreground">{tese.Tema}</h3>
+                          <div className="flex items-center gap-3 mt-2">
+                            <span className="text-sm text-muted-foreground font-mono">{tese.Tese_ID}</span>
+                            <Badge className={cn('text-xs', statusColors[tese.Status as keyof typeof statusColors])}>
+                              {tese.Status}
+                            </Badge>
+                            <Badge className={cn('text-xs', grauRiscoColors[tese['Grau de Risco'] as keyof typeof grauRiscoColors])}>
+                              {tese['Grau de Risco']}
+                            </Badge>
+                          </div>
                           <p className="text-sm text-muted-foreground mt-1">{tese.Tipo}</p>
                         </div>
                         
