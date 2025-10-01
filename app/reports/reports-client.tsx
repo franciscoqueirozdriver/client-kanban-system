@@ -1,15 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import Filters from '@/components/Filters';
+import { usePathname, useRouter } from 'next/navigation';
+import Filters, { type ActiveFilters, type FilterOptions } from '@/components/Filters';
 import ReportTable from '@/components/ReportTable';
 import ExportButton from '@/components/ExportButton';
 import SummaryCard from '@/components/SummaryCard';
 import { useFilterState } from '@/hooks/useFilterState';
-import { useQueryParam } from '@/hooks/useQueryParam';
 
-const filterDefaults = {
+const filterDefaults: ActiveFilters = {
   segmento: [],
   porte: [],
   uf: [],
@@ -20,24 +19,46 @@ const filterDefaults = {
   vendedor: []
 };
 
-function useSearchQuery() {
+type ReportRow = Record<string, unknown>;
+
+type FiltersResponse = {
+  filters?: Record<string, string[]>;
+};
+
+type ReportsResponse = {
+  rows?: ReportRow[];
+};
+
+export default function ReportsClient({
+  initialQuery,
+  initialView
+}: {
+  initialQuery: string;
+  initialView: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const queryParam = useQueryParam('q');
-  const [query, setQuery] = useState(queryParam);
+
+  const [rows, setRows] = useState<ReportRow[]>([]);
+  const [maxLeads, setMaxLeads] = useState<number>(30);
+  const [options, setOptions] = useState<Record<string, string[]>>({});
+  const { state: filters, replace: replaceFilters, reset } = useFilterState<ActiveFilters>(filterDefaults);
+
+  const [query, setQuery] = useState<string>(initialQuery);
   const [hydrated, setHydrated] = useState(false);
-  const paramsString = useMemo(() => searchParams?.toString() ?? '', [searchParams]);
+  const [view, setView] = useState<string>(() => (initialView === 'detail' ? 'detail' : 'summary'));
 
   useEffect(() => {
-    setQuery(queryParam);
+    setQuery(initialQuery);
+    setView(initialView === 'detail' ? 'detail' : 'summary');
     setHydrated(true);
-  }, [queryParam]);
+  }, [initialQuery, initialView]);
 
   useEffect(() => {
     if (!hydrated) return;
+    if (typeof window === 'undefined') return;
 
-    const params = new URLSearchParams(paramsString);
+    const params = new URLSearchParams(window.location.search);
     const trimmed = query.trim();
 
     if (trimmed) {
@@ -46,36 +67,35 @@ function useSearchQuery() {
       params.delete('q');
     }
 
+    const normalizedView = view === 'detail' ? 'detail' : 'summary';
+
+    if (normalizedView !== 'summary') {
+      params.set('view', normalizedView);
+    } else {
+      params.delete('view');
+    }
+
     const nextParamsString = params.toString();
     const next = `${pathname}${nextParamsString ? `?${nextParamsString}` : ''}`;
-    const current = `${pathname}${paramsString ? `?${paramsString}` : ''}`;
+    const current = `${pathname}${window.location.search}`;
 
     if (next !== current) {
       router.replace(next, { scroll: false });
     }
-  }, [hydrated, pathname, paramsString, query, router]);
-
-  return { query, setQuery };
-}
-
-export default function ReportsPage() {
-  const [rows, setRows] = useState([]);
-  const [maxLeads, setMaxLeads] = useState(30);
-  const [options, setOptions] = useState({});
-  const { state: filters, replace: replaceFilters, reset } = useFilterState(filterDefaults);
-  const { query, setQuery } = useSearchQuery();
+  }, [hydrated, pathname, query, router, view]);
 
   useEffect(() => {
     async function fetchOptions() {
       const response = await fetch('/api/clientes');
-      const data = await response.json();
-      setOptions(data.filters || {});
+      const data: FiltersResponse = await response.json();
+      setOptions(data.filters ?? {});
     }
+
     fetchOptions();
   }, []);
 
-  const filterOptions = useMemo(() => {
-    const mapToOptions = (values = []) => values.map((value) => ({ label: value, value }));
+  const filterOptions = useMemo<FilterOptions>(() => {
+    const mapToOptions = (values: string[] = []) => values.map((value) => ({ label: value, value }));
     return {
       segmento: mapToOptions(options.segmento),
       porte: mapToOptions(options.porte),
@@ -85,57 +105,78 @@ export default function ReportsPage() {
       fase: mapToOptions(options.fase),
       origem: mapToOptions(options.origem),
       vendedor: mapToOptions(options.vendedor)
-    };
+    } satisfies FilterOptions;
   }, [options]);
 
-  const handleFilterChange = (next) => {
+  const handleFilterChange = (next: ActiveFilters) => {
     replaceFilters(next);
   };
 
   useEffect(() => {
     async function fetchData() {
       const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, values]) => {
-        if (Array.isArray(values) && values.length) {
+
+      (Object.entries(filters) as Array<[keyof ActiveFilters, string[]]>).forEach(([key, values]) => {
+        if (Array.isArray(values) && values.length > 0) {
           params.set(key, values.join(','));
         }
       });
-      if (query.trim()) {
-        params.set('q', query.trim());
+
+      const trimmed = query.trim();
+      if (trimmed) {
+        params.set('q', trimmed);
       }
+
       if (maxLeads) {
         params.set('maxLeads', String(maxLeads));
       }
 
       const response = await fetch(`/api/reports?${params.toString()}`);
-      const data = await response.json();
+      const data: ReportsResponse = await response.json();
       setRows(Array.isArray(data.rows) ? data.rows : []);
     }
 
     fetchData();
-  }, [filters, query, maxLeads]);
+  }, [filters, maxLeads, query]);
 
   const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
-  const formatNumber = (value) => numberFormatter.format(value);
+  const formatNumber = (value: number) => numberFormatter.format(value);
 
   const summary = useMemo(() => {
     const totalLeads = rows.length;
-    const uniqueCompanies = new Set(rows.map((row) => (row.company || '').trim()).filter(Boolean)).size;
-    const uniqueContacts = new Set(rows.map((row) => (row.nome || '').trim().toLowerCase()).filter(Boolean)).size;
-    const reachable = rows.filter((row) => (Array.isArray(row.normalizedPhones) && row.normalizedPhones.length > 0) || !!row.email).length;
+    const uniqueCompanies = new Set(
+      rows.map((row) => (typeof row.company === 'string' ? row.company.trim() : '')).filter(Boolean)
+    ).size;
+    const uniqueContacts = new Set(
+      rows.map((row) => (typeof row.nome === 'string' ? row.nome.trim().toLowerCase() : '')).filter(Boolean)
+    ).size;
+    const reachable = rows.filter((row) => {
+      const phones = Array.isArray((row as { normalizedPhones?: unknown }).normalizedPhones)
+        ? ((row as { normalizedPhones?: string[] }).normalizedPhones ?? [])
+        : [];
+      const email = typeof row.email === 'string' ? row.email : '';
+      return (phones && phones.length > 0) || !!email;
+    }).length;
 
     return { totalLeads, uniqueCompanies, uniqueContacts, reachable };
   }, [rows]);
 
   const filtersSummary = useMemo(() => {
     const activeFilters = Object.entries(filters)
-      .filter(([, values]) => Array.isArray(values) && values.length)
+      .filter(([, values]) => Array.isArray(values) && values.length > 0)
       .map(([key, values]) => `${key}: ${(values || []).join(', ')}`);
-    if (query.trim()) {
-      activeFilters.unshift(`busca: ${query.trim()}`);
+
+    const trimmed = query.trim();
+    if (trimmed) {
+      activeFilters.unshift(`busca: ${trimmed}`);
     }
+
+    if (view === 'detail') {
+      activeFilters.push('visualização: Detalhado');
+    }
+
     return [activeFilters.join(' | '), `maxLeads: ${maxLeads || 30}`].filter(Boolean).join(' | ');
-  }, [filters, maxLeads, query]);
+  }, [filters, maxLeads, query, view]);
 
   const generatedAt = useMemo(
     () => new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }),
@@ -143,20 +184,27 @@ export default function ReportsPage() {
   );
 
   const exportFilters = useMemo(() => {
-    const entries = Object.entries(filters).reduce((acc, [key, values]) => {
-      if (Array.isArray(values) && values.length) {
+    const entries = Object.entries(filters).reduce<Record<string, string | number>>((acc, [key, values]) => {
+      if (Array.isArray(values) && values.length > 0) {
         acc[key] = values.join(',');
       }
       return acc;
     }, {});
-    if (query.trim()) {
-      entries.q = query.trim();
-    }
-    entries.maxLeads = maxLeads;
-    return entries;
-  }, [filters, maxLeads, query]);
 
-  const handleMaxLeadsChange = (value) => {
+    const trimmed = query.trim();
+    if (trimmed) {
+      entries.q = trimmed;
+    }
+
+    entries.maxLeads = maxLeads;
+    if (view === 'detail') {
+      entries.view = 'detail';
+    }
+
+    return entries;
+  }, [filters, maxLeads, query, view]);
+
+  const handleMaxLeadsChange = (value: string) => {
     const num = parseInt(value, 10);
     setMaxLeads(Number.isNaN(num) ? 30 : num);
   };
