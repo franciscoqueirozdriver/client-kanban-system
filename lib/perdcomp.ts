@@ -95,15 +95,15 @@ export const NATUREZA_FAMILIA: Record<string, Familia> = {
 
 // Observações específicas por natureza
 export const NATUREZA_OBSERVACOES: Record<string, string> = {
-  '1.0': 'Ressarcimento de IPI',
-  '1.1': 'Pedido de Ressarcimento (genérico)',
+  '1.0': 'Declaração de Compensação',
+  '1.1': 'Pedido de Ressarcimento',
   '1.2': 'Pedido de Restituição',
-  '1.3': 'Declaração de Compensação (geral)',
-  '1.5': 'Pedido de Ressarcimento (IPI, etc.)',
+  '1.3': 'Declaração de Compensação',
+  '1.5': 'Pedido de Ressarcimento',
   '1.6': 'Pedido de Restituição',
   '1.7': 'Declaração de Compensação',
   '1.8': 'Pedido de Cancelamento',
-  '1.9': 'Cofins Não-Cumulativa – Ressarcimento/Compensação',
+  '1.9': 'Cofins Não-Cumulativa – Ressarc/Comp.',
 };
 
 // Descrições dos códigos de crédito (Bloco 6)
@@ -116,7 +116,7 @@ export const CREDITOS_DESCRICAO: Record<string, string> = {
   '16': 'Outros Créditos (Cancelamento)',
   '17': 'Reintegra',
   '18': 'Outros Créditos',
-  '19': 'Cofins Não-Cumulativa – Ressarcimento/Compensação',
+  '19': 'Cofins Não-Cumulativa – Ressarc/Comp.',
   '24': 'Pagamento Indevido ou a Maior (eSocial)',
   '25': 'Outros Créditos',
   '57': 'Outros Créditos',
@@ -238,7 +238,7 @@ export function analisarPortfolioPerdcomp(perdcomps: string[]): {
     distribuicaoPorCategoria[categoria] = (distribuicaoPorCategoria[categoria] || 0) + 1;
     
     // Distribuição por natureza
-    const natureza = analise.natureza ? `Natureza ${analise.natureza}` : 'Não identificada';
+    const natureza = analise.natureza ? (NATUREZA_OBSERVACOES[analise.natureza] || `Natureza ${analise.natureza}`) : 'Não identificada';
     distribuicaoPorNatureza[natureza] = (distribuicaoPorNatureza[natureza] || 0) + 1;
     
     // Distribuição por crédito
