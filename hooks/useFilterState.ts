@@ -7,10 +7,14 @@ function cloneValues<T>(value: T): T {
   return Array.isArray(value) ? ([...value] as T) : value;
 }
 
+/**
+ * Hook genérico para filtros sincronizados com a URL.
+ * T deve ser um Record<string, string[]>
+ */
 export function useFilterState<T extends Record<string, string[]>>(defaults: T) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname();              // pode ser string | null no tipo
   const [state, setState] = useState<T>(defaults);
 
   // Inicializa filtros a partir da querystring
@@ -28,7 +32,7 @@ export function useFilterState<T extends Record<string, string[]>>(defaults: T) 
     setState(initial);
   }, [defaults, searchParams]);
 
-  // Atualiza URL quando o estado mudar
+  // Atualiza URL quando o estado mudar (substitui o objeto inteiro)
   const replace = useCallback(
     (next: T) => {
       const params = new URLSearchParams();
@@ -41,7 +45,8 @@ export function useFilterState<T extends Record<string, string[]>>(defaults: T) 
       });
 
       const queryString = params.toString();
-      const url = `${pathname}${queryString ? `?${queryString}` : ''}`;
+      const base = pathname ?? '/';           // <<< fallback seguro
+      const url = `${base}${queryString ? `?${queryString}` : ''}`;
 
       router.replace(url, { scroll: false });
       setState(next);
@@ -49,9 +54,11 @@ export function useFilterState<T extends Record<string, string[]>>(defaults: T) 
     [pathname, router]
   );
 
+  // Reseta estado e limpa params
   const reset = useCallback(() => {
     setState(defaults);
-    router.replace(pathname, { scroll: false });
+    const base = pathname ?? '/';            // <<< fallback seguro
+    router.replace(base, { scroll: false });
   }, [defaults, pathname, router]);
 
   return { state, replace, reset };
