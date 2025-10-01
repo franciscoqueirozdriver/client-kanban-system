@@ -8,6 +8,7 @@ import Filters, { type ActiveFilters, type FilterOptions } from '@/components/Fi
 import NewCompanyModal from '@/components/NewCompanyModal';
 import EnrichmentPreviewDialog from '@/components/EnrichmentPreviewDialog';
 import SummaryCard from '@/components/SummaryCard';
+import SpotterModal from '@/components/spotter/SpotterModal';
 import { useFilterState } from '@/hooks/useFilterState';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 
@@ -101,6 +102,9 @@ function ClientesPageComponent() {
   const [enrichPreview, setEnrichPreview] = useState<EnrichPreview | null>(null);
   const [showEnrichPreview, setShowEnrichPreview] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
+  const [spotterOpen, setSpotterOpen] = useState(false);
+  const [spotterLead, setSpotterLead] = useState<ClientRecord | null>(null);
+  const [isSubmittingSpotter, setIsSubmittingSpotter] = useState(false);
 
   const { state: filters, replace: replaceFilters, reset } = useFilterState<ActiveFilters>(filterDefaults);
   const { query, setQuery } = useSearchQuery();
@@ -238,6 +242,42 @@ function ClientesPageComponent() {
     setCompanyModalOpen(true);
   }
 
+  function handleOpenSpotter(client: ClientRecord, meta?: { cardId: string; onUpdate: (update: Partial<ClientRecord>) => void }) {
+    setSpotterLead(client);
+    setSpotterOpen(true);
+  }
+
+  async function handleSpotterSubmit(payload: any) {
+    setIsSubmittingSpotter(true);
+    try {
+      const response = await fetch('/api/spoter/oportunidades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao enviar ao Spotter');
+      }
+
+      const result = await response.json();
+      
+      // Fechar modal e mostrar sucesso
+      setSpotterOpen(false);
+      setSpotterLead(null);
+      
+      // Aqui você pode adicionar uma notificação de sucesso
+      alert('Lead enviado ao Spotter com sucesso!');
+      
+    } catch (error) {
+      console.error('Erro ao enviar ao Spotter:', error);
+      throw error; // Re-throw para que o modal possa mostrar o erro
+    } finally {
+      setIsSubmittingSpotter(false);
+    }
+  }
+
   function handleSaveNewCompany() {
     setCompanyModalOpen(false);
     setCompanyPrefill(null);
@@ -348,7 +388,7 @@ function ClientesPageComponent() {
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredClients.map((client) => (
-                <ClientCard key={client.id} client={client} />
+                <ClientCard key={client.id} client={client} onOpenSpotter={handleOpenSpotter} />
               ))}
             </div>
           )}
@@ -391,6 +431,14 @@ function ClientesPageComponent() {
           handleOpenNewCompanyModal(mergedWithCnpj);
           setShowEnrichPreview(false);
         }}
+      />
+
+      <SpotterModal
+        open={spotterOpen}
+        onOpenChange={setSpotterOpen}
+        lead={spotterLead}
+        onSubmit={handleSpotterSubmit}
+        isSubmitting={isSubmittingSpotter}
       />
     </div>
   );

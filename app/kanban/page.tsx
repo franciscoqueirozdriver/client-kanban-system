@@ -8,6 +8,7 @@ import Filters, { type ActiveFilters, type FilterOptions } from '@/components/Fi
 import ViewToggle from '@/components/view-toggle/ViewToggle';
 import Views from './Views';
 import SummaryCard from '@/components/SummaryCard';
+import SpotterModal from '@/components/spotter/SpotterModal';
 import { useFilterState } from '@/hooks/useFilterState';
 import { useQueryParam } from '@/hooks/useQueryParam';
 
@@ -98,6 +99,9 @@ function KanbanPage() {
   const [columns, setColumns] = useState<Column[]>([]);
   const [allOptions, setAllOptions] = useState<Record<string, string[]>>({});
   const [isUpdating, setIsUpdating] = useState(false);
+  const [spotterOpen, setSpotterOpen] = useState(false);
+  const [spotterLead, setSpotterLead] = useState<ClientRecord | null>(null);
+  const [isSubmittingSpotter, setIsSubmittingSpotter] = useState(false);
   const { state: filters, replace: replaceFilters, reset } = useFilterState<ActiveFilters>(filterDefaults);
   const { query, setQuery } = useSearchQuery();
 
@@ -274,23 +278,40 @@ function KanbanPage() {
 
   const filterOptions = filterOptionsForMultiSelect;
 
-  function handleOpenSpotter(arg?: string | ClientRecord) {
-    if (typeof window === 'undefined') return;
+  function handleOpenSpotter(client: ClientRecord, meta?: { cardId: string; onUpdate: (update: Partial<ClientRecord>) => void }) {
+    setSpotterLead(client);
+    setSpotterOpen(true);
+  }
 
-    let empresa = '';
-    let id = '';
+  async function handleSpotterSubmit(payload: any) {
+    setIsSubmittingSpotter(true);
+    try {
+      const response = await fetch('/api/spoter/oportunidades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-    if (typeof arg === 'string') {
-      id = arg;
-    } else if (arg) {
-      id = arg.id ?? '';
-      empresa = arg.company ?? '';
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao enviar ao Spotter');
+      }
+
+      const result = await response.json();
+      
+      // Fechar modal e mostrar sucesso
+      setSpotterOpen(false);
+      setSpotterLead(null);
+      
+      // Aqui você pode adicionar uma notificação de sucesso
+      alert('Lead enviado ao Spotter com sucesso!');
+      
+    } catch (error) {
+      console.error('Erro ao enviar ao Spotter:', error);
+      throw error; // Re-throw para que o modal possa mostrar o erro
+    } finally {
+      setIsSubmittingSpotter(false);
     }
-
-    if (!id && !empresa) return;
-
-    const url = `/spotter?empresa=${encodeURIComponent(empresa)}&id=${encodeURIComponent(id)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   return (
@@ -347,6 +368,14 @@ function KanbanPage() {
       ) : (
         <Views leads={filteredColumns.flatMap((column) => column.cards.map((card) => card.client))} />
       )}
+
+      <SpotterModal
+        open={spotterOpen}
+        onOpenChange={setSpotterOpen}
+        lead={spotterLead}
+        onSubmit={handleSpotterSubmit}
+        isSubmitting={isSubmittingSpotter}
+      />
     </div>
   );
 }
