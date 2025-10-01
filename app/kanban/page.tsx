@@ -333,7 +333,7 @@ function KanbanPage() {
       {view === 'kanban' ? (
         <section className="rounded-3xl border border-border bg-muted/40 p-4 shadow-soft">
           <DragDropContext onDragEnd={onDragEnd}>
-            <div className="flex flex-wrap gap-4" role="list">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 min-h-0" role="list">
               {filteredColumns.map((column) => (
                 <KanbanColumn
                   key={column.id}

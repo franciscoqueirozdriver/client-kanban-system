@@ -52,140 +52,152 @@ function useDesignTokens(theme) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const style = getComputedStyle(document.documentElement);
-    const read = (token, fallback) => {
-      const value = style.getPropertyValue(`--${token}`).trim();
-      return value ? `hsl(${value})` : fallback;
+
+    const root = document.documentElement;
+    const computedStyle = getComputedStyle(root);
+
+    const getHSLValue = (variable) => {
+      const value = computedStyle.getPropertyValue(variable).trim();
+      return value ? `hsl(${value})` : null;
     };
 
-    setColors({
-      primary: read('primary', FALLBACK_COLORS.primary),
-      secondary: read('secondary', FALLBACK_COLORS.secondary),
-      accent: read('accent', FALLBACK_COLORS.accent),
-      success: read('success', FALLBACK_COLORS.success),
-      warning: read('warning', FALLBACK_COLORS.warning),
-      danger: read('danger', FALLBACK_COLORS.danger),
-      card: read('card', FALLBACK_COLORS.card),
-      foreground: read('foreground', FALLBACK_COLORS.foreground),
-      muted: read('muted', FALLBACK_COLORS.muted),
-      mutedForeground: read('muted-foreground', FALLBACK_COLORS.mutedForeground),
-      border: read('border', FALLBACK_COLORS.border),
-      background: read('background', FALLBACK_COLORS.background),
-    });
+    const newColors = {
+      primary: getHSLValue('--primary') || FALLBACK_COLORS.primary,
+      secondary: getHSLValue('--secondary') || FALLBACK_COLORS.secondary,
+      accent: getHSLValue('--accent') || FALLBACK_COLORS.accent,
+      success: getHSLValue('--success') || FALLBACK_COLORS.success,
+      warning: getHSLValue('--warning') || FALLBACK_COLORS.warning,
+      danger: getHSLValue('--destructive') || FALLBACK_COLORS.danger,
+      card: getHSLValue('--card') || FALLBACK_COLORS.card,
+      foreground: getHSLValue('--foreground') || FALLBACK_COLORS.foreground,
+      muted: getHSLValue('--muted') || FALLBACK_COLORS.muted,
+      mutedForeground: getHSLValue('--muted-foreground') || FALLBACK_COLORS.mutedForeground,
+      border: getHSLValue('--border') || FALLBACK_COLORS.border,
+      background: getHSLValue('--background') || FALLBACK_COLORS.background,
+    };
+
+    setColors(newColors);
   }, [theme]);
 
   return colors;
 }
 
 export default function Charts({ clients = [] }) {
-  const { resolvedTheme } = useTheme();
-  const colors = useDesignTokens(resolvedTheme);
+  const { theme } = useTheme();
+  const colors = useDesignTokens(theme);
 
-  const phaseLabels = useMemo(
-    () => [
+  const phasesData = useMemo(() => {
+    const phases = [
       'Lead Selecionado',
       'Tentativa de Contato',
       'Contato Efetuado',
       'Conversa Iniciada',
       'Reunião Agendada',
-      'Proposta',
-      'Negociação',
-      'Vendido',
       'Perdido',
-    ],
-    [],
-  );
+    ];
 
-  const { phasesData, segmentsData } = useMemo(() => {
-    const phaseCounts = new Map();
-    const segmentCounts = new Map();
-
-    clients.forEach((client) => {
-      const status = client.status || 'Sem status';
-      phaseCounts.set(status, (phaseCounts.get(status) ?? 0) + 1);
-      if (client.segment) {
-        segmentCounts.set(client.segment, (segmentCounts.get(client.segment) ?? 0) + 1);
-      }
-    });
-
-    const phases = phaseLabels.map((status) => ({
-      status,
-      total: phaseCounts.get(status) ?? 0,
+    return phases.map((phase) => ({
+      phase,
+      total: clients.filter((client) => client.status === phase).length,
     }));
+  }, [clients]);
 
-    const segments = Array.from(segmentCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, value]) => ({ name, value }));
+  const segmentsData = useMemo(() => {
+    const segmentCounts = clients.reduce((acc, client) => {
+      const segment = client.segment || 'Não informado';
+      acc[segment] = (acc[segment] || 0) + 1;
+      return acc;
+    }, {});
 
-    return { phasesData: phases, segmentsData: segments };
-  }, [clients, phaseLabels]);
+    return Object.entries(segmentCounts)
+      .map(([segment, count]) => ({ segment, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [clients]);
 
   const barData = useMemo(
     () => ({
-      labels: phasesData.map((phase) => phase.status),
+      labels: phasesData.map((phase) => phase.phase),
       datasets: [
         {
-          label: 'Leads',
+          label: 'Quantidade de leads',
           data: phasesData.map((phase) => phase.total),
-          backgroundColor: colors.primary,
-          borderRadius: 12,
-          barThickness: 24,
+          backgroundColor: withAlpha(colors.primary, 0.8),
+          borderColor: colors.primary,
+          borderWidth: 1,
+          borderRadius: 8,
+          borderSkipped: false,
         },
       ],
     }),
-    [phasesData, colors.primary],
-  );
-
-  const palette = useMemo(
-    () => [colors.primary, colors.secondary, colors.accent, colors.success, colors.warning, colors.danger],
-    [colors],
+    [phasesData, colors],
   );
 
   const doughnutData = useMemo(
     () => ({
-      labels: segmentsData.map((segment) => segment.name),
+      labels: segmentsData.map((segment) => segment.segment),
       datasets: [
         {
-          data: segmentsData.map((segment) => segment.value),
-          backgroundColor: palette,
-          borderColor: colors.background,
+          data: segmentsData.map((segment) => segment.count),
+          backgroundColor: [
+            withAlpha(colors.primary, 0.8),
+            withAlpha(colors.secondary, 0.8),
+            withAlpha(colors.accent, 0.8),
+            withAlpha(colors.success, 0.8),
+            withAlpha(colors.warning, 0.8),
+            withAlpha(colors.danger, 0.8),
+            withAlpha(colors.muted, 0.8),
+            withAlpha(colors.mutedForeground, 0.8),
+          ],
+          borderColor: colors.card,
           borderWidth: 2,
         },
       ],
     }),
-    [segmentsData, palette, colors.background],
+    [segmentsData, colors],
   );
-
-  const gridColor = withAlpha(colors.mutedForeground, 0.2);
 
   const barOptions = useMemo(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { top: 12, right: 16, bottom: 8, left: 8 } },
-      scales: {
-        x: {
-          grid: { color: gridColor, drawBorder: false },
-          ticks: { color: colors.mutedForeground, maxRotation: 0, minRotation: 0, autoSkip: false, font: { size: 11 } },
-        },
-        y: {
-          grid: { color: gridColor, drawBorder: false },
-          ticks: { color: colors.mutedForeground, precision: 0 },
-        },
-      },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: false,
+        },
         tooltip: {
           backgroundColor: colors.card,
+          titleColor: colors.foreground,
+          bodyColor: colors.foreground,
           borderColor: colors.border,
           borderWidth: 1,
-          titleColor: colors.foreground,
-          bodyColor: colors.mutedForeground,
-          padding: 12,
         },
       },
+      scales: {
+        x: {
+          ticks: {
+            color: colors.mutedForeground,
+            font: { size: 11 },
+          },
+          grid: {
+            color: withAlpha(colors.border, 0.3),
+          },
+        },
+        y: {
+          ticks: {
+            color: colors.mutedForeground,
+            font: { size: 11 },
+          },
+          grid: {
+            color: withAlpha(colors.border, 0.3),
+          },
+        },
+      },
+      layout: {
+        padding: 12,
+      },
     }),
-    [colors, gridColor],
+    [colors],
   );
 
   const doughnutOptions = useMemo(
@@ -197,53 +209,41 @@ export default function Charts({ clients = [] }) {
           position: 'bottom',
           labels: {
             color: colors.mutedForeground,
-            boxWidth: 12,
+            font: { size: 11 },
+            padding: 16,
             usePointStyle: true,
-            padding: 12,
+            pointStyle: 'circle',
           },
         },
         tooltip: {
           backgroundColor: colors.card,
+          titleColor: colors.foreground,
+          bodyColor: colors.foreground,
           borderColor: colors.border,
           borderWidth: 1,
-          titleColor: colors.foreground,
-          bodyColor: colors.mutedForeground,
-          padding: 12,
         },
+      },
+      layout: {
+        padding: 12,
       },
       cutout: '60%',
     }),
     [colors],
   );
 
+  // Retorna apenas uma mensagem informativa, removendo os gráficos específicos
   return (
-    <section className="grid gap-4 md:grid-cols-2">
-      <div className="rounded-3xl border border-border bg-card p-4 shadow-soft">
-        <h3 className="px-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Distribuição por etapa</h3>
-        <div className="mt-3 h-72">
-          {phasesData.every((phase) => phase.total === 0) ? (
-            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Sem dados suficientes para exibir o gráfico.
-            </p>
-          ) : (
-            <Bar data={barData} options={barOptions} aria-label="Distribuição de leads por etapa" />
-          )}
-        </div>
-      </div>
-
-      <div className="rounded-3xl border border-border bg-card p-4 shadow-soft">
-        <h3 className="px-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Segmentos mais frequentes
+    <section className="rounded-3xl border border-border bg-card p-6 shadow-soft">
+      <div className="text-center">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+          Análise de Dados
         </h3>
-        <div className="mt-3 h-72">
-          {segmentsData.length === 0 ? (
-            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Sem segmentos cadastrados.
-            </p>
-          ) : (
-            <Doughnut data={doughnutData} options={doughnutOptions} aria-label="Segmentos mais frequentes" />
-          )}
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Os gráficos "Segmentos mais frequentes" e "Distribuição por etapa" foram removidos conforme solicitado.
+        </p>
+        <p className="text-xs text-muted-foreground mt-2">
+          Para análises detalhadas, utilize os filtros e visualizações disponíveis nas outras seções.
+        </p>
       </div>
     </section>
   );
