@@ -8,6 +8,7 @@ import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
 import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import PerdcompEnrichedCard from '../../../components/PerdcompEnrichedCard';
 import { decideCNPJFinalBeforeQuery } from '@/helpers/decideCNPJ';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ensureValidCnpj, formatCnpj, normalizeCnpj, onlyDigits, isCnpj, isEmptyCNPJLike } from '@/utils/cnpj';
@@ -33,6 +34,7 @@ interface CardData {
     porFamilia: { DCOMP: number; REST: number; RESSARC: number; CANC: number; DESCONHECIDO: number };
     porNaturezaAgrupada: Record<string, number>;
   };
+  perdcompCodigos?: string[]; // Array de códigos PER/DCOMP de 24 dígitos
 }
 
 type ApiDebug = {
@@ -932,134 +934,25 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             className="grid grid-cols-4 gap-4 overflow-x-hidden px-2 py-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
             aria-label="Resultados da comparação PER/DCOMP"
           >
-            {results.map(({ company, data, status, error, debug }) => {
-              const resumo = data?.perdcompResumo;
-              const temRegistros = (resumo?.totalSemCancelamento ?? 0) > 0;
-              const cancelamentos = resumo?.canc ?? resumo?.porFamilia?.CANC ?? 0;
-              const ultimaConsulta = data?.lastConsultation || null;
-
-              return (
-                <article
-                  key={company.CNPJ_Empresa}
-                  className="group relative mx-auto flex h-full w-full max-w-[420px] flex-col rounded-3xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg"
-                >
-                  <header className="mb-2">
-                    <h3 className="text-lg font-semibold text-foreground" title={company.Nome_da_Empresa}>
-                      {company.Nome_da_Empresa}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">{formatCnpj(company.CNPJ_Empresa)}</p>
-                    {ultimaConsulta && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Última consulta: {new Date(ultimaConsulta).toLocaleDateString()}
-                      </p>
-                    )}
-                  </header>
-
-                  <div className="flex flex-1 flex-col">
-                    {status === 'loading' && (
-                      <div className="flex flex-1 items-center justify-center text-primary">
-                        <FaSpinner className="h-6 w-6 animate-spin" aria-hidden="true" />
-                      </div>
-                    )}
-
-                    {status === 'error' && (
-                      <div className="flex flex-1 items-center justify-center text-center text-sm text-destructive">
-                        {buildApiErrorLabel(error)}
-                      </div>
-                    )}
-
-                    {status === 'loaded' && data && (
-                      <>
-                        {error && (
-                          <p className="text-sm text-destructive">
-                            {buildApiErrorLabel(error)}
-                          </p>
-                        )}
-                        {data.fromCache && (
-                          <p className="text-xs text-amber-600">
-                            Mostrando dados da última consulta em{' '}
-                            {data.lastConsultation ? new Date(data.lastConsultation).toLocaleDateString() : ''}
-                          </p>
-                        )}
-
-                        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                          <div className="contents">
-                            <dt className="text-muted-foreground">Quantidade:</dt>
-                            <dd className="text-right font-medium">{resumo?.totalSemCancelamento ?? data.quantity ?? 0}</dd>
-                          </div>
-                          <div className="contents">
-                            <dt className="text-muted-foreground">Valor Total:</dt>
-                            <dd className="text-right font-medium">R$ 0,00</dd>
-                          </div>
-                        </dl>
-
-                        {temRegistros ? (
-                          <div className="mt-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantos são:</p>
-                            <ul className="mt-2 space-y-1 text-sm">
-                              {Object.entries(resumo?.porNaturezaAgrupada || {}).map(([cod, qtd]) => (
-                                <li key={cod} className="flex items-center justify-between gap-4">
-                                  <span className="text-muted-foreground">
-                                    {cod === '1.3/1.7'
-                                      ? '1.3/1.7 = DCOMP (Declarações de Compensação)'
-                                      : cod === '1.2/1.6'
-                                      ? '1.2/1.6 = REST (Pedidos de Restituição)'
-                                      : cod === '1.1/1.5'
-                                      ? '1.1/1.5 = RESSARC (Pedidos de Ressarcimento)'
-                                      : cod}
-                                  </span>
-                                  <span className="font-medium">{qtd}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : (
-                          <div className="mt-4 rounded-2xl border border-dashed border-border bg-card/40 p-4 text-center text-sm text-muted-foreground">
-                            Nenhum PER/DCOMP encontrado no período.
-                          </div>
-                        )}
-
-                        <div className="mt-4 flex flex-wrap items-center gap-4">
-                          <button
-                            type="button"
-                            className="text-sm font-semibold text-primary hover:underline"
-                            onClick={() => {
-                              setCancelCount(cancelamentos);
-                              setOpenCancel(true);
-                            }}
-                          >
-                            Cancelamentos
-                          </button>
-                          {data.siteReceipt && (
-                            <a
-                              className="text-sm text-muted-foreground hover:underline"
-                              href={data.siteReceipt}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              HTML
-                            </a>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {showDebug && status === 'loaded' && debug && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPreviewPayload({ company, debug });
-                        setPreviewOpen(true);
-                      }}
-                      className="mt-4 inline-flex items-center justify-center rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      Ver retorno da API
-                    </button>
-                  )}
-                </article>
-              );
-            })}
+            {results.map(({ company, data, status, error, debug }) => (
+              <PerdcompEnrichedCard
+                key={company.CNPJ_Empresa}
+                company={company}
+                data={data}
+                status={status}
+                error={error}
+                debug={debug}
+                showDebug={showDebug}
+                onCancelClick={(count) => {
+                  setCancelCount(count);
+                  setOpenCancel(true);
+                }}
+                onDebugClick={(company, debug) => {
+                  setPreviewPayload({ company, debug });
+                  setPreviewOpen(true);
+                }}
+              />
+            ))}
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-border bg-card/40 p-6 text-center text-sm text-muted-foreground" aria-live="polite">
