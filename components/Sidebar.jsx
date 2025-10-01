@@ -12,6 +12,7 @@ export default function Sidebar() {
     { href: '/clientes', label: 'Clients', icon: <FaUsers /> },
     { href: '/kanban', label: 'Kanban', icon: <FaColumns /> },
     { href: '/consultas/perdecomp-comparativo', label: 'PER/DCOMP (Comparativo)', icon: <FaSearchDollar /> },
+    { href: '/perdcomp/lote', label: 'PER/DCOMP (Lote)', icon: <FaSearchDollar /> },
     { href: '/reports', label: 'Reports', icon: <FaChartBar /> },
     { href: '#', label: 'Settings', icon: <FaCog /> },
   ];
