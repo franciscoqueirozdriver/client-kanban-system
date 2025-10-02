@@ -178,11 +178,16 @@ export async function findCompetitors(input: { nome: string; max?: number }): Pr
 Liste os ${max} principais concorrentes da empresa "${nome}" no Brasil.
 Retorne ESTRITAMENTE um array JSON de objetos no formato:
 [
-  {"nome": "<Nome da empresa>", "cnpj": "<apenas números com 14 dígitos; se não encontrado ou inválido, use \"\">"}
+  {"nome": "<Nome oficial completo da empresa>", "cnpj": "<apenas números com 14 dígitos do CNPJ MATRIZ; se não encontrado ou inválido, use \"\">"}
 ]
 
-Regras:
-- NÃO invente CNPJ. Se não encontrar, devolva "".
+Regras IMPORTANTES:
+- Busque o CNPJ da MATRIZ (sede principal), NÃO de filiais.
+- O CNPJ da matriz termina com /0001-XX (onde XX são os dígitos verificadores).
+- Se a empresa tiver múltiplos CNPJs, use apenas o da matriz.
+- NÃO invente CNPJ. Se não encontrar um CNPJ válido de matriz, devolva "".
+- Evite duplicações: cada empresa deve aparecer apenas uma vez.
+- NÃO inclua a própria empresa "${nome}" na lista de concorrentes.
 - NÃO inclua nada além do JSON.
 `.trim();
 
@@ -217,6 +222,7 @@ Regras:
 
   const rawList = Array.isArray(parsed) ? parsed : [];
   const seen = new Set<string>();
+  const seenCnpjRaiz = new Set<string>(); // Para detectar CNPJs do mesmo grupo empresarial
   const items: Array<{ nome: string; cnpj: string }> = [];
 
   for (const entry of rawList) {
@@ -228,9 +234,26 @@ Regras:
       cnpj = '';
     }
 
-    const key = cnpj || nome.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
+    // Validar duplicação por nome
+    const nomeKey = nome.toLowerCase();
+    if (seen.has(nomeKey)) continue;
+
+    // Validar duplicação por CNPJ completo
+    if (cnpj) {
+      if (seen.has(cnpj)) continue;
+      
+      // Validar duplicação por CNPJ raiz (8 primeiros dígitos = mesmo grupo empresarial)
+      const cnpjRaiz = cnpj.substring(0, 8);
+      if (seenCnpjRaiz.has(cnpjRaiz)) {
+        console.warn(`[findCompetitors] CNPJ duplicado detectado (mesmo grupo): ${nome} - ${cnpj}`);
+        continue; // Pula empresas do mesmo grupo
+      }
+      
+      seen.add(cnpj);
+      seenCnpjRaiz.add(cnpjRaiz);
+    }
+
+    seen.add(nomeKey);
     items.push({ nome, cnpj });
     if (items.length >= max) break;
   }

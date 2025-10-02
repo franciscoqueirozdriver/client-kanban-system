@@ -544,18 +544,35 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
 
   function confirmCompetitors(selected: Array<{ nome: string; cnpj: string }>) {
     const sanitized: Array<{ nome: string; cnpj: string }> = [];
+    const empresasSemCnpj: string[] = [];
+    
     for (const item of selected) {
       const nome = String(item?.nome ?? '').trim();
       if (!nome) continue;
       const cleaned = onlyDigits(item?.cnpj ?? '');
+      
       if (cleaned) {
         if (!isCnpj(cleaned)) {
-          alert('CNPJ inválido');
+          alert(`CNPJ inválido para a empresa "${nome}". Por favor, verifique e tente novamente.`);
           return;
         }
         sanitized.push({ nome, cnpj: cleaned });
       } else {
-        sanitized.push({ nome, cnpj: '' });
+        // CNPJ obrigatório - coletar empresas sem CNPJ para alertar
+        empresasSemCnpj.push(nome);
+      }
+    }
+
+    // Validar se há empresas sem CNPJ
+    if (empresasSemCnpj.length > 0) {
+      const listaEmpresas = empresasSemCnpj.join(', ');
+      alert(
+        `As seguintes empresas não possuem CNPJ válido e não podem ser adicionadas:\n\n${listaEmpresas}\n\n` +
+        `Por favor, tente enriquecer os dados dessas empresas antes de adicioná-las como concorrentes.`
+      );
+      if (sanitized.length === 0) {
+        setCompDialogOpen(false);
+        return;
       }
     }
 
@@ -564,30 +581,72 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       return;
     }
 
+    // Validar duplicações com cliente principal e concorrentes existentes
     const existingKeys = new Set<string>();
+    const existingCnpjRaiz = new Set<string>();
+    
+    // Adicionar CNPJ do cliente principal
+    if (client?.company?.CNPJ_Empresa) {
+      const cnpj = normalizeCnpj(client.company.CNPJ_Empresa);
+      if (cnpj) {
+        existingKeys.add(cnpj);
+        existingCnpjRaiz.add(cnpj.substring(0, 8));
+      }
+    }
+    
+    // Adicionar CNPJs dos concorrentes existentes
     competitors.forEach(existing => {
       if (!existing) return;
       const cnpj = normalizeCnpj(existing.company.CNPJ_Empresa);
       if (cnpj) {
         existingKeys.add(cnpj);
-        return;
+        existingCnpjRaiz.add(cnpj.substring(0, 8));
       }
       const key = String(existing.company.Nome_da_Empresa || '').trim().toLowerCase();
       if (key) existingKeys.add(key);
     });
-    if (client?.company?.CNPJ_Empresa) {
-      const cnpj = normalizeCnpj(client.company.CNPJ_Empresa);
-      if (cnpj) existingKeys.add(cnpj);
-    }
 
     const filtered: Array<{ nome: string; cnpj: string }> = [];
     const seen = new Set<string>();
+    const seenCnpjRaiz = new Set<string>();
+    const duplicados: string[] = [];
+    
     sanitized.forEach(item => {
-      const key = item.cnpj || item.nome.toLowerCase();
-      if (existingKeys.has(key) || seen.has(key)) return;
-      seen.add(key);
+      const nomeKey = item.nome.toLowerCase();
+      const cnpj = item.cnpj;
+      const cnpjRaiz = cnpj.substring(0, 8);
+      
+      // Verificar duplicação por nome
+      if (existingKeys.has(nomeKey) || seen.has(nomeKey)) {
+        duplicados.push(`${item.nome} (nome duplicado)`);
+        return;
+      }
+      
+      // Verificar duplicação por CNPJ completo
+      if (existingKeys.has(cnpj) || seen.has(cnpj)) {
+        duplicados.push(`${item.nome} (CNPJ ${formatCnpj(cnpj)} já existe)`);
+        return;
+      }
+      
+      // Verificar duplicação por CNPJ raiz (mesmo grupo empresarial)
+      if (existingCnpjRaiz.has(cnpjRaiz) || seenCnpjRaiz.has(cnpjRaiz)) {
+        duplicados.push(`${item.nome} (mesmo grupo empresarial - CNPJ raiz ${cnpjRaiz})`);
+        return;
+      }
+      
+      seen.add(nomeKey);
+      seen.add(cnpj);
+      seenCnpjRaiz.add(cnpjRaiz);
       filtered.push(item);
     });
+
+    // Alertar sobre duplicados
+    if (duplicados.length > 0) {
+      const listaDuplicados = duplicados.join('\n');
+      alert(
+        `As seguintes empresas não foram adicionadas por serem duplicadas:\n\n${listaDuplicados}`
+      );
+    }
 
     if (filtered.length === 0) {
       setCompDialogOpen(false);
