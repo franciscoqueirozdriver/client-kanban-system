@@ -26,16 +26,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ lastConsultation: null });
     }
 
-    // Find the most recent consultation date
-    const mostRecentConsultation = dataForCnpj.reduce((latest, row) => {
-      const currentDate = new Date(row.Data_Consulta);
-      if (!latest || currentDate > new Date(latest)) {
-        return row.Data_Consulta;
-      }
-      return latest;
-    }, '' as string | null);
+    // Find the most recent consultation date robustly
+    const mostRecentConsultation = dataForCnpj
+      .map(row => row.Data_Consulta)
+      .filter(dateStr => dateStr && typeof dateStr === 'string') // Filter out null/undefined/empty
+      .map(dateStr => new Date(dateStr))
+      .filter(date => !isNaN(date.getTime())) // Filter out invalid dates
+      .sort((a, b) => b.getTime() - a.getTime())[0]; // Sort descending
 
-    return NextResponse.json({ lastConsultation: mostRecentConsultation });
+    const lastConsultation = mostRecentConsultation ? mostRecentConsultation.toISOString() : null;
+
+    return NextResponse.json({ lastConsultation });
 
   } catch (error) {
     console.error('[API /perdecomp/verificar]', error);

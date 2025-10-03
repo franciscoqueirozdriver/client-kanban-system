@@ -55,7 +55,7 @@ interface ComparisonResult {
 }
 
 interface CompanySelection {
-  company: Company; lastConsultation: string | null; forceRefresh: boolean;
+  company: Company; forceRefresh: boolean;
 }
 
 // Tipagem do flattened vindo do preview de enriquecimento
@@ -152,6 +152,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     resolve?: (value: boolean) => void;
   }>({ isOpen: false });
   const [isDateAutomationEnabled, setIsDateAutomationEnabled] = useState(true);
+  const [lastConsultations, setLastConsultations] = useState<Record<string, string | null>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPayload, setPreviewPayload] = useState<{ company: Company; debug: ApiDebug } | null>(null);
   const [openCancel, setOpenCancel] = useState(false);
@@ -640,7 +641,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             Nome_da_Empresa: s.nome,
             CNPJ_Empresa: s.cnpj,
           },
-          lastConsultation: null,
           forceRefresh: false,
         };
       }
@@ -653,7 +653,6 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           Nome_da_Empresa: s.nome,
           CNPJ_Empresa: s.cnpj,
         },
-        lastConsultation: null,
         forceRefresh: false,
       });
     }
@@ -758,8 +757,11 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
     const cnpj = normalizeCnpj(company.CNPJ_Empresa);
     const normalized = { ...company, CNPJ_Empresa: cnpj };
-    const lastConsultation = isCnpj(cnpj) ? await checkLastConsultation(cnpj) : null;
-    const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
+    if (isCnpj(cnpj)) {
+      const lastConsultation = await checkLastConsultation(cnpj);
+      setLastConsultations(prev => ({ ...prev, [cnpj]: lastConsultation }));
+    }
+    const selection: CompanySelection = { company: normalized, forceRefresh: false };
     if (type === 'client') {
       setClient(selection);
     } else if (type === 'competitor' && index !== undefined) {
@@ -830,12 +832,12 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
               isEnriching={isEnriching && enrichTarget === 'client'}
               initialQuery={q}
             />
-            {client?.lastConsultation && (
+            {client?.company.CNPJ_Empresa && lastConsultations[client.company.CNPJ_Empresa] && (
               <div className="rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                Última consulta em {new Date(client.lastConsultation).toLocaleDateString()}
+                Última consulta em {new Date(lastConsultations[client.company.CNPJ_Empresa]!).toLocaleDateString()}
               </div>
             )}
-            {client?.lastConsultation && (
+            {client?.company.CNPJ_Empresa && lastConsultations[client.company.CNPJ_Empresa] && (
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 <input
                   type="checkbox"
@@ -905,10 +907,10 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                 </button>
               </div>
 
-              {comp?.lastConsultation && (
+              {comp?.company.CNPJ_Empresa && lastConsultations[comp.company.CNPJ_Empresa] && (
                 <div className="mt-3 space-y-2">
                   <div className="rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                    Última consulta em {new Date(comp.lastConsultation).toLocaleDateString()}
+                    Última consulta em {new Date(lastConsultations[comp.company.CNPJ_Empresa]!).toLocaleDateString()}
                   </div>
                   <label className="flex items-center gap-2 text-sm text-muted-foreground">
                     <input
