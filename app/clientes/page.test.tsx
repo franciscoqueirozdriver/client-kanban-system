@@ -32,6 +32,7 @@ jest.mock('@/components/Filters', () => ({ filters, onFilterChange }) => (
 jest.mock('@/components/client-card', () => () => <div data-testid="client-card" />);
 jest.mock('@/components/NewCompanyModal', () => () => null);
 jest.mock('@/components/EnrichmentPreviewDialog', () => () => null);
+jest.mock('@/components/spotter/SpotterModal', () => () => null);
 
 type MockClient = {
   id: string;

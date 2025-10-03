@@ -544,36 +544,12 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
 
   function confirmCompetitors(selected: Array<{ nome: string; cnpj: string }>) {
     const sanitized: Array<{ nome: string; cnpj: string }> = [];
-    const empresasSemCnpj: string[] = [];
     
     for (const item of selected) {
       const nome = String(item?.nome ?? '').trim();
       if (!nome) continue;
       const cleaned = onlyDigits(item?.cnpj ?? '');
-      
-      if (cleaned) {
-        if (!isCnpj(cleaned)) {
-          alert(`CNPJ inválido para a empresa "${nome}". Por favor, verifique e tente novamente.`);
-          return;
-        }
-        sanitized.push({ nome, cnpj: cleaned });
-      } else {
-        // CNPJ obrigatório - coletar empresas sem CNPJ para alertar
-        empresasSemCnpj.push(nome);
-      }
-    }
-
-    // Validar se há empresas sem CNPJ
-    if (empresasSemCnpj.length > 0) {
-      const listaEmpresas = empresasSemCnpj.join(', ');
-      alert(
-        `As seguintes empresas não possuem CNPJ válido e não podem ser adicionadas:\n\n${listaEmpresas}\n\n` +
-        `Por favor, tente enriquecer os dados dessas empresas antes de adicioná-las como concorrentes.`
-      );
-      if (sanitized.length === 0) {
-        setCompDialogOpen(false);
-        return;
-      }
+      sanitized.push({ nome, cnpj: cleaned });
     }
 
     if (sanitized.length === 0) {
@@ -623,20 +599,20 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       }
       
       // Verificar duplicação por CNPJ completo
-      if (existingKeys.has(cnpj) || seen.has(cnpj)) {
+      if (cnpj && (existingKeys.has(cnpj) || seen.has(cnpj))) {
         duplicados.push(`${item.nome} (CNPJ ${formatCnpj(cnpj)} já existe)`);
         return;
       }
       
       // Verificar duplicação por CNPJ raiz (mesmo grupo empresarial)
-      if (existingCnpjRaiz.has(cnpjRaiz) || seenCnpjRaiz.has(cnpjRaiz)) {
+      if (cnpjRaiz && (existingCnpjRaiz.has(cnpjRaiz) || seenCnpjRaiz.has(cnpjRaiz))) {
         duplicados.push(`${item.nome} (mesmo grupo empresarial - CNPJ raiz ${cnpjRaiz})`);
         return;
       }
       
       seen.add(nomeKey);
-      seen.add(cnpj);
-      seenCnpjRaiz.add(cnpjRaiz);
+      if (cnpj) seen.add(cnpj);
+      if (cnpjRaiz) seenCnpjRaiz.add(cnpjRaiz);
       filtered.push(item);
     });
 
