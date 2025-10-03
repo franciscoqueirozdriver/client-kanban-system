@@ -255,10 +255,6 @@ export async function savePerdecompResults(args: SaveArgs) {
     });
   }
 
-  if (factRowsToAppend.length > 0) {
-    await appendPerdecompFacts(factRowsToAppend);
-  }
-
   // --- Handle snapshot sheet ---
   const datas = uniqueSortedDatesISO(args.facts.map(f => f.Data_ISO));
   const primeiraData = minDateISO(datas);
@@ -311,7 +307,23 @@ export async function savePerdecompResults(args: SaveArgs) {
     args.erroUltimaConsulta ?? '',
   ];
 
+  console.log('PERDCOMP_PERSIST_START', {
+    clienteId: args.clienteId,
+    factsCount: factRowsToAppend.length,
+    cardCodes: args.card?.codigos_identificados?.length ?? -1,
+  });
+
   await upsertPerdecompSnapshot(snapshotRow);
+  console.log('PERDCOMP_SNAPSHOT_OK', { clienteId: args.clienteId });
+
+  if (factRowsToAppend.length) {
+    await appendPerdecompFacts(factRowsToAppend);
+    console.log('PERDCOMP_FACTS_OK', { clienteId: args.clienteId, appended: factRowsToAppend.length });
+  } else {
+    console.log('PERDCOMP_FACTS_SKIP_EMPTY', { clienteId: args.clienteId });
+  }
+
+  console.log('PERDCOMP_PERSIST_END', { clienteId: args.clienteId });
 }
 
 function parseJson<T>(input: string | undefined, fallback: T): T {
