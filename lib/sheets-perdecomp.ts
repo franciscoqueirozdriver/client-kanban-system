@@ -1,4 +1,9 @@
-import { getSheets, SHEET_ID } from '@/lib/google-sheets';
+import { getSheetsClient } from '@/lib/googleSheets.js';
+
+const SHEET_ID = process.env.SPREADSHEET_ID!;
+if (!SHEET_ID) {
+  throw new Error('SPREADSHEET_ID is not set');
+}
 
 export type SheetCell = string | number | boolean | null;
 export type SheetRow = SheetCell[];
@@ -68,13 +73,13 @@ export const SNAPSHOT_HEADERS = [
 ];
 
 async function getValues(range: string) {
-  const sheets = await getSheets();
+  const sheets = await getSheetsClient();
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   return res.data.values ?? [];
 }
 
 async function setValues(range: string, values: SheetRow[]) {
-  const sheets = await getSheets();
+  const sheets = await getSheetsClient();
   return sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range,
@@ -85,7 +90,7 @@ async function setValues(range: string, values: SheetRow[]) {
 
 async function appendValues(range: string, values: SheetRow[]) {
   if (!values.length) return;
-  const sheets = await getSheets();
+  const sheets = await getSheetsClient();
   return sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
     range,
@@ -96,7 +101,7 @@ async function appendValues(range: string, values: SheetRow[]) {
 }
 
 async function ensureSheetWithHeaders(sheetTitle: string, headers: string[]) {
-  const sheets = await getSheets();
+  const sheets = await getSheetsClient();
   const current = await getValues(`${sheetTitle}!1:1`).catch(() => []);
   const hasHeader = current && current[0] && current[0].length > 0;
 
