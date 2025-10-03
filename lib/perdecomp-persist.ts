@@ -169,6 +169,12 @@ function classifyFamilia(fact: SaveArgs['facts'][number]) {
 }
 
 export async function savePerdecompResults(args: SaveArgs) {
+  console.log('[PERDCOMP] savePerdecompResults CALLED', {
+    clienteId: args.clienteId,
+    facts: args.facts?.length ?? 0,
+    risco: args.risco_nivel,
+    ultima: args.card?.rendered_at_iso,
+  });
   const spreadsheetId = process.env.SPREADSHEET_ID;
   if (!spreadsheetId) {
     throw new Error('SPREADSHEET_ID is not set');
