@@ -605,10 +605,10 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       }
       
       // Verificar duplicação por CNPJ raiz (mesmo grupo empresarial)
-      if (cnpjRaiz && (existingCnpjRaiz.has(cnpjRaiz) || seenCnpjRaiz.has(cnpjRaiz))) {
-        duplicados.push(`${item.nome} (mesmo grupo empresarial - CNPJ raiz ${cnpjRaiz})`);
-        return;
-      }
+      // if (cnpjRaiz && (existingCnpjRaiz.has(cnpjRaiz) || seenCnpjRaiz.has(cnpjRaiz))) {
+      //   duplicados.push(`${item.nome} (mesmo grupo empresarial - CNPJ raiz ${cnpjRaiz})`);
+      //   return;
+      // }
       
       seen.add(nomeKey);
       if (cnpj) seen.add(cnpj);
