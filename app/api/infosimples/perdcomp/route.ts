@@ -18,7 +18,7 @@ import {
   CREDITO_RISCO,
   CREDITO_RECOMENDACOES,
   CREDITO_CATEGORIA,
-} from '@/lib/perdecomp';
+} from '@/lib/perdcomp';
 
 export const runtime = 'nodejs';
 
