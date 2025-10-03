@@ -1,5 +1,8 @@
 import { getSheets, SHEET_ID } from '@/lib/google-sheets';
 
+export type SheetCell = string | number | boolean | null;
+export type SheetRow = SheetCell[];
+
 export const FACTS_HEADERS = [
   'Cliente_ID','Empresa_ID','Nome da Empresa','CNPJ','Perdcomp_Numero','Perdcomp_Formatado','B1','B2','Data_DDMMAA','Data_ISO','Tipo_Codigo','Tipo_Nome','Natureza','Familia','Credito_Codigo','Credito_Descricao','Risco_Nivel','Protocolo','Situacao','Situacao_Detalhamento','Motivo_Normalizado','Solicitante','Fonte','Data_Consulta','URL_Comprovante_HTML','Row_Hash','Inserted_At','Consulta_ID','Version','Deleted_Flag',
 ];
@@ -14,7 +17,7 @@ async function getValues(range: string) {
   return res.data.values ?? [];
 }
 
-async function setValues(range: string, values: any[][]) {
+async function setValues(range: string, values: SheetRow[]) {
   const sheets = await getSheets();
   return sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
@@ -24,7 +27,7 @@ async function setValues(range: string, values: any[][]) {
   });
 }
 
-async function appendValues(range: string, values: any[][]) {
+async function appendValues(range: string, values: SheetRow[]) {
   if (!values.length) return;
   const sheets = await getSheets();
   return sheets.spreadsheets.values.append({
@@ -64,12 +67,12 @@ async function ensureSheetWithHeaders(sheetTitle: string, headers: string[]) {
   }
 }
 
-export async function appendPerdecompFacts(rows: any[][]) {
+export async function appendPerdecompFacts(rows: SheetRow[]) {
   await ensureSheetWithHeaders('perdecomp_facts', FACTS_HEADERS);
   return appendValues('perdecomp_facts!A1', rows);
 }
 
-export async function upsertPerdecompSnapshot(row: any[]) {
+export async function upsertPerdecompSnapshot(row: SheetRow) {
   await ensureSheetWithHeaders('perdecomp_snapshot', SNAPSHOT_HEADERS);
   const values = await getValues('perdecomp_snapshot!A:A');
   const headerOffset = 1;

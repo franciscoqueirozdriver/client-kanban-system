@@ -3,10 +3,17 @@ import 'server-only';
 import crypto from 'crypto';
 import { Buffer } from 'buffer';
 
-import { appendPerdecompFacts, upsertPerdecompSnapshot } from '@/lib/sheets-perdecomp';
+import {
+  appendPerdecompFacts,
+  upsertPerdecompSnapshot,
+  type SheetCell,
+} from '@/lib/sheets-perdecomp';
 import { getSheetData } from './googleSheets.js';
 
 type Maybe<T> = T | null | undefined;
+
+type Cell = SheetCell;
+type Row = Cell[];
 
 export type IdentifiedCode = {
   codigo: string;
@@ -179,7 +186,7 @@ export async function savePerdecompResults(args: SaveArgs) {
     existingFactsByKey.get(key)!.push(row);
   });
 
-  const factRowsToAppend: string[][] = [];
+  const factRowsToAppend: Row[] = [];
   for (const fact of args.facts) {
     const factKey = buildFactKey(args.clienteId, fact.Perdcomp_Numero, fact.Protocolo);
     let existing = existingFactsByKey.get(factKey);
@@ -206,7 +213,7 @@ export async function savePerdecompResults(args: SaveArgs) {
 
     const version = maxVersion + 1 || 1;
 
-    const rowValues = [
+    const rowValues: Row = [
       args.clienteId,
       args.empresaId,
       args.nome,
@@ -235,7 +242,7 @@ export async function savePerdecompResults(args: SaveArgs) {
       rowHash,
       nowISO,
       args.consultaId,
-      String(version),
+      version,
       false,
     ];
     factRowsToAppend.push(rowValues);
@@ -244,7 +251,7 @@ export async function savePerdecompResults(args: SaveArgs) {
       Perdcomp_Numero: fact.Perdcomp_Numero,
       Protocolo: fact.Protocolo ?? '',
       Row_Hash: rowHash,
-      Version: String(version),
+      Version: version,
     });
   }
 
@@ -272,15 +279,16 @@ export async function savePerdecompResults(args: SaveArgs) {
     { DCOMP: 0, REST: 0, RESSARC: 0 } as { DCOMP: number; REST: number; RESSARC: number },
   );
 
-  const snapshotRow = [
+  const qtdTotal = args.card.quantidade_total ?? args.facts.length ?? 0;
+  const snapshotRow: Row = [
     args.clienteId,
     args.empresaId,
     args.nome,
     args.cnpj,
-    String(args.card.quantidade_total ?? args.facts.length ?? 0),
-    String(counts.DCOMP),
-    String(counts.REST),
-    String(counts.RESSARC),
+    qtdTotal,
+    counts.DCOMP,
+    counts.REST,
+    counts.RESSARC,
     args.risco_nivel,
     JSON.stringify(args.tags_risco ?? []),
     JSON.stringify(args.por_natureza ?? []),
@@ -290,15 +298,15 @@ export async function savePerdecompResults(args: SaveArgs) {
     ultimaData,
     p1,
     p2,
-    String(args.card.schema_version ?? ''),
+    args.card.schema_version ?? 0,
     args.card.rendered_at_iso ?? '',
     args.fonte,
     args.dataConsultaISO,
     args.urlComprovanteHTML ?? '',
-    String(payloadBytes),
+    payloadBytes,
     nowISO,
     snapshotHash,
-    String(args.facts.length),
+    args.facts.length,
     args.consultaId,
     args.erroUltimaConsulta ?? '',
   ];
