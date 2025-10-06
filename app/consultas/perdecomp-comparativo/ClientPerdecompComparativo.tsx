@@ -9,6 +9,7 @@ import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDial
 import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import PerdcompEnrichedCard from '../../../components/PerdcompEnrichedCard';
+import MainClientCard from '../../../components/MainClientCard';
 import { decideCNPJFinalBeforeQuery } from '@/helpers/decideCNPJ';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ensureValidCnpj, formatCnpj, normalizeCnpj, onlyDigits, isCnpj, isEmptyCNPJLike } from '@/utils/cnpj';
@@ -873,6 +874,16 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const hasResultCards = results.length > 0;
   const statusMessage = globalLoading ? 'Consultando dados do PER/DCOMP...' : '';
 
+  const mainClientResult = useMemo(() => {
+    if (!client) return null;
+    return results.find(r => r.company.Cliente_ID === client.company.Cliente_ID);
+  }, [client, results]);
+
+  const competitorResults = useMemo(() => {
+    if (!client) return results;
+    return results.filter(r => r.company.Cliente_ID !== client.company.Cliente_ID);
+  }, [client, results]);
+
   return (
     <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       <header className="flex flex-wrap items-start justify-between gap-6 rounded-3xl border border-border bg-card px-6 py-6 shadow-soft">
@@ -1039,36 +1050,53 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         </p>
       </section>
 
-      <section className="relative -mx-2 rounded-3xl border border-border bg-muted/40 p-4 shadow-soft">
-        {hasResultCards ? (
-          <div
-            className="grid grid-cols-4 gap-4 overflow-x-hidden px-2 py-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-            aria-label="Resultados da comparação PER/DCOMP"
-          >
-            {results.map(({ company, data, status, error, debug }) => (
-              <PerdcompEnrichedCard
-                key={company.CNPJ_Empresa}
-                company={company}
-                data={data}
-                status={status}
-                error={error}
-                debug={debug}
-                showDebug={showDebug}
-                onCancelClick={(count) => {
-                  setCancelCount(count);
-                  setOpenCancel(true);
-                }}
-                onDebugClick={(company, debug) => {
-                  setPreviewPayload({ company, debug });
-                  setPreviewOpen(true);
-                }}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-border bg-card/40 p-6 text-center text-sm text-muted-foreground" aria-live="polite">
-            Nenhum resultado para os filtros aplicados.
-          </div>
+      <section className="relative -mx-2 rounded-3xl border-border bg-muted/40 p-4 shadow-soft">
+        {mainClientResult && (
+            <div className="mb-4">
+                <MainClientCard
+                    key={mainClientResult.company.CNPJ_Empresa}
+                    company={mainClientResult.company}
+                    data={mainClientResult.data}
+                    status={mainClientResult.status}
+                    error={mainClientResult.error}
+                />
+            </div>
+        )}
+
+        {competitorResults.length > 0 && (
+            <>
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Concorrentes</h3>
+                <div
+                    className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                    aria-label="Resultados da comparação PER/DCOMP para concorrentes"
+                >
+                    {competitorResults.map(({ company, data, status, error, debug }) => (
+                        <PerdcompEnrichedCard
+                            key={company.CNPJ_Empresa}
+                            company={company}
+                            data={data}
+                            status={status}
+                            error={error}
+                            debug={debug}
+                            showDebug={showDebug}
+                             onCancelClick={(count) => {
+                                setCancelCount(count);
+                                setOpenCancel(true);
+                            }}
+                            onDebugClick={(company, debug) => {
+                                setPreviewPayload({ company, debug });
+                                setPreviewOpen(true);
+                            }}
+                        />
+                    ))}
+                </div>
+            </>
+        )}
+
+        {!hasResultCards && (
+            <div className="rounded-2xl border border-dashed border-border bg-card/40 p-6 text-center text-sm text-muted-foreground" aria-live="polite">
+                Nenhum resultado para os filtros aplicados.
+            </div>
         )}
       </section>
 
