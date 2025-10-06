@@ -153,6 +153,20 @@ export default function MainClientCard({
     return [] as CountBlock[];
   }, [card?.quantos_sao]);
 
+  const codigosSummary = useMemo(() => {
+    if (!codigosIdentificados || codigosIdentificados.length === 0) {
+      return [];
+    }
+    const summary = codigosIdentificados.reduce((acc, codigo) => {
+      const tipo = codigo.credito_tipo || 'Não identificado';
+      acc[tipo] = (acc[tipo] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(summary).map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [codigosIdentificados]);
+
   const consultedAt = data?.consultedAtISO ?? card?.rendered_at_iso ?? card?.header?.ultima_consulta_iso ?? data?.lastConsultation ?? null;
   const isCached = data?.source === 'snapshot' || data?.fromCache;
 
@@ -279,28 +293,19 @@ export default function MainClientCard({
 
             {/* Coluna 2 */}
             <div className="lg:col-span-1">
-                 {codigosIdentificados.length > 0 && (
+                 {codigosSummary.length > 0 && (
                     <div className="h-full">
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Códigos identificados
+                            Códigos identificados (Sumarizado)
                         </p>
-                        <div className="max-h-[450px] space-y-2 overflow-y-auto pr-2 text-xs">
-                            {codigosIdentificados.map((codigo: IdentifiedCode, index) => (
-                                <div key={`${codigo.codigo}-${index}`} className="rounded-lg border border-border/40 bg-background/60 p-2">
-                                    <div className="mb-1 flex items-center justify-between">
-                                        <span className="font-mono text-muted-foreground">{codigo.codigo}</span>
-                                        <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${getRiskBadgeColor(codigo.risco)}`}>
-                                          {codigo.risco}
-                                        </span>
-                                    </div>
-                                    <p className="text-foreground font-medium">{codigo.credito_tipo || 'Não identificado'}</p>
-                                    <p className="text-muted-foreground">
-                                        {codigo.grupo} • {codigo.natureza}
-                                        {codigo.data_iso ? ` • ${formatDate(codigo.data_iso)}` : ''}
-                                    </p>
-                                </div>
+                        <ul className="mt-2 space-y-1 text-sm">
+                            {codigosSummary.map((summaryItem) => (
+                                <li key={summaryItem.label} className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">{summaryItem.label}</span>
+                                    <span className="font-medium">{summaryItem.count}</span>
+                                </li>
                             ))}
-                        </div>
+                        </ul>
                     </div>
                 )}
             </div>
