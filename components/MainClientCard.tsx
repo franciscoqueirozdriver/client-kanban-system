@@ -287,8 +287,17 @@ export default function MainClientCard({
                         <div className="max-h-[450px] space-y-2 overflow-y-auto pr-2 text-xs">
                             {codigosIdentificados.map((codigo: IdentifiedCode, index) => (
                                 <div key={`${codigo.codigo}-${index}`} className="rounded-lg border border-border/40 bg-background/60 p-2">
-                                    <p className="font-mono text-muted-foreground">{codigo.codigo}</p>
+                                    <div className="mb-1 flex items-center justify-between">
+                                        <span className="font-mono text-muted-foreground">{codigo.codigo}</span>
+                                        <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${getRiskBadgeColor(codigo.risco)}`}>
+                                          {codigo.risco}
+                                        </span>
+                                    </div>
                                     <p className="text-foreground font-medium">{codigo.credito_tipo || 'Não identificado'}</p>
+                                    <p className="text-muted-foreground">
+                                        {codigo.grupo} • {codigo.natureza}
+                                        {codigo.data_iso ? ` • ${formatDate(codigo.data_iso)}` : ''}
+                                    </p>
                                 </div>
                             ))}
                         </div>
