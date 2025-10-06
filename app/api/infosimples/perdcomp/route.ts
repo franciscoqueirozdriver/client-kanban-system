@@ -1,7 +1,31 @@
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
-import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
+import { padCNPJ14, isValidCNPJ, formatCnpj } from '@/utils/cnpj';
 import { agregaPerdcomp } from '@/utils/perdcomp';
+import {
+  loadPerdecompSnapshot,
+  savePerdecompResults,
+  uniqueSortedDatesISO,
+  minDateISO,
+  maxDateISO,
+  type SaveArgs,
+} from '@/lib/perdecomp-persist';
+import type {
+  CardPayload,
+  RiskTag,
+  CountBlock,
+  SnapshotMetadata,
+} from '@/types/perdecomp-card';
+import {
+  parsePerdcomp,
+  TIPOS_DOCUMENTO,
+  NATUREZA_FAMILIA,
+  NATUREZA_OBSERVACOES,
+  CREDITOS_DESCRICAO,
+  CREDITO_RISCO,
+  CREDITO_RECOMENDACOES,
+  CREDITO_CATEGORIA,
+} from '@/lib/perdcomp';
 
 export const runtime = 'nodejs';
 
@@ -20,6 +44,58 @@ const REQUIRED_HEADERS = [
   'Perdcomp_Tipo_Credito', 'Perdcomp_Data_Transmissao',
   'Perdcomp_Situacao', 'Perdcomp_Situacao_Detalhamento'
 ];
+
+const RISK_LABEL_NORMALIZATION: Record<string, string> = {
+  MEDIO: 'MÉDIO',
+};
+
+function normalizeRiskLabel(label?: string | null) {
+  if (!label) return '';
+  const upper = String(label).trim().toUpperCase();
+  if (!upper) return '';
+  return RISK_LABEL_NORMALIZATION[upper] ?? upper;
+}
+
+function determineOverallRiskLevel(riskCounts: Map<string, number>, hasFacts: boolean) {
+  if (riskCounts.get('ALTO')) return 'ALTO';
+  if (riskCounts.get('MÉDIO')) return 'MÉDIO';
+  if (riskCounts.get('BAIXO')) return 'BAIXO';
+  if (hasFacts) return 'DESCONHECIDO';
+  return '';
+}
+
+function buildResumoFromCard(card: CardPayload | null | undefined) {
+  if (!card) return null;
+  const map = new Map<string, number>();
+  for (const block of card.quantos_sao || []) {
+    if (!block) continue;
+    const label = String(block.label || '').toUpperCase();
+    if (!label) continue;
+    map.set(label, Number(block.count ?? 0));
+  }
+
+  const porFamilia = {
+    DCOMP: map.get('DCOMP') ?? 0,
+    REST: map.get('REST') ?? 0,
+    RESSARC: map.get('RESSARC') ?? 0,
+    CANC: map.get('CANC') ?? 0,
+    DESCONHECIDO: map.get('DESCONHECIDO') ?? 0,
+  };
+
+  const canc = porFamilia.CANC;
+  const totalSemCancelamento = Number(card.quantidade_total ?? 0) || 0;
+  const porNaturezaAgrupada = Object.fromEntries(
+    (card.por_natureza || []).map(block => [block.label, block.count])
+  );
+
+  return {
+    total: totalSemCancelamento + canc,
+    totalSemCancelamento,
+    canc,
+    porFamilia,
+    porNaturezaAgrupada,
+  };
+}
 
 function columnNumberToLetter(columnNumber: number) {
   let temp;
@@ -151,8 +227,41 @@ export async function POST(request: Request) {
       body?.nomeEmpresa ??
       url.searchParams.get('Nome_da_Empresa') ??
       url.searchParams.get('nomeEmpresa');
+    const empresaId =
+      body?.Empresa_ID ??
+      body?.empresaId ??
+      body?.EmpresaId ??
+      '';
     if (!clienteId || !nomeEmpresa) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    }
+
+    const preferCacheParam = body?.preferCache ?? url.searchParams.get('preferCache');
+    const preferCache = preferCacheParam === undefined ? true : String(preferCacheParam) !== '0';
+
+    if (!force && preferCache && clienteId) {
+      try {
+        const snapshot = await loadPerdecompSnapshot(clienteId);
+        if (snapshot?.card) {
+          const consultedAtISO =
+            snapshot.metadata.dataConsulta ||
+            snapshot.metadata.renderedAtISO ||
+            snapshot.card.rendered_at_iso ||
+            '';
+          return NextResponse.json({
+            ok: true,
+            source: 'snapshot',
+            consultedAtISO,
+            card: snapshot.card,
+            metadata: snapshot.metadata,
+            perdcompResumo: buildResumoFromCard(snapshot.card),
+            perdcompCodigos: snapshot.card.codigos_identificados?.map(code => code.codigo) || [],
+            site_receipt: snapshot.metadata.urlComprovanteHTML || snapshot.card.links?.html || '',
+          });
+        }
+      } catch (error) {
+        console.error('[PERDCOMP] snapshot load error', error);
+      }
     }
 
     const requestedAt = new Date().toISOString();
@@ -309,6 +418,132 @@ export async function POST(request: Request) {
     const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
     const siteReceipt = apiResponse?.site_receipts?.[0] || '';
 
+    const renderedAtISO = new Date().toISOString();
+    const ultimaConsultaISO = headerRequestedAt || requestedAt;
+    const formattedCnpj = formatCnpj(cnpj);
+    const factsForPersistence: SaveArgs['facts'] = [];
+    const identifiedCodes: CardPayload['codigos_identificados'] = [];
+    const riskCounts = new Map<string, number>();
+    const creditCounts = new Map<string, number>();
+    const recommendations = new Set<string>();
+
+    for (const item of perdcompArray) {
+      const rawCode = String(item?.perdcomp ?? '').trim();
+      if (!rawCode) continue;
+
+      const parsed = parsePerdcomp(rawCode);
+      const formatted = parsed.formatted ?? rawCode;
+      const blocks = formatted.split('.');
+      const dataBlock = blocks.length > 2 ? blocks[2] : '';
+      const tipoInfo = parsed.bloco4 ? TIPOS_DOCUMENTO[parsed.bloco4] : undefined;
+      const tipoCodigo = tipoInfo?.nome ?? (item?.tipo_documento ? String(item.tipo_documento).toUpperCase() : '');
+      const tipoNome = tipoInfo?.desc ?? (item?.tipo_documento ?? '');
+      const naturezaCodigo = parsed.natureza ?? '';
+      const naturezaNome = naturezaCodigo ? NATUREZA_OBSERVACOES[naturezaCodigo] ?? naturezaCodigo : '';
+      const familia = naturezaCodigo ? NATUREZA_FAMILIA[naturezaCodigo] ?? '' : '';
+      const creditoCodigo = parsed.credito ?? '';
+      const creditoDescricao =
+        creditoCodigo ? CREDITOS_DESCRICAO[creditoCodigo] ?? (item?.tipo_credito ?? '') : item?.tipo_credito ?? '';
+      const creditoGrupo = creditoCodigo ? CREDITO_CATEGORIA[creditoCodigo] ?? 'Genérico' : 'Genérico';
+      const riscoBase = creditoCodigo ? CREDITO_RISCO[creditoCodigo] : undefined;
+      const riskLabel = normalizeRiskLabel(riscoBase);
+      const riskTagLabel = riskLabel || 'DESCONHECIDO';
+      const protocolo = parsed.protocolo ?? (item?.protocolo ? String(item.protocolo) : '');
+      const situacao = item?.situacao ?? '';
+      const situacaoDetalhamento = item?.situacao_detalhamento ?? '';
+      const motivoNormalizado = item?.motivo_normalizado ?? item?.motivo ?? '';
+      const solicitante = item?.solicitante ?? '';
+      const dataIso = parsed.dataISO ?? (item?.data_transmissao ? String(item.data_transmissao).slice(0, 10) : '');
+
+      const fact: SaveArgs['facts'][number] = {
+        Perdcomp_Numero: rawCode,
+        Perdcomp_Formatado: formatted,
+        B1: parsed.sequencia ?? '',
+        B2: parsed.controle ?? '',
+        Data_DDMMAA: dataBlock,
+        Data_ISO: dataIso,
+        Tipo_Codigo: tipoCodigo,
+        Tipo_Nome: tipoNome,
+        Natureza: naturezaNome,
+        Familia: familia || '',
+        Credito_Codigo: creditoCodigo,
+        Credito_Descricao: creditoDescricao,
+        Risco_Nivel: riskTagLabel,
+        Protocolo: protocolo,
+        Situacao: situacao,
+        Situacao_Detalhamento: situacaoDetalhamento,
+        Motivo_Normalizado: motivoNormalizado,
+        Solicitante: solicitante,
+      };
+      factsForPersistence.push(fact);
+
+      identifiedCodes.push({
+        codigo: formatted,
+        risco: riskTagLabel,
+        credito_tipo: creditoDescricao || 'Não identificado',
+        grupo: creditoGrupo,
+        natureza: naturezaNome || '',
+        protocolo: protocolo || undefined,
+        situacao: situacao || undefined,
+        situacao_detalhamento: situacaoDetalhamento || undefined,
+        data_iso: dataIso || undefined,
+      });
+
+      riskCounts.set(riskTagLabel, (riskCounts.get(riskTagLabel) ?? 0) + 1);
+      if (creditoDescricao) {
+        creditCounts.set(creditoDescricao, (creditCounts.get(creditoDescricao) ?? 0) + 1);
+      }
+      const recomendacao = creditoCodigo ? CREDITO_RECOMENDACOES[creditoCodigo] : undefined;
+      if (recomendacao) {
+        recommendations.add(recomendacao);
+      }
+    }
+
+    const quantosSao: CountBlock[] = [
+      { label: 'DCOMP', count: resumo.porFamilia.DCOMP },
+      { label: 'REST', count: resumo.porFamilia.REST },
+      { label: 'RESSARC', count: resumo.porFamilia.RESSARC },
+      { label: 'CANC', count: resumo.porFamilia.CANC },
+    ].filter(block => block.count > 0);
+
+    const porNaturezaBlocks: CountBlock[] = Object.entries(resumo.porNaturezaAgrupada ?? {})
+      .map(([label, count]) => ({ label, count }))
+      .filter(block => block.count > 0);
+
+    const porCreditoBlocks: CountBlock[] = Array.from(creditCounts.entries())
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const tagsRisco: RiskTag[] = Array.from(riskCounts.entries())
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const riscoNivel = determineOverallRiskLevel(riskCounts, factsForPersistence.length > 0);
+
+    const cardPayload: CardPayload = {
+      header: {
+        nome: nomeEmpresa,
+        cnpj: formattedCnpj,
+        ultima_consulta_iso: ultimaConsultaISO,
+      },
+      quantidade_total: resumo.totalSemCancelamento ?? factsForPersistence.length,
+      analise_risco: {
+        nivel: riscoNivel,
+        tags: tagsRisco,
+      },
+      quantos_sao: quantosSao,
+      por_natureza: porNaturezaBlocks,
+      por_credito: porCreditoBlocks,
+      codigos_identificados: identifiedCodes,
+      recomendacoes: Array.from(recommendations),
+      links: siteReceipt ? { html: siteReceipt } : undefined,
+      schema_version: 1,
+      rendered_at_iso: renderedAtISO,
+    };
+
+    const consultaId = `${clienteId}-${Date.now()}`;
+    const fonte = 'PERDCOMP';
+
     const writes: Record<string, any> = {
       Code: apiResponse.code,
       Code_Message: apiResponse.code_message || '',
@@ -394,8 +629,40 @@ export async function POST(request: Request) {
       });
     }
 
+    const sortedDates = uniqueSortedDatesISO(factsForPersistence.map(f => f.Data_ISO));
+    const consultedAtISO = cardPayload.rendered_at_iso || ultimaConsultaISO || new Date().toISOString();
+    const metadataForResponse: Partial<SnapshotMetadata> = {
+      clienteId,
+      empresaId,
+      nome: nomeEmpresa,
+      cnpj,
+      riscoNivel: riscoNivel,
+      tagsRisco: tagsRisco,
+      porNatureza: porNaturezaBlocks,
+      porCredito: porCreditoBlocks,
+      datas: sortedDates,
+      primeiraDataISO: minDateISO(sortedDates),
+      ultimaDataISO: maxDateISO(sortedDates),
+      renderedAtISO: cardPayload.rendered_at_iso,
+      cardSchemaVersion: cardPayload.schema_version,
+      fonte,
+      dataConsulta: ultimaConsultaISO,
+      urlComprovanteHTML: siteReceipt,
+      factsCount: factsForPersistence.length,
+      consultaId,
+      erroUltimaConsulta: '',
+      qtdTotal: cardPayload.quantidade_total ?? factsForPersistence.length,
+      qtdDcomp: resumo.porFamilia.DCOMP,
+      qtdRest: resumo.porFamilia.REST,
+      qtdRessarc: resumo.porFamilia.RESSARC,
+    };
+
     const resp: any = {
       ok: true,
+      source: 'network',
+      consultedAtISO,
+      card: cardPayload,
+      metadata: metadataForResponse,
       header: { requested_at: headerRequestedAt },
       mappedCount,
       total_perdcomp: totalPerdcomp,
@@ -426,6 +693,29 @@ export async function POST(request: Request) {
         total_perdcomp: totalPerdcomp,
         perdcompResumo: resumo,
       };
+    }
+
+    try {
+      await savePerdecompResults({
+        clienteId,
+        empresaId,
+        nome: nomeEmpresa,
+        cnpj,
+        consultaId,
+        fonte,
+        dataConsultaISO: ultimaConsultaISO,
+        urlComprovanteHTML: siteReceipt,
+        facts: factsForPersistence,
+        card: cardPayload,
+        risco_nivel: riscoNivel,
+        tags_risco: tagsRisco,
+        por_natureza: porNaturezaBlocks,
+        por_credito: porCreditoBlocks,
+        erroUltimaConsulta: '',
+      });
+      console.log('[PERDCOMP] persist OK', { clienteId, facts: factsForPersistence.length });
+    } catch (e: any) {
+      console.error('[PERDCOMP] persist FAIL', { msg: e?.message, clienteId });
     }
 
     return NextResponse.json(resp);

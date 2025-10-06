@@ -13,6 +13,7 @@ import { decideCNPJFinalBeforeQuery } from '@/helpers/decideCNPJ';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ensureValidCnpj, formatCnpj, normalizeCnpj, onlyDigits, isCnpj, isEmptyCNPJLike } from '@/utils/cnpj';
 import { fmtCNPJ } from '@/utils/cnpj-matriz';
+import type { CardPayload, SnapshotMetadata } from '@/types/perdecomp-card';
 
 // --- Helper Types ---
 interface Company {
@@ -23,9 +24,13 @@ interface Company {
 }
 
 interface CardData {
-  quantity: number;
-  lastConsultation: string | null;
-  siteReceipt: string | null;
+  card: CardPayload | null;
+  metadata?: SnapshotMetadata | null;
+  source?: 'snapshot' | 'network';
+  consultedAtISO?: string | null;
+  quantity?: number;
+  lastConsultation?: string | null;
+  siteReceipt?: string | null;
   fromCache?: boolean;
   perdcompResumo?: {
     total: number;
@@ -33,7 +38,7 @@ interface CardData {
     canc: number;
     porFamilia: { DCOMP: number; REST: number; RESSARC: number; CANC: number; DESCONHECIDO: number };
     porNaturezaAgrupada: Record<string, number>;
-  };
+  } | null;
   perdcompCodigos?: string[]; // Array de códigos PER/DCOMP de 24 dígitos
 }
 
@@ -90,6 +95,39 @@ type CompetitorFetchState = {
   error: string | null;
   items: Array<{ nome: string; cnpj: string }>;
 };
+
+function buildResumoFromCardPayload(card?: CardPayload | null) {
+  if (!card) return null;
+  const map = new Map<string, number>();
+  for (const block of card.quantos_sao || []) {
+    if (!block) continue;
+    const label = String(block.label || '').toUpperCase();
+    if (!label) continue;
+    map.set(label, Number(block.count ?? 0));
+  }
+
+  const porFamilia = {
+    DCOMP: map.get('DCOMP') ?? 0,
+    REST: map.get('REST') ?? 0,
+    RESSARC: map.get('RESSARC') ?? 0,
+    CANC: map.get('CANC') ?? 0,
+    DESCONHECIDO: map.get('DESCONHECIDO') ?? 0,
+  };
+
+  const canc = porFamilia.CANC;
+  const totalSemCancelamento = Number(card.quantidade_total ?? 0) || 0;
+  const porNaturezaAgrupada = Object.fromEntries(
+    (card.por_natureza || []).map(block => [block.label, block.count])
+  );
+
+  return {
+    total: totalSemCancelamento + canc,
+    totalSemCancelamento,
+    canc,
+    porFamilia,
+    porNaturezaAgrupada,
+  };
+}
 
 function buildApiErrorLabel(e: any) {
   const parts: string[] = [];
@@ -299,7 +337,13 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     }
 
     try {
-      const res = await fetch('/api/infosimples/perdcomp', {
+      const preferCacheFlag = forceRefresh ? '0' : '1';
+      const queryParams = new URLSearchParams({
+        preferCache: preferCacheFlag,
+        clienteId: company.Cliente_ID,
+      });
+
+      const res = await fetch(`/api/infosimples/perdcomp?${queryParams.toString()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -310,6 +354,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           debug: showDebug,
           Cliente_ID: company.Cliente_ID,
           nomeEmpresa: company.Nome_da_Empresa,
+          Empresa_ID: (company as any)?.Empresa_ID ?? '',
+          preferCache: preferCacheFlag,
+          empresaId: (company as any)?.Empresa_ID ?? '',
         }),
       });
       const data = await res.json();
@@ -350,6 +397,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             porNaturezaAgrupada,
           };
           const cardData: CardData = {
+            card: null,
+            metadata: null,
+            source: 'snapshot',
             quantity: resumo.totalSemCancelamento,
             lastConsultation: data.fallback.requested_at ?? null,
             siteReceipt: data.fallback.site_receipt ?? null,
@@ -375,22 +425,46 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         data.debug?.total_perdcomp ??
         0;
       const siteReceipt =
-        (data.site_receipt ??
-          data.debug?.siteReceipts?.[0] ??
-          firstLinha?.URL_Comprovante_HTML) || null;
-      const lastConsultation =
-        data.header?.requested_at ||
-        data.debug?.header?.requested_at ||
-        firstLinha?.Data_Consulta ||
+        data.site_receipt ??
+        data.metadata?.urlComprovanteHTML ??
+        data.card?.links?.html ??
+        data.debug?.siteReceipts?.[0] ??
+        firstLinha?.URL_Comprovante_HTML ??
         null;
-      const resumo = data.perdcompResumo;
-          const cardData: CardData = {
-            quantity: resumo?.totalSemCancelamento ?? Math.max(totalPerdcomp, mappedCount),
-            lastConsultation,
-            siteReceipt,
-            perdcompResumo: resumo,
-            perdcompCodigos: data.perdcompCodigos || [],
-          };
+      const lastConsultation =
+        data.consultedAtISO ??
+        data.header?.requested_at ??
+        data.debug?.header?.requested_at ??
+        firstLinha?.Data_Consulta ??
+        null;
+      const cardPayload: CardPayload | null = data.card ?? null;
+      const metadata: SnapshotMetadata | null = data.metadata ?? null;
+      const derivedResumo = data.perdcompResumo ?? buildResumoFromCardPayload(cardPayload);
+      const consultedAtISO =
+        data.consultedAtISO ??
+        cardPayload?.rendered_at_iso ??
+        cardPayload?.header?.ultima_consulta_iso ??
+        metadata?.dataConsulta ??
+        lastConsultation ??
+        null;
+      const cardData: CardData = {
+        card: cardPayload,
+        metadata,
+        source: data.source,
+        consultedAtISO,
+        quantity:
+          cardPayload?.quantidade_total ??
+          derivedResumo?.totalSemCancelamento ??
+          Math.max(totalPerdcomp, mappedCount),
+        lastConsultation: consultedAtISO ?? lastConsultation,
+        siteReceipt,
+        fromCache: data.source === 'snapshot' || data.source === 'legacy_sheet',
+        perdcompResumo: derivedResumo ?? null,
+        perdcompCodigos:
+          cardPayload?.codigos_identificados?.map(code => code.codigo) ??
+          data.perdcompCodigos ??
+          [],
+      };
       updateResult(finalCNPJ, { status: 'loaded', data: cardData, debug: showDebug ? data.debug ?? null : null });
 
       if (showDebug && forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
