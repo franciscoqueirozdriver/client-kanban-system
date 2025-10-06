@@ -3,12 +3,19 @@ import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
 import { padCNPJ14, isValidCNPJ, formatCnpj } from '@/utils/cnpj';
 import { agregaPerdcomp } from '@/utils/perdcomp';
 import {
+  loadPerdecompSnapshot,
   savePerdecompResults,
-  type CardPayload,
-  type RiskTag,
-  type CountBlock,
+  uniqueSortedDatesISO,
+  minDateISO,
+  maxDateISO,
   type SaveArgs,
 } from '@/lib/perdecomp-persist';
+import type {
+  CardPayload,
+  RiskTag,
+  CountBlock,
+  SnapshotMetadata,
+} from '@/types/perdecomp-card';
 import {
   parsePerdcomp,
   TIPOS_DOCUMENTO,
@@ -55,6 +62,39 @@ function determineOverallRiskLevel(riskCounts: Map<string, number>, hasFacts: bo
   if (riskCounts.get('BAIXO')) return 'BAIXO';
   if (hasFacts) return 'DESCONHECIDO';
   return '';
+}
+
+function buildResumoFromCard(card: CardPayload | null | undefined) {
+  if (!card) return null;
+  const map = new Map<string, number>();
+  for (const block of card.quantos_sao || []) {
+    if (!block) continue;
+    const label = String(block.label || '').toUpperCase();
+    if (!label) continue;
+    map.set(label, Number(block.count ?? 0));
+  }
+
+  const porFamilia = {
+    DCOMP: map.get('DCOMP') ?? 0,
+    REST: map.get('REST') ?? 0,
+    RESSARC: map.get('RESSARC') ?? 0,
+    CANC: map.get('CANC') ?? 0,
+    DESCONHECIDO: map.get('DESCONHECIDO') ?? 0,
+  };
+
+  const canc = porFamilia.CANC;
+  const totalSemCancelamento = Number(card.quantidade_total ?? 0) || 0;
+  const porNaturezaAgrupada = Object.fromEntries(
+    (card.por_natureza || []).map(block => [block.label, block.count])
+  );
+
+  return {
+    total: totalSemCancelamento + canc,
+    totalSemCancelamento,
+    canc,
+    porFamilia,
+    porNaturezaAgrupada,
+  };
 }
 
 function columnNumberToLetter(columnNumber: number) {
@@ -194,6 +234,34 @@ export async function POST(request: Request) {
       '';
     if (!clienteId || !nomeEmpresa) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    }
+
+    const preferCacheParam = body?.preferCache ?? url.searchParams.get('preferCache');
+    const preferCache = preferCacheParam === undefined ? true : String(preferCacheParam) !== '0';
+
+    if (!force && preferCache && clienteId) {
+      try {
+        const snapshot = await loadPerdecompSnapshot(clienteId);
+        if (snapshot?.card) {
+          const consultedAtISO =
+            snapshot.metadata.dataConsulta ||
+            snapshot.metadata.renderedAtISO ||
+            snapshot.card.rendered_at_iso ||
+            '';
+          return NextResponse.json({
+            ok: true,
+            source: 'snapshot',
+            consultedAtISO,
+            card: snapshot.card,
+            metadata: snapshot.metadata,
+            perdcompResumo: buildResumoFromCard(snapshot.card),
+            perdcompCodigos: snapshot.card.codigos_identificados?.map(code => code.codigo) || [],
+            site_receipt: snapshot.metadata.urlComprovanteHTML || snapshot.card.links?.html || '',
+          });
+        }
+      } catch (error) {
+        console.error('[PERDCOMP] snapshot load error', error);
+      }
     }
 
     const requestedAt = new Date().toISOString();
@@ -561,8 +629,40 @@ export async function POST(request: Request) {
       });
     }
 
+    const sortedDates = uniqueSortedDatesISO(factsForPersistence.map(f => f.Data_ISO));
+    const consultedAtISO = cardPayload.rendered_at_iso || ultimaConsultaISO || new Date().toISOString();
+    const metadataForResponse: Partial<SnapshotMetadata> = {
+      clienteId,
+      empresaId,
+      nome: nomeEmpresa,
+      cnpj,
+      riscoNivel: riscoNivel,
+      tagsRisco: tagsRisco,
+      porNatureza: porNaturezaBlocks,
+      porCredito: porCreditoBlocks,
+      datas: sortedDates,
+      primeiraDataISO: minDateISO(sortedDates),
+      ultimaDataISO: maxDateISO(sortedDates),
+      renderedAtISO: cardPayload.rendered_at_iso,
+      cardSchemaVersion: cardPayload.schema_version,
+      fonte,
+      dataConsulta: ultimaConsultaISO,
+      urlComprovanteHTML: siteReceipt,
+      factsCount: factsForPersistence.length,
+      consultaId,
+      erroUltimaConsulta: '',
+      qtdTotal: cardPayload.quantidade_total ?? factsForPersistence.length,
+      qtdDcomp: resumo.porFamilia.DCOMP,
+      qtdRest: resumo.porFamilia.REST,
+      qtdRessarc: resumo.porFamilia.RESSARC,
+    };
+
     const resp: any = {
       ok: true,
+      source: 'network',
+      consultedAtISO,
+      card: cardPayload,
+      metadata: metadataForResponse,
       header: { requested_at: headerRequestedAt },
       mappedCount,
       total_perdcomp: totalPerdcomp,
