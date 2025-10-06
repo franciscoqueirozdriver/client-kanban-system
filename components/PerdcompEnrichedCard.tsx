@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { FaSpinner, FaExclamationTriangle, FaInfoCircle, FaLightbulb } from 'react-icons/fa';
 import type { CardPayload, CountBlock, IdentifiedCode, SnapshotMetadata } from '@/types/perdecomp-card';
 import { formatCnpj } from '@/utils/cnpj';
+import { getNaturezaDescription } from '@/utils/naturezas';
 
 interface Company {
   Cliente_ID: string;
@@ -303,7 +304,7 @@ export default function PerdcompEnrichedCard({
                   <ul className="mt-2 space-y-1 text-sm">
                     {naturezas.map((block: CountBlock) => (
                       <li key={block.label} className="flex items-center justify-between gap-4">
-                        <span className="text-muted-foreground">{block.label}</span>
+                        <span className="text-muted-foreground">{getNaturezaDescription(block.label)}</span>
                         <span className="font-medium">{block.count}</span>
                       </li>
                     ))}
