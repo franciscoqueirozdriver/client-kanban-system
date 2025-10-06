@@ -16,7 +16,7 @@ export function getNaturezaDescription(code: string): string {
     const codes = code.split('/');
     const descriptions = codes.map(c => naturezasMap[c] || c);
     // Return unique descriptions joined by '/'
-    return [...new Set(descriptions)].join(' / ');
+    return Array.from(new Set(descriptions)).join(' / ');
   }
   return naturezasMap[code] || code;
 }
