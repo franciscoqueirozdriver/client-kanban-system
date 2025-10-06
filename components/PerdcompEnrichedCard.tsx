@@ -93,16 +93,18 @@ function SourceBadge({ source, consultedAtISO }: { source?: 'snapshot' | 'networ
   const dateLabel = formatDate(consultedAtISO);
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ring-1 ${color}`}>
-      <svg width="12" height="12" viewBox="0 0 24 24" className="opacity-80" aria-hidden="true">
+    <span className={`inline-flex flex-wrap items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ring-1 ${color}`}>
+      <svg width="12" height="12" viewBox="0 0 24 24" className="shrink-0 opacity-80" aria-hidden="true">
         {isSnapshot ? (
           <path d="M12 3a9 9 0 1 0 9 9H12V3z" fill="currentColor" />
         ) : (
           <path d="M12 2a10 10 0 1 0 10 10h-2A8 8 0 1 1 12 4v8h8A8 8 0 0 1 12 2z" fill="currentColor" />
         )}
       </svg>
-      {label}
-      {dateLabel ? ` • ${dateLabel}` : ''}
+      <span className="leading-tight">
+        {label}
+        {dateLabel ? ` • ${dateLabel}` : ''}
+      </span>
     </span>
   );
 }
