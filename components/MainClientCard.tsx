@@ -159,12 +159,28 @@ export default function MainClientCard({
     }
     const summary = codigosIdentificados.reduce((acc, codigo) => {
       const tipo = codigo.credito_tipo || 'Não identificado';
-      acc[tipo] = (acc[tipo] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+      const risco = codigo.risco || 'DESCONHECIDO';
 
-    return Object.entries(summary).map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count);
+      if (!acc[tipo]) {
+        acc[tipo] = { total: 0 };
+      }
+
+      acc[tipo].total += 1;
+      acc[tipo][risco] = (acc[tipo][risco] || 0) + 1;
+
+      return acc;
+    }, {} as Record<string, { total: number; [risk: string]: number }>);
+
+    return Object.entries(summary)
+      .map(([label, { total, ...risks }]) => ({
+        label,
+        total,
+        risks: Object.entries(risks)
+          .filter(([key]) => key !== 'total')
+          .map(([riskLabel, riskCount]) => ({ label: riskLabel, count: riskCount }))
+          .sort((a, b) => b.count - a.count),
+      }))
+      .sort((a, b) => b.total - a.total);
   }, [codigosIdentificados]);
 
   const consultedAt = data?.consultedAtISO ?? card?.rendered_at_iso ?? card?.header?.ultima_consulta_iso ?? data?.lastConsultation ?? null;
@@ -298,14 +314,24 @@ export default function MainClientCard({
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             Códigos identificados (Sumarizado)
                         </p>
-                        <ul className="mt-2 space-y-1 text-sm">
+                        <div className="mt-2 space-y-3 text-sm">
                             {codigosSummary.map((summaryItem) => (
-                                <li key={summaryItem.label} className="flex items-center justify-between gap-4">
-                                    <span className="text-muted-foreground">{summaryItem.label}</span>
-                                    <span className="font-medium">{summaryItem.count}</span>
-                                </li>
+                                <div key={summaryItem.label}>
+                                    <div className="flex items-center justify-between gap-4">
+                                        <span className="font-medium text-foreground">{summaryItem.label}</span>
+                                        <span className="font-bold">{summaryItem.total}</span>
+                                    </div>
+                                    <ul className="mt-1 space-y-1 pl-4">
+                                        {summaryItem.risks.map(riskItem => (
+                                            <li key={riskItem.label} className="flex items-center justify-between gap-4 text-xs">
+                                                <span className="text-muted-foreground">{riskItem.label}</span>
+                                                <span className="font-medium">{riskItem.count}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             ))}
-                        </ul>
+                        </div>
                     </div>
                 )}
             </div>
