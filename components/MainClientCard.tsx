@@ -4,8 +4,15 @@ import { useMemo } from 'react';
 import { FaSpinner, FaExclamationTriangle, FaInfoCircle, FaLightbulb } from 'react-icons/fa';
 import type { CardPayload, CountBlock, IdentifiedCode, SnapshotMetadata } from '@/types/perdecomp-card';
 import { formatCnpj } from '@/utils/cnpj';
-import { getNaturezaDescription } from '@/utils/naturezas';
 import DoughnutChart from './DoughnutChart';
+import {
+    getRiskBadgeColor,
+    normalizeRisk,
+    formatDate,
+    describeFamilia,
+    buildApiErrorLabel,
+    SourceBadge
+} from './ui/card-utils';
 
 // These interfaces can be moved to a shared types file later
 interface Company {
@@ -41,91 +48,6 @@ interface MainClientCardProps {
   error?: any;
 }
 
-// Helper functions also present in PerdcompEnrichedCard.tsx
-function buildApiErrorLabel(e: any) {
-  const parts: string[] = [];
-  if (e?.httpStatus) {
-    parts.push(`API error: ${e.httpStatus}${e.httpStatusText ? ' ' + e.httpStatusText : ''}`);
-  } else {
-    parts.push('API error:');
-  }
-  if (e?.message) {
-    parts.push(e.message);
-  }
-  return parts.join(' ');
-}
-
-function getRiskBadgeColor(nivel: string) {
-  const value = nivel.toUpperCase();
-  switch (value) {
-    case 'BAIXO':
-      return 'bg-green-100 text-green-800 border-green-200';
-    case 'MÉDIO':
-    case 'MEDIO':
-      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    case 'ALTO':
-      return 'bg-red-100 text-red-800 border-red-200';
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-}
-
-function formatDate(iso?: string | null) {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  } catch {
-    return '';
-  }
-}
-
-function SourceBadge({ source, consultedAtISO }: { source?: 'snapshot' | 'network'; consultedAtISO?: string | null }) {
-  if (!source) return null;
-  const isSnapshot = source === 'snapshot';
-  const label = isSnapshot ? 'Cache' : 'Atualizado';
-  const color = isSnapshot
-    ? 'bg-slate-100 text-slate-700 ring-slate-200'
-    : 'bg-emerald-100 text-emerald-700 ring-emerald-200';
-  const dateLabel = formatDate(consultedAtISO);
-
-  return (
-    <span className={`inline-flex flex-wrap items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ring-1 ${color}`}>
-      <svg width="12" height="12" viewBox="0 0 24 24" className="shrink-0 opacity-80" aria-hidden="true">
-        {isSnapshot ? (
-          <path d="M12 3a9 9 0 1 0 9 9H12V3z" fill="currentColor" />
-        ) : (
-          <path d="M12 2a10 10 0 1 0 10 10h-2A8 8 0 1 1 12 4v8h8A8 8 0 0 1 12 2z" fill="currentColor" />
-        )}
-      </svg>
-      <span className="leading-tight">
-        {label}
-        {dateLabel ? ` • ${dateLabel}` : ''}
-      </span>
-    </span>
-  );
-}
-
-function describeFamilia(label: string) {
-  const value = label.toUpperCase();
-  switch (value) {
-    case 'DCOMP':
-      return 'DCOMP (Declarações de Compensação)';
-    case 'REST':
-      return 'REST (Pedidos de Restituição)';
-    case 'RESSARC':
-      return 'RESSARC (Pedidos de Ressarcimento)';
-    case 'CANC':
-      return 'Cancelamentos';
-    case 'DESCONHECIDO':
-      return 'Não classificado';
-    default:
-      return label;
-  }
-}
 
 export default function MainClientCard({
   company,
@@ -153,35 +75,32 @@ export default function MainClientCard({
     return [] as CountBlock[];
   }, [card?.quantos_sao]);
 
-  const codigosSummary = useMemo(() => {
+  const creditosComRisco = useMemo(() => {
     if (!codigosIdentificados || codigosIdentificados.length === 0) {
-      return [];
+      return creditos.map(c => ({ ...c, risk: 'DESCONHECIDO' }));
     }
-    const summary = codigosIdentificados.reduce((acc, codigo) => {
-      const tipo = codigo.credito_tipo || 'Não identificado';
-      const risco = codigo.risco || 'DESCONHECIDO';
 
-      if (!acc[tipo]) {
-        acc[tipo] = { total: 0 };
+    const riskPriority: Record<string, number> = { 'ALTO': 3, 'MÉDIO': 2, 'BAIXO': 1, 'DESCONHECIDO': 0 };
+    const riskLevels: Record<number, string> = { 3: 'ALTO', 2: 'MÉDIO', 1: 'BAIXO', 0: 'DESCONHECIDO' };
+
+    const aggregatedRisks = codigosIdentificados.reduce((acc, codigo) => {
+      const tipo = codigo.credito_tipo || 'Não identificado';
+      const risco = normalizeRisk(codigo.risco);
+      const priority = riskPriority[risco] ?? 0;
+
+      if (!acc[tipo] || priority > (acc[tipo] ?? 0)) {
+        acc[tipo] = priority;
       }
 
-      acc[tipo].total += 1;
-      acc[tipo][risco] = (acc[tipo][risco] || 0) + 1;
-
       return acc;
-    }, {} as Record<string, { total: number; [risk: string]: number }>);
+    }, {} as Record<string, number>);
 
-    return Object.entries(summary)
-      .map(([label, { total, ...risks }]) => ({
-        label,
-        total,
-        risks: Object.entries(risks)
-          .filter(([key]) => key !== 'total')
-          .map(([riskLabel, riskCount]) => ({ label: riskLabel, count: riskCount }))
-          .sort((a, b) => b.count - a.count),
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [codigosIdentificados]);
+    return creditos.map(c => {
+      const riskPriorityLevel = aggregatedRisks[c.label] ?? 0;
+      const risk = riskLevels[riskPriorityLevel] || 'DESCONHECIDO';
+      return { ...c, risk };
+    });
+  }, [creditos, codigosIdentificados]);
 
   const consultedAt = data?.consultedAtISO ?? card?.rendered_at_iso ?? card?.header?.ultima_consulta_iso ?? data?.lastConsultation ?? null;
   const isCached = data?.source === 'snapshot' || data?.fromCache;
@@ -189,7 +108,7 @@ export default function MainClientCard({
   const naturezaChartData = useMemo(() => {
     if (!naturezas || naturezas.length === 0) return null;
     return {
-      labels: naturezas.map(n => getNaturezaDescription(n.label)),
+      labels: naturezas.map(n => n.label),
       datasets: [
         {
           data: naturezas.map(n => n.count),
@@ -242,7 +161,7 @@ export default function MainClientCard({
         )}
 
         {status === 'loaded' && data && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Coluna 1 */}
             <div className="space-y-4">
                 {riskNivel && (
@@ -285,21 +204,26 @@ export default function MainClientCard({
                         <ul className="mt-2 space-y-1 text-sm">
                             {naturezas.map((block: CountBlock) => (
                                 <li key={block.label} className="flex items-center justify-between gap-4">
-                                    <span className="text-muted-foreground">{getNaturezaDescription(block.label)}</span>
+                                    <span className="text-muted-foreground">{block.label}</span>
                                     <span className="font-medium">{block.count}</span>
                                 </li>
                             ))}
                         </ul>
                     </div>
                 )}
-                {creditos.length > 0 && (
+                {creditosComRisco.length > 0 && (
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Por crédito:</p>
                         <ul className="mt-2 space-y-1 text-sm">
-                            {creditos.map((block: CountBlock) => (
-                                <li key={block.label} className="flex items-center justify-between gap-4">
+                            {creditosComRisco.map((block) => (
+                                <li key={block.label} className="flex items-center justify-between gap-2">
                                     <span className="text-muted-foreground">{block.label}</span>
-                                    <span className="font-medium">{block.count}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-medium">{block.count}</span>
+                                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${getRiskBadgeColor(block.risk)}`}>
+                                            {block.risk}
+                                        </span>
+                                    </div>
                                 </li>
                             ))}
                         </ul>
@@ -308,35 +232,6 @@ export default function MainClientCard({
             </div>
 
             {/* Coluna 2 */}
-            <div className="lg:col-span-1">
-                 {codigosSummary.length > 0 && (
-                    <div className="h-full">
-                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Códigos identificados (Sumarizado)
-                        </p>
-                        <div className="mt-2 space-y-3 text-sm">
-                            {codigosSummary.map((summaryItem) => (
-                                <div key={summaryItem.label}>
-                                    <div className="flex items-center justify-between gap-4">
-                                        <span className="font-medium text-foreground">{summaryItem.label}</span>
-                                        <span className="font-bold">{summaryItem.total}</span>
-                                    </div>
-                                    <ul className="mt-1 space-y-1 pl-4">
-                                        {summaryItem.risks.map(riskItem => (
-                                            <li key={riskItem.label} className="flex items-center justify-between gap-4 text-xs">
-                                                <span className="text-muted-foreground">{riskItem.label}</span>
-                                                <span className="font-medium">{riskItem.count}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Coluna 3 */}
             <div className="space-y-4">
                  {naturezaChartData && <DoughnutChart title="Por Natureza" data={naturezaChartData} />}
                 {creditoChartData && <DoughnutChart title="Por Crédito" data={creditoChartData} />}
