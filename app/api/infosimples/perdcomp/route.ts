@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheetData, getSheetsClient, appendSheetData } from '../../../../lib/googleSheets.js';
+import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
 import { padCNPJ14, isValidCNPJ, formatCnpj } from '@/utils/cnpj';
 import { agregaPerdcomp } from '@/utils/perdcomp';
 import {
@@ -18,23 +18,14 @@ import type {
 } from '@/types/perdecomp-card';
 import {
   parsePerdcomp,
+  TIPOS_DOCUMENTO,
+  NATUREZA_FAMILIA,
+  NATUREZA_OBSERVACOES,
+  CREDITOS_DESCRICAO,
+  CREDITO_RISCO,
+  CREDITO_RECOMENDACOES,
+  CREDITO_CATEGORIA,
 } from '@/lib/perdcomp';
-
-async function getDictionarySheet(sheetName: string) {
-    const { rows } = await getSheetData(sheetName);
-    const map: Record<string, string> = {};
-    if (rows.length > 0) {
-        const headers = Object.keys(rows[0]);
-        const keyColumn = headers[0];
-        const valueColumn = headers[1];
-        rows.forEach(row => {
-            if (row[keyColumn]) {
-                map[String(row[keyColumn]).trim()] = String(row[valueColumn] || '').trim();
-            }
-        });
-    }
-    return map;
-}
 
 export const runtime = 'nodejs';
 
@@ -202,129 +193,8 @@ async function getLastPerdcompFromSheet({
   };
 }
 
-let dictionaryCache: any = null;
-let cacheTimestamp = 0;
-const CACHE_DURATION = 3600 * 1000; // 1 hour in milliseconds
-
-async function loadAllDictionaries() {
-    const now = Date.now();
-    if (dictionaryCache && (now - cacheTimestamp < CACHE_DURATION)) {
-        return dictionaryCache;
-    }
-
-    // Load ALL dictionaries from sheets
-    const [
-      creditosDesc,
-      naturezasRaw,
-      tiposDoc,
-      creditosRisco,
-      creditosCategoria,
-      creditosRecomendacoes
-    ] = await Promise.all([
-        getDictionarySheet('DIC_CREDITOS'),
-        getSheetData('DIC_NATUREZAS'),
-        getDictionarySheet('DIC_TIPOS'),
-        getDictionarySheet('DIC_RISCO'),
-        getDictionarySheet('DIC_CATEGORIA'),
-        getDictionarySheet('DIC_RECOMENDACOES'),
-    ]);
-
-    const naturezasFamilia: Record<string, string> = {};
-    const naturezasObservacoes: Record<string, string> = {};
-    naturezasRaw.rows.forEach(row => {
-        const code = String(row.Natureza || '').trim();
-        if (code) {
-            naturezasFamilia[code] = String(row.Familia || '').trim();
-            naturezasObservacoes[code] = String(row.Descricao || '').trim();
-        }
-    });
-
-    const tiposDocumento: Record<string, { nome: string; desc: string }> = {};
-    Object.entries(tiposDoc).forEach(([key, value]) => {
-        tiposDocumento[key] = { nome: value, desc: value };
-    });
-
-    const dictionaries = {
-        CREDITOS_DESCRICAO: creditosDesc,
-        NATUREZA_FAMILIA: naturezasFamilia,
-        NATUREZA_OBSERVACOES: naturezasObservacoes,
-        TIPOS_DOCUMENTO: tiposDocumento,
-        CREDITO_RISCO: creditosRisco,
-        CREDITO_RECOMENDACOES: creditosRecomendacoes,
-        CREDITO_CATEGORIA: creditosCategoria,
-    };
-
-    dictionaryCache = dictionaries;
-    cacheTimestamp = now;
-
-    return dictionaries;
-}
-
-async function enrichUnknownPerdcomp(perdcompNumber: string, creditoCodigo: string, token: string): Promise<any | null> {
-  if (!perdcompNumber || !creditoCodigo) return null;
-
-  console.log(`[Enrichment] Looking up unknown PER/DCOMP: ${perdcompNumber} for credit code: ${creditoCodigo}`);
-
-  const params = new URLSearchParams({
-    token: token,
-    perdcomp: perdcompNumber,
-    timeout: '300',
-  });
-
-  try {
-    const resp = await fetch('https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    });
-
-    if (!resp.ok) {
-      console.error(`[Enrichment] API call failed for ${perdcompNumber} with status: ${resp.status}`);
-      return null;
-    }
-
-    const json = await resp.json();
-    if (json.code !== 200 || !Array.isArray(json.data) || json.data.length === 0) {
-      console.error(`[Enrichment] No data found for ${perdcompNumber}.`);
-      return null;
-    }
-
-    const perdcompDetails = json.data[0]?.perdcomp?.[0];
-    if (perdcompDetails?.tipo_credito) {
-      console.log(`[Enrichment] Successfully enriched ${perdcompNumber}. Found credit type: ${perdcompDetails.tipo_credito}`);
-
-      // Append to the dictionary sheet
-      try {
-        await appendSheetData('DIC_CREDITOS', [[creditoCodigo, perdcompDetails.tipo_credito]]);
-        console.log(`[Enrichment] Successfully wrote new credit code ${creditoCodigo} to DIC_CREDITOS sheet.`);
-      } catch (sheetError) {
-        console.error(`[Enrichment] Failed to write to DIC_CREDITOS sheet:`, sheetError);
-        // Do not block the main flow if sheet writing fails
-      }
-
-      return perdcompDetails;
-    }
-    return null;
-  } catch (error) {
-    console.error(`[Enrichment] Error during API call for ${perdcompNumber}:`, error);
-    return null;
-  }
-}
-
 export async function POST(request: Request) {
   try {
-    const {
-      CREDITOS_DESCRICAO,
-      NATUREZA_FAMILIA,
-      NATUREZA_OBSERVACOES,
-      TIPOS_DOCUMENTO,
-      CREDITO_RISCO,
-      CREDITO_RECOMENDACOES,
-      CREDITO_CATEGORIA,
-    } = await loadAllDictionaries();
-
     const body = await request.json().catch(() => ({}));
     const url = new URL(request.url);
 
@@ -572,21 +442,8 @@ export async function POST(request: Request) {
       const naturezaNome = naturezaCodigo ? NATUREZA_OBSERVACOES[naturezaCodigo] ?? naturezaCodigo : '';
       const familia = naturezaCodigo ? NATUREZA_FAMILIA[naturezaCodigo] ?? '' : '';
       const creditoCodigo = parsed.credito ?? '';
-      let creditoDescricao = creditoCodigo ? CREDITOS_DESCRICAO[creditoCodigo] : undefined;
-
-      // If the credit code exists but we have no description for it, try to enrich it.
-      if (creditoCodigo && !creditoDescricao && token) {
-        const enrichedData = await enrichUnknownPerdcomp(rawCode, creditoCodigo, token);
-        if (enrichedData?.tipo_credito) {
-          creditoDescricao = enrichedData.tipo_credito;
-          // Temporarily add to the in-memory dictionary for this request to avoid re-fetching
-          CREDITOS_DESCRICAO[creditoCodigo] = creditoDescricao;
-        }
-      }
-
-      // Use the (potentially newly enriched) description, or fall back to what the API gave us.
-      creditoDescricao = creditoDescricao || item?.tipo_credito || '';
-
+      const creditoDescricao =
+        creditoCodigo ? CREDITOS_DESCRICAO[creditoCodigo] ?? (item?.tipo_credito ?? '') : item?.tipo_credito ?? '';
       const creditoGrupo = creditoCodigo ? CREDITO_CATEGORIA[creditoCodigo] ?? 'Genérico' : 'Genérico';
       const riscoBase = creditoCodigo ? CREDITO_RISCO[creditoCodigo] : undefined;
       const riskLabel = normalizeRiskLabel(riscoBase);

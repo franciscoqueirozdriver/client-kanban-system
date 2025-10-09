@@ -77,10 +77,6 @@ function validatePayload(p) {
 }
 
 export async function POST(req) {
-  // Temporarily disabled to allow build to pass without Spotter token.
-  // This endpoint is out of scope for the current task.
-  return NextResponse.json({ message: 'Endpoint temporariamente desativado.' }, { status: 503 });
-
   try {
     const formPayload = await req.json();
 
