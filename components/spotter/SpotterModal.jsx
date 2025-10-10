@@ -5,6 +5,7 @@ import { FaSearch, FaSpinner } from "react-icons/fa";
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
+import { validateSpotterLead } from "@/validators/spotterLead";
 
 const fieldMap = {
   "Nome do Lead": "nomeLead",
@@ -39,18 +40,38 @@ const fieldMap = {
   "Email Pré-vendedor": "emailPrevendedor",
 };
 
-const reversedFieldMap = Object.entries(fieldMap).reduce((acc, [layoutKey, formKey]) => {
-  acc[formKey] = layoutKey;
-  return acc;
-}, {});
+const validatorFieldToFormKey = {
+  nomeLead: fieldMap["Nome do Lead"],
+  origem: fieldMap["Origem"],
+  mercado: fieldMap["Mercado"],
+  pais: fieldMap["País"],
+  estado: fieldMap["Estado"],
+  cidade: fieldMap["Cidade"],
+  telefones: fieldMap["Telefones"],
+  nomeContato: fieldMap["Nome Contato"],
+  telefonesContato: fieldMap["Telefones Contato"],
+  emailContato: fieldMap["E-mail Contato"],
+  tipoServCom: fieldMap["Tipo do Serv. Comunicação"],
+  idServCom: fieldMap["ID do Serv. Comunicação"],
+  area: fieldMap["Área"],
+  funilId: fieldMap["Funil"],
+  etapaNome: fieldMap["Etapa"],
+  address: fieldMap["Logradouro"],
+  addressNumber: fieldMap["Número"],
+  addressComplement: fieldMap["Complemento"],
+  neighborhood: fieldMap["Bairro"],
+  zipcode: fieldMap["CEP"],
+};
 export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSubmitting = false }) {
   const [formData, setFormData] = useState({});
-  const [errors, setErrors] = useState([]);
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
   const [isEnrichConfirmOpen, setIsEnrichConfirmOpen] = useState(false);
   const [produtosList, setProdutosList] = useState([]);
   const [mercadosList, setMercadosList] = useState([]);
   const [prevendedoresList, setPrevendedoresList] = useState([]);
+  const isProcessing = isSubmitting || isSubmittingLocal;
 
   useEffect(() => {
     if (!open) return;
@@ -127,7 +148,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       }, { ...initialFormState });
 
       setFormData(fullForm);
-      setErrors([]);
+      setFormErrors({});
     };
 
     fetchAndPrefill();
@@ -135,13 +156,49 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   useEffect(() => {
     if (!open) {
-      setErrors([]);
+      setFormErrors({});
     }
   }, [open]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const readValue = (label) => {
+    const key = fieldMap[label];
+    if (!key) return "";
+    const value = formData[key];
+    if (value == null) return "";
+    return typeof value === "string" ? value : String(value);
+  };
+
+  const readTrimmedValue = (label) => readValue(label).trim();
+
+  const valueOrNull = (label) => {
+    const value = readTrimmedValue(label);
+    return value ? value : null;
+  };
+
+  const valueOrUndefined = (label) => {
+    const value = readTrimmedValue(label);
+    return value ? value : undefined;
+  };
+
+  const mapFieldErrorsToForm = (fieldErrors) => {
+    if (!fieldErrors || typeof fieldErrors !== "object") {
+      return {};
+    }
+    const mapped = {};
+    Object.entries(fieldErrors).forEach(([field, messages]) => {
+      const formKey = validatorFieldToFormKey[field] || field;
+      if (!formKey) return;
+      const message = Array.isArray(messages) ? messages[0] : messages;
+      if (message) {
+        mapped[formKey] = String(message);
+      }
+    });
+    return mapped;
   };
 
   const handleEnrich = () => {
@@ -159,7 +216,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     if (!companyName) return;
 
     setIsEnriching(true);
-    setErrors([]);
+    setFormErrors({});
     try {
       const res = await fetch("/api/empresas/enriquecer", {
         method: "POST",
@@ -198,30 +255,111 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   const handleSubmit = async (event) => {
     event?.preventDefault();
-    setErrors([]);
+    setFormErrors({});
 
-    const payloadForApi = Object.entries(formData).reduce((acc, [formKey, value]) => {
-      const layoutKey = reversedFieldMap[formKey];
-      if (layoutKey) {
-        acc[layoutKey] = value || null;
+    const validatorPayload = {
+      nomeLead: readTrimmedValue("Nome do Lead"),
+      origem: readTrimmedValue("Origem"),
+      mercado: readTrimmedValue("Mercado"),
+      pais: readTrimmedValue("País"),
+      estado: readTrimmedValue("Estado"),
+      cidade: readTrimmedValue("Cidade"),
+      telefones: readValue("Telefones"),
+      nomeContato: readTrimmedValue("Nome Contato"),
+      telefonesContato: readValue("Telefones Contato"),
+      emailContato: readTrimmedValue("E-mail Contato"),
+      tipoServCom: readTrimmedValue("Tipo do Serv. Comunicação"),
+      idServCom: readTrimmedValue("ID do Serv. Comunicação"),
+      area: readValue("Área"),
+      modalidade: formData.modalidade ?? "",
+      funilId: valueOrNull("Funil"),
+      etapaNome: valueOrNull("Etapa"),
+      address: readTrimmedValue("Logradouro"),
+      addressNumber: readTrimmedValue("Número"),
+      addressComplement: readTrimmedValue("Complemento"),
+      neighborhood: readTrimmedValue("Bairro"),
+      zipcode: readTrimmedValue("CEP"),
+    };
+
+    const clientValidation = validateSpotterLead(validatorPayload);
+
+    if (!clientValidation.ok) {
+      const mappedErrors = mapFieldErrorsToForm(clientValidation.fieldErrors);
+      if (Object.keys(mappedErrors).length > 0) {
+        setFormErrors(mappedErrors);
       }
-      return acc;
-    }, {});
+      if (clientValidation.messages.length) {
+        console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
+      }
+      alert("Preencha os campos obrigatórios.");
+      return;
+    }
+
+    if (clientValidation.messages.length) {
+      console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
+    }
+
+    const payloadForServer = {
+      ...validatorPayload,
+      subSource: valueOrUndefined("Sub-Origem"),
+      subOrigem: valueOrUndefined("Sub-Origem"),
+      leadProduct: valueOrUndefined("Produto"),
+      produto: valueOrUndefined("Produto"),
+      website: valueOrUndefined("Site"),
+      site: valueOrUndefined("Site"),
+      cpfcnpj: valueOrUndefined("CPF/CNPJ"),
+      observacao: valueOrUndefined("Observação"),
+      description: valueOrUndefined("Observação"),
+      emailPrevendedor: valueOrUndefined("Email Pré-vendedor"),
+      nomeEmpresa: valueOrUndefined("Nome da Empresa"),
+      cargoContato: valueOrUndefined("Cargo Contato"),
+      ddiContato: valueOrUndefined("DDI Contato"),
+      logradouro: valueOrUndefined("Logradouro"),
+      numero: valueOrUndefined("Número"),
+      complemento: valueOrUndefined("Complemento"),
+      bairro: valueOrUndefined("Bairro"),
+      cep: valueOrUndefined("CEP"),
+      tipoServComunicacao: validatorPayload.tipoServCom,
+      idServComunicacao: validatorPayload.idServCom,
+    };
+
+    setIsSubmittingLocal(true);
 
     try {
-      await onSubmit(payloadForApi);
-    } catch (error) {
-      const details = error?.details;
-      if (Array.isArray(details)) {
-        setErrors(details);
-      } else if (error?.message) {
-        console.error("Erro no envio ao Spotter:", error);
+      if (!onSubmit) {
+        throw new Error("Função de envio ao Spotter não definida.");
       }
+
+      const response = await onSubmit(payloadForServer);
+      const serverMessages = Array.isArray(response?.messages) ? response.messages : [];
+      const combinedMessages = [...clientValidation.messages, ...serverMessages];
+      const successMessage =
+        combinedMessages.length > 0
+          ? `Enviado ao Spotter com sucesso. — ${combinedMessages.join(' • ')}`
+          : "Enviado ao Spotter com sucesso.";
+      alert(successMessage);
+      setFormErrors({});
+      onOpenChange?.(false);
+    } catch (error) {
+      console.error("Erro no envio ao Spotter:", error);
+      const fieldErrors = error?.fieldErrors || error?.details;
+      const mappedErrors = mapFieldErrorsToForm(fieldErrors);
+      if (Object.keys(mappedErrors).length > 0) {
+        setFormErrors(mappedErrors);
+      }
+      const extraMessages = Array.isArray(error?.messages) ? error.messages : [];
+      const messageParts = [error?.error || error?.message || "Falha ao enviar ao Spotter."];
+      if (extraMessages.length) {
+        messageParts.push(extraMessages.join(" • "));
+      }
+      alert(messageParts.filter(Boolean).join(" — "));
+    } finally {
+      setIsSubmittingLocal(false);
     }
   };
 
   const renderInput = (label, key, props = {}) => {
-    const error = errors.find((e) => e.field === label);
+    const errorMessage = formErrors?.[key];
     const baseClasses =
       "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
     return (
@@ -238,17 +376,18 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           {...props}
           className={cn(
             baseClasses,
-            error ? "border-red-500" : "border-border",
+            errorMessage ? "border-red-500" : "border-border",
             props.className,
           )}
+          aria-invalid={Boolean(errorMessage)}
         />
-        {error && <p className="mt-1 text-xs text-red-500">{error.message}</p>}
+        {errorMessage && <p className="mt-1 text-xs text-red-500">{errorMessage}</p>}
       </div>
     );
   };
 
   const renderSelect = (label, key, options, props = {}) => {
-    const error = errors.find((e) => e.field === label);
+    const errorMessage = formErrors?.[key];
     const baseClasses =
       "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
     return (
@@ -265,9 +404,10 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           {...props}
           className={cn(
             baseClasses,
-            error ? "border-red-500" : "border-border",
+            errorMessage ? "border-red-500" : "border-border",
             props.className,
           )}
+          aria-invalid={Boolean(errorMessage)}
         >
           <option value="">Selecione...</option>
           {options.map((opt) => (
@@ -276,7 +416,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
             </option>
           ))}
         </select>
-        {error && <p className="mt-1 text-xs text-red-500">{error.message}</p>}
+        {errorMessage && <p className="mt-1 text-xs text-red-500">{errorMessage}</p>}
       </div>
     );
   };
@@ -375,7 +515,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
             <button
               type="button"
               onClick={handleEnrich}
-              disabled={isEnriching || isSubmitting}
+              disabled={isEnriching || isProcessing}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
             >
               {isEnriching && <FaSpinner className="animate-spin" />}
@@ -386,17 +526,17 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 type="button"
                 className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                 onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
+                disabled={isProcessing}
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
-                disabled={isSubmitting || isEnriching}
+                disabled={isProcessing || isEnriching}
                 aria-label="Enviar ao Spotter"
               >
-                {isSubmitting ? (
+                {(isProcessing) ? (
                   <span className="inline-flex items-center gap-2">
                     <FaSpinner className="animate-spin" /> Enviando...
                   </span>
