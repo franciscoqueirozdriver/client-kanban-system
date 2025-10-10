@@ -93,7 +93,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           ? client.opportunities.join(";")
           : client?.segment ?? "Geral",
         [fieldMap["Etapa"]]: "Entrada",
-        [fieldMap["Funil"]]: "Padrão",
+        [fieldMap["Funil"]]: "Pré-venda",
         [fieldMap["Nome da Empresa"]]: client?.company ?? "",
         [fieldMap["Nome Contato"]]: firstContact?.name ?? firstContact?.nome ?? "",
         [fieldMap["E-mail Contato"]]:

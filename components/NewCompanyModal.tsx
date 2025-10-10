@@ -120,7 +120,7 @@ const initialForm: CompanyForm = {
   Origem: 'Cadastro Manual',
   Sub_Origem: 'Modal PER/DCOMP',
   Etapa: 'Novo',
-  Funil: 'Padrão',
+  Funil: 'Pré-venda',
   Tipo_do_Serv_Comunicacao: '',
   ID_do_Serv_Comunicacao: '',
 };
