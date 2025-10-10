@@ -212,52 +212,89 @@ async function loadAllDictionaries() {
         return dictionaryCache;
     }
 
-    // Load ALL dictionaries from sheets
-    const [
-      creditosDesc,
-      naturezasRaw,
-      tiposDoc,
-      creditosRisco,
-      creditosCategoria,
-      creditosRecomendacoes
-    ] = await Promise.all([
-        getDictionarySheet('DIC_CREDITOS'),
-        getSheetData('DIC_NATUREZAS'),
-        getDictionarySheet('DIC_TIPOS'),
-        getDictionarySheet('DIC_RISCO'),
-        getDictionarySheet('DIC_CATEGORIA'),
-        getDictionarySheet('DIC_RECOMENDACOES'),
-    ]);
+    try {
+        // Load ALL dictionaries from sheets with timeout
+        const loadPromise = Promise.all([
+            getDictionarySheet('DIC_CREDITOS'),
+            getSheetData('DIC_NATUREZAS'),
+            getDictionarySheet('DIC_TIPOS'),
+            getDictionarySheet('DIC_RISCO'),
+            getDictionarySheet('DIC_CATEGORIA'),
+            getDictionarySheet('DIC_RECOMENDACOES'),
+        ]);
 
-    const naturezasFamilia: Record<string, string> = {};
-    const naturezasObservacoes: Record<string, string> = {};
-    naturezasRaw.rows.forEach(row => {
-        const code = String(row.Natureza || '').trim();
-        if (code) {
-            naturezasFamilia[code] = String(row.Familia || '').trim();
-            naturezasObservacoes[code] = String(row.Descricao || '').trim();
-        }
-    });
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Dictionary loading timeout')), 10000)
+        );
 
-    const tiposDocumento: Record<string, { nome: string; desc: string }> = {};
-    Object.entries(tiposDoc).forEach(([key, value]) => {
-        tiposDocumento[key] = { nome: value, desc: value };
-    });
+        const [
+          creditosDesc,
+          naturezasRaw,
+          tiposDoc,
+          creditosRisco,
+          creditosCategoria,
+          creditosRecomendacoes
+        ] = await Promise.race([loadPromise, timeoutPromise]) as any;
 
-    const dictionaries = {
-        CREDITOS_DESCRICAO: creditosDesc,
-        NATUREZA_FAMILIA: naturezasFamilia,
-        NATUREZA_OBSERVACOES: naturezasObservacoes,
-        TIPOS_DOCUMENTO: tiposDocumento,
-        CREDITO_RISCO: creditosRisco,
-        CREDITO_RECOMENDACOES: creditosRecomendacoes,
-        CREDITO_CATEGORIA: creditosCategoria,
-    };
+        const naturezasFamilia: Record<string, string> = {};
+        const naturezasObservacoes: Record<string, string> = {};
+        naturezasRaw.rows.forEach((row: any) => {
+            const code = String(row.Natureza || '').trim();
+            if (code) {
+                naturezasFamilia[code] = String(row.Familia || '').trim();
+                naturezasObservacoes[code] = String(row.Descricao || '').trim();
+            }
+        });
 
-    dictionaryCache = dictionaries;
-    cacheTimestamp = now;
+        const tiposDocumento: Record<string, { nome: string; desc: string }> = {};
+        Object.entries(tiposDoc).forEach(([key, value]) => {
+            tiposDocumento[key] = { nome: value as string, desc: value as string };
+        });
 
-    return dictionaries;
+        const dictionaries = {
+            CREDITOS_DESCRICAO: creditosDesc,
+            NATUREZA_FAMILIA: naturezasFamilia,
+            NATUREZA_OBSERVACOES: naturezasObservacoes,
+            TIPOS_DOCUMENTO: tiposDocumento,
+            CREDITO_RISCO: creditosRisco,
+            CREDITO_RECOMENDACOES: creditosRecomendacoes,
+            CREDITO_CATEGORIA: creditosCategoria,
+        };
+
+        dictionaryCache = dictionaries;
+        cacheTimestamp = now;
+
+        console.log('[PERDCOMP] Dictionaries loaded successfully from sheets');
+        return dictionaries;
+    } catch (error) {
+        console.error('[PERDCOMP] Failed to load dictionaries from sheets, using fallback:', error);
+        // Use fallback constants from lib/perdcomp.ts
+        const {
+            TIPOS_DOCUMENTO_FALLBACK,
+            NATUREZA_FAMILIA_FALLBACK,
+            NATUREZA_OBSERVACOES_FALLBACK,
+            CREDITOS_DESCRICAO_FALLBACK,
+            CREDITO_CATEGORIA_FALLBACK,
+            CREDITO_RISCO_FALLBACK,
+        } = await import('@/lib/perdcomp');
+
+        const fallbackDictionaries = {
+            CREDITOS_DESCRICAO: CREDITOS_DESCRICAO_FALLBACK,
+            NATUREZA_FAMILIA: NATUREZA_FAMILIA_FALLBACK,
+            NATUREZA_OBSERVACOES: NATUREZA_OBSERVACOES_FALLBACK,
+            TIPOS_DOCUMENTO: TIPOS_DOCUMENTO_FALLBACK,
+            CREDITO_RISCO: CREDITO_RISCO_FALLBACK,
+            CREDITO_RECOMENDACOES: {}, // Will use static one from import
+            CREDITO_CATEGORIA: CREDITO_CATEGORIA_FALLBACK,
+        };
+
+        // Cache fallback for a shorter duration
+        dictionaryCache = fallbackDictionaries;
+        cacheTimestamp = now - (CACHE_DURATION * 0.9); // Cache for only 6 minutes
+
+        return fallbackDictionaries;
+    }
 }
 
 async function enrichUnknownPerdcomp(perdcompNumber: string, creditoCodigo: string, token: string): Promise<any | null> {
@@ -575,12 +612,18 @@ export async function POST(request: Request) {
       let creditoDescricao = creditoCodigo ? CREDITOS_DESCRICAO[creditoCodigo] : undefined;
 
       // If the credit code exists but we have no description for it, try to enrich it.
+      // This is non-blocking - if it fails, we continue with available data
       if (creditoCodigo && !creditoDescricao && token) {
-        const enrichedData = await enrichUnknownPerdcomp(rawCode, creditoCodigo, token);
-        if (enrichedData?.tipo_credito) {
-          creditoDescricao = enrichedData.tipo_credito;
-          // Temporarily add to the in-memory dictionary for this request to avoid re-fetching
-          CREDITOS_DESCRICAO[creditoCodigo] = creditoDescricao;
+        try {
+          const enrichedData = await enrichUnknownPerdcomp(rawCode, creditoCodigo, token);
+          if (enrichedData?.tipo_credito) {
+            creditoDescricao = enrichedData.tipo_credito;
+            // Temporarily add to the in-memory dictionary for this request to avoid re-fetching
+            CREDITOS_DESCRICAO[creditoCodigo] = creditoDescricao;
+          }
+        } catch (enrichError) {
+          console.error(`[PERDCOMP] Enrichment failed for ${rawCode}, continuing with available data:`, enrichError);
+          // Continue processing without enrichment
         }
       }
 

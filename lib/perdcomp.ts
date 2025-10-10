@@ -73,6 +73,80 @@ export function parsePerdcomp(raw: string): PerdcompParsed {
   };
 }
 
+// Fallback constants - used when dynamic loading fails
+export const TIPOS_DOCUMENTO_FALLBACK: Record<number, { nome: string; desc: string }> = {
+  1: { nome: 'DCOMP', desc: 'Declaração de Compensação' },
+  2: { nome: 'REST', desc: 'Pedido de Restituição' },
+  8: { nome: 'CANC', desc: 'Pedido de Cancelamento' },
+};
+
+export const NATUREZA_FAMILIA_FALLBACK: Record<string, Familia> = {
+  '1.0': 'DCOMP',
+  '1.1': 'RESSARC',
+  '1.2': 'REST',
+  '1.3': 'DCOMP',
+  '1.5': 'RESSARC',
+  '1.6': 'REST',
+  '1.7': 'DCOMP',
+  '1.8': 'CANC',
+  '1.9': 'DCOMP',
+};
+
+export const NATUREZA_OBSERVACOES_FALLBACK: Record<string, string> = {
+  '1.0': 'Declaração de Compensação',
+  '1.1': 'Pedido de Ressarcimento',
+  '1.2': 'Pedido de Restituição',
+  '1.3': 'Declaração de Compensação',
+  '1.5': 'Pedido de Ressarcimento',
+  '1.6': 'Pedido de Restituição',
+  '1.7': 'Declaração de Compensação',
+  '1.8': 'Pedido de Cancelamento',
+  '1.9': 'Cofins Não-Cumulativa – Ressarc/Comp.',
+};
+
+export const CREDITOS_DESCRICAO_FALLBACK: Record<string, string> = {
+  '01': 'Ressarcimento de IPI',
+  '02': 'Saldo Negativo de IRPJ',
+  '03': 'Outros Créditos',
+  '04': 'Pagamento indevido ou a maior',
+  '15': 'Retenção – Lei nº 9.711/98',
+  '16': 'Outros Créditos (Cancelamento)',
+  '17': 'Reintegra',
+  '18': 'Outros Créditos',
+  '19': 'Cofins Não-Cumulativa – Ressarc/Comp.',
+  '24': 'Pagamento Indevido ou a Maior (eSocial)',
+  '25': 'Outros Créditos',
+  '57': 'Outros Créditos',
+};
+
+export const CREDITO_CATEGORIA_FALLBACK: Record<string, string> = {
+  '01': 'IPI',
+  '02': 'IRPJ',
+  '15': 'Retenções',
+  '17': 'Incentivos Fiscais',
+  '19': 'PIS/Cofins',
+  '24': 'eSocial',
+  '03': 'Genérico',
+  '16': 'Genérico',
+  '18': 'Genérico',
+  '25': 'Genérico',
+  '57': 'Genérico',
+};
+
+export const CREDITO_RISCO_FALLBACK: Record<string, 'BAIXO' | 'MEDIO' | 'ALTO'> = {
+  '01': 'BAIXO',
+  '02': 'BAIXO',
+  '15': 'BAIXO',
+  '17': 'BAIXO',
+  '19': 'BAIXO',
+  '24': 'MEDIO',
+  '03': 'ALTO',
+  '16': 'ALTO',
+  '18': 'ALTO',
+  '25': 'ALTO',
+  '57': 'ALTO',
+};
+
 // Recomendações estratégicas por código
 // Note: This remains static as it contains business logic, not just simple mappings.
 export const CREDITO_RECOMENDACOES: Record<string, string> = {
