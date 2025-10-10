@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { spotterGet, spotterPost } from '@/lib/exactSpotter';
-import { validateSpotterLead } from '@/validators/spotterLead';
+const { validateSpotterLead } = require('../../../../validators/spotterLead');
 
 const readEnvList = (name) => {
   const value = process.env[name];

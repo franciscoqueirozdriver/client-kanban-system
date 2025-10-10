@@ -5,7 +5,7 @@ import { FaSearch, FaSpinner } from "react-icons/fa";
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
-import { validateSpotterLead } from "@/validators/spotterLead";
+import { validateSpotterLead } from "../../validators/spotterLead";
 
 const fieldMap = {
   "Nome do Lead": "nomeLead",
