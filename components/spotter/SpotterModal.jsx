@@ -51,6 +51,13 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [produtosList, setProdutosList] = useState([]);
   const [mercadosList, setMercadosList] = useState([]);
   const [prevendedoresList, setPrevendedoresList] = useState([]);
+  const [funnels, setFunnels] = useState([]);
+  const [selectedFunnelId, setSelectedFunnelId] = useState(null);
+  const [isLoadingFunnels, setIsLoadingFunnels] = useState(false);
+
+  function normalize(s) {
+    return (s ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -134,6 +141,46 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   }, [open, lead]);
 
   useEffect(() => {
+    let ignore = false;
+
+    async function fetchFunnels() {
+      try {
+        setIsLoadingFunnels(true);
+        const res = await fetch("/api/spotter/funnels", { cache: "no-store" });
+        if (!res.ok) throw new Error("Falha ao buscar funis");
+        const json = await res.json();
+        if (ignore) return;
+        const list = Array.isArray(json?.funnels) ? json.funnels : [];
+        setFunnels(list);
+
+        const preferred = list.find((f) => normalize(f?.value) === normalize("Pré-venda"));
+        if (preferred?.id != null) {
+          setSelectedFunnelId(String(preferred.id));
+        } else if (list.length) {
+          const firstActive = list.find((f) => f?.active) || list[0];
+          setSelectedFunnelId(firstActive?.id != null ? String(firstActive.id) : null);
+        } else {
+          setSelectedFunnelId(null);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!ignore) {
+          setIsLoadingFunnels(false);
+        }
+      }
+    }
+
+    if (open) {
+      fetchFunnels();
+    }
+
+    return () => {
+      ignore = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open) {
       setErrors([]);
     }
@@ -208,8 +255,17 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       return acc;
     }, {});
 
+    const payload = {
+      ...payloadForApi,
+      funnelId: selectedFunnelId
+        ? isNaN(Number(selectedFunnelId))
+          ? String(selectedFunnelId)
+          : Number(selectedFunnelId)
+        : null,
+    };
+
     try {
-      await onSubmit(payloadForApi);
+      await onSubmit(payload);
     } catch (error) {
       const details = error?.details;
       if (Array.isArray(details)) {
@@ -344,6 +400,30 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               {renderSelect("Produto", fieldMap["Produto"], produtosList)}
               {renderSelect("Email Pré-vendedor", fieldMap["Email Pré-vendedor"], prevendedoresList)}
               {renderInput("Área", fieldMap["Área"], { required: true, placeholder: "Separar múltiplas por ;" })}
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">Funil</label>
+                <select
+                  className="border rounded-md px-3 py-2 text-sm"
+                  value={selectedFunnelId ?? ""}
+                  onChange={(e) => setSelectedFunnelId(e.target.value || null)}
+                  disabled={isLoadingFunnels || funnels.length === 0}
+                  title="Selecione o funil onde o lead será criado/atualizado no Spotter"
+                >
+                  {isLoadingFunnels && <option value="">Carregando...</option>}
+                  {!isLoadingFunnels && funnels.length === 0 && (
+                    <option value="">Nenhum funil encontrado</option>
+                  )}
+                  {!isLoadingFunnels &&
+                    funnels.map((f) => (
+                      <option key={String(f.id)} value={String(f.id)}>
+                        {f.value}
+                      </option>
+                    ))}
+                </select>
+                <small className="text-xs text-muted-foreground">
+                  O lead será enviado para o funil selecionado.
+                </small>
+              </div>
               {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
               {renderInput("Observação", fieldMap["Observação"])}
 

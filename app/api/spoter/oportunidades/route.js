@@ -132,7 +132,12 @@ export async function POST(req) {
         country: formPayload["País"] || "Brasil",
         description: formPayload["Observação"] || "Lead importado do sistema Kanban",
         cpfcnpj: formPayload["CPF/CNPJ"],
-        funnelId: null, // Padrão
+        funnelId:
+          typeof formPayload?.funnelId !== 'undefined' && formPayload?.funnelId !== null
+            ? Number.isNaN(Number(formPayload.funnelId))
+              ? formPayload.funnelId
+              : Number(formPayload.funnelId)
+            : null,
         stage: "Entrada",
         sdrEmail: formPayload["Email Pré-vendedor"],
         // The docs show ddiPhone and phone separately. My normalizer combines them.
