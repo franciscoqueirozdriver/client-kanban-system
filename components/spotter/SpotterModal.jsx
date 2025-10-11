@@ -71,7 +71,15 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [produtosList, setProdutosList] = useState([]);
   const [mercadosList, setMercadosList] = useState([]);
   const [prevendedoresList, setPrevendedoresList] = useState([]);
+  const [funnels, setFunnels] = useState([]);
+  const [isLoadingFunnels, setIsLoadingFunnels] = useState(false);
+  const [stagesByFunnel, setStagesByFunnel] = useState({});
+  const [loadingStagesFor, setLoadingStagesFor] = useState(null);
+  const [prefillFunnelName, setPrefillFunnelName] = useState("");
+  const [prefillStageName, setPrefillStageName] = useState("");
   const isProcessing = isSubmitting || isSubmittingLocal;
+  const funilKey = fieldMap["Funil"];
+  const etapaKey = fieldMap["Etapa"];
 
   useEffect(() => {
     if (!open) return;
@@ -113,8 +121,8 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         [fieldMap["Área"]]: Array.isArray(client?.opportunities) && client?.opportunities.length
           ? client.opportunities.join(";")
           : client?.segment ?? "Geral",
-        [fieldMap["Etapa"]]: "Entrada",
-        [fieldMap["Funil"]]: "Pré-venda",
+        [fieldMap["Etapa"]]: "",
+        [fieldMap["Funil"]]: "",
         [fieldMap["Nome da Empresa"]]: client?.company ?? "",
         [fieldMap["Nome Contato"]]: firstContact?.name ?? firstContact?.nome ?? "",
         [fieldMap["E-mail Contato"]]:
@@ -149,6 +157,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
       setFormData(fullForm);
       setFormErrors({});
+      setPrefillFunnelName("Pré-venda");
+      setPrefillStageName("Entrada");
+      setStagesByFunnel({});
     };
 
     fetchAndPrefill();
@@ -157,11 +168,25 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   useEffect(() => {
     if (!open) {
       setFormErrors({});
+      setFunnels([]);
+      setStagesByFunnel({});
+      setPrefillFunnelName("");
+      setPrefillStageName("");
     }
   }, [open]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
+    if (name === funilKey) {
+      setPrefillStageName("");
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+        [etapaKey]: "",
+      }));
+      return;
+    }
+
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -200,6 +225,165 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     });
     return mapped;
   };
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+
+    const fetchFunnels = async () => {
+      setIsLoadingFunnels(true);
+      try {
+        const res = await fetch("/api/spoter/funil");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error || "Falha ao buscar funis do Spotter.");
+        }
+        if (cancelled) return;
+        const list = Array.isArray(data?.funnels) ? data.funnels : [];
+        setFunnels(list.filter((item) => item?.id && item?.name));
+      } catch (error) {
+        console.error("Failed to fetch Spotter funnels", error);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingFunnels(false);
+        }
+      }
+    };
+
+    fetchFunnels();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const selectedFunnelId = formData[funilKey] ?? "";
+
+  useEffect(() => {
+    if (!open) return;
+    if (!funnels.length) return;
+
+    let applied = false;
+    setFormData((prev) => {
+      const currentValue = prev[funilKey];
+      if (currentValue) return prev;
+
+      const matcher = (value) =>
+        value?.toLowerCase?.() === prefillFunnelName?.toLowerCase?.();
+
+      const desired = prefillFunnelName
+        ? funnels.find((item) => matcher(item?.name))
+        : null;
+      const fallback = desired || funnels[0];
+      if (!fallback?.id && !fallback?.name) {
+        return prev;
+      }
+      applied = true;
+      return {
+        ...prev,
+        [funilKey]: String(fallback.id ?? fallback.name ?? ""),
+      };
+    });
+
+    if (applied && prefillFunnelName) {
+      setPrefillFunnelName("");
+    }
+  }, [funnels, open, funilKey, prefillFunnelName]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!selectedFunnelId) return;
+    if (stagesByFunnel[selectedFunnelId]) return;
+
+    let cancelled = false;
+
+    const fetchStages = async () => {
+      setLoadingStagesFor(selectedFunnelId);
+      try {
+        const params = new URLSearchParams({ id: String(selectedFunnelId) });
+        const res = await fetch(`/api/spoter/funil?${params.toString()}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error || "Falha ao buscar etapas do funil no Spotter.");
+        }
+        if (cancelled) return;
+        const stages = Array.isArray(data?.stages) ? data.stages : [];
+        setStagesByFunnel((prev) => ({
+          ...prev,
+          [selectedFunnelId]: stages.filter((stage) => stage?.nome),
+        }));
+      } catch (error) {
+        console.error("Failed to fetch Spotter funnel stages", error);
+        setStagesByFunnel((prev) => ({
+          ...prev,
+          [selectedFunnelId]: prev[selectedFunnelId] ?? [],
+        }));
+      } finally {
+        if (!cancelled) {
+          setLoadingStagesFor(null);
+        }
+      }
+    };
+
+    fetchStages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, selectedFunnelId, stagesByFunnel, funilKey]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!selectedFunnelId) return;
+
+    const stages = stagesByFunnel[selectedFunnelId];
+    if (!Array.isArray(stages) || stages.length === 0) return;
+
+    let applied = false;
+    setFormData((prev) => {
+      const currentStage = prev[etapaKey];
+      const hasCurrent =
+        typeof currentStage === "string" &&
+        stages.some((stage) => stage?.nome && stage.nome.toLowerCase() === currentStage.toLowerCase());
+      if (hasCurrent) return prev;
+
+      const desired =
+        prefillStageName && typeof prefillStageName === "string"
+          ? stages.find((stage) => stage?.nome && stage.nome.toLowerCase() === prefillStageName.toLowerCase())
+          : null;
+      const fallback = desired || stages[0];
+      if (!fallback?.nome) return prev;
+      applied = true;
+      return {
+        ...prev,
+        [etapaKey]: fallback.nome,
+      };
+    });
+
+    if (applied && prefillStageName) {
+      setPrefillStageName("");
+    }
+  }, [open, selectedFunnelId, stagesByFunnel, etapaKey, prefillStageName]);
+
+  const validatorStagesMap = useMemo(() => {
+    const entries = Object.entries(stagesByFunnel || {});
+    if (!entries.length) return undefined;
+    const mapped = {};
+    entries.forEach(([id, list]) => {
+      if (!Array.isArray(list) || list.length === 0) return;
+      const normalized = list
+        .map((stage) => ({
+          id: stage?.id ?? stage?.ID ?? stage?.value ?? stage?.name ?? stage?.nome ?? "",
+          nome: stage?.nome ?? stage?.name ?? stage?.value ?? "",
+        }))
+        .filter((stage) => stage.nome);
+      if (normalized.length) {
+        mapped[String(id)] = normalized;
+      }
+    });
+    return Object.keys(mapped).length ? mapped : undefined;
+  }, [stagesByFunnel]);
 
   const handleEnrich = () => {
     const companyName = formData[fieldMap["Nome da Empresa"]];
@@ -281,7 +465,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       zipcode: readTrimmedValue("CEP"),
     };
 
-    const clientValidation = validateSpotterLead(validatorPayload);
+    const clientValidation = validateSpotterLead(validatorPayload, {
+      etapasPorFunil: validatorStagesMap,
+    });
 
     if (!clientValidation.ok) {
       const mappedErrors = mapFieldErrorsToForm(clientValidation.fieldErrors);
@@ -388,8 +574,16 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   const renderSelect = (label, key, options, props = {}) => {
     const errorMessage = formErrors?.[key];
+    const { placeholder, className, ...selectProps } = props;
     const baseClasses =
       "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+    const normalizedOptions = Array.isArray(options)
+      ? options.map((opt) =>
+          typeof opt === "string"
+            ? { value: opt, label: opt }
+            : { value: String(opt.value ?? opt.id ?? opt.label ?? ""), label: opt.label ?? opt.name ?? opt.value ?? "" },
+        )
+      : [];
     return (
       <div>
         <label htmlFor={key} className="mb-1 block text-sm font-medium text-foreground">
@@ -401,18 +595,18 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           name={key}
           value={formData[key] ?? ""}
           onChange={handleChange}
-          {...props}
+          {...selectProps}
           className={cn(
             baseClasses,
             errorMessage ? "border-red-500" : "border-border",
-            props.className,
+            className,
           )}
           aria-invalid={Boolean(errorMessage)}
         >
-          <option value="">Selecione...</option>
-          {options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+          <option value="">{placeholder ?? "Selecione..."}</option>
+          {normalizedOptions.map((opt) => (
+            <option key={`${key}-${opt.value}`} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
@@ -486,6 +680,31 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               {renderInput("Área", fieldMap["Área"], { required: true, placeholder: "Separar múltiplas por ;" })}
               {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
               {renderInput("Observação", fieldMap["Observação"])}
+              {renderSelect(
+                "Funil",
+                funilKey,
+                funnels.map((funnel) => ({ value: funnel.id, label: funnel.name })),
+                {
+                  required: true,
+                  placeholder: isLoadingFunnels ? "Carregando funis..." : "Selecione...",
+                  disabled: isLoadingFunnels && funnels.length === 0,
+                },
+              )}
+              {renderSelect(
+                "Etapa",
+                etapaKey,
+                (stagesByFunnel[selectedFunnelId] ?? []).map((stage) => ({ value: stage.nome, label: stage.nome })),
+                {
+                  required: Boolean(selectedFunnelId),
+                  placeholder:
+                    loadingStagesFor === selectedFunnelId && !(stagesByFunnel[selectedFunnelId] ?? []).length
+                      ? "Carregando etapas..."
+                      : "Selecione...",
+                  disabled:
+                    !selectedFunnelId ||
+                    (loadingStagesFor === selectedFunnelId && !(stagesByFunnel[selectedFunnelId] ?? []).length),
+                },
+              )}
 
               <h3 className="col-span-full border-t border-border/60 pt-4 text-lg font-semibold text-foreground">Endereço</h3>
               {renderInput("País", fieldMap["País"])}

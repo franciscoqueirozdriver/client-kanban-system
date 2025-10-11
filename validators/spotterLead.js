@@ -95,6 +95,8 @@ function validateSpotterLead(p = {}, opts = {}) {
         "Não foi possível validar compatibilidade de Etapa com o Funil no cliente — o servidor fará essa checagem.",
       );
     }
+  } else if (funilDef && !etapaDef) {
+    add("etapaNome", "Informe a Etapa correspondente ao Funil selecionado.");
   }
 
   return { ok: Object.keys(errors).length === 0, fieldErrors: errors, messages };
