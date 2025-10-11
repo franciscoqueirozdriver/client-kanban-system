@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FaSearch, FaSpinner } from "react-icons/fa";
-import { toast } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
@@ -703,6 +704,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
             </div>
           </div>
         )}
+        <ToastContainer position="bottom-right" autoClose={4000} theme="colored" />
       </DialogContent>
     </Dialog>
   );
