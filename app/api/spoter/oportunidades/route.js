@@ -1,23 +1,8 @@
 import { NextResponse } from 'next/server';
-import { spotterGet, spotterPost } from '@/lib/exactSpotter';
+import { NextResponse } from 'next/server';
+import { spotterGet, spotterPost } from '@/lib/exactSpotter.ts';
+import { getSpotterAreasValidas, getSpotterModalidadesValidas } from '@/lib/spotter-env.ts';
 const { validateSpotterLead } = require('../../../../validators/spotterLead');
-
-const readEnvList = (name) => {
-  const value = process.env[name];
-  if (!value) return undefined;
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-};
-
-async function getAreasValidas() {
-  return readEnvList('SPOTTER_AREAS_VALIDAS');
-}
-
-async function getModalidadesValidas() {
-  return readEnvList('SPOTTER_MODALIDADES_VALIDAS');
-}
 
 const splitPhone = (raw) => {
   const digits = String(raw ?? '')
@@ -82,8 +67,8 @@ export async function POST(req) {
     const stageIdFromBody = body?.stageId ?? body?.etapaId ?? null;
 
     const [areasValidas, modalidadesValidas] = await Promise.all([
-      getAreasValidas(),
-      getModalidadesValidas(),
+      getSpotterAreasValidas(),
+      getSpotterModalidadesValidas(),
     ]);
 
     const serverMessages = [];

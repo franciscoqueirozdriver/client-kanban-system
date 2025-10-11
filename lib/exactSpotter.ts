@@ -1,16 +1,21 @@
 import { joinUrl } from './url.js';
 
+import { getSpotterToken } from './spotter-env.ts';
+import { joinUrl } from './url.js';
+
 export const SPOTTER_BASE_URL =
   (process.env.EXACT_SPOTTER_BASE_URL || 'https://api.exactspotter.com/v3').replace(/\/+$/, '');
 
-const TOKEN = process.env.EXACT_SPOTTER_TOKEN || process.env.SPOTTER_TOKEN;
-if (!TOKEN) throw new Error('Token do Spotter ausente (EXACT_SPOTTER_TOKEN ou SPOTTER_TOKEN)');
-
 async function spotterFetch(url, options = {}) {
+  const token = getSpotterToken();
+  if (!token) {
+    throw new Error('Token do Spotter ausente');
+  }
+
   const res = await fetch(url, {
     ...options,
     headers: {
-      token_exact: TOKEN,
+      token_exact: token,
       'Content-Type': 'application/json',
       Accept: 'application/json',
       ...options.headers,
@@ -56,11 +61,15 @@ export async function spotterGet(entitySet) {
 }
 
 export async function spotterMetadata() {
+  const token = getSpotterToken();
+  if (!token) {
+    throw new Error('Token do Spotter ausente');
+  }
   const url = joinUrl(SPOTTER_BASE_URL, '$metadata');
   if (process.env.NODE_ENV !== 'production') {
     console.log('[Spotter] GET →', url);
   }
-  const res = await fetch(url, { headers: { token_exact: TOKEN } });
+  const res = await fetch(url, { headers: { token_exact: token } });
    if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(`$metadata ${res.status}: ${txt || res.statusText}`);
