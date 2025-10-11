@@ -79,6 +79,8 @@ export async function POST(req) {
       zipcode: body?.zipcode ?? body?.cep ?? '',
     };
 
+    const stageIdFromBody = body?.stageId ?? body?.etapaId ?? null;
+
     const [areasValidas, modalidadesValidas] = await Promise.all([
       getAreasValidas(),
       getModalidadesValidas(),
@@ -101,7 +103,21 @@ export async function POST(req) {
             id: stage.id ?? stage.ID ?? stage.value ?? stage.name,
             nome: stage.value ?? stage.name ?? stage.nome ?? '',
           }))
+          .map((stage) => ({
+            id: stage.id != null ? String(stage.id) : null,
+            nome: stage.nome,
+          }))
           .filter((stage) => stage.nome);
+
+        if (stageIdFromBody) {
+          const normalizedStageId = String(stageIdFromBody);
+          const matchById = mappedStages.find((stage) => stage.id === normalizedStageId);
+          if (!matchById) {
+            serverMessages.push('A etapa selecionada não pertence ao funil informado.');
+          } else if (!base.etapaNome) {
+            base.etapaNome = matchById.nome;
+          }
+        }
 
         if (mappedStages.length > 0) {
           etapasPorFunil = { [String(base.funilId)]: mappedStages };
@@ -143,6 +159,7 @@ export async function POST(req) {
       source: base.origem,
       funnelId: base.funilId ?? null,
       stage: base.etapaNome ?? undefined,
+      stageId: stageIdFromBody != null ? String(stageIdFromBody) : undefined,
       ddiPhone: firstPhone.phone ? firstPhone.ddi ?? '55' : undefined,
       phone: firstPhone.phone ?? undefined,
       ddiPhone2: secondPhone.phone ? secondPhone.ddi ?? '55' : undefined,

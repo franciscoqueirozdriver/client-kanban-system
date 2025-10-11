@@ -74,7 +74,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [funnels, setFunnels] = useState([]);
   const [isLoadingFunnels, setIsLoadingFunnels] = useState(false);
   const [stagesByFunnel, setStagesByFunnel] = useState({});
-  const [loadingStagesFor, setLoadingStagesFor] = useState(null);
+  const [spotterOnline, setSpotterOnline] = useState(true);
   const [prefillFunnelName, setPrefillFunnelName] = useState("");
   const [prefillStageName, setPrefillStageName] = useState("");
   const isProcessing = isSubmitting || isSubmittingLocal;
@@ -172,6 +172,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       setStagesByFunnel({});
       setPrefillFunnelName("");
       setPrefillStageName("");
+      setSpotterOnline(true);
     }
   }, [open]);
 
@@ -231,19 +232,94 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
     let cancelled = false;
 
-    const fetchFunnels = async () => {
+    const loadSpotterData = async () => {
       setIsLoadingFunnels(true);
       try {
-        const res = await fetch("/api/spoter/funil");
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data?.error || "Falha ao buscar funis do Spotter.");
-        }
+        const [stagesRes, funnelsRes] = await Promise.all([
+          fetch("/api/spotter/stages", { cache: "no-store" }),
+          fetch("/api/spotter/funnels", { cache: "no-store" }),
+        ]);
+
         if (cancelled) return;
-        const list = Array.isArray(data?.funnels) ? data.funnels : [];
-        setFunnels(list.filter((item) => item?.id && item?.name));
+
+        if (!stagesRes.ok) {
+          const text = await stagesRes.text().catch(() => "");
+          throw new Error(text || "Falha ao buscar etapas do Spotter.");
+        }
+
+        const stagesJson = await stagesRes.json().catch(() => []);
+        const stageItems = Array.isArray(stagesJson) ? stagesJson : [];
+
+        const groupedStages = stageItems.reduce((acc, rawStage) => {
+          const funnelId = rawStage?.funnelId ? String(rawStage.funnelId) : "";
+          const name = rawStage?.name != null ? String(rawStage.name).trim() : "";
+          if (!funnelId || !name) return acc;
+          const rawPosition =
+            rawStage?.position ?? rawStage?.Position ?? rawStage?.posicao ?? rawStage?.Posicao ?? 0;
+          const numericPosition = Number(rawPosition);
+          const stageEntry = {
+            id: rawStage?.id != null ? String(rawStage.id) : undefined,
+            nome: name,
+            position: Number.isFinite(numericPosition) ? numericPosition : 0,
+          };
+          if (!acc[funnelId]) {
+            acc[funnelId] = [];
+          }
+          acc[funnelId].push(stageEntry);
+          return acc;
+        }, {});
+
+        Object.keys(groupedStages).forEach((key) => {
+          groupedStages[key] = groupedStages[key]
+            .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+            .map((stage) => ({ id: stage.id, nome: stage.nome }));
+        });
+
+        let normalizedFunnels = [];
+        if (funnelsRes.ok) {
+          const funnelsJson = await funnelsRes.json().catch(() => []);
+          normalizedFunnels = (Array.isArray(funnelsJson) ? funnelsJson : [])
+            .map((item) => ({
+              id: item?.id != null ? String(item.id) : "",
+              name:
+                item?.name != null
+                  ? String(item.name)
+                  : item?.value != null
+                  ? String(item.value)
+                  : item?.label != null
+                  ? String(item.label)
+                  : "",
+            }))
+            .map((item) => ({
+              id: item.id,
+              name: typeof item.name === "string" ? item.name.trim() : "",
+            }))
+            .filter((item) => item.id && item.name);
+        }
+
+        if (!normalizedFunnels.length) {
+          const ids = Array.from(
+            new Set(
+              stageItems
+                .map((stage) => (stage?.funnelId != null ? String(stage.funnelId) : ""))
+                .filter(Boolean),
+            ),
+          );
+          normalizedFunnels = ids.map((id) => ({ id, name: `Funil #${id}` }));
+        }
+
+        if (cancelled) return;
+
+        setStagesByFunnel(groupedStages);
+        setFunnels(normalizedFunnels);
+        setSpotterOnline(true);
       } catch (error) {
-        console.error("Failed to fetch Spotter funnels", error);
+        console.error("Falha ao carregar dados do Spotter", error);
+        if (!cancelled) {
+          setSpotterOnline(false);
+          setFunnels([]);
+          setStagesByFunnel({});
+        }
       } finally {
         if (!cancelled) {
           setIsLoadingFunnels(false);
@@ -251,14 +327,19 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       }
     };
 
-    fetchFunnels();
+    loadSpotterData();
 
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, funilKey, etapaKey, setFormData]);
 
   const selectedFunnelId = formData[funilKey] ?? "";
+
+  const filteredStages = useMemo(() => {
+    const list = stagesByFunnel[selectedFunnelId];
+    return Array.isArray(list) ? list : [];
+  }, [selectedFunnelId, stagesByFunnel]);
 
   useEffect(() => {
     if (!open) return;
@@ -291,47 +372,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     }
   }, [funnels, open, funilKey, prefillFunnelName]);
 
-  useEffect(() => {
-    if (!open) return;
-    if (!selectedFunnelId) return;
-    if (stagesByFunnel[selectedFunnelId]) return;
-
-    let cancelled = false;
-
-    const fetchStages = async () => {
-      setLoadingStagesFor(selectedFunnelId);
-      try {
-        const params = new URLSearchParams({ id: String(selectedFunnelId) });
-        const res = await fetch(`/api/spoter/funil?${params.toString()}`);
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data?.error || "Falha ao buscar etapas do funil no Spotter.");
-        }
-        if (cancelled) return;
-        const stages = Array.isArray(data?.stages) ? data.stages : [];
-        setStagesByFunnel((prev) => ({
-          ...prev,
-          [selectedFunnelId]: stages.filter((stage) => stage?.nome),
-        }));
-      } catch (error) {
-        console.error("Failed to fetch Spotter funnel stages", error);
-        setStagesByFunnel((prev) => ({
-          ...prev,
-          [selectedFunnelId]: prev[selectedFunnelId] ?? [],
-        }));
-      } finally {
-        if (!cancelled) {
-          setLoadingStagesFor(null);
-        }
-      }
-    };
-
-    fetchStages();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, selectedFunnelId, stagesByFunnel, funilKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -465,6 +505,15 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       zipcode: readTrimmedValue("CEP"),
     };
 
+    const requiresStageSelection =
+      spotterOnline && selectedFunnelId && filteredStages.length > 0;
+
+    if (requiresStageSelection && !validatorPayload.etapaNome) {
+      setFormErrors({ [etapaKey]: "Selecione uma etapa do funil." });
+      alert("Selecione uma etapa do funil.");
+      return;
+    }
+
     const clientValidation = validateSpotterLead(validatorPayload, {
       etapasPorFunil: validatorStagesMap,
     });
@@ -507,6 +556,13 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       cep: valueOrUndefined("CEP"),
       tipoServComunicacao: validatorPayload.tipoServCom,
       idServComunicacao: validatorPayload.idServCom,
+      stageId:
+        filteredStages.find(
+          (stage) =>
+            stage?.nome &&
+            validatorPayload.etapaNome &&
+            stage.nome.toLowerCase() === validatorPayload.etapaNome.toLowerCase(),
+        )?.id ?? undefined,
     };
 
     setIsSubmittingLocal(true);
@@ -685,25 +741,37 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 funilKey,
                 funnels.map((funnel) => ({ value: funnel.id, label: funnel.name })),
                 {
-                  required: true,
-                  placeholder: isLoadingFunnels ? "Carregando funis..." : "Selecione...",
-                  disabled: isLoadingFunnels && funnels.length === 0,
+                  required: spotterOnline && funnels.length > 0,
+                  placeholder: spotterOnline
+                    ? isLoadingFunnels
+                      ? "Carregando funis..."
+                      : "Selecione..."
+                    : "Indisponível (servidor valida)",
+                  disabled: !spotterOnline || (isLoadingFunnels && funnels.length === 0),
                 },
               )}
               {renderSelect(
                 "Etapa",
                 etapaKey,
-                (stagesByFunnel[selectedFunnelId] ?? []).map((stage) => ({ value: stage.nome, label: stage.nome })),
+                filteredStages.map((stage) => ({ value: stage.nome, label: stage.nome })),
                 {
-                  required: Boolean(selectedFunnelId),
-                  placeholder:
-                    loadingStagesFor === selectedFunnelId && !(stagesByFunnel[selectedFunnelId] ?? []).length
-                      ? "Carregando etapas..."
-                      : "Selecione...",
-                  disabled:
-                    !selectedFunnelId ||
-                    (loadingStagesFor === selectedFunnelId && !(stagesByFunnel[selectedFunnelId] ?? []).length),
+                  required: spotterOnline && Boolean(selectedFunnelId) && filteredStages.length > 0,
+                  placeholder: !spotterOnline
+                    ? "Indisponível (servidor valida)"
+                    : !selectedFunnelId
+                    ? "Escolha um funil"
+                    : filteredStages.length
+                    ? "Selecione..."
+                    : isLoadingFunnels
+                    ? "Carregando etapas..."
+                    : "Sem etapas",
+                  disabled: !spotterOnline || !selectedFunnelId || filteredStages.length === 0,
                 },
+              )}
+              {!spotterOnline && (
+                <p className="col-span-full text-xs text-muted-foreground">
+                  Não foi possível listar funis/etapas agora. O servidor validará a etapa no envio.
+                </p>
               )}
 
               <h3 className="col-span-full border-t border-border/60 pt-4 text-lg font-semibold text-foreground">Endereço</h3>
