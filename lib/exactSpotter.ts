@@ -1,6 +1,4 @@
-import { joinUrl } from './url.js';
-
-import { getSpotterToken } from './spotter-env.ts';
+import { getSpotterToken } from './spotter-env';
 import { joinUrl } from './url.js';
 
 export const SPOTTER_BASE_URL =
