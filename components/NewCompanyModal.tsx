@@ -236,7 +236,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
   return (
     <>
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" role="dialog" aria-labelledby="modal-title">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
+      <div className="bg-background rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
         <header className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <h2 id="modal-title" className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {isUpdateMode ? 'Atualizar Empresa' : 'Cadastrar Nova Empresa'}
@@ -268,12 +268,12 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
                     <div className="md:col-span-2">
                       <label htmlFor="nome-empresa" className="block text-sm font-medium mb-1">Nome da Empresa *</label>
-                      <input id="nome-empresa" type="text" name="Nome_da_Empresa" value={formData.Nome_da_Empresa || ''} onChange={handleChange} required aria-required="true" className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="nome-empresa" type="text" name="Nome_da_Empresa" value={formData.Nome_da_Empresa || ''} onChange={handleChange} required aria-required="true" className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div>
                       <label htmlFor="cnpj-empresa" className="block text-sm font-medium mb-1">CNPJ Empresa</label>
                       <div className="flex items-center gap-2">
-                      <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={formData.CNPJ_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: onlyDigits(e.target.value) }))} onBlur={() => setFormData(prev => ({ ...prev, CNPJ_Empresa: padCNPJ14(prev.CNPJ_Empresa ?? '') }))} className="flex-grow w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={formData.CNPJ_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: onlyDigits(e.target.value) }))} onBlur={() => setFormData(prev => ({ ...prev, CNPJ_Empresa: padCNPJ14(prev.CNPJ_Empresa ?? '') }))} className="flex-grow w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                         <button
                           type="button"
                           onClick={() => {
@@ -291,52 +291,52 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                     </div>
                     <div>
                       <label htmlFor="site-empresa" className="block text-sm font-medium mb-1">Site Empresa</label>
-                      <input id="site-empresa" type="url" name="Site_Empresa" placeholder="https://..." value={formData.Site_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="site-empresa" type="url" name="Site_Empresa" placeholder="https://..." value={formData.Site_Empresa || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label htmlFor="logradouro-empresa" className="block text-sm font-medium mb-1">Logradouro</label>
-                            <input id="logradouro-empresa" type="text" name="Logradouro_Empresa" value={formData.Logradouro_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                            <input id="logradouro-empresa" type="text" name="Logradouro_Empresa" value={formData.Logradouro_Empresa || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                         </div>
                         <div>
                             <label htmlFor="numero-empresa" className="block text-sm font-medium mb-1">Número</label>
-                            <input id="numero-empresa" type="text" name="Numero_Empresa" value={formData.Numero_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                            <input id="numero-empresa" type="text" name="Numero_Empresa" value={formData.Numero_Empresa || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                         </div>
                         <div>
                             <label htmlFor="bairro-empresa" className="block text-sm font-medium mb-1">Bairro</label>
-                            <input id="bairro-empresa" type="text" name="Bairro_Empresa" value={formData.Bairro_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                            <input id="bairro-empresa" type="text" name="Bairro_Empresa" value={formData.Bairro_Empresa || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                         </div>
                     </div>
                     <div>
                       <label htmlFor="cidade-empresa" className="block text-sm font-medium mb-1">Cidade</label>
-                      <input id="cidade-empresa" type="text" name="Cidade_Empresa" value={formData.Cidade_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="cidade-empresa" type="text" name="Cidade_Empresa" value={formData.Cidade_Empresa || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div>
                       <label htmlFor="estado-empresa" className="block text-sm font-medium mb-1">Estado (UF)</label>
-                      <input id="estado-empresa" type="text" name="Estado_Empresa" value={formData.Estado_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, Estado_Empresa: e.target.value.toUpperCase() }))} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="estado-empresa" type="text" name="Estado_Empresa" value={formData.Estado_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, Estado_Empresa: e.target.value.toUpperCase() }))} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Use a sigla, ex.: SP</p>
                     </div>
                     <div>
                       <label htmlFor="cep-empresa" className="block text-sm font-medium mb-1">CEP</label>
-                      <input id="cep-empresa" type="text" name="CEP_Empresa" value={formData.CEP_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="cep-empresa" type="text" name="CEP_Empresa" value={formData.CEP_Empresa || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Formato 00000-000</p>
                     </div>
                     <div>
                       <label htmlFor="pais-empresa" className="block text-sm font-medium mb-1">País</label>
-                      <input id="pais-empresa" type="text" name="Pais_Empresa" value={formData.Pais_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="pais-empresa" type="text" name="Pais_Empresa" value={formData.Pais_Empresa || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div>
                       <label htmlFor="ddi-empresa" className="block text-sm font-medium mb-1">DDI Empresa</label>
-                      <input id="ddi-empresa" type="text" name="DDI_Empresa" value={formData.DDI_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="ddi-empresa" type="text" name="DDI_Empresa" value={formData.DDI_Empresa || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div>
                       <label htmlFor="telefones-empresa" className="block text-sm font-medium mb-1">Telefones Empresa</label>
-                      <input id="telefones-empresa" type="text" name="Telefones_Empresa" value={formData.Telefones_Empresa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="telefones-empresa" type="text" name="Telefones_Empresa" value={formData.Telefones_Empresa || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Separe múltiplos por ;</p>
                     </div>
                     <div className="md:col-span-2">
                       <label htmlFor="obs-empresa" className="block text-sm font-medium mb-1">Observação</label>
-                      <textarea id="obs-empresa" name="Observacao_Empresa" value={formData.Observacao_Empresa || ''} onChange={handleChange} rows={3} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <textarea id="obs-empresa" name="Observacao_Empresa" value={formData.Observacao_Empresa || ''} onChange={handleChange} rows={3} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                   </div>
                 </section>
@@ -346,23 +346,23 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="nome-contato" className="block text-sm font-medium mb-1">Nome Contato</label>
-                      <input id="nome-contato" type="text" name="Nome_Contato" value={formData.Nome_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="nome-contato" type="text" name="Nome_Contato" value={formData.Nome_Contato || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div>
                       <label htmlFor="cargo-contato" className="block text-sm font-medium mb-1">Cargo Contato</label>
-                      <input id="cargo-contato" type="text" name="Cargo_Contato" value={formData.Cargo_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="cargo-contato" type="text" name="Cargo_Contato" value={formData.Cargo_Contato || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div className="md:col-span-2">
                       <label htmlFor="email-contato" className="block text-sm font-medium mb-1">E-mail Contato</label>
-                      <input id="email-contato" type="email" name="Email_Contato" value={formData.Email_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="email-contato" type="email" name="Email_Contato" value={formData.Email_Contato || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div>
                       <label htmlFor="ddi-contato" className="block text-sm font-medium mb-1">DDI Contato</label>
-                      <input id="ddi-contato" type="text" name="DDI_Contato" value={formData.DDI_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="ddi-contato" type="text" name="DDI_Contato" value={formData.DDI_Contato || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div>
                       <label htmlFor="telefones-contato" className="block text-sm font-medium mb-1">Telefones Contato</label>
-                      <input id="telefones-contato" type="text" name="Telefones_Contato" value={formData.Telefones_Contato || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="telefones-contato" type="text" name="Telefones_Contato" value={formData.Telefones_Contato || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                       <p className="text-xs text-gray-500 mt-1">Separe múltiplos por ;</p>
                     </div>
                   </div>
@@ -373,33 +373,33 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                      <div>
                       <label htmlFor="origem" className="block text-sm font-medium mb-1">Origem</label>
-                      <input id="origem" type="text" name="Origem" value={formData.Origem || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="origem" type="text" name="Origem" value={formData.Origem || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div>
                       <label htmlFor="sub-origem" className="block text-sm font-medium mb-1">Sub-Origem</label>
-                      <input id="sub-origem" type="text" name="Sub_Origem" value={formData.Sub_Origem || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="sub-origem" type="text" name="Sub_Origem" value={formData.Sub_Origem || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                      <div>
                       <label htmlFor="etapa" className="block text-sm font-medium mb-1">Etapa</label>
-                      <input id="etapa" type="text" name="Etapa" value={formData.Etapa || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="etapa" type="text" name="Etapa" value={formData.Etapa || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                     <div>
                       <label htmlFor="mercado" className="block text-sm font-medium mb-1">Mercado</label>
-                      <input id="mercado" type="text" name="Mercado" value={formData.Mercado || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="mercado" type="text" name="Mercado" value={formData.Mercado || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                      <div>
                       <label htmlFor="produto" className="block text-sm font-medium mb-1">Produto</label>
-                      <input id="produto" type="text" name="Produto" value={formData.Produto || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="produto" type="text" name="Produto" value={formData.Produto || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                      <div>
                       <label htmlFor="area" className="block text-sm font-medium mb-1">Área</label>
-                      <input id="area" type="text" name="Area" value={formData.Area || ''} onChange={handleChange} className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                      <input id="area" type="text" name="Area" value={formData.Area || ''} onChange={handleChange} className="w-full rounded-md border border-slate-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary dark:border-slate-700 bg-background p-2"/>
                     </div>
                   </div>
                 </section>
             </div>
 
-            <footer className="flex-shrink-0 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-end gap-3">
+            <footer className="flex-shrink-0 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-background flex justify-end gap-3">
               {error && <p className="text-red-500 text-sm self-center mr-auto" role="alert">{error}</p>}
               <button
                 type="button"

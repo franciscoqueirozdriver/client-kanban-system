@@ -442,10 +442,10 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const renderInput = (label, key, props = {}) => {
     const errorMessage = formErrors?.[key];
     const baseClasses =
-      "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+      "w-full rounded-md border bg-background px-3 py-2.5 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary";
     return (
       <div>
-        <label htmlFor={key} className="mb-1 block text-sm font-medium text-foreground">
+        <label htmlFor={key} className="mb-1.5 block text-sm font-medium text-foreground">
           {label}
           {props.required ? " *" : ""}
         </label>
@@ -457,7 +457,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           {...props}
           className={cn(
             baseClasses,
-            errorMessage ? "border-red-500" : "border-border",
+            errorMessage ? "border-red-500 focus-visible:ring-red-500" : "border-slate-300 dark:border-slate-700",
             props.className,
           )}
           aria-invalid={Boolean(errorMessage)}
@@ -471,7 +471,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     const errorMessage = formErrors?.[key];
     const { placeholder, className, ...selectProps } = props;
     const baseClasses =
-      "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+      "w-full rounded-md border bg-background px-3 py-2.5 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary appearance-none cursor-pointer hover:border-slate-400 dark:hover:border-slate-600";
     const normalizedOptions = Array.isArray(options)
       ? options.map((opt) =>
           typeof opt === "string"
@@ -481,28 +481,35 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       : [];
     return (
       <div>
-        <label htmlFor={key} className="mb-1 block text-sm font-medium text-foreground">
+        <label htmlFor={key} className="mb-1.5 block text-sm font-medium text-foreground">
           {label}
           {props.required ? " *" : ""}
         </label>
-        <select
-          id={key}
-          name={key}
-          {...selectProps}
-          className={cn(
-            baseClasses,
-            errorMessage ? "border-red-500" : "border-border",
-            className,
-          )}
-          aria-invalid={Boolean(errorMessage)}
-        >
-          <option value="">{placeholder ?? "Selecione..."}</option>
-          {normalizedOptions.map((opt) => (
-            <option key={`${key}-${opt.value}`} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            id={key}
+            name={key}
+            {...selectProps}
+            className={cn(
+              baseClasses,
+              errorMessage ? "border-red-500 focus-visible:ring-red-500" : "border-slate-300 dark:border-slate-700",
+              className,
+            )}
+            aria-invalid={Boolean(errorMessage)}
+          >
+            <option value="">{placeholder ?? "Selecione..."}</option>
+            {normalizedOptions.map((opt) => (
+              <option key={`${key}-${opt.value}`} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+            <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
         {errorMessage && <p className="mt-1 text-xs text-red-500">{errorMessage}</p>}
       </div>
     );
@@ -642,9 +649,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           <DialogFooter className="w-full flex-col gap-3 border-t border-border/60 bg-card px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
-              onClick={handleEnrich}
-              disabled={isEnriching || isProcessing}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+              onClick={() => setIsEnrichConfirmOpen(true)}
+              disabled={!formData[fieldMap["Nome da Empresa"]] || isEnriching || isProcessing}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-500 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition-all hover:bg-blue-100 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900"
             >
               {isEnriching && <FaSpinner className="animate-spin" />}
               Enriquecer com IA
@@ -652,7 +659,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <button
                 type="button"
-                className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                className="inline-flex items-center justify-center rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted hover:border-slate-400 dark:hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                 onClick={() => onOpenChange(false)}
                 disabled={isProcessing}
               >
@@ -660,7 +667,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               </button>
               <button
                 type="submit"
-                className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                 disabled={isProcessing || isEnriching}
                 aria-label="Enviar ao Spotter"
               >
@@ -677,8 +684,8 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         </form>
 
         {isEnrichConfirmOpen && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-foreground/40">
-            <div className="w-11/12 max-w-md rounded-2xl border border-border bg-card p-6 shadow-soft">
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-foreground/40 backdrop-blur-sm">
+            <div className="w-11/12 max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
               <h2 className="text-lg font-semibold text-foreground">Confirmar Enriquecimento</h2>
               <p className="mt-3 text-sm text-muted-foreground">
                 Deseja buscar e atualizar os dados para a empresa
@@ -688,7 +695,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 <button
                   type="button"
                   onClick={() => setIsEnrichConfirmOpen(false)}
-                  className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-3 py-1.5 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="inline-flex items-center justify-center rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition-all hover:bg-muted hover:border-slate-400 dark:hover:border-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   Cancelar
                 </button>
@@ -696,7 +703,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                   type="button"
                   onClick={handleEnrichConfirm}
                   disabled={isEnriching}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                 >
                   {isEnriching ? <FaSpinner className="animate-spin" /> : "Sim, enriquecer"}
                 </button>
