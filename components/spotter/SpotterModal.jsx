@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FaSearch, FaSpinner } from "react-icons/fa";
+import { toast } from 'react-toastify';
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
@@ -71,12 +72,17 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [produtosList, setProdutosList] = useState([]);
   const [mercadosList, setMercadosList] = useState([]);
   const [prevendedoresList, setPrevendedoresList] = useState([]);
+
   const [funnels, setFunnels] = useState([]);
+  const [stages, setStages] = useState([]);
   const [isLoadingFunnels, setIsLoadingFunnels] = useState(false);
-  const [stagesByFunnel, setStagesByFunnel] = useState({});
+  const [isLoadingStages, setIsLoadingStages] = useState(false);
+  const [selectedFunnelId, setSelectedFunnelId] = useState(null);
+  const [selectedStageId, setSelectedStageId] = useState(null);
+
   const [spotterOnline, setSpotterOnline] = useState(true);
   const [prefillFunnelName, setPrefillFunnelName] = useState("");
-  const [prefillStageName, setPrefillStageName] = useState("");
+
   const isProcessing = isSubmitting || isSubmittingLocal;
   const funilKey = fieldMap["Funil"];
   const etapaKey = fieldMap["Etapa"];
@@ -121,8 +127,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         [fieldMap["Área"]]: Array.isArray(client?.opportunities) && client?.opportunities.length
           ? client.opportunities.join(";")
           : client?.segment ?? "Geral",
-        [fieldMap["Etapa"]]: "",
-        [fieldMap["Funil"]]: "",
         [fieldMap["Nome da Empresa"]]: client?.company ?? "",
         [fieldMap["Nome Contato"]]: firstContact?.name ?? firstContact?.nome ?? "",
         [fieldMap["E-mail Contato"]]:
@@ -158,8 +162,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       setFormData(fullForm);
       setFormErrors({});
       setPrefillFunnelName("Pré-venda");
-      setPrefillStageName("Entrada");
-      setStagesByFunnel({});
     };
 
     fetchAndPrefill();
@@ -169,25 +171,16 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     if (!open) {
       setFormErrors({});
       setFunnels([]);
-      setStagesByFunnel({});
+      setStages([]);
+      setSelectedFunnelId(null);
+      setSelectedStageId(null);
       setPrefillFunnelName("");
-      setPrefillStageName("");
       setSpotterOnline(true);
     }
   }, [open]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    if (name === funilKey) {
-      setPrefillStageName("");
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-        [etapaKey]: "",
-      }));
-      return;
-    }
-
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -200,11 +193,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   };
 
   const readTrimmedValue = (label) => readValue(label).trim();
-
-  const valueOrNull = (label) => {
-    const value = readTrimmedValue(label);
-    return value ? value : null;
-  };
 
   const valueOrUndefined = (label) => {
     const value = readTrimmedValue(label);
@@ -230,200 +218,76 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   useEffect(() => {
     if (!open) return;
 
-    let cancelled = false;
-
-    const loadSpotterData = async () => {
+    const loadFunnels = async () => {
       setIsLoadingFunnels(true);
       try {
-        const [stagesRes, funnelsRes] = await Promise.all([
-          fetch("/api/spotter/stages", { cache: "no-store" }),
-          fetch("/api/spotter/funnels", { cache: "no-store" }),
-        ]);
-
-        if (cancelled) return;
-
-        if (!stagesRes.ok) {
-          const text = await stagesRes.text().catch(() => "");
-          throw new Error(text || "Falha ao buscar etapas do Spotter.");
+        const res = await fetch('/api/spotter/funnels', { cache: 'no-store' });
+        if (!res.ok) {
+          throw new Error('Failed to fetch funnels');
         }
-
-        const stagesJson = await stagesRes.json().catch(() => []);
-        const stageItems = Array.isArray(stagesJson) ? stagesJson : [];
-
-        const groupedStages = stageItems.reduce((acc, rawStage) => {
-          const funnelId = rawStage?.funnelId ? String(rawStage.funnelId) : "";
-          const name = rawStage?.name != null ? String(rawStage.name).trim() : "";
-          if (!funnelId || !name) return acc;
-          const rawPosition =
-            rawStage?.position ?? rawStage?.Position ?? rawStage?.posicao ?? rawStage?.Posicao ?? 0;
-          const numericPosition = Number(rawPosition);
-          const stageEntry = {
-            id: rawStage?.id != null ? String(rawStage.id) : undefined,
-            nome: name,
-            position: Number.isFinite(numericPosition) ? numericPosition : 0,
-          };
-          if (!acc[funnelId]) {
-            acc[funnelId] = [];
-          }
-          acc[funnelId].push(stageEntry);
-          return acc;
-        }, {});
-
-        Object.keys(groupedStages).forEach((key) => {
-          groupedStages[key] = groupedStages[key]
-            .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-            .map((stage) => ({ id: stage.id, nome: stage.nome }));
-        });
-
-        let normalizedFunnels = [];
-        if (funnelsRes.ok) {
-          const funnelsJson = await funnelsRes.json().catch(() => []);
-          normalizedFunnels = (Array.isArray(funnelsJson) ? funnelsJson : [])
-            .map((item) => ({
-              id: item?.id != null ? String(item.id) : "",
-              name:
-                item?.name != null
-                  ? String(item.name)
-                  : item?.value != null
-                  ? String(item.value)
-                  : item?.label != null
-                  ? String(item.label)
-                  : "",
-            }))
-            .map((item) => ({
-              id: item.id,
-              name: typeof item.name === "string" ? item.name.trim() : "",
-            }))
-            .filter((item) => item.id && item.name);
-        }
-
-        if (!normalizedFunnels.length) {
-          const ids = Array.from(
-            new Set(
-              stageItems
-                .map((stage) => (stage?.funnelId != null ? String(stage.funnelId) : ""))
-                .filter(Boolean),
-            ),
-          );
-          normalizedFunnels = ids.map((id) => ({ id, name: `Funil #${id}` }));
-        }
-
-        if (cancelled) return;
-
-        setStagesByFunnel(groupedStages);
-        setFunnels(normalizedFunnels);
+        const data = await res.json();
+        setFunnels(data.value || []);
         setSpotterOnline(true);
       } catch (error) {
-        console.error("Falha ao carregar dados do Spotter", error);
-        if (!cancelled) {
-          setSpotterOnline(false);
-          setFunnels([]);
-          setStagesByFunnel({});
-        }
+        console.error("Falha ao carregar funis do Spotter", error);
+        toast.warn("Não foi possível listar funis/etapas agora. O servidor validará a etapa no envio.");
+        setSpotterOnline(false);
       } finally {
-        if (!cancelled) {
-          setIsLoadingFunnels(false);
+        setIsLoadingFunnels(false);
+      }
+    };
+
+    loadFunnels();
+  }, [open]);
+
+  useEffect(() => {
+    if (!selectedFunnelId) {
+      setStages([]);
+      return;
+    }
+
+    const loadStages = async () => {
+      setIsLoadingStages(true);
+      setSelectedStageId(null);
+      try {
+        const res = await fetch(`/api/spotter/stages?funnelId=${selectedFunnelId}`, { cache: 'no-store' });
+        if (!res.ok) {
+          throw new Error('Failed to fetch stages');
         }
+        const data = await res.json();
+        const activeStages = (data.value || []).filter(s => s.active).sort((a, b) => a.position - b.position);
+        setStages(activeStages);
+        if (activeStages.length > 0) {
+          setSelectedStageId(activeStages[0].id);
+        }
+      } catch (error) {
+        console.error(`Falha ao carregar etapas para o funil ${selectedFunnelId}`, error);
+        toast.warn("Não foi possível listar as etapas do funil. O servidor validará a etapa no envio.");
+      } finally {
+        setIsLoadingStages(false);
       }
     };
 
-    loadSpotterData();
+    loadStages();
+  }, [selectedFunnelId]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [open, funilKey, etapaKey, setFormData]);
-
-  const selectedFunnelId = formData[funilKey] ?? "";
-
-  const filteredStages = useMemo(() => {
-    const list = stagesByFunnel[selectedFunnelId];
-    return Array.isArray(list) ? list : [];
-  }, [selectedFunnelId, stagesByFunnel]);
+  const handleFunnelChange = (e) => {
+    const funnelId = e.target.value ? Number(e.target.value) : null;
+    setSelectedFunnelId(funnelId);
+    setSelectedStageId(null);
+  };
 
   useEffect(() => {
-    if (!open) return;
-    if (!funnels.length) return;
+    if (!open || !funnels.length || selectedFunnelId) return;
 
-    let applied = false;
-    setFormData((prev) => {
-      const currentValue = prev[funilKey];
-      if (currentValue) return prev;
+    const matcher = (value) => value?.toLowerCase?.() === prefillFunnelName?.toLowerCase?.();
+    const desired = prefillFunnelName ? funnels.find((item) => matcher(item.value)) : null;
+    const fallback = desired || funnels.find(f => f.active) || funnels[0];
 
-      const matcher = (value) =>
-        value?.toLowerCase?.() === prefillFunnelName?.toLowerCase?.();
-
-      const desired = prefillFunnelName
-        ? funnels.find((item) => matcher(item?.name))
-        : null;
-      const fallback = desired || funnels[0];
-      if (!fallback?.id && !fallback?.name) {
-        return prev;
-      }
-      applied = true;
-      return {
-        ...prev,
-        [funilKey]: String(fallback.id ?? fallback.name ?? ""),
-      };
-    });
-
-    if (applied && prefillFunnelName) {
-      setPrefillFunnelName("");
+    if (fallback?.id) {
+      setSelectedFunnelId(fallback.id);
     }
-  }, [funnels, open, funilKey, prefillFunnelName]);
-
-
-  useEffect(() => {
-    if (!open) return;
-    if (!selectedFunnelId) return;
-
-    const stages = stagesByFunnel[selectedFunnelId];
-    if (!Array.isArray(stages) || stages.length === 0) return;
-
-    let applied = false;
-    setFormData((prev) => {
-      const currentStage = prev[etapaKey];
-      const hasCurrent =
-        typeof currentStage === "string" &&
-        stages.some((stage) => stage?.nome && stage.nome.toLowerCase() === currentStage.toLowerCase());
-      if (hasCurrent) return prev;
-
-      const desired =
-        prefillStageName && typeof prefillStageName === "string"
-          ? stages.find((stage) => stage?.nome && stage.nome.toLowerCase() === prefillStageName.toLowerCase())
-          : null;
-      const fallback = desired || stages[0];
-      if (!fallback?.nome) return prev;
-      applied = true;
-      return {
-        ...prev,
-        [etapaKey]: fallback.nome,
-      };
-    });
-
-    if (applied && prefillStageName) {
-      setPrefillStageName("");
-    }
-  }, [open, selectedFunnelId, stagesByFunnel, etapaKey, prefillStageName]);
-
-  const validatorStagesMap = useMemo(() => {
-    const entries = Object.entries(stagesByFunnel || {});
-    if (!entries.length) return undefined;
-    const mapped = {};
-    entries.forEach(([id, list]) => {
-      if (!Array.isArray(list) || list.length === 0) return;
-      const normalized = list
-        .map((stage) => ({
-          id: stage?.id ?? stage?.ID ?? stage?.value ?? stage?.name ?? stage?.nome ?? "",
-          nome: stage?.nome ?? stage?.name ?? stage?.value ?? "",
-        }))
-        .filter((stage) => stage.nome);
-      if (normalized.length) {
-        mapped[String(id)] = normalized;
-      }
-    });
-    return Object.keys(mapped).length ? mapped : undefined;
-  }, [stagesByFunnel]);
+  }, [funnels, open, prefillFunnelName, selectedFunnelId]);
 
   const handleEnrich = () => {
     const companyName = formData[fieldMap["Nome da Empresa"]];
@@ -479,122 +343,96 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   const handleSubmit = async (event) => {
     event?.preventDefault();
+    setIsSubmittingLocal(true);
     setFormErrors({});
 
-    const validatorPayload = {
-      nomeLead: readTrimmedValue("Nome do Lead"),
-      origem: readTrimmedValue("Origem"),
-      mercado: readTrimmedValue("Mercado"),
-      pais: readTrimmedValue("País"),
-      estado: readTrimmedValue("Estado"),
-      cidade: readTrimmedValue("Cidade"),
-      telefones: readValue("Telefones"),
-      nomeContato: readTrimmedValue("Nome Contato"),
-      telefonesContato: readValue("Telefones Contato"),
-      emailContato: readTrimmedValue("E-mail Contato"),
-      tipoServCom: readTrimmedValue("Tipo do Serv. Comunicação"),
-      idServCom: readTrimmedValue("ID do Serv. Comunicação"),
-      area: readValue("Área"),
-      modalidade: formData.modalidade ?? "",
-      funilId: valueOrNull("Funil"),
-      etapaNome: valueOrNull("Etapa"),
-      address: readTrimmedValue("Logradouro"),
-      addressNumber: readTrimmedValue("Número"),
-      addressComplement: readTrimmedValue("Complemento"),
-      neighborhood: readTrimmedValue("Bairro"),
-      zipcode: readTrimmedValue("CEP"),
-    };
-
-    const requiresStageSelection =
-      spotterOnline && selectedFunnelId && filteredStages.length > 0;
-
-    if (requiresStageSelection && !validatorPayload.etapaNome) {
-      setFormErrors({ [etapaKey]: "Selecione uma etapa do funil." });
-      alert("Selecione uma etapa do funil.");
-      return;
-    }
-
-    const clientValidation = validateSpotterLead(validatorPayload, {
-      etapasPorFunil: validatorStagesMap,
-    });
-
-    if (!clientValidation.ok) {
-      const mappedErrors = mapFieldErrorsToForm(clientValidation.fieldErrors);
-      if (Object.keys(mappedErrors).length > 0) {
-        setFormErrors(mappedErrors);
-      }
-      if (clientValidation.messages.length) {
-        console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
-      }
-      alert("Preencha os campos obrigatórios.");
-      return;
-    }
-
-    if (clientValidation.messages.length) {
-      console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
-    }
-
-    const payloadForServer = {
-      ...validatorPayload,
-      subSource: valueOrUndefined("Sub-Origem"),
-      subOrigem: valueOrUndefined("Sub-Origem"),
-      leadProduct: valueOrUndefined("Produto"),
-      produto: valueOrUndefined("Produto"),
-      website: valueOrUndefined("Site"),
-      site: valueOrUndefined("Site"),
-      cpfcnpj: valueOrUndefined("CPF/CNPJ"),
-      observacao: valueOrUndefined("Observação"),
-      description: valueOrUndefined("Observação"),
-      emailPrevendedor: valueOrUndefined("Email Pré-vendedor"),
-      nomeEmpresa: valueOrUndefined("Nome da Empresa"),
-      cargoContato: valueOrUndefined("Cargo Contato"),
-      ddiContato: valueOrUndefined("DDI Contato"),
-      logradouro: valueOrUndefined("Logradouro"),
-      numero: valueOrUndefined("Número"),
-      complemento: valueOrUndefined("Complemento"),
-      bairro: valueOrUndefined("Bairro"),
-      cep: valueOrUndefined("CEP"),
-      tipoServComunicacao: validatorPayload.tipoServCom,
-      idServComunicacao: validatorPayload.idServCom,
-      stageId:
-        filteredStages.find(
-          (stage) =>
-            stage?.nome &&
-            validatorPayload.etapaNome &&
-            stage.nome.toLowerCase() === validatorPayload.etapaNome.toLowerCase(),
-        )?.id ?? undefined,
-    };
-
-    setIsSubmittingLocal(true);
-
     try {
+      let stageIdToSend = selectedStageId;
+
+      try {
+        if (selectedFunnelId && !stageIdToSend) {
+          const r = await fetch(`/api/spotter/stages?funnelId=${selectedFunnelId}`, { cache: 'no-store' });
+          const { value } = r.ok ? await r.json() : { value: [] };
+          const firstActive = (value ?? []).find((s) => s.active) || value?.[0];
+          stageIdToSend = firstActive?.id ?? null;
+        }
+      } catch (e) {
+        toast.warn('Não foi possível validar a etapa agora. O servidor fará a checagem.');
+      }
+
+      const payloadForServer = {
+        nomeLead: readTrimmedValue("Nome do Lead"),
+        origem: readTrimmedValue("Origem"),
+        mercado: readTrimmedValue("Mercado"),
+        pais: readTrimmedValue("País"),
+        estado: readTrimmedValue("Estado"),
+        cidade: readTrimmedValue("Cidade"),
+        telefones: readValue("Telefones"),
+        nomeContato: readTrimmedValue("Nome Contato"),
+        telefonesContato: readValue("Telefones Contato"),
+        emailContato: readTrimmedValue("E-mail Contato"),
+        tipoServCom: readTrimmedValue("Tipo do Serv. Comunicação"),
+        idServCom: readTrimmedValue("ID do Serv. Comunicação"),
+        area: readValue("Área"),
+        funilId: selectedFunnelId ?? undefined,
+        stageId: stageIdToSend ?? undefined,
+        address: readTrimmedValue("Logradouro"),
+        addressNumber: readTrimmedValue("Número"),
+        addressComplement: readTrimmedValue("Complemento"),
+        neighborhood: readTrimmedValue("Bairro"),
+        zipcode: readTrimmedValue("CEP"),
+        subSource: valueOrUndefined("Sub-Origem"),
+        subOrigem: valueOrUndefined("Sub-Origem"),
+        leadProduct: valueOrUndefined("Produto"),
+        produto: valueOrUndefined("Produto"),
+        website: valueOrUndefined("Site"),
+        site: valueOrUndefined("Site"),
+        cpfcnpj: valueOrUndefined("CPF/CNPJ"),
+        observacao: valueOrUndefined("Observação"),
+        description: valueOrUndefined("Observação"),
+        emailPrevendedor: valueOrUndefined("Email Pré-vendedor"),
+        nomeEmpresa: valueOrUndefined("Nome da Empresa"),
+        cargoContato: valueOrUndefined("Cargo Contato"),
+        ddiContato: valueOrUndefined("DDI Contato"),
+        logradouro: valueOrUndefined("Logradouro"),
+        numero: valueOrUndefined("Número"),
+        complemento: valueOrUndefined("Complemento"),
+        bairro: valueOrUndefined("Bairro"),
+        cep: valueOrUndefined("CEP"),
+        tipoServComunicacao: readTrimmedValue("Tipo do Serv. Comunicação"),
+        idServComunicacao: readTrimmedValue("ID do Serv. Comunicação"),
+      };
+
+      const clientValidation = validateSpotterLead(payloadForServer, {});
+
+      if (!clientValidation.ok) {
+        const mappedErrors = mapFieldErrorsToForm(clientValidation.fieldErrors);
+        if (Object.keys(mappedErrors).length > 0) {
+          setFormErrors(mappedErrors);
+        }
+        if (clientValidation.messages.length) {
+          console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
+        }
+        alert("Preencha os campos obrigatórios.");
+        setIsSubmittingLocal(false);
+        return;
+      }
+
       if (!onSubmit) {
         throw new Error("Função de envio ao Spotter não definida.");
       }
 
-      const response = await onSubmit(payloadForServer);
-      const serverMessages = Array.isArray(response?.messages) ? response.messages : [];
-      const combinedMessages = [...clientValidation.messages, ...serverMessages];
-      const successMessage =
-        combinedMessages.length > 0
-          ? `Enviado ao Spotter com sucesso. — ${combinedMessages.join(' • ')}`
-          : "Enviado ao Spotter com sucesso.";
-      alert(successMessage);
-      setFormErrors({});
+      await onSubmit(payloadForServer);
+
+      toast.success('Enviado ao Spotter com sucesso!');
       onOpenChange?.(false);
-    } catch (error) {
-      console.error("Erro no envio ao Spotter:", error);
-      const fieldErrors = error?.fieldErrors || error?.details;
+    } catch (err) {
+      const fieldErrors = err?.fieldErrors || err?.details;
       const mappedErrors = mapFieldErrorsToForm(fieldErrors);
       if (Object.keys(mappedErrors).length > 0) {
         setFormErrors(mappedErrors);
       }
-      const extraMessages = Array.isArray(error?.messages) ? error.messages : [];
-      const messageParts = [error?.error || error?.message || "Falha ao enviar ao Spotter."];
-      if (extraMessages.length) {
-        messageParts.push(extraMessages.join(" • "));
-      }
-      alert(messageParts.filter(Boolean).join(" — "));
+      toast.error(`Falha ao enviar ao Spotter — ${err?.message || err?.error || 'Erro desconhecido'}`);
     } finally {
       setIsSubmittingLocal(false);
     }
@@ -649,8 +487,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         <select
           id={key}
           name={key}
-          value={formData[key] ?? ""}
-          onChange={handleChange}
           {...selectProps}
           className={cn(
             baseClasses,
@@ -730,42 +566,46 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               </div>
               {renderInput("Site", fieldMap["Site"], { type: "url" })}
               {renderInput("Sub-Origem", fieldMap["Sub-Origem"])}
-              {renderSelect("Mercado", fieldMap["Mercado"], mercadosList, { required: true })}
-              {renderSelect("Produto", fieldMap["Produto"], produtosList)}
-              {renderSelect("Email Pré-vendedor", fieldMap["Email Pré-vendedor"], prevendedoresList)}
+              {renderSelect("Mercado", fieldMap["Mercado"], mercadosList, { required: true, value: formData[fieldMap["Mercado"]] ?? "", onChange: handleChange })}
+              {renderSelect("Produto", fieldMap["Produto"], produtosList, { value: formData[fieldMap["Produto"]] ?? "", onChange: handleChange })}
+              {renderSelect("Email Pré-vendedor", fieldMap["Email Pré-vendedor"], prevendedoresList, { value: formData[fieldMap["Email Pré-vendedor"]] ?? "", onChange: handleChange })}
               {renderInput("Área", fieldMap["Área"], { required: true, placeholder: "Separar múltiplas por ;" })}
               {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
               {renderInput("Observação", fieldMap["Observação"])}
               {renderSelect(
                 "Funil",
                 funilKey,
-                funnels.map((funnel) => ({ value: funnel.id, label: funnel.name })),
+                funnels.map((funnel) => ({ value: funnel.id, label: funnel.value })),
                 {
+                  value: selectedFunnelId || "",
+                  onChange: handleFunnelChange,
                   required: spotterOnline && funnels.length > 0,
                   placeholder: spotterOnline
                     ? isLoadingFunnels
                       ? "Carregando funis..."
                       : "Selecione..."
                     : "Indisponível (servidor valida)",
-                  disabled: !spotterOnline || (isLoadingFunnels && funnels.length === 0),
+                  disabled: !spotterOnline || isLoadingFunnels,
                 },
               )}
               {renderSelect(
                 "Etapa",
                 etapaKey,
-                filteredStages.map((stage) => ({ value: stage.nome, label: stage.nome })),
+                stages.map((stage) => ({ value: stage.id, label: stage.value })),
                 {
-                  required: spotterOnline && Boolean(selectedFunnelId) && filteredStages.length > 0,
+                  value: selectedStageId || "",
+                  onChange: (e) => setSelectedStageId(e.target.value ? Number(e.target.value) : null),
+                  required: spotterOnline && Boolean(selectedFunnelId) && stages.length > 0,
                   placeholder: !spotterOnline
                     ? "Indisponível (servidor valida)"
                     : !selectedFunnelId
                     ? "Escolha um funil"
-                    : filteredStages.length
-                    ? "Selecione..."
-                    : isLoadingFunnels
+                    : isLoadingStages
                     ? "Carregando etapas..."
+                    : stages.length
+                    ? "Selecione..."
                     : "Sem etapas",
-                  disabled: !spotterOnline || !selectedFunnelId || filteredStages.length === 0,
+                  disabled: !spotterOnline || !selectedFunnelId || isLoadingStages,
                 },
               )}
               {!spotterOnline && (
