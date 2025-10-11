@@ -5,7 +5,7 @@ import { FaSearch, FaSpinner } from "react-icons/fa";
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
 import { validateSpotterLead } from "../../validators/spotterLead";
 
@@ -80,6 +80,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [isLoadingStages, setIsLoadingStages] = useState(false);
   const [selectedFunnelId, setSelectedFunnelId] = useState(null);
   const [selectedStageId, setSelectedStageId] = useState(null);
+  const [stageError, setStageError] = useState(null);
 
   const [spotterOnline, setSpotterOnline] = useState(true);
   const [prefillFunnelName, setPrefillFunnelName] = useState("");
@@ -244,32 +245,23 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   useEffect(() => {
     if (!selectedFunnelId) {
       setStages([]);
+      setSelectedStageId(null);
       return;
     }
-
-    const loadStages = async () => {
-      setIsLoadingStages(true);
-      setSelectedStageId(null);
-      try {
-        const res = await fetch(`/api/spotter/stages?funnelId=${selectedFunnelId}`, { cache: 'no-store' });
-        if (!res.ok) {
-          throw new Error('Failed to fetch stages');
-        }
-        const data = await res.json();
-        const activeStages = (data.value || []).filter(s => s.active).sort((a, b) => a.position - b.position);
-        setStages(activeStages);
-        if (activeStages.length > 0) {
-          setSelectedStageId(activeStages[0].id);
-        }
-      } catch (error) {
-        console.error(`Falha ao carregar etapas para o funil ${selectedFunnelId}`, error);
-        toast.warn("Não foi possível listar as etapas do funil. O servidor validará a etapa no envio.");
-      } finally {
-        setIsLoadingStages(false);
-      }
-    };
-
-    loadStages();
+    setIsLoadingStages(true);
+    setStageError(null);
+    fetch(`/api/spotter/stages?funnelId=${selectedFunnelId}`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        const items = Array.isArray(data?.value) ? data.value : data;
+        setStages(items || []);
+        setSelectedStageId(null);
+      })
+      .catch(() => {
+        setStages([]);
+        setSelectedStageId(null);
+      })
+      .finally(() => setIsLoadingStages(false));
   }, [selectedFunnelId]);
 
   const handleFunnelChange = (e) => {
@@ -342,98 +334,81 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     }
   };
 
-  const handleSubmit = async (event) => {
-    event?.preventDefault();
-    setIsSubmittingLocal(true);
-    setFormErrors({});
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-    try {
-      let stageIdToSend = selectedStageId;
+    const mustRequireStage = selectedFunnelId && stages.length > 0;
+    if (mustRequireStage && !selectedStageId) {
+      setStageError('Informe a Etapa correspondente ao Funil selecionado.');
+      return;
+    }
 
-      try {
-        if (selectedFunnelId && !stageIdToSend) {
-          const r = await fetch(`/api/spotter/stages?funnelId=${selectedFunnelId}`, { cache: 'no-store' });
-          const { value } = r.ok ? await r.json() : { value: [] };
-          const firstActive = (value ?? []).find((s) => s.active) || value?.[0];
-          stageIdToSend = firstActive?.id ?? null;
-        }
-      } catch (e) {
-        toast.warn('Não foi possível validar a etapa agora. O servidor fará a checagem.');
-      }
+    const payload = {
+      nomeLead: readTrimmedValue("Nome do Lead"),
+      origem: readTrimmedValue("Origem"),
+      mercado: readTrimmedValue("Mercado"),
+      pais: readTrimmedValue("País"),
+      estado: readTrimmedValue("Estado"),
+      cidade: readTrimmedValue("Cidade"),
+      telefones: readValue("Telefones"),
+      nomeContato: readTrimmedValue("Nome Contato"),
+      telefonesContato: readValue("Telefones Contato"),
+      emailContato: readTrimmedValue("E-mail Contato"),
+      tipoServCom: readTrimmedValue("Tipo do Serv. Comunicação"),
+      idServCom: readTrimmedValue("ID do Serv. Comunicação"),
+      area: readValue("Área"),
+      funilId: selectedFunnelId || undefined,
+      stageId: selectedStageId || undefined,
+      address: readTrimmedValue("Logradouro"),
+      addressNumber: readTrimmedValue("Número"),
+      addressComplement: readTrimmedValue("Complemento"),
+      neighborhood: readTrimmedValue("Bairro"),
+      zipcode: readTrimmedValue("CEP"),
+      subSource: valueOrUndefined("Sub-Origem"),
+      subOrigem: valueOrUndefined("Sub-Origem"),
+      leadProduct: valueOrUndefined("Produto"),
+      produto: valueOrUndefined("Produto"),
+      website: valueOrUndefined("Site"),
+      site: valueOrUndefined("Site"),
+      cpfcnpj: valueOrUndefined("CPF/CNPJ"),
+      observacao: valueOrUndefined("Observação"),
+      description: valueOrUndefined("Observação"),
+      emailPrevendedor: valueOrUndefined("Email Pré-vendedor"),
+      nomeEmpresa: valueOrUndefined("Nome da Empresa"),
+      cargoContato: valueOrUndefined("Cargo Contato"),
+      ddiContato: valueOrUndefined("DDI Contato"),
+      logradouro: valueOrUndefined("Logradouro"),
+      numero: valueOrUndefined("Número"),
+      complemento: valueOrUndefined("Complemento"),
+      bairro: valueOrUndefined("Bairro"),
+      cep: valueOrUndefined("CEP"),
+      tipoServComunicacao: readTrimmedValue("Tipo do Serv. Comunicação"),
+      idServComunicacao: readTrimmedValue("ID do Serv. Comunicação"),
+    };
 
-      const payloadForServer = {
-        nomeLead: readTrimmedValue("Nome do Lead"),
-        origem: readTrimmedValue("Origem"),
-        mercado: readTrimmedValue("Mercado"),
-        pais: readTrimmedValue("País"),
-        estado: readTrimmedValue("Estado"),
-        cidade: readTrimmedValue("Cidade"),
-        telefones: readValue("Telefones"),
-        nomeContato: readTrimmedValue("Nome Contato"),
-        telefonesContato: readValue("Telefones Contato"),
-        emailContato: readTrimmedValue("E-mail Contato"),
-        tipoServCom: readTrimmedValue("Tipo do Serv. Comunicação"),
-        idServCom: readTrimmedValue("ID do Serv. Comunicação"),
-        area: readValue("Área"),
-        funilId: selectedFunnelId ?? undefined,
-        stageId: stageIdToSend ?? undefined,
-        address: readTrimmedValue("Logradouro"),
-        addressNumber: readTrimmedValue("Número"),
-        addressComplement: readTrimmedValue("Complemento"),
-        neighborhood: readTrimmedValue("Bairro"),
-        zipcode: readTrimmedValue("CEP"),
-        subSource: valueOrUndefined("Sub-Origem"),
-        subOrigem: valueOrUndefined("Sub-Origem"),
-        leadProduct: valueOrUndefined("Produto"),
-        produto: valueOrUndefined("Produto"),
-        website: valueOrUndefined("Site"),
-        site: valueOrUndefined("Site"),
-        cpfcnpj: valueOrUndefined("CPF/CNPJ"),
-        observacao: valueOrUndefined("Observação"),
-        description: valueOrUndefined("Observação"),
-        emailPrevendedor: valueOrUndefined("Email Pré-vendedor"),
-        nomeEmpresa: valueOrUndefined("Nome da Empresa"),
-        cargoContato: valueOrUndefined("Cargo Contato"),
-        ddiContato: valueOrUndefined("DDI Contato"),
-        logradouro: valueOrUndefined("Logradouro"),
-        numero: valueOrUndefined("Número"),
-        complemento: valueOrUndefined("Complemento"),
-        bairro: valueOrUndefined("Bairro"),
-        cep: valueOrUndefined("CEP"),
-        tipoServComunicacao: readTrimmedValue("Tipo do Serv. Comunicação"),
-        idServComunicacao: readTrimmedValue("ID do Serv. Comunicação"),
-      };
-
-      const clientValidation = validateSpotterLead(payloadForServer, {});
-
-      if (!clientValidation.ok) {
-        const mappedErrors = mapFieldErrorsToForm(clientValidation.fieldErrors);
-        if (Object.keys(mappedErrors).length > 0) {
-          setFormErrors(mappedErrors);
-        }
-        if (clientValidation.messages.length) {
-          console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
-        }
-        alert("Preencha os campos obrigatórios.");
-        setIsSubmittingLocal(false);
-        return;
-      }
-
-      if (!onSubmit) {
-        throw new Error("Função de envio ao Spotter não definida.");
-      }
-
-      await onSubmit(payloadForServer);
-
-      toast.success('Enviado ao Spotter com sucesso!');
-      onOpenChange?.(false);
-    } catch (err) {
-      const fieldErrors = err?.fieldErrors || err?.details;
-      const mappedErrors = mapFieldErrorsToForm(fieldErrors);
+    const clientValidation = validateSpotterLead(payload, {});
+    if (!clientValidation.ok) {
+      const mappedErrors = mapFieldErrorsToForm(clientValidation.fieldErrors);
       if (Object.keys(mappedErrors).length > 0) {
         setFormErrors(mappedErrors);
       }
-      toast.error(`Falha ao enviar ao Spotter — ${err?.message || err?.error || 'Erro desconhecido'}`);
+      if (clientValidation.messages.length) {
+        console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
+      }
+      alert("Preencha os campos obrigatórios.");
+      return;
+    }
+
+    setIsSubmittingLocal(true);
+    try {
+      if (!onSubmit) {
+        throw new Error("Função de envio ao Spotter não definida.");
+      }
+      await onSubmit(payload);
+      toast.success('Enviado ao Spotter com sucesso!');
+      onOpenChange?.(false);
+    } catch (err) {
+      toast.error(`Falha ao enviar ao Spotter — ${err.message}`);
     } finally {
       setIsSubmittingLocal(false);
     }
@@ -521,9 +496,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       >
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
-          <p id="spotter-modal-description" className="text-sm text-muted-foreground">
-            Confirme ou ajuste os dados antes do envio.
-          </p>
+          <DialogDescription className="sr-only">
+            Confirme os dados antes do envio ao Spotter.
+          </DialogDescription>
         </DialogHeader>
         <form
           onSubmit={handleSubmit}
@@ -578,7 +553,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 funilKey,
                 funnels.map((funnel) => ({ value: funnel.id, label: funnel.value })),
                 {
-                  value: selectedFunnelId || "",
+                  value: selectedFunnelId ?? '',
                   onChange: handleFunnelChange,
                   required: spotterOnline && funnels.length > 0,
                   placeholder: spotterOnline
@@ -589,26 +564,29 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                   disabled: !spotterOnline || isLoadingFunnels,
                 },
               )}
-              {renderSelect(
-                "Etapa",
-                etapaKey,
-                stages.map((stage) => ({ value: stage.id, label: stage.value })),
-                {
-                  value: selectedStageId || "",
-                  onChange: (e) => setSelectedStageId(e.target.value ? Number(e.target.value) : null),
-                  required: spotterOnline && Boolean(selectedFunnelId) && stages.length > 0,
-                  placeholder: !spotterOnline
-                    ? "Indisponível (servidor valida)"
-                    : !selectedFunnelId
-                    ? "Escolha um funil"
-                    : isLoadingStages
-                    ? "Carregando etapas..."
-                    : stages.length
-                    ? "Selecione..."
-                    : "Sem etapas",
-                  disabled: !spotterOnline || !selectedFunnelId || isLoadingStages,
-                },
-              )}
+              <div>
+                {renderSelect(
+                  "Etapa",
+                  etapaKey,
+                  stages.map((stage) => ({ value: stage.id, label: stage.value })),
+                  {
+                    value: selectedStageId ?? '',
+                    onChange: (e) => { setSelectedStageId(Number(e.target.value) || null); setStageError(null); },
+                    required: spotterOnline && Boolean(selectedFunnelId) && stages.length > 0,
+                    placeholder: !spotterOnline
+                      ? "Indisponível (servidor valida)"
+                      : !selectedFunnelId
+                      ? "Escolha um funil"
+                      : isLoadingStages
+                      ? "Carregando etapas..."
+                      : stages.length
+                      ? "Selecione..."
+                      : "Sem etapas",
+                    disabled: !spotterOnline || !selectedFunnelId || isLoadingStages,
+                  },
+                )}
+                {stageError ? (<p className="text-xs text-destructive mt-1">{stageError}</p>) : null}
+              </div>
               {!spotterOnline && (
                 <p className="col-span-full text-xs text-muted-foreground">
                   Não foi possível listar funis/etapas agora. O servidor validará a etapa no envio.

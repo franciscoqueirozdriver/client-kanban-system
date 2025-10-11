@@ -1,7 +1,6 @@
 import { getSpotterToken } from './spotter-env';
 import { joinUrl } from './url.js';
 
-
 export const SPOTTER_BASE_URL =
   (process.env.EXACT_SPOTTER_BASE_URL || 'https://api.exactspotter.com/v3').replace(/\/+$/, '');
 
@@ -26,10 +25,6 @@ function mergeHeaders(extra: HeadersLike): HeadersInit {
 }
 
 async function spotterFetch(url: string, options: RequestInit = {}) {
-  const token = getSpotterToken();
-  if (!token) {
-    throw new Error('Token do Spotter ausente');
-  }
   const { headers, ...rest } = options;
   const res = await fetch(url, {
     ...rest,
@@ -98,4 +93,3 @@ export async function listStages(): Promise<SpotterStage[]> {
   const data = await res.json();
   return (data?.value ?? []) as SpotterStage[];
 }
-
