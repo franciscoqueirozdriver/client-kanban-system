@@ -291,21 +291,22 @@ function KanbanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao enviar ao Spotter');
+        const enhancedError: any = new Error(data?.error || 'Falha ao enviar ao Spotter.');
+        if (data?.fieldErrors) {
+          enhancedError.fieldErrors = data.fieldErrors;
+        }
+        if (Array.isArray(data?.messages)) {
+          enhancedError.messages = data.messages;
+        }
+        throw enhancedError;
       }
 
-      const result = await response.json();
-      
-      // Fechar modal e mostrar sucesso
       setSpotterOpen(false);
       setSpotterLead(null);
-      
-      // Aqui você pode adicionar uma notificação de sucesso
-      alert('Lead enviado ao Spotter com sucesso!');
-      
+      return data;
     } catch (error) {
       console.error('Erro ao enviar ao Spotter:', error);
       throw error; // Re-throw para que o modal possa mostrar o erro
