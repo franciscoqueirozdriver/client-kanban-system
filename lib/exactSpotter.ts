@@ -4,20 +4,32 @@ import { joinUrl } from './url.js';
 export const SPOTTER_BASE_URL =
   (process.env.EXACT_SPOTTER_BASE_URL || 'https://api.exactspotter.com/v3').replace(/\/+$/, '');
 
-async function spotterFetch(url, options = {}) {
-  const token = getSpotterToken();
-  if (!token) {
-    throw new Error('Token do Spotter ausente');
-  }
+type HeadersLike = HeadersInit | undefined;
 
+function mergeHeaders(extra: HeadersLike): HeadersInit {
+  const base: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    token_exact: getSpotterToken(),
+  };
+  if (!extra) return base;
+  // normaliza HeadersInit para objeto simples
+  if (extra instanceof Headers) {
+    extra.forEach((v, k) => { base[k] = v; });
+    return base;
+  }
+  if (Array.isArray(extra)) {
+    for (const [k, v] of extra) base[k] = v as string;
+    return base;
+  }
+  return { ...base, ...extra };
+}
+
+async function spotterFetch(url: string, options: RequestInit = {}) {
+  const { headers, ...rest } = options;
   const res = await fetch(url, {
-    ...options,
-    headers: {
-      token_exact: token,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...options.headers,
-    },
+    ...rest,
+    headers: mergeHeaders(headers),
     cache: 'no-store',
   });
 
@@ -39,7 +51,7 @@ async function spotterFetch(url, options = {}) {
 }
 
 
-export async function spotterPost(entitySet, payload) {
+export async function spotterPost(entitySet: string, payload: any) {
   const url = joinUrl(SPOTTER_BASE_URL, entitySet);
   if (process.env.NODE_ENV !== 'production') {
     console.log('[Spotter] POST →', url);
@@ -50,7 +62,7 @@ export async function spotterPost(entitySet, payload) {
   });
 }
 
-export async function spotterGet(entitySet) {
+export async function spotterGet(entitySet: string) {
   const url = joinUrl(SPOTTER_BASE_URL, entitySet);
   if (process.env.NODE_ENV !== 'production') {
     console.log('[Spotter] GET →', url);
