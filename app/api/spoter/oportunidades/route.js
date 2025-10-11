@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { NextResponse } from 'next/server';
 import { spotterGet, spotterPost } from '@/lib/exactSpotter.ts';
 import { getSpotterAreasValidas, getSpotterModalidadesValidas } from '@/lib/spotter-env.ts';
 const { validateSpotterLead } = require('../../../../validators/spotterLead');
