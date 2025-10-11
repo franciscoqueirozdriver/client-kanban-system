@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server";
-import https from "https";
 
-const agent = new https.Agent({ keepAlive: true, maxSockets: 50 });
-
-function getSpotterToken() {
-  return process.env.SPOTTER_TOKEN || process.env.EXACT_SPOTTER_TOKEN || "";
-}
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const token = getSpotterToken();
+  const token = process.env.SPOTTER_TOKEN;
   if (!token) {
     return NextResponse.json({ error: "SPOTTER_TOKEN missing" }, { status: 500 });
   }
@@ -20,7 +15,6 @@ export async function GET() {
         "Content-Type": "application/json",
         token_exact: token,
       },
-      agent,
       cache: "no-store",
     });
 

@@ -1,97 +1,62 @@
 import { NextResponse } from "next/server";
-import https from "https";
 
-const agent = new https.Agent({ keepAlive: true, maxSockets: 50 });
-
-function getSpotterToken() {
-  return process.env.SPOTTER_TOKEN || process.env.EXACT_SPOTTER_TOKEN || "";
-}
-
-function normalizeFunnelName(input: any) {
-  if (typeof input === "string") return input;
-  if (input == null) return "";
-  return String(input);
-}
-
-async function fetchStages(token: string) {
-  const response = await fetch("https://api.exactspotter.com/v3/stages", {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      token_exact: token,
-    },
-    agent,
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(text || `stages ${response.status}`);
-  }
-
-  const json = await response.json().catch(() => ({}));
-  const items = Array.isArray(json?.value) ? json.value : Array.isArray(json) ? json : [];
-  return items;
-}
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const token = getSpotterToken();
-  if (!token) {
-    return NextResponse.json({ error: "SPOTTER_TOKEN missing" }, { status: 500 });
-  }
-
   try {
-    const response = await fetch("https://api.exactspotter.com/v3/funnels", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        token_exact: token,
-      },
-      agent,
+    const stagesEndpoint = `${process.env.NEXT_PUBLIC_BASE_URL ?? ""}/api/spotter/stages`;
+    const response = await fetch(stagesEndpoint, {
       cache: "no-store",
     });
 
     if (response.ok) {
-      const json = await response.json().catch(() => ({}));
-      const value = Array.isArray(json?.value) ? json.value : Array.isArray(json) ? json : [];
-      const normalized = value
-        .map((funnel: any) => ({
-          id: funnel?.id ?? funnel?.ID ?? funnel?.Id ?? null,
-          name: normalizeFunnelName(
-            funnel?.name ?? funnel?.value ?? funnel?.Nome ?? funnel?.Name ?? funnel?.descricao ?? funnel?.Descricao,
-          ).trim(),
-        }))
-        .map((funnel) => ({
-          id: funnel.id != null ? String(funnel.id) : "",
-          name: funnel.name,
-        }))
-        .filter((funnel) => funnel.id && funnel.name);
-
-      if (normalized.length > 0) {
-        return NextResponse.json(normalized);
+      const stages = await response.json();
+      const stageList: Array<{ funnelId?: string }> = Array.isArray(stages) ? stages : [];
+      const map = new Map<string, { id: string; name: string }>();
+      for (const stage of stageList) {
+        const funnelId = stage?.funnelId ? String(stage.funnelId) : "";
+        if (!funnelId) continue;
+        if (!map.has(funnelId)) {
+          map.set(funnelId, { id: funnelId, name: `Funil #${funnelId}` });
+        }
       }
-    }
-  } catch (error) {
-    // swallow and fallback to stages aggregation
-  }
-
-  try {
-    const stageItems = await fetchStages(token);
-    const map = new Map<string, { id: string; name: string }>();
-    for (const stage of stageItems) {
-      const funnelId = stage?.funnelId ?? stage?.FunnelId ?? stage?.funilId;
-      if (funnelId == null) continue;
-      const id = String(funnelId);
-      if (!map.has(id)) {
-        map.set(id, { id, name: `Funil #${id}` });
-      }
+      return NextResponse.json(Array.from(map.values()));
     }
 
-    return NextResponse.json(Array.from(map.values()));
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: "funnels upstream", details: error?.message || String(error) },
-      { status: 502 },
+    const token = process.env.SPOTTER_TOKEN;
+    if (!token) {
+      return NextResponse.json([], { status: 200 });
+    }
+
+    const upstream = await fetch("https://api.exactspotter.com/v3/stages", {
+      headers: {
+        "Content-Type": "application/json",
+        token_exact: token,
+      },
+      cache: "no-store",
+    });
+
+    if (!upstream.ok) {
+      return NextResponse.json([], { status: 200 });
+    }
+
+    const upstreamJson = await upstream.json();
+    const upstreamItems: any[] = Array.isArray(upstreamJson?.value)
+      ? upstreamJson.value
+      : Array.isArray(upstreamJson)
+        ? upstreamJson
+        : [];
+    const ids = Array.from(
+      new Set(
+        upstreamItems
+          .map((stage: any) => stage?.funnelId ?? stage?.FunnelId ?? stage?.funilId)
+          .map((id: any) => (id != null ? String(id) : ""))
+          .filter((id: string) => Boolean(id)),
+      ),
     );
+
+    return NextResponse.json(ids.map((id) => ({ id, name: `Funil #${id}` })));
+  } catch {
+    return NextResponse.json([], { status: 200 });
   }
 }
