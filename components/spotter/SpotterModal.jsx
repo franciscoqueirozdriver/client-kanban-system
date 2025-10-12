@@ -253,8 +253,8 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     fetch(`/api/spotter/stages?funnelId=${selectedFunnelId}`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
-        const items = Array.isArray(data?.value) ? data.value : data;
-        setStages(items || []);
+        const items = Array.isArray(data?.value) ? data.value : [];
+        setStages(items);
         setSelectedStageId(null);
       })
       .catch(() => {
@@ -268,6 +268,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     const funnelId = e.target.value ? Number(e.target.value) : null;
     setSelectedFunnelId(funnelId);
     setSelectedStageId(null);
+    setStageError(null);
   };
 
   useEffect(() => {
@@ -386,7 +387,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       idServComunicacao: readTrimmedValue("ID do Serv. Comunicação"),
     };
 
-    const clientValidation = validateSpotterLead(payload, {});
+    const clientValidation = validateSpotterLead(payload, { availableStages: stages });
     if (!clientValidation.ok) {
       const mappedErrors = mapFieldErrorsToForm(clientValidation.fieldErrors);
       if (Object.keys(mappedErrors).length > 0) {
