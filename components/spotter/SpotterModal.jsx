@@ -338,7 +338,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const mustRequireStage = selectedFunnelId && stages.length > 0;
+    const stagesForFunnel = stages.filter(s => s.funnelId === selectedFunnelId);
+    const mustRequireStage = selectedFunnelId && stagesForFunnel.length > 0;
+
     if (mustRequireStage && !selectedStageId) {
       setStageError('Informe a Etapa correspondente ao Funil selecionado.');
       return;
@@ -358,8 +360,8 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       tipoServCom: readTrimmedValue("Tipo do Serv. Comunicação"),
       idServCom: readTrimmedValue("ID do Serv. Comunicação"),
       area: readValue("Área"),
-      funilId: selectedFunnelId || undefined,
-      stageId: selectedStageId || undefined,
+      funilId: selectedFunnelId ?? undefined,
+      stageId: selectedStageId ?? undefined,
       address: readTrimmedValue("Logradouro"),
       addressNumber: readTrimmedValue("Número"),
       addressComplement: readTrimmedValue("Complemento"),
@@ -387,7 +389,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       idServComunicacao: readTrimmedValue("ID do Serv. Comunicação"),
     };
 
-    const clientValidation = validateSpotterLead(payload, { availableStages: stages });
+    const clientValidation = validateSpotterLead(payload, {});
     if (!clientValidation.ok) {
       const mappedErrors = mapFieldErrorsToForm(clientValidation.fieldErrors);
       if (Object.keys(mappedErrors).length > 0) {
@@ -586,7 +588,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                     disabled: !spotterOnline || !selectedFunnelId || isLoadingStages,
                   },
                 )}
-                {stageError ? (<p className="text-xs text-destructive mt-1">{stageError}</p>) : null}
+                {stageError && (<p className="text-xs text-destructive mt-1">{stageError}</p>)}
               </div>
               {!spotterOnline && (
                 <p className="col-span-full text-xs text-muted-foreground">
