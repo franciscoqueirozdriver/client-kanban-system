@@ -168,21 +168,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   };
 
   const handleSubmitClick = () => {
-    if (typeof document === 'undefined') {
-      return;
-    }
-
-    const form = document.getElementById('spotter-form');
-    if (!form || typeof form.querySelector !== 'function') {
-      return;
-    }
-
-    const firstInvalid = form.querySelector(':invalid');
-    if (firstInvalid) {
-      console.warn('Campo inválido (nativo):', firstInvalid.name || firstInvalid.id || firstInvalid);
-      firstInvalid.focus?.();
-      firstInvalid.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-    }
+    // Native HTML validation removed - only API validation will be used
   };
 
   useEffect(() => {
@@ -386,15 +372,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const form = e.currentTarget;
-    if (form && typeof form.querySelector === 'function') {
-      const firstInvalid = form.querySelector(':invalid');
-      if (firstInvalid) {
-        console.warn('Campo inválido (nativo):', firstInvalid.name || firstInvalid.id || firstInvalid);
-        firstInvalid.focus?.();
-        firstInvalid.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-      }
-    }
+    // Native HTML validation removed - only API validation will be used
 
     if (!validateStage()) {
       return;
@@ -476,22 +454,28 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     const errorMessage = formErrors?.[key];
     const baseClasses =
       "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+    
+    // Remove native HTML validation attributes
+    const { required, type, ...cleanProps } = props;
+    const showRequired = required || props.required;
+    
     return (
       <div>
         <label htmlFor={key} className="mb-1 block text-sm font-medium text-foreground">
           {label}
-          {props.required ? " *" : ""}
+          {showRequired ? " *" : ""}
         </label>
         <input
           id={key}
           name={key}
+          type="text"
           value={formData[key] ?? ""}
           onChange={handleChange}
-          {...props}
+          {...cleanProps}
           className={cn(
             baseClasses,
             errorMessage ? "border-red-500" : "border-border",
-            props.className,
+            cleanProps.className,
           )}
           aria-invalid={Boolean(errorMessage)}
         />
@@ -502,7 +486,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   const renderSelect = (label, key, options, props = {}) => {
     const errorMessage = formErrors?.[key];
-    const { placeholder, className, ...selectProps } = props;
+    // Remove native HTML validation attributes
+    const { placeholder, className, required, ...selectProps } = props;
+    const showRequired = required;
     const baseClasses =
       "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
     const normalizedOptions = Array.isArray(options)
@@ -516,7 +502,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       <div>
         <label htmlFor={key} className="mb-1 block text-sm font-medium text-foreground">
           {label}
-          {props.required ? " *" : ""}
+          {showRequired ? " *" : ""}
         </label>
         <select
           id={key}
@@ -620,7 +606,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                   className="w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card"
                   value={selectedFunnelId}
                   onChange={handleFunnelChange}
-                  required={hasFunnels}
                   disabled={!hasFunnels}
                 >
                   <option value="">
@@ -642,7 +627,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                   )}
                   value={selectedStageId}
                   onChange={handleStageChange}
-                  required={hasStagesForFunnel}
                   disabled={!selectedFunnelId || isLoadingStages || !hasStagesForFunnel}
                 >
                   <option value="">
