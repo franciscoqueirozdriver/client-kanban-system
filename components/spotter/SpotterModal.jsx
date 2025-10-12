@@ -694,11 +694,13 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 Cancelar
               </button>
               <button
-                type="submit"
+                type="button"
                 className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                 disabled={isProcessing || isEnriching}
-                formNoValidate
-                onClick={handleSubmitClick}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }}
                 aria-label="Enviar ao Spotter"
               >
                 {(isProcessing) ? (
