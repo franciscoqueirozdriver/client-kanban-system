@@ -513,10 +513,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     );
   };
 
-  const stageList = stagesByFunnel[selectedFunnelId];
-  const normalizedStageList = Array.isArray(stageList) ? stageList : [];
-  const hasStageOptions = normalizedStageList.length > 0;
-  const stagesLoadedForFunnel = Array.isArray(stageList);
+  const hasFunnels = Array.isArray(funnels) && funnels.length > 0;
+  const stageList = Array.isArray(stagesByFunnel?.[selectedFunnelId])
+    ? stagesByFunnel[selectedFunnelId]
+    : [];
+  const hasStagesForFunnel = stageList.length > 0;
 
   const modalTitle = useMemo(() => {
     return lead?.company ? `Enviar ${lead.company} ao Spotter` : "Enviar ao Spotter";
@@ -532,10 +533,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
           <DialogDescription id="spotter-modal-desc" className="sr-only">
-            Confirme ou ajuste os dados antes do envio.
+            Confirme ou ajuste os dados antes do envio ao Spotter. Campos obrigatórios marcados com *.
           </DialogDescription>
         </DialogHeader>
         <form
+          id="spotter-form"
           onSubmit={handleSubmit}
           noValidate
           onKeyDown={(event) => {
@@ -585,22 +587,25 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
               {renderInput("Observação", fieldMap["Observação"])}
               <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Funil *</label>
+                <label className="text-sm font-medium">Funil{hasFunnels ? ' *' : ''}</label>
                 <select
                   className="w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card"
                   value={selectedFunnelId}
                   onChange={handleFunnelChange}
-                  required
+                  required={hasFunnels}
+                  disabled={!hasFunnels}
                 >
-                  <option value="" disabled>Selecione o funil</option>
-                  {funnels.map(f => (
-                    <option key={f.id} value={f.id}>{f.value ?? f.name}</option>
+                  <option value="">
+                    {hasFunnels ? 'Selecione o funil' : 'Funis indisponíveis'}
+                  </option>
+                  {funnels.map((f) => (
+                    <option key={f.id} value={String(f.id)}>{f.value ?? f.name}</option>
                   ))}
                 </select>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium">
-                  Etapa{hasStageOptions ? ' *' : ''}
+                  Etapa{hasStagesForFunnel ? ' *' : ''}
                 </label>
                 <select
                   className={cn(
@@ -609,18 +614,22 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                   )}
                   value={selectedStageId}
                   onChange={handleStageChange}
-                  required={hasStageOptions}
-                  disabled={!selectedFunnelId || isLoadingStages || (stagesLoadedForFunnel && !hasStageOptions)}
+                  required={hasStagesForFunnel}
+                  disabled={!selectedFunnelId || isLoadingStages || !hasStagesForFunnel}
                 >
-                  <option value="" disabled>
-                    {isLoadingStages ? 'Carregando etapas…' : 'Selecione a etapa'}
+                  <option value="">
+                    {isLoadingStages
+                      ? 'Carregando etapas…'
+                      : hasStagesForFunnel
+                        ? 'Selecione a etapa'
+                        : 'Etapas indisponíveis'}
                   </option>
-                  {normalizedStageList.map((s) => (
-                    <option key={s.id} value={s.id}>{s.value}</option>
+                  {stageList.map((s) => (
+                    <option key={s.id} value={String(s.id)}>{s.value}</option>
                   ))}
                 </select>
                 {stageError && (
-                  <p className="text-xs text-destructive mt-1">{stageError}</p>
+                  <p className="mt-1 text-xs text-destructive">{stageError}</p>
                 )}
               </div>
               {!spotterOnline && (

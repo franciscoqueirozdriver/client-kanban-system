@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const funnelId = searchParams.get('funnelId')?.trim();
+    const funnelId = searchParams.get('funnelId')?.trim() || '';
 
     const normalizedBase = BASE.replace(/\/+$/, '');
     const url = funnelId
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     const raw: any[] = Array.isArray(data?.value) ? data.value : [];
 
     const value = raw
-      .filter((stage) => (!funnelId || String(stage?.funnelId) === String(funnelId)))
+      .filter((stage) => (!funnelId || String(stage?.funnelId) === funnelId))
       .map((stage) => ({
         id: String(stage?.id ?? ''),
         value: String(stage?.value ?? ''),
