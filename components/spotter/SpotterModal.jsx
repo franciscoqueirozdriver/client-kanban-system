@@ -85,6 +85,14 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [spotterOnline, setSpotterOnline] = useState(true);
   const [prefillFunnelName, setPrefillFunnelName] = useState("");
 
+  const hasStagesForFunnel = Boolean(selectedFunnelId) && stages.length > 0;
+
+  useEffect(() => {
+    if (!hasStagesForFunnel) {
+      setStageError(null);
+    }
+  }, [hasStagesForFunnel]);
+
   const isProcessing = isSubmitting || isSubmittingLocal;
 
   async function fetchFunnels() {
@@ -321,12 +329,23 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+      const formElement = e.currentTarget instanceof HTMLFormElement ? e.currentTarget : document.getElementById("spotter-form");
+      const firstInvalid = formElement?.querySelector(":invalid");
+      if (firstInvalid) {
+        console.warn("Campo inválido (nativo):", firstInvalid.name || firstInvalid.id || firstInvalid);
+        firstInvalid.focus?.();
+        firstInvalid.scrollIntoView?.({ block: "center", behavior: "smooth" });
+      }
+    }
 
-    const chosenStage = stages.find(s => s.id === selectedStageId);
-    if (!selectedStageId || !chosenStage || chosenStage.funnelId !== selectedFunnelId) {
-      setStageError('Informe a Etapa correspondente ao Funil selecionado.');
-      return;
+    if (hasStagesForFunnel) {
+      const chosenStage = stages.find(s => s.id === selectedStageId);
+      if (!selectedStageId || !chosenStage || chosenStage.funnelId !== selectedFunnelId) {
+        setStageError('Informe a Etapa correspondente ao Funil selecionado.');
+        return;
+      }
     }
 
     const payload = {
@@ -476,24 +495,26 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        aria-describedby="spotter-modal-description"
+        aria-describedby="spotter-modal-desc"
         className="max-h-[90vh] overflow-hidden p-0"
         onClick={(event) => event.stopPropagation()}
       >
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
           <DialogDescription id="spotter-modal-desc" className="sr-only">
-            Confirme ou ajuste os dados antes do envio.
+            Confirme ou ajuste os dados antes do envio ao Spotter. Campos obrigatórios marcados com asterisco.
           </DialogDescription>
         </DialogHeader>
         <form
+          id="spotter-form"
           onSubmit={handleSubmit}
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
               event.preventDefault();
-              handleSubmit();
+              handleSubmit(event);
             }
           }}
+          noValidate
           className="flex max-h-[calc(90vh-150px)] flex-col"
         >
           <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -553,9 +574,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 <select
                   className="w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card"
                   value={selectedStageId ? String(selectedStageId) : ""}
-                  onChange={(e) => setSelectedStageId(e.target.value)}
-                  required
-                  disabled={!stages.length}
+                  onChange={(e) => handleStageChange(e.target.value)}
+                  required={hasStagesForFunnel}
+                  disabled={!hasStagesForFunnel || isLoadingStages}
                 >
                   <option value="" disabled>Selecione a etapa</option>
                   {stages.map(s => (
@@ -620,6 +641,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                 disabled={isProcessing || isEnriching}
                 aria-label="Enviar ao Spotter"
+                formNoValidate
               >
                 {(isProcessing) ? (
                   <span className="inline-flex items-center gap-2">
