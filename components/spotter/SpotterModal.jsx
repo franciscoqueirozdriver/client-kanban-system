@@ -6,6 +6,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/cn";
 import { validateSpotterLead } from "../../validators/spotterLead";
 
@@ -86,8 +87,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [prefillFunnelName, setPrefillFunnelName] = useState("");
 
   const isProcessing = isSubmitting || isSubmittingLocal;
-  const funilKey = fieldMap["Funil"];
-  const etapaKey = fieldMap["Etapa"];
 
   async function fetchFunnels() {
     setIsLoadingFunnels(true);
@@ -538,44 +537,41 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               {renderInput("Observação", fieldMap["Observação"])}
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium">Funil *</label>
-                <select
-                  className="rounded-md border px-3 py-2 outline-none"
+                <Select
                   value={selectedFunnelId ? String(selectedFunnelId) : ''}
-                  onChange={(e) => handleFunnelChange(e.target.value)}
+                  onValueChange={handleFunnelChange}
                   disabled={isLoadingFunnels}
-                  aria-label="Funil"
                 >
-                  <option value="" disabled>
-                    {isLoadingFunnels ? 'Carregando...' : 'Selecione o funil'}
-                  </option>
-                  {funnels.map((f) => (
-                    <option key={f.id} value={String(f.id)}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger aria-label="Funil">
+                    <SelectValue placeholder={isLoadingFunnels ? 'Carregando...' : 'Selecione o funil'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {funnels.map(f => (
+                      <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium">Etapa *</label>
-                <select
-                  className={`rounded-md border px-3 py-2 outline-none ${stageError ? 'border-red-500' : ''}`}
+                <Select
                   value={selectedStageId ? String(selectedStageId) : ''}
-                  onChange={(e) => handleStageChange(e.target.value)}
+                  onValueChange={handleStageChange}
                   disabled={!selectedFunnelId || isLoadingStages}
-                  aria-label="Etapa"
                 >
-                  <option value="" disabled>
-                    {!selectedFunnelId ? 'Selecione um funil primeiro' :
-                    isLoadingStages ? 'Carregando...' : 'Selecione a etapa'}
-                  </option>
-                  {stages
-                    .filter((s) => !selectedFunnelId || s.funnelId === selectedFunnelId)
-                    .map((s) => (
-                      <option key={s.id} value={String(s.id)}>
-                        {s.value}
-                      </option>
-                    ))}
-                </select>
+                  <SelectTrigger aria-label="Etapa" className={stageError ? 'border-red-500' : ''}>
+                    <SelectValue placeholder={!selectedFunnelId ? 'Selecione um funil primeiro' : isLoadingStages ? 'Carregando...' : 'Selecione a etapa'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stages
+                      .filter((s) => !selectedFunnelId || s.funnelId === selectedFunnelId)
+                      .map((s) => (
+                        <SelectItem key={s.id} value={String(s.id)}>
+                          {s.value}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
                 {stageError && (
                   <p className="text-xs text-red-600 mt-1">{stageError}</p>
                 )}
