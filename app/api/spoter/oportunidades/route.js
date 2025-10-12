@@ -158,7 +158,7 @@ export async function POST(req) {
       industry: base.mercado,
       source: base.origem,
       funnelId: Number(body.funnelId) || undefined,
-      stage: base.etapaNome ?? undefined,
+      stageId: Number(body.stageId) || Number(body.etapaId) || undefined,
       ddiPhone: firstPhone.phone ? firstPhone.ddi ?? '55' : undefined,
       phone: firstPhone.phone ?? undefined,
       ddiPhone2: secondPhone.phone ? secondPhone.ddi ?? '55' : undefined,
