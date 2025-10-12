@@ -431,7 +431,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       if (clientValidation.messages.length) {
         console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
       }
-      alert("Preencha os campos obrigatórios.");
+      toast.warn("Preencha os campos obrigatórios.");
       return;
     }
 
