@@ -6,7 +6,6 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/cn";
 import { validateSpotterLead } from "../../validators/spotterLead";
 
@@ -537,43 +536,34 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               {renderInput("Observação", fieldMap["Observação"])}
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium">Funil *</label>
-                <Select
-                  value={selectedFunnelId ? String(selectedFunnelId) : ''}
-                  onValueChange={handleFunnelChange}
-                  disabled={isLoadingFunnels}
+                <select
+                  className="w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card"
+                  value={selectedFunnelId ? String(selectedFunnelId) : ""}
+                  onChange={(e) => handleFunnelChange(e.target.value)}
+                  required
                 >
-                  <SelectTrigger aria-label="Funil">
-                    <SelectValue placeholder={isLoadingFunnels ? 'Carregando...' : 'Selecione o funil'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {funnels.map(f => (
-                      <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <option value="" disabled>Selecione o funil</option>
+                  {funnels.map(f => (
+                    <option key={f.id} value={String(f.id)}>{f.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium">Etapa *</label>
-                <Select
-                  value={selectedStageId ? String(selectedStageId) : ''}
-                  onValueChange={handleStageChange}
-                  disabled={!selectedFunnelId || isLoadingStages}
+                <select
+                  className="w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card"
+                  value={selectedStageId ? String(selectedStageId) : ""}
+                  onChange={(e) => setSelectedStageId(e.target.value)}
+                  required
+                  disabled={!stages.length}
                 >
-                  <SelectTrigger aria-label="Etapa" className={stageError ? 'border-red-500' : ''}>
-                    <SelectValue placeholder={!selectedFunnelId ? 'Selecione um funil primeiro' : isLoadingStages ? 'Carregando...' : 'Selecione a etapa'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stages
-                      .filter((s) => !selectedFunnelId || s.funnelId === selectedFunnelId)
-                      .map((s) => (
-                        <SelectItem key={s.id} value={String(s.id)}>
-                          {s.value}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                  <option value="" disabled>Selecione a etapa</option>
+                  {stages.map(s => (
+                    <option key={s.id} value={String(s.id)}>{s.value}</option>
+                  ))}
+                </select>
                 {stageError && (
-                  <p className="text-xs text-red-600 mt-1">{stageError}</p>
+                  <p className="text-xs text-destructive mt-1">{stageError}</p>
                 )}
               </div>
               {!spotterOnline && (

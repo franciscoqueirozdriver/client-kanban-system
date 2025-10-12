@@ -95,3 +95,22 @@
 .scrollbar-thin::-webkit-scrollbar-track {
   background-color: transparent;
 }
+
+/* Corrige contraste de <select>/<option> no tema atual */
+select,
+select option {
+  color: var(--foreground);
+  background-color: var(--card);
+}
+
+/* Placeholder (primeira opção desabilitada) */
+select option[disabled] {
+  color: var(--muted-foreground);
+}
+
+/* Dark mode, se aplicável via data-theme */
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] select option {
+  color: var(--foreground);
+  background-color: var(--card);
+}
