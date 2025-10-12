@@ -5,9 +5,8 @@ import { FaSearch, FaSpinner } from "react-icons/fa";
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
-import { validateSpotterLead } from "../../validators/spotterLead";
 
 const fieldMap = {
   "Nome do Lead": "nomeLead",
@@ -42,28 +41,6 @@ const fieldMap = {
   "Email Pré-vendedor": "emailPrevendedor",
 };
 
-const validatorFieldToFormKey = {
-  nomeLead: fieldMap["Nome do Lead"],
-  origem: fieldMap["Origem"],
-  mercado: fieldMap["Mercado"],
-  pais: fieldMap["País"],
-  estado: fieldMap["Estado"],
-  cidade: fieldMap["Cidade"],
-  telefones: fieldMap["Telefones"],
-  nomeContato: fieldMap["Nome Contato"],
-  telefonesContato: fieldMap["Telefones Contato"],
-  emailContato: fieldMap["E-mail Contato"],
-  tipoServCom: fieldMap["Tipo do Serv. Comunicação"],
-  idServCom: fieldMap["ID do Serv. Comunicação"],
-  area: fieldMap["Área"],
-  funilId: fieldMap["Funil"],
-  etapaNome: fieldMap["Etapa"],
-  address: fieldMap["Logradouro"],
-  addressNumber: fieldMap["Número"],
-  addressComplement: fieldMap["Complemento"],
-  neighborhood: fieldMap["Bairro"],
-  zipcode: fieldMap["CEP"],
-};
 export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSubmitting = false }) {
   const [formData, setFormData] = useState({});
   const [formErrors, setFormErrors] = useState({});
@@ -75,11 +52,10 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [prevendedoresList, setPrevendedoresList] = useState([]);
 
   const [funnels, setFunnels] = useState([]);
-  const [stages, setStages] = useState([]);
-  const [isLoadingFunnels, setIsLoadingFunnels] = useState(false);
+  const [stagesByFunnel, setStagesByFunnel] = useState({});
+  const [selectedFunnelId, setSelectedFunnelId] = useState("");
+  const [selectedStageId, setSelectedStageId] = useState("");
   const [isLoadingStages, setIsLoadingStages] = useState(false);
-  const [selectedFunnelId, setSelectedFunnelId] = useState(null);
-  const [selectedStageId, setSelectedStageId] = useState(null);
   const [stageError, setStageError] = useState(null);
 
   const [spotterOnline, setSpotterOnline] = useState(true);
@@ -87,57 +63,89 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   const isProcessing = isSubmitting || isSubmittingLocal;
 
-  async function fetchFunnels() {
-    setIsLoadingFunnels(true);
-    try {
-      const r = await fetch('/api/spotter/funnels', { cache: 'no-store' });
-      if (!r.ok) throw new Error('Falha ao carregar funis');
-      const data = await r.json();
-      setFunnels(Array.isArray(data.value) ? data.value : []);
-    } finally {
-      setIsLoadingFunnels(false);
-    }
-  }
-
-  async function fetchStages(fid) {
-    if (!fid) { setStages([]); return; }
-    setIsLoadingStages(true);
-    try {
-      const r = await fetch(`/api/spotter/stages?funnelId=${fid}`, { cache: 'no-store' });
-      if (!r.ok) throw new Error('Falha ao carregar etapas');
-      const data = await r.json();
-      setStages(Array.isArray(data.value) ? data.value : []);
-    } finally {
-      setIsLoadingStages(false);
-    }
-  }
-
   useEffect(() => {
-    if (open) {
-      fetchFunnels();
-    }
+    if (!open) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/spotter/funnels', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Falha ao listar funis');
+        const data = await res.json();
+        const funis = (data?.value || []).map((f) => ({ ...f, id: String(f.id) }));
+        setFunnels(funis);
+        setSpotterOnline(true);
+      } catch (e) {
+        console.warn('[Spotter] Falha ao buscar funis', e);
+        setFunnels([]);
+        setSpotterOnline(false);
+      }
+    })();
   }, [open]);
 
   useEffect(() => {
-    if (selectedFunnelId) {
-      fetchStages(selectedFunnelId);
-    } else {
-      setStages([]);
-      setSelectedStageId(null);
+    if (!selectedFunnelId) {
+      setSelectedStageId('');
+      setStageError(null);
+      return;
     }
-  }, [selectedFunnelId]);
 
-  const handleFunnelChange = (value) => {
-    const fid = value ? Number(value) : null;
-    setSelectedFunnelId(fid);
-    setSelectedStageId(null);
+    const cachedStages = stagesByFunnel[selectedFunnelId];
+    if (cachedStages) {
+      setStageError(null);
+      const exists = cachedStages.some((s) => String(s.id) === String(selectedStageId));
+      if (!exists) {
+        setSelectedStageId('');
+      }
+      return;
+    }
+
+    const funnelId = selectedFunnelId;
+    let cancelled = false;
+
+    setIsLoadingStages(true);
+    setSelectedStageId('');
+    setStageError(null);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/spotter/stages?funnelId=${encodeURIComponent(funnelId)}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Falha ao listar etapas');
+        const data = await res.json();
+        if (cancelled) return;
+        const fases = (data?.value || []).map((s) => ({ ...s, id: String(s.id), funnelId: String(s.funnelId) }));
+        setStagesByFunnel((prev) => ({ ...prev, [funnelId]: fases }));
+        setSpotterOnline(true);
+      } catch (e) {
+        if (cancelled) return;
+        console.warn('[Spotter] Falha ao buscar etapas', e);
+        setStagesByFunnel((prev) => ({ ...prev, [funnelId]: [] }));
+        setSpotterOnline(false);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingStages(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFunnelId, selectedStageId, stagesByFunnel]);
+
+  const handleFunnelChange = (e) => {
+    const id = String(e.target.value || '');
+    setSelectedFunnelId(id);
+    setSelectedStageId('');
     setStageError(null);
   };
 
-  const handleStageChange = (value) => {
-    const sid = value ? Number(value) : null;
-    setSelectedStageId(sid);
+  const handleStageChange = (e) => {
+    const id = String(e.target.value || '');
+    setSelectedStageId(id);
     setStageError(null);
+  };
+
+  const handleSubmitClick = () => {
+    // Native HTML validation removed - only API validation will be used
   };
 
   useEffect(() => {
@@ -224,9 +232,10 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     if (!open) {
       setFormErrors({});
       setFunnels([]);
-      setStages([]);
-      setSelectedFunnelId(null);
-      setSelectedStageId(null);
+      setStagesByFunnel({});
+      setSelectedFunnelId('');
+      setSelectedStageId('');
+      setStageError(null);
       setPrefillFunnelName("");
       setSpotterOnline(true);
     }
@@ -252,26 +261,10 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     return value ? value : undefined;
   };
 
-  const mapFieldErrorsToForm = (fieldErrors) => {
-    if (!fieldErrors || typeof fieldErrors !== "object") {
-      return {};
-    }
-    const mapped = {};
-    Object.entries(fieldErrors).forEach(([field, messages]) => {
-      const formKey = validatorFieldToFormKey[field] || field;
-      if (!formKey) return;
-      const message = Array.isArray(messages) ? messages[0] : messages;
-      if (message) {
-        mapped[formKey] = String(message);
-      }
-    });
-    return mapped;
-  };
-
   const handleEnrich = () => {
     const companyName = formData[fieldMap["Nome da Empresa"]];
     if (!companyName) {
-      alert("Por favor, preencha o nome da empresa para enriquecer.");
+      toast.warning("Por favor, preencha o nome da empresa para enriquecer.");
       return;
     }
     setIsEnrichConfirmOpen(true);
@@ -312,23 +305,20 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         }
         return next;
       });
-      alert("Dados enriquecidos com sucesso!");
+      toast.success("Dados enriquecidos com sucesso!");
     } catch (error) {
-      alert(`Erro ao enriquecer: ${error?.message ?? error}`);
+      toast.error(`Erro ao enriquecer: ${error?.message ?? error}`);
     } finally {
       setIsEnriching(false);
     }
   };
 
+
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const chosenStage = stages.find(s => s.id === selectedStageId);
-    if (!selectedStageId || !chosenStage || chosenStage.funnelId !== selectedFunnelId) {
-      setStageError('Informe a Etapa correspondente ao Funil selecionado.');
-      return;
-    }
-
+    // No client-side validation - let API handle all validation
     const payload = {
       nomeLead: readTrimmedValue("Nome do Lead"),
       origem: readTrimmedValue("Origem"),
@@ -343,8 +333,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       tipoServCom: readTrimmedValue("Tipo do Serv. Comunicação"),
       idServCom: readTrimmedValue("ID do Serv. Comunicação"),
       area: readValue("Área"),
-      funilId: selectedFunnelId,
-      stageId: selectedStageId,
+      funilId: selectedFunnelId ? Number(selectedFunnelId) : undefined,
+      funnelId: selectedFunnelId ? Number(selectedFunnelId) : undefined,
+      stageId: selectedStageId ? Number(selectedStageId) : undefined,
       address: readTrimmedValue("Logradouro"),
       addressNumber: readTrimmedValue("Número"),
       addressComplement: readTrimmedValue("Complemento"),
@@ -372,19 +363,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       idServComunicacao: readTrimmedValue("ID do Serv. Comunicação"),
     };
 
-    const clientValidation = validateSpotterLead(payload, {});
-    if (!clientValidation.ok) {
-      const mappedErrors = mapFieldErrorsToForm(clientValidation.fieldErrors);
-      if (Object.keys(mappedErrors).length > 0) {
-        setFormErrors(mappedErrors);
-      }
-      if (clientValidation.messages.length) {
-        console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
-      }
-      alert("Preencha os campos obrigatórios.");
-      return;
-    }
-
     setIsSubmittingLocal(true);
     try {
       if (!onSubmit) {
@@ -394,7 +372,29 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       toast.success('Enviado ao Spotter com sucesso!');
       onOpenChange?.(false);
     } catch (err) {
-      toast.error(`Falha ao enviar ao Spotter — ${err.message}`);
+      // Extract detailed error information from API response
+      let errorMessage = err.message || 'Falha ao enviar ao Spotter';
+      
+      // If API returned field-specific errors, show them
+      if (err.fieldErrors && typeof err.fieldErrors === 'object') {
+        const fieldErrorMessages = [];
+        Object.entries(err.fieldErrors).forEach(([field, messages]) => {
+          const messageArray = Array.isArray(messages) ? messages : [messages];
+          messageArray.forEach(msg => {
+            fieldErrorMessages.push(`${field}: ${msg}`);
+          });
+        });
+        if (fieldErrorMessages.length > 0) {
+          errorMessage = fieldErrorMessages.join(' | ');
+        }
+      }
+      
+      // If API returned general messages, append them
+      if (err.messages && Array.isArray(err.messages) && err.messages.length > 0) {
+        errorMessage = err.messages.join(' | ');
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setIsSubmittingLocal(false);
     }
@@ -404,22 +404,28 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     const errorMessage = formErrors?.[key];
     const baseClasses =
       "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+    
+    // Remove native HTML validation attributes
+    const { required, type, ...cleanProps } = props;
+    const showRequired = required || props.required;
+    
     return (
       <div>
         <label htmlFor={key} className="mb-1 block text-sm font-medium text-foreground">
           {label}
-          {props.required ? " *" : ""}
+          {showRequired ? " *" : ""}
         </label>
         <input
           id={key}
           name={key}
+          type="text"
           value={formData[key] ?? ""}
           onChange={handleChange}
-          {...props}
+          {...cleanProps}
           className={cn(
             baseClasses,
             errorMessage ? "border-red-500" : "border-border",
-            props.className,
+            cleanProps.className,
           )}
           aria-invalid={Boolean(errorMessage)}
         />
@@ -430,7 +436,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   const renderSelect = (label, key, options, props = {}) => {
     const errorMessage = formErrors?.[key];
-    const { placeholder, className, ...selectProps } = props;
+    // Remove native HTML validation attributes
+    const { placeholder, className, required, ...selectProps } = props;
+    const showRequired = required;
     const baseClasses =
       "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
     const normalizedOptions = Array.isArray(options)
@@ -444,7 +452,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       <div>
         <label htmlFor={key} className="mb-1 block text-sm font-medium text-foreground">
           {label}
-          {props.required ? " *" : ""}
+          {showRequired ? " *" : ""}
         </label>
         <select
           id={key}
@@ -469,6 +477,12 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     );
   };
 
+  const hasFunnels = Array.isArray(funnels) && funnels.length > 0;
+  const stageList = Array.isArray(stagesByFunnel?.[selectedFunnelId])
+    ? stagesByFunnel[selectedFunnelId]
+    : [];
+  const hasStagesForFunnel = stageList.length > 0;
+
   const modalTitle = useMemo(() => {
     return lead?.company ? `Enviar ${lead.company} ao Spotter` : "Enviar ao Spotter";
   }, [lead?.company]);
@@ -476,22 +490,28 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        aria-describedby="spotter-modal-description"
+        aria-describedby="spotter-modal-desc"
         className="max-h-[90vh] overflow-hidden p-0"
         onClick={(event) => event.stopPropagation()}
       >
+        <p id="spotter-modal-desc" className="sr-only">
+          Confirme ou ajuste os dados antes do envio ao Spotter. Campos obrigatórios marcados com asterisco.
+        </p>
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
-          <DialogDescription id="spotter-modal-desc" className="sr-only">
-            Confirme ou ajuste os dados antes do envio.
-          </DialogDescription>
         </DialogHeader>
         <form
-          onSubmit={handleSubmit}
+          id="spotter-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+          }}
+          noValidate
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
               event.preventDefault();
-              handleSubmit();
+              handleSubmit(event);
             }
           }}
           className="flex max-h-[calc(90vh-150px)] flex-col"
@@ -535,35 +555,47 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
               {renderInput("Observação", fieldMap["Observação"])}
               <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Funil *</label>
+                <label className="text-sm font-medium">Funil{hasFunnels ? ' *' : ''}</label>
                 <select
                   className="w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card"
-                  value={selectedFunnelId ? String(selectedFunnelId) : ""}
-                  onChange={(e) => handleFunnelChange(e.target.value)}
-                  required
+                  value={selectedFunnelId}
+                  onChange={handleFunnelChange}
+                  disabled={!hasFunnels}
                 >
-                  <option value="" disabled>Selecione o funil</option>
-                  {funnels.map(f => (
-                    <option key={f.id} value={String(f.id)}>{f.name}</option>
+                  <option value="">
+                    {hasFunnels ? 'Selecione o funil' : 'Funis indisponíveis'}
+                  </option>
+                  {funnels.map((f) => (
+                    <option key={f.id} value={String(f.id)}>{f.value ?? f.name}</option>
                   ))}
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Etapa *</label>
+                <label className="text-sm font-medium">
+                  Etapa{hasStagesForFunnel ? ' *' : ''}
+                </label>
                 <select
-                  className="w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card"
-                  value={selectedStageId ? String(selectedStageId) : ""}
-                  onChange={(e) => setSelectedStageId(e.target.value)}
-                  required
-                  disabled={!stages.length}
+                  className={cn(
+                    'w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card',
+                    stageError ? 'border-destructive' : 'border-border'
+                  )}
+                  value={selectedStageId}
+                  onChange={handleStageChange}
+                  disabled={!selectedFunnelId || isLoadingStages || !hasStagesForFunnel}
                 >
-                  <option value="" disabled>Selecione a etapa</option>
-                  {stages.map(s => (
+                  <option value="">
+                    {isLoadingStages
+                      ? 'Carregando etapas…'
+                      : hasStagesForFunnel
+                        ? 'Selecione a etapa'
+                        : 'Etapas indisponíveis'}
+                  </option>
+                  {stageList.map((s) => (
                     <option key={s.id} value={String(s.id)}>{s.value}</option>
                   ))}
                 </select>
                 {stageError && (
-                  <p className="text-xs text-destructive mt-1">{stageError}</p>
+                  <p className="mt-1 text-xs text-destructive">{stageError}</p>
                 )}
               </div>
               {!spotterOnline && (
@@ -616,9 +648,13 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 Cancelar
               </button>
               <button
-                type="submit"
+                type="button"
                 className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                 disabled={isProcessing || isEnriching}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }}
                 aria-label="Enviar ao Spotter"
               >
                 {(isProcessing) ? (
