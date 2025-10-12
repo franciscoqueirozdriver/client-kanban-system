@@ -115,7 +115,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     if (cachedStages) {
       setStageError(null);
       const exists = cachedStages.some((s) => String(s.id) === String(selectedStageId));
-      if (!exists) setSelectedStageId('');
+      if (!exists) {
+        setSelectedStageId('');
+      }
       return;
     }
 
@@ -123,6 +125,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     let cancelled = false;
 
     setIsLoadingStages(true);
+    setSelectedStageId('');
     setStageError(null);
 
     (async () => {
@@ -510,7 +513,10 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     );
   };
 
-  const stagesForSelectedFunnel = stagesByFunnel[selectedFunnelId] || [];
+  const stageList = stagesByFunnel[selectedFunnelId];
+  const normalizedStageList = Array.isArray(stageList) ? stageList : [];
+  const hasStageOptions = normalizedStageList.length > 0;
+  const stagesLoadedForFunnel = Array.isArray(stageList);
 
   const modalTitle = useMemo(() => {
     return lead?.company ? `Enviar ${lead.company} ao Spotter` : "Enviar ao Spotter";
@@ -519,7 +525,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        aria-describedby="spotter-modal-description"
+        aria-describedby="spotter-modal-desc"
         className="max-h-[90vh] overflow-hidden p-0"
         onClick={(event) => event.stopPropagation()}
       >
@@ -531,10 +537,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         </DialogHeader>
         <form
           onSubmit={handleSubmit}
+          noValidate
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
               event.preventDefault();
-              handleSubmit();
+              handleSubmit(event);
             }
           }}
           className="flex max-h-[calc(90vh-150px)] flex-col"
@@ -592,7 +599,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Etapa *</label>
+                <label className="text-sm font-medium">
+                  Etapa{hasStageOptions ? ' *' : ''}
+                </label>
                 <select
                   className={cn(
                     'w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card',
@@ -600,13 +609,13 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                   )}
                   value={selectedStageId}
                   onChange={handleStageChange}
-                  required={stagesForSelectedFunnel.length > 0}
-                  disabled={!selectedFunnelId || isLoadingStages || stagesForSelectedFunnel.length === 0}
+                  required={hasStageOptions}
+                  disabled={!selectedFunnelId || isLoadingStages || (stagesLoadedForFunnel && !hasStageOptions)}
                 >
                   <option value="" disabled>
                     {isLoadingStages ? 'Carregando etapas…' : 'Selecione a etapa'}
                   </option>
-                  {stagesForSelectedFunnel.map(s => (
+                  {normalizedStageList.map((s) => (
                     <option key={s.id} value={s.id}>{s.value}</option>
                   ))}
                 </select>
