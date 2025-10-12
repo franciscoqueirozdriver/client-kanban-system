@@ -7,7 +7,6 @@ import 'react-toastify/dist/ReactToastify.css';
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
-import { validateSpotterLead } from "../../validators/spotterLead";
 
 const fieldMap = {
   "Nome do Lead": "nomeLead",
@@ -42,28 +41,6 @@ const fieldMap = {
   "Email Pré-vendedor": "emailPrevendedor",
 };
 
-const validatorFieldToFormKey = {
-  nomeLead: fieldMap["Nome do Lead"],
-  origem: fieldMap["Origem"],
-  mercado: fieldMap["Mercado"],
-  pais: fieldMap["País"],
-  estado: fieldMap["Estado"],
-  cidade: fieldMap["Cidade"],
-  telefones: fieldMap["Telefones"],
-  nomeContato: fieldMap["Nome Contato"],
-  telefonesContato: fieldMap["Telefones Contato"],
-  emailContato: fieldMap["E-mail Contato"],
-  tipoServCom: fieldMap["Tipo do Serv. Comunicação"],
-  idServCom: fieldMap["ID do Serv. Comunicação"],
-  area: fieldMap["Área"],
-  funilId: fieldMap["Funil"],
-  etapaNome: fieldMap["Etapa"],
-  address: fieldMap["Logradouro"],
-  addressNumber: fieldMap["Número"],
-  addressComplement: fieldMap["Complemento"],
-  neighborhood: fieldMap["Bairro"],
-  zipcode: fieldMap["CEP"],
-};
 export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSubmitting = false }) {
   const [formData, setFormData] = useState({});
   const [formErrors, setFormErrors] = useState({});
@@ -284,22 +261,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     return value ? value : undefined;
   };
 
-  const mapFieldErrorsToForm = (fieldErrors) => {
-    if (!fieldErrors || typeof fieldErrors !== "object") {
-      return {};
-    }
-    const mapped = {};
-    Object.entries(fieldErrors).forEach(([field, messages]) => {
-      const formKey = validatorFieldToFormKey[field] || field;
-      if (!formKey) return;
-      const message = Array.isArray(messages) ? messages[0] : messages;
-      if (message) {
-        mapped[formKey] = String(message);
-      }
-    });
-    return mapped;
-  };
-
   const handleEnrich = () => {
     const companyName = formData[fieldMap["Nome da Empresa"]];
     if (!companyName) {
@@ -352,36 +313,12 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     }
   };
 
-  const validateStage = () => {
-    if (!selectedFunnelId) {
-      const errorMsg = 'Selecione o funil.';
-      setStageError(errorMsg);
-      toast.error(errorMsg);
-      return false;
-    }
-    const list = stagesByFunnel[selectedFunnelId];
-    if (!Array.isArray(list) || list.length === 0) {
-      setStageError(null);
-      return true;
-    }
-    const ok = list.some((s) => String(s.id) === String(selectedStageId));
-    if (!ok) {
-      const errorMsg = 'Informe a Etapa correspondente ao Funil selecionado.';
-      setStageError(errorMsg);
-      toast.error(errorMsg);
-    }
-    return ok;
-  };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Native HTML validation removed - only API validation will be used
-
-    if (!validateStage()) {
-      return;
-    }
-
+    // No client-side validation - let API handle all validation
     const payload = {
       nomeLead: readTrimmedValue("Nome do Lead"),
       origem: readTrimmedValue("Origem"),
@@ -426,21 +363,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       idServComunicacao: readTrimmedValue("ID do Serv. Comunicação"),
     };
 
-    const clientValidation = validateSpotterLead(payload, {});
-    if (!clientValidation.ok) {
-      const mappedErrors = mapFieldErrorsToForm(clientValidation.fieldErrors);
-      if (Object.keys(mappedErrors).length > 0) {
-        setFormErrors(mappedErrors);
-      }
-      if (clientValidation.messages.length) {
-        console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
-        toast.error(clientValidation.messages[0] || "Preencha os campos obrigatórios.");
-      } else {
-        toast.error("Preencha os campos obrigatórios.");
-      }
-      return;
-    }
-
     setIsSubmittingLocal(true);
     try {
       if (!onSubmit) {
@@ -450,7 +372,8 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       toast.success('Enviado ao Spotter com sucesso!');
       onOpenChange?.(false);
     } catch (err) {
-      toast.error(`Falha ao enviar ao Spotter — ${err.message}`);
+      // Show API error response in toast
+      toast.error(err.message || 'Falha ao enviar ao Spotter');
     } finally {
       setIsSubmittingLocal(false);
     }
