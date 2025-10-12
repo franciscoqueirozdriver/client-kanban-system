@@ -303,7 +303,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const handleEnrich = () => {
     const companyName = formData[fieldMap["Nome da Empresa"]];
     if (!companyName) {
-      alert("Por favor, preencha o nome da empresa para enriquecer.");
+      toast.warning("Por favor, preencha o nome da empresa para enriquecer.");
       return;
     }
     setIsEnrichConfirmOpen(true);
@@ -344,9 +344,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         }
         return next;
       });
-      alert("Dados enriquecidos com sucesso!");
+      toast.success("Dados enriquecidos com sucesso!");
     } catch (error) {
-      alert(`Erro ao enriquecer: ${error?.message ?? error}`);
+      toast.error(`Erro ao enriquecer: ${error?.message ?? error}`);
     } finally {
       setIsEnriching(false);
     }
@@ -354,7 +354,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   const validateStage = () => {
     if (!selectedFunnelId) {
-      setStageError('Selecione o funil.');
+      const errorMsg = 'Selecione o funil.';
+      setStageError(errorMsg);
+      toast.error(errorMsg);
       return false;
     }
     const list = stagesByFunnel[selectedFunnelId];
@@ -364,7 +366,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     }
     const ok = list.some((s) => String(s.id) === String(selectedStageId));
     if (!ok) {
-      setStageError('Informe a Etapa correspondente ao Funil selecionado.');
+      const errorMsg = 'Informe a Etapa correspondente ao Funil selecionado.';
+      setStageError(errorMsg);
+      toast.error(errorMsg);
     }
     return ok;
   };
@@ -430,8 +434,10 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       }
       if (clientValidation.messages.length) {
         console.warn("Validação Spotter (cliente):", clientValidation.messages.join(" | "));
+        toast.error(clientValidation.messages[0] || "Preencha os campos obrigatórios.");
+      } else {
+        toast.error("Preencha os campos obrigatórios.");
       }
-      alert("Preencha os campos obrigatórios.");
       return;
     }
 
