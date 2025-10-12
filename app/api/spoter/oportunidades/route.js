@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
-import { spotterGet, spotterPost } from '@/lib/exactSpotter';
+import { spotterGet, spotterPost, listFunnels } from '@/lib/exactSpotter';
 const { validateSpotterLead } = require('../../../../validators/spotterLead');
+
+let cachedFunnels = null;
+
+async function getFunnels() {
+  if (cachedFunnels) {
+    return cachedFunnels;
+  }
+  cachedFunnels = await listFunnels();
+  return cachedFunnels;
+}
 
 const readEnvList = (name) => {
   const value = process.env[name];
@@ -153,12 +163,16 @@ export async function POST(req) {
     const firstPhone = phoneList[0] ? splitPhone(phoneList[0]) : { ddi: undefined, phone: undefined };
     const secondPhone = phoneList[1] ? splitPhone(phoneList[1]) : { ddi: undefined, phone: undefined };
 
+    const funnels = await getFunnels();
+    const funnel = funnels.find((f) => f.id === Number(base.funilId));
+
     const spotterPayload = {
       name: base.nomeLead,
       industry: base.mercado,
       source: base.origem,
-      funnelId: Number(body.funnelId) || undefined,
+      funnel: funnel ? funnel.value : undefined,
       stageId: Number(body.stageId) || Number(body.etapaId) || undefined,
+      stage: base.etapaNome ?? undefined,
       ddiPhone: firstPhone.phone ? firstPhone.ddi ?? '55' : undefined,
       phone: firstPhone.phone ?? undefined,
       ddiPhone2: secondPhone.phone ? secondPhone.ddi ?? '55' : undefined,
