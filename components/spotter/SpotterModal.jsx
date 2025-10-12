@@ -372,8 +372,29 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       toast.success('Enviado ao Spotter com sucesso!');
       onOpenChange?.(false);
     } catch (err) {
-      // Show API error response in toast
-      toast.error(err.message || 'Falha ao enviar ao Spotter');
+      // Extract detailed error information from API response
+      let errorMessage = err.message || 'Falha ao enviar ao Spotter';
+      
+      // If API returned field-specific errors, show them
+      if (err.fieldErrors && typeof err.fieldErrors === 'object') {
+        const fieldErrorMessages = [];
+        Object.entries(err.fieldErrors).forEach(([field, messages]) => {
+          const messageArray = Array.isArray(messages) ? messages : [messages];
+          messageArray.forEach(msg => {
+            fieldErrorMessages.push(`${field}: ${msg}`);
+          });
+        });
+        if (fieldErrorMessages.length > 0) {
+          errorMessage = fieldErrorMessages.join(' | ');
+        }
+      }
+      
+      // If API returned general messages, append them
+      if (err.messages && Array.isArray(err.messages) && err.messages.length > 0) {
+        errorMessage = err.messages.join(' | ');
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setIsSubmittingLocal(false);
     }
