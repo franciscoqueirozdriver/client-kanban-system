@@ -558,7 +558,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         </DialogHeader>
         <form
           id="spotter-form"
-          onSubmit={handleSubmit}
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+          }}
           noValidate
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
