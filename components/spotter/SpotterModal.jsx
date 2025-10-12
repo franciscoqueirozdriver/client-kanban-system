@@ -5,7 +5,7 @@ import { FaSearch, FaSpinner } from "react-icons/fa";
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
 import { validateSpotterLead } from "../../validators/spotterLead";
 
@@ -165,6 +165,24 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     const id = String(e.target.value || '');
     setSelectedStageId(id);
     setStageError(null);
+  };
+
+  const handleSubmitClick = () => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const form = document.getElementById('spotter-form');
+    if (!form || typeof form.querySelector !== 'function') {
+      return;
+    }
+
+    const firstInvalid = form.querySelector(':invalid');
+    if (firstInvalid) {
+      console.warn('Campo inválido (nativo):', firstInvalid.name || firstInvalid.id || firstInvalid);
+      firstInvalid.focus?.();
+      firstInvalid.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
@@ -368,6 +386,16 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const form = e.currentTarget;
+    if (form && typeof form.querySelector === 'function') {
+      const firstInvalid = form.querySelector(':invalid');
+      if (firstInvalid) {
+        console.warn('Campo inválido (nativo):', firstInvalid.name || firstInvalid.id || firstInvalid);
+        firstInvalid.focus?.();
+        firstInvalid.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      }
+    }
+
     if (!validateStage()) {
       return;
     }
@@ -530,11 +558,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         className="max-h-[90vh] overflow-hidden p-0"
         onClick={(event) => event.stopPropagation()}
       >
+        <p id="spotter-modal-desc" className="sr-only">
+          Confirme ou ajuste os dados antes do envio ao Spotter. Campos obrigatórios marcados com asterisco.
+        </p>
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
-          <DialogDescription id="spotter-modal-desc" className="sr-only">
-            Confirme ou ajuste os dados antes do envio ao Spotter. Campos obrigatórios marcados com *.
-          </DialogDescription>
         </DialogHeader>
         <form
           id="spotter-form"
@@ -685,6 +713,8 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 type="submit"
                 className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                 disabled={isProcessing || isEnriching}
+                formNoValidate
+                onClick={handleSubmitClick}
                 aria-label="Enviar ao Spotter"
               >
                 {(isProcessing) ? (
