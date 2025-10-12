@@ -96,21 +96,36 @@
   background-color: transparent;
 }
 
-/* Corrige contraste de <select>/<option> no tema atual */
+/* === Ajuste visual dos <select> === */
+
+/* Aplica cor de texto e fundo consistentes */
 select,
 select option {
-  color: var(--foreground);
-  background-color: var(--card);
+  color: var(--foreground, #1a1a1a);
+  background-color: var(--card, #ffffff);
 }
 
 /* Placeholder (primeira opção desabilitada) */
 select option[disabled] {
-  color: var(--muted-foreground);
+  color: var(--muted-foreground, #7a7a7a);
 }
 
-/* Dark mode, se aplicável via data-theme */
-:root[data-theme='dark'] select,
-:root[data-theme='dark'] select option {
-  color: var(--foreground);
-  background-color: var(--card);
+/* Quando o option está selecionado e em foco (corrige azul sobre azul no Windows/Chrome) */
+select option:checked,
+select option:hover,
+select:focus option:checked {
+  background-color: #6e56cf; /* cor violeta leve combinando com seu tema */
+  color: #fff; /* texto branco pra contraste */
+}
+
+/* Dark mode (caso tenha tema escuro) */
+[data-theme='dark'] select,
+[data-theme='dark'] select option {
+  color: #fff;
+  background-color: #18181b;
+}
+[data-theme='dark'] select option:checked,
+[data-theme='dark'] select option:hover {
+  background-color: #7c3aed;
+  color: #fff;
 }
