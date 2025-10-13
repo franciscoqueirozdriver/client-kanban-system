@@ -55,8 +55,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [selectedFunnelId, setSelectedFunnelId] = useState(null);
   const [selectedStageName, setSelectedStageName] = useState("");
 
-  const [prefillFunnelName, setPrefillFunnelName] = useState("");
-
   const isProcessing = isSubmitting || isSubmittingLocal;
 
   useEffect(() => {
@@ -66,22 +64,19 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         const res = await fetch('/api/spotter/funnels', { cache: 'no-store' });
         if (!res.ok) throw new Error('Falha ao listar funis');
         const data = await res.json();
-        setPipelines(data.pipelines || []);
+        const pipelinesData = data.pipelines || [];
+        setPipelines(pipelinesData);
+
+        const prefillFunnel = pipelinesData.find(p => p.name === "Pré-venda");
+        if (prefillFunnel) {
+          setSelectedFunnelId(prefillFunnel.id);
+        }
       } catch (e) {
         console.warn('[Spotter] Falha ao buscar funis', e);
         setPipelines([]);
       }
     })();
   }, [open]);
-
-  useEffect(() => {
-    if (pipelines.length > 0 && prefillFunnelName) {
-      const prefillFunnel = pipelines.find(p => p.name === prefillFunnelName);
-      if (prefillFunnel) {
-        setSelectedFunnelId(prefillFunnel.id);
-      }
-    }
-  }, [pipelines, prefillFunnelName]);
 
   const handleFunnelChange = (e) => {
     const id = Number(e.target.value);
@@ -172,7 +167,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
       setFormData(fullForm);
       setFormErrors({});
-      setPrefillFunnelName("Pré-venda");
     };
 
     fetchAndPrefill();
@@ -184,7 +178,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       setPipelines([]);
       setSelectedFunnelId(null);
       setSelectedStageName("");
-      setPrefillFunnelName("");
     }
   }, [open]);
 
