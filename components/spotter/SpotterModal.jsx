@@ -5,7 +5,7 @@ import { FaSearch, FaSpinner } from "react-icons/fa";
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
 
 const digitsOnly = (value) => String(value ?? "").replace(/\D+/g, "");
@@ -81,6 +81,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [funnels, setFunnels] = useState([]);
   const [selectedFunnelId, setSelectedFunnelId] = useState("");
   const [selectedStageName, setSelectedStageName] = useState("");
+  const [prefillFunnelName, setPrefillFunnelName] = useState("");
   const [stageError, setStageError] = useState(null);
 
   const isProcessing = isSubmitting || isSubmittingLocal;
@@ -583,14 +584,14 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        aria-describedby="spotter-modal-desc"
-        className="max-h-[90vh] overflow-hidden p-0"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <p id="spotter-modal-desc" className="sr-only">
-          Confirme ou ajuste os dados antes do envio ao Spotter. Campos obrigatórios marcados com asterisco.
-        </p>
+    <DialogContent
+      aria-describedby="spotter-modal-desc"
+      className="max-h-[90vh] overflow-hidden p-0"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <DialogDescription id="spotter-modal-desc" className="sr-only">
+        Confirme ou ajuste os dados antes do envio ao Spotter. Campos obrigatórios marcados com asterisco.
+      </DialogDescription>
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
         </DialogHeader>
