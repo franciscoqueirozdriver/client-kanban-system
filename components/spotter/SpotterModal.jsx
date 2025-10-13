@@ -53,7 +53,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   const [funnels, setFunnels] = useState([]);
   const [selectedFunnelId, setSelectedFunnelId] = useState("");
-  const [spotterOnline, setSpotterOnline] = useState(true);
   const [prefillFunnelName, setPrefillFunnelName] = useState("");
 
   const isProcessing = isSubmitting || isSubmittingLocal;
@@ -67,11 +66,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         const data = await res.json();
         const funis = (data?.value || []).map((f) => ({ ...f, id: String(f.id) }));
         setFunnels(funis);
-        setSpotterOnline(true);
       } catch (e) {
         console.warn('[Spotter] Falha ao buscar funis', e);
         setFunnels([]);
-        setSpotterOnline(false);
       }
     })();
   }, [open]);
@@ -172,7 +169,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       setFunnels([]);
       setSelectedFunnelId('');
       setPrefillFunnelName("");
-      setSpotterOnline(true);
     }
   }, [open]);
 
@@ -501,11 +497,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                 </select>
               </div>
               {renderInput("Etapa", fieldMap["Etapa"], { required: true })}
-              {!spotterOnline && (
-                <p className="col-span-full text-xs text-muted-foreground">
-                  Não foi possível listar funis/etapas agora. O servidor validará a etapa no envio.
-                </p>
-              )}
 
               <h3 className="col-span-full border-t border-border/60 pt-4 text-lg font-semibold text-foreground">Endereço</h3>
               {renderInput("País", fieldMap["País"])}
