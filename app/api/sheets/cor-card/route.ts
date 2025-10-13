@@ -51,9 +51,9 @@ async function appendRow({ cardId, cor }: Payload) {
     const headers = new Set(currentHeaders);
     const needed = ['CardId', 'Cor_Card', 'CreatedAt'].filter((h) => !headers.has(h));
     if (needed.length > 0) {
-      await sheet.setHeaderRow([
-        ...new Set([...currentHeaders, ...needed]),
-      ]);
+      const merged = [...currentHeaders, ...needed];
+      const deduped = merged.filter((col, idx) => merged.indexOf(col) === idx);
+      await sheet.setHeaderRow(deduped);
     }
   }
 
