@@ -1,16 +1,6 @@
 import { NextResponse } from 'next/server';
-import { spotterGet, spotterPost, listFunnels } from '@/lib/exactSpotter';
+import { spotterGet, spotterPost } from '@/lib/exactSpotter';
 const { validateSpotterLead } = require('../../../../validators/spotterLead');
-
-let cachedFunnels = null;
-
-async function getFunnels() {
-  if (cachedFunnels) {
-    return cachedFunnels;
-  }
-  cachedFunnels = await listFunnels();
-  return cachedFunnels;
-}
 
 const readEnvList = (name) => {
   const value = process.env[name];
@@ -89,61 +79,16 @@ export async function POST(req) {
       zipcode: body?.zipcode ?? body?.cep ?? '',
     };
 
-    const stageIdFromBody = body?.stageId ?? body?.etapaId ?? null;
-
     const [areasValidas, modalidadesValidas] = await Promise.all([
       getAreasValidas(),
       getModalidadesValidas(),
     ]);
 
     const serverMessages = [];
-    let etapasPorFunil;
-
-    if (base.funilId && base.etapaNome) {
-      try {
-        const stagesResponse = await spotterGet(`Funnels/${base.funilId}/Stages`);
-        const rawStages = Array.isArray(stagesResponse?.value)
-          ? stagesResponse.value
-          : Array.isArray(stagesResponse)
-          ? stagesResponse
-          : [];
-
-        const mappedStages = rawStages
-          .map((stage) => ({
-            id: stage.id ?? stage.ID ?? stage.value ?? stage.name,
-            nome: stage.value ?? stage.name ?? stage.nome ?? '',
-          }))
-          .map((stage) => ({
-            id: stage.id != null ? String(stage.id) : null,
-            nome: stage.nome,
-          }))
-          .filter((stage) => stage.nome);
-
-        if (stageIdFromBody) {
-          const normalizedStageId = String(stageIdFromBody);
-          const matchById = mappedStages.find((stage) => stage.id === normalizedStageId);
-          if (!matchById) {
-            serverMessages.push('A etapa selecionada não pertence ao funil informado.');
-          } else if (!base.etapaNome) {
-            base.etapaNome = matchById.nome;
-          }
-        }
-
-        if (mappedStages.length > 0) {
-          etapasPorFunil = { [String(base.funilId)]: mappedStages };
-        } else {
-          serverMessages.push('Não foi possível validar as etapas deste funil com os dados retornados pelo Spotter.');
-        }
-      } catch (err) {
-        console.error('Falha ao carregar etapas do funil no Spotter:', err);
-        serverMessages.push('Não foi possível consultar as etapas do funil no Spotter para validar a etapa informada.');
-      }
-    }
 
     const validation = validateSpotterLead(base, {
       areasValidas: areasValidas ?? undefined,
       modalidadesValidas: modalidadesValidas ?? undefined,
-      etapasPorFunil,
     });
 
     const messages = [...validation.messages, ...serverMessages];
@@ -163,15 +108,11 @@ export async function POST(req) {
     const firstPhone = phoneList[0] ? splitPhone(phoneList[0]) : { ddi: undefined, phone: undefined };
     const secondPhone = phoneList[1] ? splitPhone(phoneList[1]) : { ddi: undefined, phone: undefined };
 
-    const funnels = await getFunnels();
-    const funnel = funnels.find((f) => f.id === Number(base.funilId));
-
     const spotterPayload = {
       name: base.nomeLead,
       industry: base.mercado,
       source: base.origem,
-      funnel: funnel ? funnel.value : undefined,
-      stageId: Number(body.stageId) || Number(body.etapaId) || undefined,
+      funnelId: Number(base.funilId) || undefined,
       stage: base.etapaNome ?? undefined,
       ddiPhone: firstPhone.phone ? firstPhone.ddi ?? '55' : undefined,
       phone: firstPhone.phone ?? undefined,

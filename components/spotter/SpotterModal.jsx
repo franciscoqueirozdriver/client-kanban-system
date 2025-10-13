@@ -52,12 +52,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [prevendedoresList, setPrevendedoresList] = useState([]);
 
   const [funnels, setFunnels] = useState([]);
-  const [stagesByFunnel, setStagesByFunnel] = useState({});
   const [selectedFunnelId, setSelectedFunnelId] = useState("");
-  const [selectedStageId, setSelectedStageId] = useState("");
-  const [isLoadingStages, setIsLoadingStages] = useState(false);
-  const [stageError, setStageError] = useState(null);
-
   const [spotterOnline, setSpotterOnline] = useState(true);
   const [prefillFunnelName, setPrefillFunnelName] = useState("");
 
@@ -81,67 +76,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     })();
   }, [open]);
 
-  useEffect(() => {
-    if (!selectedFunnelId) {
-      setSelectedStageId('');
-      setStageError(null);
-      return;
-    }
-
-    const cachedStages = stagesByFunnel[selectedFunnelId];
-    if (cachedStages) {
-      setStageError(null);
-      const exists = cachedStages.some((s) => String(s.id) === String(selectedStageId));
-      if (!exists) {
-        setSelectedStageId('');
-      }
-      return;
-    }
-
-    const funnelId = selectedFunnelId;
-    let cancelled = false;
-
-    setIsLoadingStages(true);
-    setSelectedStageId('');
-    setStageError(null);
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/spotter/stages?funnelId=${encodeURIComponent(funnelId)}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Falha ao listar etapas');
-        const data = await res.json();
-        if (cancelled) return;
-        const fases = (data?.value || []).map((s) => ({ ...s, id: String(s.id), funnelId: String(s.funnelId) }));
-        setStagesByFunnel((prev) => ({ ...prev, [funnelId]: fases }));
-        setSpotterOnline(true);
-      } catch (e) {
-        if (cancelled) return;
-        console.warn('[Spotter] Falha ao buscar etapas', e);
-        setStagesByFunnel((prev) => ({ ...prev, [funnelId]: [] }));
-        setSpotterOnline(false);
-      } finally {
-        if (!cancelled) {
-          setIsLoadingStages(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedFunnelId, selectedStageId, stagesByFunnel]);
-
   const handleFunnelChange = (e) => {
     const id = String(e.target.value || '');
     setSelectedFunnelId(id);
-    setSelectedStageId('');
-    setStageError(null);
-  };
-
-  const handleStageChange = (e) => {
-    const id = String(e.target.value || '');
-    setSelectedStageId(id);
-    setStageError(null);
   };
 
   const handleSubmitClick = () => {
@@ -195,6 +132,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         [fieldMap["Telefones Contato"]]: firstContact?.normalizedPhones?.join(";") ?? "",
         [fieldMap["Cargo Contato"]]: firstContact?.role ?? firstContact?.cargo ?? "",
         [fieldMap["CPF/CNPJ"]]: client?.document ?? client?.cnpj ?? client?.cpf ?? "",
+        [fieldMap["Etapa"]]: "Entrada",
         [fieldMap["Estado"]]: client?.uf ?? "",
         [fieldMap["Cidade"]]: client?.city ?? "",
         [fieldMap["País"]]: client?.country ?? (client?.city ? "Brasil" : ""),
@@ -334,8 +272,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       idServCom: readTrimmedValue("ID do Serv. Comunicação"),
       area: readValue("Área"),
       funilId: selectedFunnelId ? Number(selectedFunnelId) : undefined,
-      funnelId: selectedFunnelId ? Number(selectedFunnelId) : undefined,
-      stageId: selectedStageId ? Number(selectedStageId) : undefined,
+      stage: readTrimmedValue("Etapa"),
       address: readTrimmedValue("Logradouro"),
       addressNumber: readTrimmedValue("Número"),
       addressComplement: readTrimmedValue("Complemento"),
@@ -478,10 +415,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   };
 
   const hasFunnels = Array.isArray(funnels) && funnels.length > 0;
-  const stageList = Array.isArray(stagesByFunnel?.[selectedFunnelId])
-    ? stagesByFunnel[selectedFunnelId]
-    : [];
-  const hasStagesForFunnel = stageList.length > 0;
 
   const modalTitle = useMemo(() => {
     return lead?.company ? `Enviar ${lead.company} ao Spotter` : "Enviar ao Spotter";
@@ -570,34 +503,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                   ))}
                 </select>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">
-                  Etapa{hasStagesForFunnel ? ' *' : ''}
-                </label>
-                <select
-                  className={cn(
-                    'w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card',
-                    stageError ? 'border-destructive' : 'border-border'
-                  )}
-                  value={selectedStageId}
-                  onChange={handleStageChange}
-                  disabled={!selectedFunnelId || isLoadingStages || !hasStagesForFunnel}
-                >
-                  <option value="">
-                    {isLoadingStages
-                      ? 'Carregando etapas…'
-                      : hasStagesForFunnel
-                        ? 'Selecione a etapa'
-                        : 'Etapas indisponíveis'}
-                  </option>
-                  {stageList.map((s) => (
-                    <option key={s.id} value={String(s.id)}>{s.value}</option>
-                  ))}
-                </select>
-                {stageError && (
-                  <p className="mt-1 text-xs text-destructive">{stageError}</p>
-                )}
-              </div>
+              {renderInput("Etapa", fieldMap["Etapa"], { required: true })}
               {!spotterOnline && (
                 <p className="col-span-full text-xs text-muted-foreground">
                   Não foi possível listar funis/etapas agora. O servidor validará a etapa no envio.
