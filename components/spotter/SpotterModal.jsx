@@ -74,6 +74,15 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     })();
   }, [open]);
 
+  useEffect(() => {
+    if (pipelines.length > 0 && prefillFunnelName) {
+      const prefillFunnel = pipelines.find(p => p.name === prefillFunnelName);
+      if (prefillFunnel) {
+        setSelectedFunnelId(prefillFunnel.id);
+      }
+    }
+  }, [pipelines, prefillFunnelName]);
+
   const handleFunnelChange = (e) => {
     const id = Number(e.target.value);
     setSelectedFunnelId(id);
