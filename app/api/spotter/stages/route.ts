@@ -25,7 +25,8 @@ export async function GET(req: Request) {
     });
 
     if (!res.ok) {
-      return NextResponse.json({ value: [] }, { status: 200 });
+      const detail = await res.text().catch(() => res.statusText || 'STAGES_ERROR');
+      throw new Error(detail || 'STAGES_ERROR');
     }
 
     const data = await res.json();
@@ -43,7 +44,11 @@ export async function GET(req: Request) {
       }));
 
     return NextResponse.json({ value }, { status: 200 });
-  } catch {
-    return NextResponse.json({ value: [] }, { status: 200 });
+  } catch (error) {
+    const message = error instanceof Error && error.message ? error.message : 'Falha ao listar etapas';
+    return NextResponse.json(
+      { error: message },
+      { status: 500 },
+    );
   }
 }
