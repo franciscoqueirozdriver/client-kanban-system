@@ -11,7 +11,7 @@ async function getStagesForFunnel(funnelId) {
       : Array.isArray(stagesResponse)
       ? stagesResponse
       : [];
-    return rawStages.map(stage => String(stage.value || stage.name));
+    return rawStages.map(stage => String(stage.name ?? stage.value ?? ""));
   } catch (error) {
     console.error(`Failed to fetch stages for funnel ${funnelId}:`, error);
     return [];
