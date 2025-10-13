@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import { listFunnels, listStages } from '@/lib/exactSpotter';
 
+type AnyStage = {
+  id?: number;
+  funnelId?: number;
+  value?: string;
+  name?: string;
+  position?: number;
+};
+
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
@@ -8,9 +16,9 @@ export async function GET() {
     const [funnels, stages] = await Promise.all([listFunnels(), listStages()]);
     const stagesByFunnel = new Map<number, Array<{ id?: number; name: string; position: number }>>();
 
-    stages.forEach((stage) => {
+    (stages as AnyStage[]).forEach((stage) => {
       const funnelId = Number(stage?.funnelId);
-      const name = String(stage?.value ?? stage?.name ?? '').trim();
+      const name = String((stage?.value ?? stage?.name ?? '')).trim();
       if (!Number.isFinite(funnelId) || !name) return;
 
       const id = Number(stage?.id);
@@ -26,7 +34,7 @@ export async function GET() {
         const id = Number(funnel?.id);
         if (!Number.isFinite(id)) return null;
 
-        const name = String(funnel?.value ?? funnel?.name ?? '').trim() || `Funil ${id}`;
+        const name = String((funnel?.value ?? funnel?.name ?? '')).trim() || `Funil ${id}`;
         const stageEntries = (stagesByFunnel.get(id) ?? [])
           .slice()
           .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
