@@ -427,7 +427,23 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         throw new Error("Função de envio ao Spotter não definida.");
       }
       await onSubmit(payload);
-      toast.success("Enviado ao Spotter com sucesso!");
+      // Toast verde apenas em envio bem-sucedido ao Spotter
+      toast.success("Enviado ao Spotter com sucesso!", {
+        theme: "colored",
+        style: { background: "#16a34a", color: "#ffffff" },
+      });
+
+      // Disparo fire-and-forget para registrar cor na planilha
+      try {
+        const cardId = lead?.id ?? null;
+        fetch("/api/sheets/cor-card", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cardId, cor: "purple" }),
+        }).catch(() => {});
+      } catch (_) {
+        // Ignora falhas no disparo para não afetar UX de sucesso
+      }
       onOpenChange?.(false);
     } catch (err) {
       let errorMessage = err?.message || "Falha ao enviar ao Spotter";
