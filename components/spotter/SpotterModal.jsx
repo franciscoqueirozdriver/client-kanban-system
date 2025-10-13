@@ -170,10 +170,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     if (!open) {
       setFormErrors({});
       setFunnels([]);
-      setStagesByFunnel({});
       setSelectedFunnelId('');
-      setSelectedStageId('');
-      setStageError(null);
       setPrefillFunnelName("");
       setSpotterOnline(true);
     }
@@ -271,7 +268,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       tipoServCom: readTrimmedValue("Tipo do Serv. Comunicação"),
       idServCom: readTrimmedValue("ID do Serv. Comunicação"),
       area: readValue("Área"),
-      funilId: selectedFunnelId ? Number(selectedFunnelId) : undefined,
       stage: readTrimmedValue("Etapa"),
       address: readTrimmedValue("Logradouro"),
       addressNumber: readTrimmedValue("Número"),
