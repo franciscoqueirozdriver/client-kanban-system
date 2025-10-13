@@ -44,7 +44,7 @@ export async function GET() {
     });
 
     const pipelines = (funnels as AnyFunnel[])
-      .map((funnel) => {
+      .map<Pipeline | null>((funnel) => {
         const id = Number(funnel?.id);
         if (!Number.isFinite(id)) return null;
 
@@ -66,14 +66,10 @@ export async function GET() {
           id,
           name,
           stageNames,
-          stages: stageEntries.map(({ id: stageId, name: stageName, position }) => ({
-            id: stageId,
-            name: stageName,
-            position,
-          })),
+          stages: stageEntries,
         };
       })
-      .filter((pipeline): pipeline is Pipeline => Boolean(pipeline));
+      .filter((pipeline): pipeline is Pipeline => pipeline !== null);
 
     const legacyValue = pipelines.map((pipeline) => ({
       id: pipeline.id,
