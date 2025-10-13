@@ -51,32 +51,9 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const [mercadosList, setMercadosList] = useState([]);
   const [prevendedoresList, setPrevendedoresList] = useState([]);
 
-  const [funnels, setFunnels] = useState([]);
-  const [selectedFunnelId, setSelectedFunnelId] = useState("");
   const [prefillFunnelName, setPrefillFunnelName] = useState("");
 
   const isProcessing = isSubmitting || isSubmittingLocal;
-
-  useEffect(() => {
-    if (!open) return;
-    (async () => {
-      try {
-        const res = await fetch('/api/spotter/funnels', { cache: 'no-store' });
-        if (!res.ok) throw new Error('Falha ao listar funis');
-        const data = await res.json();
-        const funis = (data?.value || []).map((f) => ({ ...f, id: String(f.id) }));
-        setFunnels(funis);
-      } catch (e) {
-        console.warn('[Spotter] Falha ao buscar funis', e);
-        setFunnels([]);
-      }
-    })();
-  }, [open]);
-
-  const handleFunnelChange = (e) => {
-    const id = String(e.target.value || '');
-    setSelectedFunnelId(id);
-  };
 
   const handleSubmitClick = () => {
     // Native HTML validation removed - only API validation will be used
@@ -166,8 +143,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   useEffect(() => {
     if (!open) {
       setFormErrors({});
-      setFunnels([]);
-      setSelectedFunnelId('');
       setPrefillFunnelName("");
     }
   }, [open]);
@@ -264,7 +239,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       tipoServCom: readTrimmedValue("Tipo do Serv. Comunicação"),
       idServCom: readTrimmedValue("ID do Serv. Comunicação"),
       area: readValue("Área"),
-      funilId: selectedFunnelId ? Number(selectedFunnelId) : undefined,
+      funilId: Number(readTrimmedValue("Funil")) || undefined,
       stage: readTrimmedValue("Etapa"),
       address: readTrimmedValue("Logradouro"),
       addressNumber: readTrimmedValue("Número"),
@@ -480,22 +455,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               {renderInput("Área", fieldMap["Área"], { required: true, placeholder: "Separar múltiplas por ;" })}
               {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
               {renderInput("Observação", fieldMap["Observação"])}
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Funil{hasFunnels ? ' *' : ''}</label>
-                <select
-                  className="w-full rounded-md border px-3 py-2 text-sm text-foreground bg-card"
-                  value={selectedFunnelId}
-                  onChange={handleFunnelChange}
-                  disabled={!hasFunnels}
-                >
-                  <option value="">
-                    {hasFunnels ? 'Selecione o funil' : 'Funis indisponíveis'}
-                  </option>
-                  {funnels.map((f) => (
-                    <option key={f.id} value={String(f.id)}>{f.value ?? f.name}</option>
-                  ))}
-                </select>
-              </div>
+              {renderInput("Funil", fieldMap["Funil"], { required: true, placeholder: "Digite o ID do Funil" })}
               {renderInput("Etapa", fieldMap["Etapa"], { required: true })}
 
               <h3 className="col-span-full border-t border-border/60 pt-4 text-lg font-semibold text-foreground">Endereço</h3>
