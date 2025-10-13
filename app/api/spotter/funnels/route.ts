@@ -7,7 +7,8 @@ export async function GET() {
   try {
     const funnels = await listFunnels();
     return NextResponse.json({ value: funnels });
-  } catch (e:any) {
-    return NextResponse.json({ error: e?.message ?? 'FUNNELS_ERROR' }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error && error.message ? error.message : 'FUNNELS_ERROR';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
