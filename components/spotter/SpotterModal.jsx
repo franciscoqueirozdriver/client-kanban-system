@@ -382,8 +382,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     );
   };
 
-  const hasFunnels = Array.isArray(funnels) && funnels.length > 0;
-
   const modalTitle = useMemo(() => {
     return lead?.company ? `Enviar ${lead.company} ao Spotter` : "Enviar ao Spotter";
   }, [lead?.company]);
