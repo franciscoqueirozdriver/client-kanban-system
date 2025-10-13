@@ -142,13 +142,18 @@ export async function POST(req) {
       spotterPayload.customFields = body.customFields;
     }
 
-    const cleanedPayload = Object.fromEntries(
+    const cleanedLeadData = Object.fromEntries(
       Object.entries(spotterPayload).filter(([, value]) => value !== undefined),
     );
 
+    const finalPayload = {
+      duplicityValidation: true,
+      lead: cleanedLeadData,
+    };
+
     let spotterResponse;
     try {
-      spotterResponse = await spotterPost('LeadsAdd', cleanedPayload);
+      spotterResponse = await spotterPost('LeadsAdd', finalPayload);
     } catch (error) {
       console.error('Erro ao enviar lead ao Spotter:', error);
       return NextResponse.json(
