@@ -173,10 +173,12 @@ function computeSnapshotRow({
       pickCardString(card, 'Nome_da_Empresa') ||
       pickCardString(card, 'Nome da Empresa'),
     CNPJ:
-      cnpj ??
-      pickCardString(card, 'cnpj') ||
-      pickCardString(card, 'CNPJ') ||
-      pickCardString(card, 'CNPJ_Empresa'),
+      (
+        cnpj ??
+        (pickCardString(card, 'cnpj') ||
+          pickCardString(card, 'CNPJ') ||
+          pickCardString(card, 'CNPJ_Empresa'))
+      ) || '',
     Qtd_Total: String(resumo?.total ?? facts?.length ?? 0),
     Qtd_DCOMP: String(porFamilia?.DCOMP ?? familiasFallback.DCOMP ?? 0),
     Qtd_REST: String(porFamilia?.REST ?? familiasFallback.REST ?? 0),
