@@ -11,6 +11,12 @@ const {
   savePerdecompResults,
 } = persistModule;
 
+const normalizeISO = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+};
+
 jest.mock('./googleSheets.js', () => ({
   getSheetData: jest.fn(),
   getSheetsClient: jest.fn(),
@@ -123,23 +129,41 @@ describe('perdecomp-persist', () => {
       'Data_Consulta',
       'URL_Comprovante_HTML',
       'Payload_Bytes',
-      'Last_Updated_ISO',
       'Snapshot_Hash',
       'Facts_Count',
+      'Last_Updated_ISO',
       'Consulta_ID',
       'Erro_Ultima_Consulta',
     ];
     const factsHeaders = [
       'Cliente_ID',
+      'Empresa_ID',
+      'Nome da Empresa',
+      'CNPJ',
       'Perdcomp_Numero',
+      'Perdcomp_Formatado',
       'Protocolo',
-      'Natureza',
-      'Credito',
+      'Data_DDMMAA',
       'Data_ISO',
-      'Valor',
+      'Tipo_Codigo',
+      'Tipo_Nome',
+      'Natureza',
+      'Familia',
+      'Credito_Codigo',
+      'Credito_Descricao',
+      'Risco_Nivel',
+      'Situacao',
+      'Situacao_Detalhamento',
+      'Motivo_Normalizado',
+      'Solicitante',
+      'Fonte',
+      'Data_Consulta',
+      'URL_Comprovante_HTML',
       'Row_Hash',
-      'Consulta_ID',
       'Inserted_At',
+      'Consulta_ID',
+      'Version',
+      'Deleted_Flag',
     ];
 
     const meta = {
@@ -157,21 +181,22 @@ describe('perdecomp-persist', () => {
       CNPJ: '12345678000190',
       Perdcomp_Numero: '123451234512345123451234',
       Natureza: '1.3',
-      Credito: '01',
-      Data_ISO: '',
-      Valor: '',
-      Data_Consulta: meta.dataConsultaISO,
-      Fonte: meta.fonte,
+      Credito_Codigo: '01',
+      Data_ISO: '2023-12-01T00:00:00.000Z',
+      Valor: '0',
+      Tipo_Codigo: 'DCOMP',
+      Tipo_Nome: 'DCOMP',
+      Situacao: 'Em análise',
     };
     const duplicateHash = crypto
       .createHash('sha256')
       .update(
         [
           duplicateFact.Perdcomp_Numero,
-          '',
+          duplicateFact.Tipo_Codigo,
           duplicateFact.Natureza,
-          duplicateFact.Credito,
-          duplicateFact.Data_ISO,
+          duplicateFact.Credito_Codigo,
+          normalizeISO(duplicateFact.Data_ISO),
           duplicateFact.Valor,
         ].join('|'),
       )
@@ -187,8 +212,7 @@ describe('perdecomp-persist', () => {
 
     getSheetData
       .mockResolvedValueOnce(snapshotData) // resolveClienteId find
-      .mockResolvedValueOnce(snapshotData) // resolveClienteId next
-      .mockResolvedValueOnce(snapshotData) // upsert snapshot
+      .mockResolvedValueOnce(snapshotData) // nextClienteId scan
       .mockResolvedValueOnce({
         headers: factsHeaders,
         rows: [
@@ -199,7 +223,19 @@ describe('perdecomp-persist', () => {
             _rowNumber: 2,
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({
+        headers: factsHeaders,
+        rows: [
+          {
+            Cliente_ID: 'CLT-3684',
+            Perdcomp_Numero: duplicateFact.Perdcomp_Numero,
+            Row_Hash: duplicateHash,
+            _rowNumber: 2,
+          },
+        ],
+      })
+      .mockResolvedValueOnce(snapshotData); // upsert snapshot
 
     const card = {
       nomeEmpresa: 'Empresa Teste',
@@ -221,9 +257,11 @@ describe('perdecomp-persist', () => {
         CNPJ: '12345678000190',
         Perdcomp_Numero: '987659876598765987659876',
         Natureza: '1.2',
-        Credito: '02',
-        Data_ISO: '',
+        Credito_Codigo: '02',
+        Data_ISO: '2023-12-02T00:00:00.000Z',
         Valor: '',
+        Tipo_Codigo: 'REST',
+        Tipo_Nome: 'REST',
       },
     ];
 
@@ -249,17 +287,19 @@ describe('perdecomp-persist', () => {
     const snapshotValues = appendMock.mock.calls[0][0].requestBody.values[0];
     expect(snapshotValues[snapshotHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
     expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('12345678000190');
-    expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('2');
+    expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('1');
 
     const appendedFacts = appendMock.mock.calls[1][0].requestBody.values;
     expect(appendedFacts).toHaveLength(1);
-    const factHeaders = appendMock.mock.calls[1][0].requestBody.values[0];
-    expect(factHeaders[factsHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
-    expect(factHeaders[factsHeaders.indexOf('Perdcomp_Numero')]).toBe('987659876598765987659876');
-    expect(factHeaders[factsHeaders.indexOf('Row_Hash')]).toBe(
+    const factRow = appendedFacts[0];
+    expect(factRow[factsHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
+    expect(factRow[factsHeaders.indexOf('Nome da Empresa')]).toBe('Empresa Teste');
+    expect(factRow[factsHeaders.indexOf('Perdcomp_Numero')]).toBe('987659876598765987659876');
+    expect(factRow[factsHeaders.indexOf('Data_DDMMAA')]).toBe('021223');
+    expect(factRow[factsHeaders.indexOf('Row_Hash')]).toBe(
       crypto
         .createHash('sha256')
-        .update(['987659876598765987659876', '', '1.2', '02', '', ''].join('|'))
+        .update(['987659876598765987659876', 'REST', '1.2', '02', '2023-12-02T00:00:00.000Z', ''].join('|'))
         .digest('hex'),
     );
 
@@ -270,7 +310,7 @@ describe('perdecomp-persist', () => {
     expect(infoSpy).toHaveBeenCalledWith('SNAPSHOT_OK', {
       clienteId: 'CLT-3684',
       snapshotHash: expect.any(String),
-      factsCount: 2,
+      factsCount: 1,
     });
     expect(infoSpy).toHaveBeenCalledWith('FACTS_OK', {
       clienteId: 'CLT-3684',
