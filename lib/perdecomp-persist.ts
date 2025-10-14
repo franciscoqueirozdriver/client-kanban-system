@@ -13,6 +13,12 @@ const SNAPSHOT_SHEET = 'perdecomp_snapshot';
 const FACTS_SHEET = 'perdecomp_facts';
 const PAYLOAD_SHARD_LIMIT = 45000;
 const CARD_SCHEMA_VERSION_FALLBACK = 'v1.0.0';
+export const CLT_ID_RE = /^CLT-\d{4,}$/;
+
+type ResolveOpts = { providedClienteId?: string | null; cnpj?: string | null };
+
+let nextClienteSequence: number | null = null;
+let resolveOverride: ((opts: ResolveOpts) => Promise<string>) | null = null;
 
 type SaveArgs = {
   clienteId: string;
@@ -41,6 +47,68 @@ const FACT_METADATA_FIELDS = new Set([
   'Consulta_ID',
   'Inserted_At',
 ]);
+
+function normalizeDigits(value: string | null | undefined): string {
+  return (value || '').replace(/\D+/g, '');
+}
+
+async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<string | null> {
+  const normalized = normalizeDigits(cnpj || '');
+  if (!normalized) return null;
+  const { rows } = await getSheetData(SNAPSHOT_SHEET);
+  const match = rows.find(row => normalizeDigits(toStringValue(row.CNPJ)) === normalized);
+  if (!match) return null;
+  const id = toStringValue(match.Cliente_ID);
+  return CLT_ID_RE.test(id) ? id : null;
+}
+
+async function nextClienteId(): Promise<string> {
+  if (nextClienteSequence === null) {
+    const { rows } = await getSheetData(SNAPSHOT_SHEET);
+    let max = 0;
+    for (const row of rows) {
+      const id = toStringValue(row.Cliente_ID);
+      const match = id.match(/^CLT-(\d{4,})$/);
+      if (!match) continue;
+      const value = Number(match[1]);
+      if (!Number.isNaN(value) && value > max) {
+        max = value;
+      }
+    }
+    nextClienteSequence = max + 1;
+  } else {
+    nextClienteSequence += 1;
+  }
+  const next = nextClienteSequence;
+  return `CLT-${String(next).padStart(4, '0')}`;
+}
+
+export async function resolveClienteId({ providedClienteId, cnpj }: ResolveOpts): Promise<string> {
+  if (providedClienteId && CLT_ID_RE.test(providedClienteId)) {
+    const match = providedClienteId.match(/^CLT-(\d{4,})$/);
+    if (match) {
+      const value = Number(match[1]);
+      if (!Number.isNaN(value)) {
+        nextClienteSequence = Math.max(nextClienteSequence ?? value, value);
+      }
+    }
+    return providedClienteId;
+  }
+
+  const found = await findClienteIdByCnpj(cnpj);
+  if (found && CLT_ID_RE.test(found)) {
+    const match = found.match(/^CLT-(\d{4,})$/);
+    if (match) {
+      const value = Number(match[1]);
+      if (!Number.isNaN(value)) {
+        nextClienteSequence = Math.max(nextClienteSequence ?? value, value);
+      }
+    }
+    return found;
+  }
+
+  return nextClienteId();
+}
 
 function columnNumberToLetter(columnNumber: number): string {
   let temp: number;
@@ -207,12 +275,47 @@ function computeSnapshotRow({
 }
 
 function computeFactHash(fact: Record<string, any>): string {
-  const naturalEntries = Object.entries(fact)
-    .filter(([key]) => !FACT_METADATA_FIELDS.has(key))
-    .map(([key, value]) => [key, toStringValue(value)])
-    .sort(([a], [b]) => a.localeCompare(b));
-  const serialized = naturalEntries.map(([key, value]) => `${key}=${value}`).join('|');
-  return crypto.createHash('sha256').update(serialized).digest('hex');
+  const numeroOuProtocolo =
+    toStringValue(
+      fact.Perdcomp_Numero ||
+        fact.perdcomp ||
+        fact.Perdcomp ||
+        fact.Protocolo ||
+        fact.protocolo ||
+        '',
+    ) || '';
+  const tipo =
+    toStringValue(fact.Tipo || fact.tipo || fact.Tipo_Documento || fact.tipo_documento || '') || '';
+  const natureza = toStringValue(fact.Natureza || fact.natureza || '') || '';
+  const credito =
+    toStringValue(fact.Credito || fact.credito || fact.Tipo_Credito || fact.tipo_credito || '') || '';
+  const dataISO =
+    toStringValue(
+      fact.Data_ISO ||
+        fact.data_iso ||
+        fact.Data_Protocolo ||
+        fact.data_protocolo ||
+        fact.Data_Transmissao ||
+        fact.data_transmissao ||
+        '',
+    ) || '';
+  const valor = toStringValue(fact.Valor || fact.valor || fact.Valor_Total || fact.valor_total || '') || '';
+
+  const baseParts = [numeroOuProtocolo, tipo, natureza, credito, dataISO, valor];
+  if (baseParts.some(part => part)) {
+    return crypto.createHash('sha256').update(baseParts.join('|')).digest('hex');
+  }
+
+  const fallback = JSON.stringify(
+    Object.keys(fact)
+      .filter(key => !FACT_METADATA_FIELDS.has(key))
+      .sort()
+      .reduce<Record<string, any>>((acc, key) => {
+        acc[key] = fact[key];
+        return acc;
+      }, {}),
+  );
+  return crypto.createHash('sha256').update(fallback).digest('hex');
 }
 
 function ensureFactBase(
@@ -226,7 +329,7 @@ function ensureFactBase(
   }: { clienteId: string; empresaId?: string; cnpj?: string; meta: SaveArgs['meta']; nowISO: string },
 ) {
   const normalized: Record<string, any> = { ...fact };
-  normalized.Cliente_ID = normalized.Cliente_ID || clienteId;
+  normalized.Cliente_ID = clienteId;
   normalized.Empresa_ID = normalized.Empresa_ID || empresaId || '';
   normalized.CNPJ = normalized.CNPJ || cnpj || '';
   const numero = toStringValue(
@@ -433,33 +536,57 @@ async function markSnapshotError(clienteId: string, message: string, nowISO: str
 }
 
 export async function savePerdecompResults(args: SaveArgs): Promise<void> {
-  const { clienteId, card, meta } = args;
-  if (!clienteId) {
-    throw new Error('clienteId is required');
-  }
+  const { card, meta } = args;
   if (!meta?.consultaId) {
     throw new Error('meta.consultaId is required');
   }
 
   const nowISO = new Date().toISOString();
-  console.info('PERSIST_START', { clienteId, consultaId: meta.consultaId });
+  const resolvedCnpj =
+    args.cnpj ||
+    pickCardString(card, 'CNPJ') ||
+    pickCardString(card, 'CNPJ_Empresa') ||
+    pickCardString(card, 'cnpj') ||
+    '';
+
+  const resolver = resolveOverride ?? resolveClienteId;
+  const clienteIdFinal = await resolver({
+    providedClienteId: args.clienteId,
+    cnpj: resolvedCnpj || null,
+  });
+
+  if (!CLT_ID_RE.test(clienteIdFinal)) {
+    console.warn('PERSIST_ABORT_INVALID_CLIENTE_ID', {
+      provided: args.clienteId,
+      resolved: clienteIdFinal,
+      cnpj: args.cnpj,
+    });
+    throw new Error('Invalid Cliente_ID for persistence');
+  }
+
+  console.info('PERSIST_START', { clienteId: clienteIdFinal, consultaId: meta.consultaId });
 
   try {
-    const snapshotRow = computeSnapshotRow({ ...args, nowISO });
+    const snapshotRow = computeSnapshotRow({ ...args, clienteId: clienteIdFinal, cnpj: resolvedCnpj, nowISO });
     await upsertSnapshot(snapshotRow);
     console.info('SNAPSHOT_OK', {
-      clienteId,
+      clienteId: clienteIdFinal,
       snapshotHash: snapshotRow.Snapshot_Hash,
       factsCount: Number(snapshotRow.Facts_Count) || 0,
     });
 
-    const { inserted, skipped } = await appendFacts({ ...args, nowISO });
-    console.info('FACTS_OK', { clienteId, inserted, skipped });
-    console.info('PERSIST_END', { clienteId });
+    const { inserted, skipped } = await appendFacts({
+      ...args,
+      clienteId: clienteIdFinal,
+      cnpj: resolvedCnpj,
+      nowISO,
+    });
+    console.info('FACTS_OK', { clienteId: clienteIdFinal, inserted, skipped });
+    console.info('PERSIST_END', { clienteId: clienteIdFinal });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('PERSIST_FAIL', { clienteId, message });
-    await markSnapshotError(clienteId, message, nowISO);
+    console.error('PERSIST_FAIL', { clienteId: clienteIdFinal, message });
+    await markSnapshotError(clienteIdFinal, message, nowISO);
   }
 }
 
@@ -482,5 +609,16 @@ export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | n
     });
     return null;
   }
+}
+
+export function __resetClienteIdSequenceForTests() {
+  nextClienteSequence = null;
+  resolveOverride = null;
+}
+
+export function __setResolveClienteIdOverrideForTests(
+  fn: ((opts: ResolveOpts) => Promise<string>) | null,
+) {
+  resolveOverride = fn;
 }
 

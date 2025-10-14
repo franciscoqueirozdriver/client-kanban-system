@@ -1,7 +1,15 @@
 /** @jest-environment node */
 import crypto from 'crypto';
 
-import { loadSnapshotCard, savePerdecompResults } from './perdecomp-persist';
+import * as persistModule from './perdecomp-persist';
+
+const {
+  __resetClienteIdSequenceForTests,
+  __setResolveClienteIdOverrideForTests,
+  loadSnapshotCard,
+  resolveClienteId,
+  savePerdecompResults,
+} = persistModule;
 
 jest.mock('./googleSheets.js', () => ({
   getSheetData: jest.fn(),
@@ -17,10 +25,12 @@ describe('perdecomp-persist', () => {
   const batchUpdateMock = jest.fn();
   const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
   const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2024-01-01T12:10:00.000Z'));
+    __resetClienteIdSequenceForTests();
     getSheetData.mockReset();
     getSheetsClient.mockReset();
     withRetry.mockClear();
@@ -29,6 +39,7 @@ describe('perdecomp-persist', () => {
     batchUpdateMock.mockReset();
     infoSpy.mockClear();
     errorSpy.mockClear();
+    warnSpy.mockClear();
     getSheetsClient.mockResolvedValue({
       spreadsheets: {
         values: {
@@ -46,9 +57,48 @@ describe('perdecomp-persist', () => {
   afterAll(() => {
     infoSpy.mockRestore();
     errorSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
-  it('persists snapshot and deduplicates facts', async () => {
+  describe('resolveClienteId', () => {
+    it('returns provided id when already compliant', async () => {
+      await expect(
+        resolveClienteId({ providedClienteId: 'CLT-1234', cnpj: '12345678000190' }),
+      ).resolves.toBe('CLT-1234');
+      expect(getSheetData).not.toHaveBeenCalled();
+    });
+
+    it('reuses snapshot id found by CNPJ', async () => {
+      getSheetData.mockResolvedValueOnce({
+        headers: ['Cliente_ID', 'CNPJ'],
+        rows: [
+          { Cliente_ID: 'CLT-3683', CNPJ: '12345678000190', _rowNumber: 2 },
+          { Cliente_ID: 'CLT-1000', CNPJ: '00990099009900', _rowNumber: 3 },
+        ],
+      });
+
+      await expect(
+        resolveClienteId({ providedClienteId: null, cnpj: '12345678000190' }),
+      ).resolves.toBe('CLT-3683');
+    });
+
+    it('generates the next sequential id when none provided or found', async () => {
+      const snapshotData = {
+        headers: ['Cliente_ID', 'CNPJ'],
+        rows: [
+          { Cliente_ID: 'CLT-3683', CNPJ: '00990099009900', _rowNumber: 2 },
+          { Cliente_ID: 'CLT-0100', CNPJ: '11111111000111', _rowNumber: 3 },
+        ],
+      };
+      getSheetData.mockResolvedValueOnce(snapshotData).mockResolvedValueOnce(snapshotData);
+
+      await expect(resolveClienteId({ providedClienteId: 'COMP-9999', cnpj: '123' })).resolves.toBe(
+        'CLT-3684',
+      );
+    });
+  });
+
+  it('persists snapshot with resolved clienteId and deduplicates facts', async () => {
     const snapshotHeaders = [
       'Cliente_ID',
       'Empresa_ID',
@@ -82,10 +132,11 @@ describe('perdecomp-persist', () => {
     const factsHeaders = [
       'Cliente_ID',
       'Perdcomp_Numero',
+      'Protocolo',
       'Natureza',
       'Credito',
-      'Data_Consulta',
-      'Fonte',
+      'Data_ISO',
+      'Valor',
       'Row_Hash',
       'Consulta_ID',
       'Inserted_At',
@@ -101,33 +152,49 @@ describe('perdecomp-persist', () => {
     };
 
     const duplicateFact = {
-      Cliente_ID: 'cli-1',
+      Cliente_ID: 'COMP-1',
       Empresa_ID: '',
       CNPJ: '12345678000190',
       Perdcomp_Numero: '123451234512345123451234',
       Natureza: '1.3',
       Credito: '01',
+      Data_ISO: '',
+      Valor: '',
       Data_Consulta: meta.dataConsultaISO,
       Fonte: meta.fonte,
     };
-    const serializedDuplicate = Object.entries(duplicateFact)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => `${key}=${value}`)
-      .join('|');
-    const duplicateHash = crypto.createHash('sha256').update(serializedDuplicate).digest('hex');
+    const duplicateHash = crypto
+      .createHash('sha256')
+      .update(
+        [
+          duplicateFact.Perdcomp_Numero,
+          '',
+          duplicateFact.Natureza,
+          duplicateFact.Credito,
+          duplicateFact.Data_ISO,
+          duplicateFact.Valor,
+        ].join('|'),
+      )
+      .digest('hex');
+
+    const snapshotData = {
+      headers: snapshotHeaders,
+      rows: [
+        { Cliente_ID: 'CLT-3683', CNPJ: '00990099009900', _rowNumber: 2 },
+        { Cliente_ID: 'CLT-0100', CNPJ: '11111111000111', _rowNumber: 3 },
+      ],
+    };
 
     getSheetData
-      .mockResolvedValueOnce({ headers: snapshotHeaders, rows: [] })
+      .mockResolvedValueOnce(snapshotData) // resolveClienteId find
+      .mockResolvedValueOnce(snapshotData) // resolveClienteId next
+      .mockResolvedValueOnce(snapshotData) // upsert snapshot
       .mockResolvedValueOnce({
         headers: factsHeaders,
         rows: [
           {
-            Cliente_ID: 'cli-1',
+            Cliente_ID: 'CLT-3684',
             Perdcomp_Numero: duplicateFact.Perdcomp_Numero,
-            Natureza: duplicateFact.Natureza,
-            Credito: duplicateFact.Credito,
-            Data_Consulta: duplicateFact.Data_Consulta,
-            Fonte: duplicateFact.Fonte,
             Row_Hash: duplicateHash,
             _rowNumber: 2,
           },
@@ -149,17 +216,19 @@ describe('perdecomp-persist', () => {
     const facts = [
       { ...duplicateFact },
       {
-        Cliente_ID: 'cli-1',
+        Cliente_ID: 'COMP-1',
         Empresa_ID: '',
         CNPJ: '12345678000190',
         Perdcomp_Numero: '987659876598765987659876',
         Natureza: '1.2',
         Credito: '02',
+        Data_ISO: '',
+        Valor: '',
       },
     ];
 
     await savePerdecompResults({
-      clienteId: 'cli-1',
+      clienteId: 'COMP-9999',
       empresaId: undefined,
       cnpj: '12345678000190',
       card,
@@ -167,6 +236,7 @@ describe('perdecomp-persist', () => {
       meta,
     });
 
+    expect(warnSpy).not.toHaveBeenCalled();
     expect(appendMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ range: 'perdecomp_snapshot' }),
@@ -175,15 +245,40 @@ describe('perdecomp-persist', () => {
       2,
       expect.objectContaining({ range: 'perdecomp_facts' }),
     );
+
+    const snapshotValues = appendMock.mock.calls[0][0].requestBody.values[0];
+    expect(snapshotValues[snapshotHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
+    expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('12345678000190');
+    expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('2');
+
     const appendedFacts = appendMock.mock.calls[1][0].requestBody.values;
     expect(appendedFacts).toHaveLength(1);
-    expect(appendedFacts[0][factsHeaders.indexOf('Perdcomp_Numero')]).toBe('987659876598765987659876');
+    const factHeaders = appendMock.mock.calls[1][0].requestBody.values[0];
+    expect(factHeaders[factsHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
+    expect(factHeaders[factsHeaders.indexOf('Perdcomp_Numero')]).toBe('987659876598765987659876');
+    expect(factHeaders[factsHeaders.indexOf('Row_Hash')]).toBe(
+      crypto
+        .createHash('sha256')
+        .update(['987659876598765987659876', '', '1.2', '02', '', ''].join('|'))
+        .digest('hex'),
+    );
+
+    expect(infoSpy).toHaveBeenCalledWith('PERSIST_START', {
+      clienteId: 'CLT-3684',
+      consultaId: meta.consultaId,
+    });
+    expect(infoSpy).toHaveBeenCalledWith('SNAPSHOT_OK', {
+      clienteId: 'CLT-3684',
+      snapshotHash: expect.any(String),
+      factsCount: 2,
+    });
     expect(infoSpy).toHaveBeenCalledWith('FACTS_OK', {
-      clienteId: 'cli-1',
+      clienteId: 'CLT-3684',
       inserted: 1,
       skipped: 1,
     });
-    expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining('PERSIST_FAIL'), expect.anything());
+    expect(infoSpy).toHaveBeenCalledWith('PERSIST_END', { clienteId: 'CLT-3684' });
+    expect(errorSpy).not.toHaveBeenCalledWith('PERSIST_FAIL', expect.anything());
   });
 
   it('marks snapshot error when persistence fails', async () => {
@@ -192,10 +287,13 @@ describe('perdecomp-persist', () => {
     appendMock.mockRejectedValueOnce(new Error('boom'));
     getSheetData
       .mockResolvedValueOnce({ headers: snapshotHeaders, rows: [] })
-      .mockResolvedValueOnce({ headers: snapshotHeaders, rows: [{ Cliente_ID: 'cli-1', _rowNumber: 2 }] });
+      .mockResolvedValueOnce({
+        headers: snapshotHeaders,
+        rows: [{ Cliente_ID: 'CLT-9000', _rowNumber: 2, Erro_Ultima_Consulta: '', Last_Updated_ISO: '' }],
+      });
 
     await savePerdecompResults({
-      clienteId: 'cli-1',
+      clienteId: 'CLT-9000',
       empresaId: undefined,
       cnpj: '12345678000190',
       card: { nomeEmpresa: 'Empresa Teste' },
@@ -211,7 +309,7 @@ describe('perdecomp-persist', () => {
     });
 
     expect(errorSpy).toHaveBeenCalledWith('PERSIST_FAIL', {
-      clienteId: 'cli-1',
+      clienteId: 'CLT-9000',
       message: 'boom',
     });
     expect(batchUpdateMock).toHaveBeenCalledWith(
@@ -221,20 +319,41 @@ describe('perdecomp-persist', () => {
     );
   });
 
+  it('rejects invalid clienteId resolution', async () => {
+    __setResolveClienteIdOverrideForTests(async () => 'COMP-9999');
+
+    await expect(
+      savePerdecompResults({
+        clienteId: 'COMP-9999',
+        empresaId: undefined,
+        cnpj: undefined,
+        card: {},
+        facts: [],
+        meta: { consultaId: 'consulta-789' },
+      }),
+    ).rejects.toThrow('Invalid Cliente_ID for persistence');
+
+    expect(warnSpy).toHaveBeenCalledWith('PERSIST_ABORT_INVALID_CLIENTE_ID', {
+      provided: 'COMP-9999',
+      resolved: expect.any(String),
+      cnpj: undefined,
+    });
+    __setResolveClienteIdOverrideForTests(null);
+  });
+
   it('loads snapshot card by concatenating shards', async () => {
     getSheetData.mockResolvedValueOnce({
       headers: ['Cliente_ID', 'Resumo_Ultima_Consulta_JSON_P1', 'Resumo_Ultima_Consulta_JSON_P2'],
       rows: [
         {
-          Cliente_ID: 'cli-1',
+          Cliente_ID: 'CLT-3683',
           Resumo_Ultima_Consulta_JSON_P1: '{"nome":"Empresa"',
           Resumo_Ultima_Consulta_JSON_P2: ',"valor":1}',
         },
       ],
     });
 
-    const card = await loadSnapshotCard({ clienteId: 'cli-1' });
+    const card = await loadSnapshotCard({ clienteId: 'CLT-3683' });
     expect(card).toEqual({ nome: 'Empresa', valor: 1 });
   });
 });
-
