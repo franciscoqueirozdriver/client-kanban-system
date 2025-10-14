@@ -1,11 +1,18 @@
+import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
+import { savePerdecompResults } from '@/lib/perdecomp-persist';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
-import { agregaPerdcomp } from '@/utils/perdcomp';
+import {
+  agregaPerdcomp,
+  classificaFamiliaPorNatureza,
+  parsePerdcompNumero,
+} from '@/utils/perdcomp';
 
 export const runtime = 'nodejs';
 
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
+const CARD_SCHEMA_VERSION = 'perdecomp-card-v1';
 
 const REQUIRED_HEADERS = [
   'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
@@ -65,6 +72,52 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delays = [1500, 
     }
   }
   throw lastErr;
+}
+
+function normalizeFactValue(value: any): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+function normalizePerdcompFacts(
+  perdcomp: any[],
+  {
+    clienteId,
+    empresaId,
+    nomeEmpresa,
+    cnpj,
+  }: { clienteId: string; empresaId?: string | null; nomeEmpresa?: string | null; cnpj: string },
+) {
+  return (perdcomp || []).map(item => {
+    const parsed = parsePerdcompNumero(item?.perdcomp || '');
+    const familia = parsed.valido ? classificaFamiliaPorNatureza(parsed.natureza) : 'DESCONHECIDO';
+
+    return {
+      Cliente_ID: clienteId,
+      Empresa_ID: empresaId ?? '',
+      Nome_da_Empresa: nomeEmpresa ?? '',
+      CNPJ: cnpj,
+      Perdcomp_Numero: normalizeFactValue(item?.perdcomp),
+      Protocolo: parsed.valido ? normalizeFactValue(parsed.protocolo) : '',
+      Natureza: parsed.valido ? normalizeFactValue(parsed.natureza) : '',
+      Credito: parsed.valido ? normalizeFactValue(parsed.credito) : '',
+      Data_ISO: parsed.valido ? normalizeFactValue(parsed.dataISO) : '',
+      Familia: normalizeFactValue(familia),
+      Tipo_Documento: normalizeFactValue(item?.tipo_documento),
+      Tipo_Credito: normalizeFactValue(item?.tipo_credito),
+      Situacao: normalizeFactValue(item?.situacao),
+      Situacao_Detalhamento: normalizeFactValue(item?.situacao_detalhamento),
+      Data_Transmissao: normalizeFactValue(item?.data_transmissao),
+      Data_Protocolo: normalizeFactValue(item?.data_protocolo),
+      Periodo_Inicio: normalizeFactValue(item?.periodo_inicio),
+      Periodo_Fim: normalizeFactValue(item?.periodo_fim),
+      Numero_Processo: normalizeFactValue(item?.numero_processo),
+      Valor: normalizeFactValue(item?.valor),
+      Solicitante: normalizeFactValue(item?.solicitante),
+    };
+  });
 }
 
 async function getLastPerdcompFromSheet({
@@ -151,6 +204,11 @@ export async function POST(request: Request) {
       body?.nomeEmpresa ??
       url.searchParams.get('Nome_da_Empresa') ??
       url.searchParams.get('nomeEmpresa');
+    const empresaId =
+      body?.Empresa_ID ??
+      body?.empresaId ??
+      url.searchParams.get('Empresa_ID') ??
+      url.searchParams.get('empresaId');
     if (!clienteId || !nomeEmpresa) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
@@ -427,6 +485,35 @@ export async function POST(request: Request) {
         perdcompResumo: resumo,
       };
     }
+
+    const consultaId = randomUUID();
+    const normalizedFacts = normalizePerdcompFacts(perdcompArray, {
+      clienteId,
+      empresaId,
+      nomeEmpresa,
+      cnpj,
+    });
+    const snapshotCard = {
+      ...resp,
+      clienteId,
+      nomeEmpresa,
+      empresaId: empresaId ?? null,
+    };
+    await savePerdecompResults({
+      clienteId,
+      empresaId: empresaId ?? undefined,
+      cnpj,
+      card: snapshotCard,
+      facts: normalizedFacts,
+      meta: {
+        fonte: 'api:infosimples',
+        dataConsultaISO: headerRequestedAt,
+        urlComprovante: siteReceipt || undefined,
+        cardSchemaVersion: CARD_SCHEMA_VERSION,
+        renderedAtISO: new Date().toISOString(),
+        consultaId,
+      },
+    });
 
     return NextResponse.json(resp);
 
