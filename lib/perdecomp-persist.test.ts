@@ -161,7 +161,8 @@ describe('perdecomp-persist', () => {
       'CNPJ',
       'Perdcomp_Numero',
       'Perdcomp_Formatado',
-      'Protocolo',
+      'B1',
+      'B2',
       'Data_DDMMAA',
       'Data_ISO',
       'Tipo_Codigo',
@@ -171,6 +172,7 @@ describe('perdecomp-persist', () => {
       'Credito_Codigo',
       'Credito_Descricao',
       'Risco_Nivel',
+      'Protocolo',
       'Situacao',
       'Situacao_Detalhamento',
       'Motivo_Normalizado',
@@ -253,9 +255,6 @@ describe('perdecomp-persist', () => {
           ],
         });
       }
-      if (sheetName === 'perdecomp_facts_202401') {
-        return Promise.resolve({ headers: factsHeaders, rows: [] });
-      }
       throw new Error(`Unexpected sheet request: ${sheetName}`);
     });
 
@@ -312,29 +311,20 @@ describe('perdecomp-persist', () => {
     });
 
     expect(warnSpy).not.toHaveBeenCalled();
-    expect(spreadsheetsBatchUpdateMock).toHaveBeenCalledWith(
+    expect(spreadsheetsBatchUpdateMock).not.toHaveBeenCalledWith(
       expect.objectContaining({
         requestBody: expect.objectContaining({
           requests: expect.arrayContaining([
-            expect.objectContaining({
-              addSheet: expect.objectContaining({
-                properties: expect.objectContaining({ title: 'perdecomp_facts_202401' }),
-              }),
-            }),
+            expect.objectContaining({ addSheet: expect.anything() }),
           ]),
         }),
       }),
     );
-    expect(valuesUpdateMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        range: expect.stringMatching(/^perdecomp_facts_202401!A1:/),
-        requestBody: expect.objectContaining({ values: [factsHeaders] }),
-      }),
-    );
+    expect(valuesUpdateMock).not.toHaveBeenCalled();
 
     expect(appendMock).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ range: 'perdecomp_facts_202401' }),
+      expect.objectContaining({ range: 'perdecomp_facts' }),
     );
 
     expect(appendMock).toHaveBeenNthCalledWith(
@@ -349,7 +339,7 @@ describe('perdecomp-persist', () => {
     const appendedFacts = factsAppendCall.requestBody.values;
     expect(snapshotValues[snapshotHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
     expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('12345678000190');
-    expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('0');
+    expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('2');
     expect(snapshotValues[snapshotHeaders.indexOf('Risco_Nivel')]).toBe('DESCONHECIDO');
     expect(
       JSON.parse(snapshotValues[snapshotHeaders.indexOf('Risco_Tags_JSON')]),
@@ -359,6 +349,8 @@ describe('perdecomp-persist', () => {
     expect(factRow[factsHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
     expect(factRow[factsHeaders.indexOf('Nome da Empresa')]).toBe('Empresa Teste');
     expect(factRow[factsHeaders.indexOf('Perdcomp_Numero')]).toBe(newPerdcompNumero);
+    expect(factRow[factsHeaders.indexOf('B1')]).toBe('');
+    expect(factRow[factsHeaders.indexOf('B2')]).toBe('');
     expect(factRow[factsHeaders.indexOf('Data_ISO')]).toBe(newPerdcompISO);
     expect(factRow[factsHeaders.indexOf('Data_DDMMAA')]).toBe('250925');
     expect(factRow[factsHeaders.indexOf('Tipo_Codigo')]).toBe('1');
@@ -406,7 +398,7 @@ describe('perdecomp-persist', () => {
     const lastCall = batchCalls[batchCalls.length - 1];
     expect(lastCall.requestBody.data).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ values: [['1']] }),
+        expect.objectContaining({ values: [['2']] }),
         expect.objectContaining({ values: [['']] }),
         expect.objectContaining({ values: [[nowISO]] }),
       ]),

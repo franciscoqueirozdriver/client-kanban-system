@@ -16,8 +16,41 @@ import {
 
 export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
 export const SHEET_FACTS = 'perdecomp_facts';
-const FACTS_PARTITION_REGEX = /^perdecomp_facts_\d{6}$/;
-const FACTS_PARTITION_PREFIX = 'perdecomp_facts_';
+
+const FACTS_COLUMNS = [
+  'Cliente_ID',
+  'Empresa_ID',
+  'Nome da Empresa',
+  'CNPJ',
+  'Perdcomp_Numero',
+  'Perdcomp_Formatado',
+  'B1',
+  'B2',
+  'Data_DDMMAA',
+  'Data_ISO',
+  'Tipo_Codigo',
+  'Tipo_Nome',
+  'Natureza',
+  'Familia',
+  'Credito_Codigo',
+  'Credito_Descricao',
+  'Risco_Nivel',
+  'Protocolo',
+  'Situacao',
+  'Situacao_Detalhamento',
+  'Motivo_Normalizado',
+  'Solicitante',
+  'Fonte',
+  'Data_Consulta',
+  'URL_Comprovante_HTML',
+  'Row_Hash',
+  'Inserted_At',
+  'Consulta_ID',
+  'Version',
+  'Deleted_Flag',
+] as const;
+
+type FactsColumn = (typeof FACTS_COLUMNS)[number];
 const PAYLOAD_SHARD_LIMIT_BYTES = 90000;
 const CARD_SCHEMA_VERSION_FALLBACK = 'v1';
 export const CLT_ID_RE = /^CLT-\d{4,}$/;
@@ -46,6 +79,7 @@ type LoadArgs = {
 };
 
 type SheetRow = Record<string, string>;
+type FactsRow = Record<FactsColumn, string>;
 
 type RiskTag = { label: string; count: number };
 
@@ -61,7 +95,7 @@ type PersistContext = {
 };
 
 type FilterResult = {
-  insert: SheetRow[];
+  insert: FactsRow[];
   skip: number;
 };
 
@@ -226,24 +260,6 @@ function columnNumberToLetter(columnNumber: number): string {
   return letter;
 }
 
-async function getSpreadsheetTitles(): Promise<string[]> {
-  const spreadsheetId = process.env.SPREADSHEET_ID;
-  if (!spreadsheetId) {
-    throw new Error('SPREADSHEET_ID is not set');
-  }
-  const sheets = await getSheetsClient();
-  const response = await withRetry(() =>
-    sheets.spreadsheets.get({
-      spreadsheetId,
-      fields: 'sheets(properties(title))',
-    })
-  );
-  const titles = (response.data.sheets ?? [])
-    .map((sheet) => sheet.properties?.title)
-    .filter((title): title is string => Boolean(title));
-  return titles;
-}
-
 async function getFactsHeaders(): Promise<string[]> {
   if (cachedFactsHeaders) return cachedFactsHeaders;
   const { headers } = await getSheetData(SHEET_FACTS, 'A1:ZZ1');
@@ -252,66 +268,6 @@ async function getFactsHeaders(): Promise<string[]> {
   }
   cachedFactsHeaders = headers;
   return headers;
-}
-
-async function ensureFactsPartitionSheet(sheetName: string, headers: string[]): Promise<void> {
-  if (sheetName === SHEET_FACTS) return;
-  const titles = await getSpreadsheetTitles();
-  if (titles.includes(sheetName)) return;
-
-  const spreadsheetId = process.env.SPREADSHEET_ID;
-  if (!spreadsheetId) {
-    throw new Error('SPREADSHEET_ID is not set');
-  }
-
-  const sheets = await getSheetsClient();
-  await withRetry(() =>
-    sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [
-          {
-            addSheet: {
-              properties: {
-                title: sheetName,
-                gridProperties: { frozenRowCount: 1 },
-              },
-            },
-          },
-        ],
-      },
-    })
-  );
-
-  if (!headers.length) return;
-  const lastColumn = columnNumberToLetter(headers.length) || 'A';
-  await withRetry(() =>
-    sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!A1:${lastColumn}1`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [headers] },
-    })
-  );
-}
-
-async function listFactsSheetNames(): Promise<string[]> {
-  const titles = await getSpreadsheetTitles();
-  const relevant = titles.filter(
-    (title) => title === SHEET_FACTS || FACTS_PARTITION_REGEX.test(title),
-  );
-  if (!relevant.includes(SHEET_FACTS)) {
-    relevant.unshift(SHEET_FACTS);
-  }
-  return Array.from(new Set(relevant));
-}
-
-async function pickFactsPartition(now: Date = new Date()): Promise<string> {
-  const headers = await getFactsHeaders();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const sheetName = `${FACTS_PARTITION_PREFIX}${now.getUTCFullYear()}${month}`;
-  await ensureFactsPartitionSheet(sheetName, headers);
-  return sheetName;
 }
 
 function pickCardString(card: any, ...paths: string[]): string | undefined {
@@ -426,7 +382,7 @@ export async function resolveClienteId({ providedClienteId, cnpj }: ResolveOpts)
   return nextId;
 }
 
-function mapFact(raw: any, ctx: PersistContext & { card?: any }): SheetRow {
+function mapFact(raw: any, ctx: PersistContext & { card?: any }): FactsRow {
   const perdcomp = coalesceString(
     raw.Perdcomp_Numero,
     raw.perdcompNumero,
@@ -502,8 +458,18 @@ function mapFact(raw: any, ctx: PersistContext & { card?: any }): SheetRow {
   const solicitante = toStringValue(raw.Solicitante ?? raw.solicitante ?? '');
   const motivoNormalizado = toStringValue(raw.Motivo_Normalizado ?? '');
   const valor = toStringValue(raw.Valor ?? raw.valor ?? '');
+  const nomeEmpresa =
+    ctx.nomeEmpresa ||
+    toStringValue(
+      coalesceString(
+        raw['Nome da Empresa'],
+        raw.Nome_da_Empresa,
+        raw.nomeEmpresa,
+        raw.empresa,
+      ),
+    );
 
-  const baseHash = idLinha
+  const rowHash = idLinha
     ? sha256([idLinha, tipoCod, natureza, creditoCod, dataISOFinal, valor].join('|'))
     : sha256(
         JSON.stringify(
@@ -517,51 +483,50 @@ function mapFact(raw: any, ctx: PersistContext & { card?: any }): SheetRow {
         )
       );
 
-  return {
+  const b1 = toStringValue(raw.B1 ?? '');
+  const b2 = toStringValue(raw.B2 ?? '');
+
+  const row: FactsRow = {
     Cliente_ID: ctx.clienteId,
     Empresa_ID: toStringValue(ctx.empresaId ?? ''),
-    'Nome da Empresa': ctx.nomeEmpresa ?? '',
+    'Nome da Empresa': nomeEmpresa,
     CNPJ: onlyDigits(ctx.cnpj),
 
     Perdcomp_Numero: perdcomp,
     Perdcomp_Formatado: perdcomp ? formatPerdcompNumero(perdcomp) : '',
-    Protocolo: protocolo,
-
+    B1: b1,
+    B2: b2,
     Data_DDMMAA: toDDMMAA(dataISOFinal),
     Data_ISO: dataISOFinal,
-
     Tipo_Codigo: tipoCod,
     Tipo_Nome: tipoNome,
     Natureza: natureza,
     Familia: familia,
-
     Credito_Codigo: creditoCod,
     Credito_Descricao: creditoDesc,
     Risco_Nivel: riscoNivel,
-
+    Protocolo: protocolo,
     Situacao: situacao,
     Situacao_Detalhamento: situacaoDetalhamento,
     Motivo_Normalizado: motivoNormalizado,
-
     Solicitante: solicitante,
-
-    Fonte: ctx.meta.fonte ?? '',
-    Data_Consulta: ctx.meta.dataConsultaISO ?? ctx.nowISO,
-    URL_Comprovante_HTML: ctx.meta.urlComprovante ?? '',
-
-    Row_Hash: baseHash,
+    Fonte: toStringValue(ctx.meta.fonte ?? ''),
+    Data_Consulta: toStringValue(ctx.meta.dataConsultaISO ?? ctx.nowISO),
+    URL_Comprovante_HTML: toStringValue(ctx.meta.urlComprovante ?? ''),
+    Row_Hash: rowHash,
     Inserted_At: ctx.nowISO,
-    Consulta_ID: ctx.meta.consultaId,
-
-    Version: 'v1',
-    Deleted_Flag: '',
+    Consulta_ID: toStringValue(ctx.meta.consultaId),
+    Version: toStringValue(ctx.meta.cardSchemaVersion ?? 'v1'),
+    Deleted_Flag: '0',
   };
+
+  return row;
 }
 
 function mapSnapshotRow(
   ctx: PersistContext & {
     card: any;
-    facts: SheetRow[];
+    facts: FactsRow[];
   }
 ): SheetRow {
   const { card, facts, meta, nowISO } = ctx;
@@ -708,28 +673,25 @@ async function upsertSnapshot(row: SheetRow) {
   );
 }
 
-async function filterNewFacts(clienteId: string, rows: SheetRow[]): Promise<FilterResult> {
+async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<FilterResult> {
   if (!rows.length) return { insert: [], skip: 0 };
-  const sheetNames = await listFactsSheetNames();
   const existingKeys = new Set<string>();
 
-  for (const sheetName of sheetNames) {
-    try {
-      const { rows: existingRows } = await getSheetData(sheetName);
-      for (const row of existingRows) {
-        if (toStringValue(row.Cliente_ID) !== clienteId) continue;
-        const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
-        const hash = toStringValue(row.Row_Hash ?? '');
-        const key = `${clienteId}|${numero}|${hash}`;
-        existingKeys.add(key);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn('FACTS_PARTITION_READ_FAIL', { sheetName, message });
+  try {
+    const { rows: existingRows } = await getSheetData(SHEET_FACTS);
+    for (const row of existingRows) {
+      if (toStringValue(row.Cliente_ID) !== clienteId) continue;
+      const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
+      const hash = toStringValue(row.Row_Hash ?? '');
+      const key = `${clienteId}|${numero}|${hash}`;
+      existingKeys.add(key);
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('FACTS_READ_FAIL', { sheetName: SHEET_FACTS, message });
   }
 
-  const insert: SheetRow[] = [];
+  const insert: FactsRow[] = [];
   let skip = 0;
 
   for (const row of rows) {
@@ -749,37 +711,40 @@ async function filterNewFacts(clienteId: string, rows: SheetRow[]): Promise<Filt
 
 async function readFactsByClienteId(clienteId: string): Promise<SheetRow[]> {
   if (!clienteId) return [];
-  const sheetNames = await listFactsSheetNames();
   const all: SheetRow[] = [];
-  for (const sheetName of sheetNames) {
-    try {
-      const { rows } = await getSheetData(sheetName);
-      for (const row of rows) {
-        if (toStringValue(row.Cliente_ID) !== clienteId) continue;
-        all.push(normalizeSheetRow(row));
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn('FACTS_PARTITION_READ_FAIL', { sheetName, message });
+  try {
+    const { rows } = await getSheetData(SHEET_FACTS);
+    for (const row of rows) {
+      if (toStringValue(row.Cliente_ID) !== clienteId) continue;
+      all.push(normalizeSheetRow(row));
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('FACTS_READ_FAIL', { sheetName: SHEET_FACTS, message });
   }
   return all;
 }
 
 async function appendFactsBatched(
-  sheetName: string,
-  rows: SheetRow[],
+  rows: FactsRow[],
   batchSize = 2000,
   maxRetries = 4,
 ): Promise<{ inserted: number; errors: Error[] }> {
   if (!rows.length) return { inserted: 0, errors: [] };
   const headers = await getFactsHeaders();
+  const orderedHeaders =
+    headers.length === FACTS_COLUMNS.length &&
+    FACTS_COLUMNS.every((column, index) => headers[index] === column)
+      ? headers
+      : [...FACTS_COLUMNS];
   const spreadsheetId = process.env.SPREADSHEET_ID;
   if (!spreadsheetId) {
     throw new Error('SPREADSHEET_ID is not set');
   }
   const sheets = await getSheetsClient();
-  const values = rows.map((row) => headers.map((header) => row[header] ?? ''));
+  const values = rows.map((row) =>
+    orderedHeaders.map((header) => row[header as FactsColumn] ?? ''),
+  );
   const batches = chunk(values, batchSize);
   let inserted = 0;
   const errors: Error[] = [];
@@ -790,7 +755,7 @@ async function appendFactsBatched(
         () =>
           sheets.spreadsheets.values.append({
             spreadsheetId,
-            range: sheetName,
+            range: SHEET_FACTS,
             valueInputOption: 'RAW',
             insertDataOption: 'INSERT_ROWS',
             requestBody: { values: batch },
@@ -963,8 +928,7 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
       const { insert, skip: skipCount } = await filterNewFacts(clienteIdFinal, mappedFacts);
       skip = skipCount;
       if (insert.length) {
-        const targetSheet = await pickFactsPartition(new Date());
-        const { inserted: appended, errors } = await appendFactsBatched(targetSheet, insert);
+        const { inserted: appended, errors } = await appendFactsBatched(insert);
         inserted = appended;
         if (errors.length) {
           factsError = toFactsErrorMessage(errors[0]);
@@ -975,7 +939,7 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
     }
 
     await markSnapshotPostFacts(clienteIdFinal, {
-      factsCount: factsError ? mappedFacts.length : inserted,
+      factsCount: mappedFacts.length,
       error: factsError,
       nowISO,
     });
