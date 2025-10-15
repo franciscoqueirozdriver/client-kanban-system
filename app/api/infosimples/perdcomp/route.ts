@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
-import { savePerdecompResults } from '@/lib/perdecomp-persist';
+import { savePerdecompResults, loadSnapshotCard } from '@/lib/perdecomp-persist';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 import {
   agregaPerdcomp,
@@ -222,39 +222,74 @@ export async function POST(request: Request) {
       endpoint: 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp',
     };
 
-    // 1. If not forcing, check the spreadsheet first
+    // 1. If not forcing, check the snapshot first
     if (!force) {
-      const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
-
-      const dataForCnpj = rows.filter(row => {
-        const rowCnpj = padCNPJ14(row.CNPJ);
-        return row.Cliente_ID === clienteId || rowCnpj === cnpj;
-      });
-
-      if (dataForCnpj.length > 0) {
-        const lastConsulta = dataForCnpj.reduce((acc, r) => {
-          const dc = r.Data_Consulta;
-          // Only consider valid-looking dates (basic ISO format check)
-          if (!dc || typeof dc !== 'string' || !dc.startsWith('20')) return acc;
-          try {
-            // Check if dates are valid before comparing
-            const d1 = new Date(dc);
-            if (isNaN(d1.getTime())) return acc;
-            if (!acc) return dc;
-            const d2 = new Date(acc);
-            if (isNaN(d2.getTime())) return dc;
-            return d1 > d2 ? dc : acc;
-          } catch {
-            return acc;
+      console.info('SNAPSHOT_MODE', { empresa: nomeEmpresa, clienteId, source: 'perdecomp_snapshot' });
+      
+      try {
+        const snapshotCard = await loadSnapshotCard({ clienteId });
+        
+        if (snapshotCard) {
+          console.info('SNAPSHOT_ROWS', { 
+            empresa: nomeEmpresa, 
+            clienteId,
+            count: Array.isArray(snapshotCard?.perdcomp) ? snapshotCard.perdcomp.length : 0 
+          });
+          
+          // Extract data from the rich snapshot card
+          const resumo = snapshotCard?.resumo ?? snapshotCard?.perdcompResumo ?? {};
+          const mappedCount = snapshotCard?.mappedCount ?? (Array.isArray(snapshotCard?.perdcomp) ? snapshotCard.perdcomp.length : 0);
+          const totalPerdcomp = snapshotCard?.total_perdcomp ?? resumo?.total ?? mappedCount;
+          const siteReceipt = snapshotCard?.site_receipt ?? snapshotCard?.header?.site_receipt ?? null;
+          const lastConsultation = snapshotCard?.header?.requested_at ?? snapshotCard?.requestedAt ?? null;
+          const primeiro = snapshotCard?.primeiro ?? (Array.isArray(snapshotCard?.perdcomp) && snapshotCard.perdcomp[0]) ?? null;
+          const perdcompCodigos = snapshotCard?.perdcompCodigos ?? [];
+          
+          const resp: any = {
+            ok: true,
+            fonte: 'perdecomp_snapshot',
+            mappedCount,
+            total_perdcomp: totalPerdcomp,
+            perdcompResumo: resumo,
+            perdcompCodigos,
+            site_receipt: siteReceipt,
+            primeiro,
+            header: {
+              requested_at: lastConsultation,
+              cnpj,
+              nomeEmpresa,
+              clienteId,
+            },
+            // Include the full card data for rich rendering
+            ...snapshotCard,
+          };
+          
+          if (debugMode) {
+            resp.debug = {
+              requestedAt,
+              fonte: 'perdecomp_snapshot',
+              apiRequest,
+              apiResponse: null,
+              mappedCount,
+              header: { requested_at: lastConsultation },
+              total_perdcomp: totalPerdcomp,
+            };
           }
-        }, '');
-
-        const rawQtd = dataForCnpj[0]?.Quantidade_PERDCOMP ?? '0';
-        const qtdSemCanc = parseInt(String(rawQtd).replace(/\D/g, ''), 10) || 0;
-        const dcomp = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_DCOMP ?? '0').replace(/\D/g, ''), 10) || 0;
-        const rest = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_REST ?? '0').replace(/\D/g, ''), 10) || 0;
-        const ressarc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_RESSARC ?? '0').replace(/\D/g, ''), 10) || 0;
-        const canc = parseInt(String(dataForCnpj[0]?.Qtd_PERDCOMP_CANCEL ?? '0').replace(/\D/g, ''), 10) || 0;
+          
+          return NextResponse.json(resp);
+        }
+      } catch (error) {
+        console.warn('SNAPSHOT_READ_FAIL', { 
+          clienteId, 
+          error: error instanceof Error ? error.message : String(error) 
+        });
+        // Fall through to API call if snapshot read fails
+      }
+      
+      // Fallback: check old PERDECOMP sheet for backward compatibility
+      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
+      if (fallback) {
+        const { quantidade, dcomp, rest, ressarc, canc, site_receipt, requested_at } = fallback;
         const porFamilia = { DCOMP: dcomp, REST: rest, RESSARC: ressarc, CANC: canc, DESCONHECIDO: 0 };
         const porNaturezaAgrupada = {
           '1.3/1.7': dcomp,
@@ -264,27 +299,28 @@ export async function POST(request: Request) {
         const total = dcomp + rest + ressarc + canc;
         const resumo = {
           total,
-          totalSemCancelamento: qtdSemCanc || dcomp + rest + ressarc,
+          totalSemCancelamento: quantidade || dcomp + rest + ressarc,
           canc,
           porFamilia,
           porNaturezaAgrupada,
         };
         const resp: any = {
           ok: true,
-          fonte: 'planilha',
-          linhas: dataForCnpj,
+          fonte: 'planilha_fallback',
           perdcompResumo: resumo,
           total_perdcomp: resumo.total,
-          perdcompCodigos: [], // Códigos individuais não disponíveis na planilha
+          perdcompCodigos: [],
+          site_receipt,
+          header: { requested_at },
         };
         if (debugMode) {
           resp.debug = {
             requestedAt,
-            fonte: 'planilha',
+            fonte: 'planilha_fallback',
             apiRequest,
             apiResponse: null,
-            mappedCount: dataForCnpj.length,
-            header: { requested_at: lastConsulta },
+            mappedCount: quantidade,
+            header: { requested_at },
             total_perdcomp: resumo.total,
           };
         }
