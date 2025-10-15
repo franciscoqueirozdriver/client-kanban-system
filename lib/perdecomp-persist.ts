@@ -767,7 +767,7 @@ async function appendFactsBatched(
       const err = error instanceof Error ? error : new Error(String(error));
       errors.push(err);
       console.warn('FACTS_BATCH_APPEND_FAIL', {
-        sheetName,
+        sheetName: SHEET_FACTS,
         batchSize: batch.length,
         message: err.message,
       });
