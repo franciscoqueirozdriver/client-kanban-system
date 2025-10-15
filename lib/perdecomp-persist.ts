@@ -7,6 +7,12 @@ import {
   withRetry,
 } from './googleSheets.js';
 import { formatPerdcompNumero } from '@/utils/perdcomp';
+import {
+  parsePerdcomp as parsePerdcompCodigo,
+  TIPOS_DOCUMENTO,
+  NATUREZA_FAMILIA,
+  CREDITOS_DESCRICAO,
+} from '@/lib/perdcomp';
 
 export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
 export const SHEET_FACTS = 'perdecomp_facts';
@@ -71,6 +77,15 @@ function toStringValue(value: unknown): string {
   }
 }
 
+function coalesceString(...values: Array<unknown>): string {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    const str = toStringValue(value);
+    if (str.trim() !== '') return str;
+  }
+  return '';
+}
+
 function onlyDigits(input?: string | null): string {
   return (input ?? '').replace(/\D+/g, '');
 }
@@ -106,6 +121,24 @@ function safeJSONStringify(input: any): string {
   } catch (error) {
     return '';
   }
+}
+
+function getTipoNomeFromCodigo(codigo?: string): string {
+  if (!codigo) return '';
+  const numero = Number(codigo);
+  if (Number.isNaN(numero)) return '';
+  const tipo = TIPOS_DOCUMENTO[numero];
+  return tipo?.desc ?? tipo?.nome ?? '';
+}
+
+function getFamiliaFromNatureza(natureza?: string): string {
+  if (!natureza) return '';
+  return NATUREZA_FAMILIA[natureza] ?? '';
+}
+
+function getCreditoDescricaoFromCodigo(codigo?: string): string {
+  if (!codigo) return '';
+  return CREDITOS_DESCRICAO[codigo] ?? '';
 }
 
 function columnNumberToLetter(columnNumber: number): string {
@@ -202,23 +235,60 @@ export async function resolveClienteId({ providedClienteId, cnpj }: ResolveOpts)
 }
 
 function mapFact(raw: any, ctx: PersistContext): SheetRow {
-  const perdcomp = toStringValue(
-    raw.Perdcomp_Numero ?? raw.perdcompNumero ?? raw.perdcomp ?? raw.numero ?? ''
+  const perdcomp = coalesceString(
+    raw.Perdcomp_Numero,
+    raw.perdcompNumero,
+    raw.perdcomp,
+    raw.numero
   );
-  const protocolo = toStringValue(raw.Protocolo ?? raw.protocolo ?? '');
+  const parsed = perdcomp ? parsePerdcompCodigo(perdcomp) : null;
+  const parsedValid = Boolean(parsed?.valido);
+  const parsedTipoCod =
+    parsedValid && parsed?.bloco4 !== undefined ? String(parsed.bloco4) : '';
+  const parsedNatureza = parsedValid ? toStringValue(parsed?.natureza ?? '') : '';
+  const parsedFamilia = parsedNatureza ? getFamiliaFromNatureza(parsedNatureza) : '';
+  const parsedCreditoCod = parsedValid ? toStringValue(parsed?.credito ?? '') : '';
+  const parsedProtocolo = parsedValid ? toStringValue(parsed?.protocolo ?? '') : '';
+  const parsedTipoNome = parsedValid ? getTipoNomeFromCodigo(parsedTipoCod) : '';
+  const parsedCreditoDesc = parsedValid
+    ? getCreditoDescricaoFromCodigo(parsedCreditoCod)
+    : '';
+  const parsedDataISO = parsedValid ? normalizeISO(parsed?.dataISO ?? '') : '';
+
+  const protocolo = coalesceString(raw.Protocolo, raw.protocolo, parsedProtocolo);
   const idLinha = perdcomp || protocolo;
 
   const dataISO = normalizeISO(
-    raw.Data_ISO ?? raw.dataISO ?? raw.data ?? raw.dataConsulta ?? ctx.meta.dataConsultaISO ?? ''
+    raw.Data_ISO ??
+      raw.dataISO ??
+      raw.data ??
+      raw.dataConsulta ??
+      parsedDataISO ??
+      ctx.meta.dataConsultaISO ??
+      ''
   );
+  const dataISOFinal = dataISO || parsedDataISO || '';
 
-  const tipoCod = toStringValue(raw.Tipo_Codigo ?? raw.tipoCodigo ?? '');
-  const tipoNome = toStringValue(raw.Tipo_Nome ?? raw.tipoNome ?? raw.tipo ?? '');
-  const natureza = toStringValue(raw.Natureza ?? raw.natureza ?? '');
-  const familia = toStringValue(raw.Familia ?? raw.familia ?? '');
-  const creditoCod = toStringValue(raw.Credito_Codigo ?? raw.creditoCodigo ?? '');
-  const creditoDesc = toStringValue(
-    raw.Credito_Descricao ?? raw.creditoDescricao ?? raw.Credito ?? raw.credito ?? ''
+  const tipoCod = coalesceString(raw.Tipo_Codigo, raw.tipoCodigo, parsedTipoCod);
+  const tipoNome = coalesceString(
+    raw.Tipo_Nome,
+    raw.tipoNome,
+    raw.tipo,
+    parsedTipoNome
+  );
+  const natureza = coalesceString(raw.Natureza, raw.natureza, parsedNatureza);
+  const familia = coalesceString(raw.Familia, raw.familia, parsedFamilia);
+  const creditoCod = coalesceString(
+    raw.Credito_Codigo,
+    raw.creditoCodigo,
+    parsedCreditoCod
+  );
+  const creditoDesc = coalesceString(
+    raw.Credito_Descricao,
+    raw.creditoDescricao,
+    raw.Credito,
+    raw.credito,
+    parsedCreditoDesc
   );
   const riscoNivel = toStringValue(raw.Risco_Nivel ?? raw.risco ?? '');
   const situacao = toStringValue(raw.Situacao ?? raw.situacao ?? '');
@@ -230,7 +300,7 @@ function mapFact(raw: any, ctx: PersistContext): SheetRow {
   const valor = toStringValue(raw.Valor ?? raw.valor ?? '');
 
   const baseHash = idLinha
-    ? sha256([idLinha, tipoCod, natureza, creditoCod, dataISO, valor].join('|'))
+    ? sha256([idLinha, tipoCod, natureza, creditoCod, dataISOFinal, valor].join('|'))
     : sha256(
         JSON.stringify(
           Object.keys(raw ?? {})
@@ -253,8 +323,8 @@ function mapFact(raw: any, ctx: PersistContext): SheetRow {
     Perdcomp_Formatado: perdcomp ? formatPerdcompNumero(perdcomp) : '',
     Protocolo: protocolo,
 
-    Data_DDMMAA: toDDMMAA(dataISO),
-    Data_ISO: dataISO,
+    Data_DDMMAA: toDDMMAA(dataISOFinal),
+    Data_ISO: dataISOFinal,
 
     Tipo_Codigo: tipoCod,
     Tipo_Nome: tipoNome,
@@ -301,7 +371,31 @@ function mapSnapshotRow(
     };
   const porNatureza =
     card?.agregados?.porNatureza ?? card?.porNatureza ?? resumo?.porNaturezaAgrupada ?? [];
-  const porCredito = card?.agregados?.porCredito ?? card?.porCredito ?? [];
+  const porCreditoFromCard =
+    card?.agregados?.porCredito ?? card?.porCredito ?? null;
+  const riscoNivel = toStringValue(
+    card?.risk?.nivel ?? card?.risk?.level ?? card?.risco?.nivel ?? ''
+  );
+  const riscoTags = Array.isArray(card?.risk?.tags ?? card?.riskTags)
+    ? card?.risk?.tags ?? card?.riskTags ?? []
+    : [];
+
+  const porCreditoFallback = porCreditoFromCard
+    ? porCreditoFromCard
+    : Object.values(
+        (facts ?? []).reduce<Record<string, { label: string; count: number }>>(
+          (acc, fact) => {
+            const label =
+              fact.Credito_Descricao || fact.Credito_Codigo || 'DESCONHECIDO';
+            if (!acc[label]) {
+              acc[label] = { label, count: 0 };
+            }
+            acc[label].count += 1;
+            return acc;
+          },
+          {}
+        )
+      );
 
   const datas = uniqSortedISO([
     ...((card?.datas as string[]) ?? []),
@@ -332,12 +426,11 @@ function mapSnapshotRow(
     Qtd_REST: String(porFamilia?.REST ?? 0),
     Qtd_RESSARC: String(porFamilia?.RESSARC ?? 0),
 
-    Risco_Nivel:
-      toStringValue(card?.risk?.nivel ?? card?.risk?.level ?? card?.risco?.nivel ?? ''),
-    Risco_Tags_JSON: safeJSONStringify(card?.risk?.tags ?? card?.riskTags ?? []),
+    Risco_Nivel: riscoNivel,
+    Risco_Tags_JSON: safeJSONStringify(riscoTags),
 
     Por_Natureza_JSON: safeJSONStringify(porNatureza),
-    Por_Credito_JSON: safeJSONStringify(porCredito),
+    Por_Credito_JSON: safeJSONStringify(porCreditoFallback),
 
     Datas_JSON: safeJSONStringify(datas),
     Primeira_Data_ISO: primeiraData,
@@ -575,6 +668,7 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
   const nomeEmpresa =
     pickCardString(
       card,
+      'nomeEmpresa',
       'header.nomeEmpresa',
       'Nome_da_Empresa',
       'Nome da Empresa',

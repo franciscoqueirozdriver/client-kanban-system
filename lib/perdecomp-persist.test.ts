@@ -175,28 +175,30 @@ describe('perdecomp-persist', () => {
       consultaId: 'consulta-123',
     };
 
+    const duplicatePerdcompNumero = '111112222201020311011234';
+    const duplicatePerdcompISO = normalizeISO('2003-02-01');
     const duplicateFact = {
       Cliente_ID: 'COMP-1',
       Empresa_ID: '',
       CNPJ: '12345678000190',
-      Perdcomp_Numero: '123451234512345123451234',
-      Natureza: '1.3',
-      Credito_Codigo: '01',
-      Data_ISO: '2023-12-01T00:00:00.000Z',
+      Perdcomp_Numero: duplicatePerdcompNumero,
+      Natureza: '',
+      Credito_Codigo: '',
+      Data_ISO: '',
       Valor: '0',
-      Tipo_Codigo: 'DCOMP',
-      Tipo_Nome: 'DCOMP',
+      Tipo_Codigo: '',
+      Tipo_Nome: '',
       Situacao: 'Em análise',
     };
     const duplicateHash = crypto
       .createHash('sha256')
       .update(
         [
-          duplicateFact.Perdcomp_Numero,
-          duplicateFact.Tipo_Codigo,
-          duplicateFact.Natureza,
-          duplicateFact.Credito_Codigo,
-          normalizeISO(duplicateFact.Data_ISO),
+          duplicatePerdcompNumero,
+          '1',
+          '1.1',
+          '01',
+          duplicatePerdcompISO,
           duplicateFact.Valor,
         ].join('|'),
       )
@@ -249,19 +251,22 @@ describe('perdecomp-persist', () => {
       perdcompCodigos: ['123451234512345123451234', '987659876598765987659876'],
     };
 
+    const newPerdcompNumero = '226629052425092513189471';
+    const newPerdcompISO = normalizeISO('2025-09-25');
+
     const facts = [
       { ...duplicateFact },
       {
         Cliente_ID: 'COMP-1',
         Empresa_ID: '',
         CNPJ: '12345678000190',
-        Perdcomp_Numero: '987659876598765987659876',
-        Natureza: '1.2',
-        Credito_Codigo: '02',
-        Data_ISO: '2023-12-02T00:00:00.000Z',
+        Perdcomp_Numero: newPerdcompNumero,
+        Natureza: '',
+        Credito_Codigo: '',
+        Data_ISO: '',
         Valor: '',
-        Tipo_Codigo: 'REST',
-        Tipo_Nome: 'REST',
+        Tipo_Codigo: '',
+        Tipo_Nome: '',
       },
     ];
 
@@ -277,31 +282,49 @@ describe('perdecomp-persist', () => {
     expect(warnSpy).not.toHaveBeenCalled();
     expect(appendMock).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ range: 'perdecomp_snapshot' }),
+      expect.objectContaining({ range: 'perdecomp_facts' }),
     );
     expect(appendMock).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ range: 'perdecomp_facts' }),
+      expect.objectContaining({ range: 'perdecomp_snapshot' }),
     );
 
-    const snapshotValues = appendMock.mock.calls[0][0].requestBody.values[0];
+    const factsAppendCall = appendMock.mock.calls[0][0];
+    const snapshotAppendCall = appendMock.mock.calls[1][0];
+
+    const snapshotValues = snapshotAppendCall.requestBody.values[0];
+    const appendedFacts = factsAppendCall.requestBody.values;
     expect(snapshotValues[snapshotHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
     expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('12345678000190');
     expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('1');
-
-    const appendedFacts = appendMock.mock.calls[1][0].requestBody.values;
     expect(appendedFacts).toHaveLength(1);
     const factRow = appendedFacts[0];
     expect(factRow[factsHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
     expect(factRow[factsHeaders.indexOf('Nome da Empresa')]).toBe('Empresa Teste');
-    expect(factRow[factsHeaders.indexOf('Perdcomp_Numero')]).toBe('987659876598765987659876');
-    expect(factRow[factsHeaders.indexOf('Data_DDMMAA')]).toBe('021223');
+    expect(factRow[factsHeaders.indexOf('Perdcomp_Numero')]).toBe(newPerdcompNumero);
+    expect(factRow[factsHeaders.indexOf('Data_ISO')]).toBe(newPerdcompISO);
+    expect(factRow[factsHeaders.indexOf('Data_DDMMAA')]).toBe('250925');
+    expect(factRow[factsHeaders.indexOf('Tipo_Codigo')]).toBe('1');
+    expect(factRow[factsHeaders.indexOf('Tipo_Nome')]).toBe('Declaração de Compensação');
+    expect(factRow[factsHeaders.indexOf('Natureza')]).toBe('1.3');
+    expect(factRow[factsHeaders.indexOf('Familia')]).toBe('DCOMP');
+    expect(factRow[factsHeaders.indexOf('Credito_Codigo')]).toBe('18');
+    expect(factRow[factsHeaders.indexOf('Credito_Descricao')]).toBe('Outros Créditos');
+    expect(factRow[factsHeaders.indexOf('Protocolo')]).toBe('9471');
     expect(factRow[factsHeaders.indexOf('Row_Hash')]).toBe(
       crypto
         .createHash('sha256')
-        .update(['987659876598765987659876', 'REST', '1.2', '02', '2023-12-02T00:00:00.000Z', ''].join('|'))
+        .update([newPerdcompNumero, '1', '1.3', '18', newPerdcompISO, ''].join('|'))
         .digest('hex'),
     );
+
+    const porCredito = JSON.parse(
+      snapshotValues[snapshotHeaders.indexOf('Por_Credito_JSON')],
+    );
+    expect(porCredito).toEqual([
+      { label: 'Ressarcimento de IPI', count: 1 },
+      { label: 'Outros Créditos', count: 1 },
+    ]);
 
     expect(infoSpy).toHaveBeenCalledWith('PERSIST_START', {
       clienteId: 'CLT-3684',
