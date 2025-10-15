@@ -297,6 +297,10 @@ describe('perdecomp-persist', () => {
     expect(snapshotValues[snapshotHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
     expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('12345678000190');
     expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('1');
+    expect(snapshotValues[snapshotHeaders.indexOf('Risco_Nivel')]).toBe('DESCONHECIDO');
+    expect(
+      JSON.parse(snapshotValues[snapshotHeaders.indexOf('Risco_Tags_JSON')]),
+    ).toEqual([{ label: 'DESCONHECIDO', count: 2 }]);
     expect(appendedFacts).toHaveLength(1);
     const factRow = appendedFacts[0];
     expect(factRow[factsHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
@@ -405,7 +409,8 @@ describe('perdecomp-persist', () => {
   });
 
   it('loads snapshot card by concatenating shards', async () => {
-    getSheetData.mockResolvedValueOnce({
+    getSheetData
+      .mockResolvedValueOnce({
       headers: ['Cliente_ID', 'Resumo_Ultima_Consulta_JSON_P1', 'Resumo_Ultima_Consulta_JSON_P2'],
       rows: [
         {
@@ -414,9 +419,10 @@ describe('perdecomp-persist', () => {
           Resumo_Ultima_Consulta_JSON_P2: ',"valor":1}',
         },
       ],
-    });
+    })
+      .mockResolvedValueOnce({ headers: ['Cliente_ID'], rows: [] });
 
     const card = await loadSnapshotCard({ clienteId: 'CLT-3683' });
-    expect(card).toEqual({ nome: 'Empresa', valor: 1 });
+    expect(card).toEqual({ nome: 'Empresa', valor: 1, risk: { nivel: '', tags: [] }, agregados: { porCredito: [] } });
   });
 });

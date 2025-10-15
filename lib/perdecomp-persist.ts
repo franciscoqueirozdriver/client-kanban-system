@@ -16,7 +16,7 @@ import {
 
 export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
 export const SHEET_FACTS = 'perdecomp_facts';
-const PAYLOAD_SHARD_LIMIT = 45000;
+const PAYLOAD_SHARD_LIMIT_BYTES = 90000;
 const CARD_SCHEMA_VERSION_FALLBACK = 'v1';
 export const CLT_ID_RE = /^CLT-\d{4,}$/;
 
@@ -44,6 +44,10 @@ type LoadArgs = {
 };
 
 type SheetRow = Record<string, string>;
+
+type RiskTag = { label: string; count: number };
+
+export type DerivedRisk = { nivel: string; tags: RiskTag[] };
 
 type PersistContext = {
   clienteId: string;
@@ -75,6 +79,15 @@ function toStringValue(value: unknown): string {
   } catch {
     return '';
   }
+}
+
+function normalizeSheetRow(row: Record<string, any>): SheetRow {
+  const normalized: SheetRow = {};
+  Object.entries(row ?? {}).forEach(([key, value]) => {
+    if (key === '_rowNumber') return;
+    normalized[key] = toStringValue(value);
+  });
+  return normalized;
 }
 
 function coalesceString(...values: Array<unknown>): string {
@@ -121,6 +134,54 @@ function safeJSONStringify(input: any): string {
   } catch (error) {
     return '';
   }
+}
+
+function splitPayloadIntoShards(payload: string): {
+  shardP1: string;
+  shardP2: string;
+  bytes: number;
+} {
+  const totalBytes = Buffer.byteLength(payload, 'utf8');
+  if (totalBytes <= PAYLOAD_SHARD_LIMIT_BYTES) {
+    return { shardP1: payload, shardP2: '', bytes: totalBytes };
+  }
+
+  let endIndex = Math.min(payload.length, Math.floor(payload.length * 0.6));
+  let shardP1 = payload.slice(0, endIndex);
+  let shardP2 = payload.slice(endIndex);
+
+  while (Buffer.byteLength(shardP1, 'utf8') > PAYLOAD_SHARD_LIMIT_BYTES && endIndex > 0) {
+    endIndex -= Math.max(1, Math.floor(endIndex * 0.05));
+    shardP1 = payload.slice(0, endIndex);
+    shardP2 = payload.slice(endIndex);
+  }
+
+  if (Buffer.byteLength(shardP1, 'utf8') > PAYLOAD_SHARD_LIMIT_BYTES) {
+    // Fallback: binary split by iterating backwards until it fits.
+    endIndex = payload.length;
+    shardP1 = payload;
+    shardP2 = '';
+    for (let i = payload.length - 1; i >= 0; i -= 1) {
+      shardP1 = payload.slice(0, i);
+      if (Buffer.byteLength(shardP1, 'utf8') <= PAYLOAD_SHARD_LIMIT_BYTES) {
+        shardP2 = payload.slice(i);
+        break;
+      }
+    }
+  }
+
+  if (Buffer.byteLength(shardP2, 'utf8') > PAYLOAD_SHARD_LIMIT_BYTES) {
+    console.warn('PAYLOAD_SHARD_OVERFLOW', {
+      shard: 'P2',
+      bytes: Buffer.byteLength(shardP2, 'utf8'),
+    });
+  }
+
+  return {
+    shardP1,
+    shardP2,
+    bytes: totalBytes,
+  };
 }
 
 function getTipoNomeFromCodigo(codigo?: string): string {
@@ -172,6 +233,37 @@ function pickCardString(card: any, ...paths: string[]): string | undefined {
     }
   }
   return undefined;
+}
+
+export function deriveRiskFromFacts(facts: SheetRow[]): DerivedRisk {
+  const counts = new Map<string, number>();
+  for (const fact of facts ?? []) {
+    const nivel = coalesceString(fact?.Risco_Nivel, fact?.risco) || 'DESCONHECIDO';
+    counts.set(nivel, (counts.get(nivel) ?? 0) + 1);
+  }
+
+  const tags: RiskTag[] = Array.from(counts.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => (b.count === a.count ? a.label.localeCompare(b.label) : b.count - a.count));
+
+  return {
+    nivel: tags[0]?.label ?? '',
+    tags,
+  };
+}
+
+export function derivePorCreditoFromFacts(
+  facts: SheetRow[],
+): Array<{ label: string; count: number }> {
+  const aggregates = new Map<string, { label: string; count: number }>();
+  for (const fact of facts ?? []) {
+    const label =
+      coalesceString(fact?.Credito_Descricao, fact?.Credito_Codigo) || 'DESCONHECIDO';
+    const existing = aggregates.get(label) ?? { label, count: 0 };
+    existing.count += 1;
+    aggregates.set(label, existing);
+  }
+  return Array.from(aggregates.values());
 }
 
 async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<string | null> {
@@ -234,7 +326,7 @@ export async function resolveClienteId({ providedClienteId, cnpj }: ResolveOpts)
   return nextId;
 }
 
-function mapFact(raw: any, ctx: PersistContext): SheetRow {
+function mapFact(raw: any, ctx: PersistContext & { card?: any }): SheetRow {
   const perdcomp = coalesceString(
     raw.Perdcomp_Numero,
     raw.perdcompNumero,
@@ -277,7 +369,14 @@ function mapFact(raw: any, ctx: PersistContext): SheetRow {
     parsedTipoNome
   );
   const natureza = coalesceString(raw.Natureza, raw.natureza, parsedNatureza);
-  const familia = coalesceString(raw.Familia, raw.familia, parsedFamilia);
+  const familia = coalesceString(
+    raw.Familia,
+    raw.familia,
+    parsedFamilia,
+    parsedTipoCod === '1' || tipoCod === '1' ? 'DCOMP' : '',
+    parsedTipoCod === '2' || tipoCod === '2' ? 'REST' : '',
+    parsedTipoCod === '8' || tipoCod === '8' ? 'CANC' : '',
+  );
   const creditoCod = coalesceString(
     raw.Credito_Codigo,
     raw.creditoCodigo,
@@ -290,7 +389,12 @@ function mapFact(raw: any, ctx: PersistContext): SheetRow {
     raw.credito,
     parsedCreditoDesc
   );
-  const riscoNivel = toStringValue(raw.Risco_Nivel ?? raw.risco ?? '');
+  const riscoNivel = coalesceString(
+    raw.Risco_Nivel,
+    raw.risco,
+    ctx.card?.risk?.nivel,
+    ctx.card?.risk?.level,
+  );
   const situacao = toStringValue(raw.Situacao ?? raw.situacao ?? '');
   const situacaoDetalhamento = toStringValue(
     raw.Situacao_Detalhamento ?? raw.situacaoDetalhamento ?? ''
@@ -371,31 +475,28 @@ function mapSnapshotRow(
     };
   const porNatureza =
     card?.agregados?.porNatureza ?? card?.porNatureza ?? resumo?.porNaturezaAgrupada ?? [];
-  const porCreditoFromCard =
-    card?.agregados?.porCredito ?? card?.porCredito ?? null;
-  const riscoNivel = toStringValue(
-    card?.risk?.nivel ?? card?.risk?.level ?? card?.risco?.nivel ?? ''
-  );
-  const riscoTags = Array.isArray(card?.risk?.tags ?? card?.riskTags)
-    ? card?.risk?.tags ?? card?.riskTags ?? []
-    : [];
 
-  const porCreditoFallback = porCreditoFromCard
-    ? porCreditoFromCard
-    : Object.values(
-        (facts ?? []).reduce<Record<string, { label: string; count: number }>>(
-          (acc, fact) => {
-            const label =
-              fact.Credito_Descricao || fact.Credito_Codigo || 'DESCONHECIDO';
-            if (!acc[label]) {
-              acc[label] = { label, count: 0 };
-            }
-            acc[label].count += 1;
-            return acc;
-          },
-          {}
-        )
-      );
+  const cardRiskNivel = coalesceString(
+    card?.risk?.nivel,
+    card?.risk?.level,
+    card?.risco?.nivel,
+  );
+  const cardRiskTags = Array.isArray(card?.risk?.tags ?? card?.riskTags)
+    ? (card?.risk?.tags ?? card?.riskTags ?? [])
+    : [];
+  const derivedRisk = deriveRiskFromFacts(facts);
+  const risk = {
+    nivel: cardRiskNivel || derivedRisk.nivel,
+    tags: (cardRiskNivel || cardRiskTags.length)
+      ? cardRiskTags
+      : derivedRisk.tags,
+  };
+
+  const porCreditoCandidate = card?.agregados?.porCredito ?? card?.porCredito ?? null;
+  const porCredito =
+    Array.isArray(porCreditoCandidate) && porCreditoCandidate.length
+      ? porCreditoCandidate
+      : derivePorCreditoFromFacts(facts);
 
   const datas = uniqSortedISO([
     ...((card?.datas as string[]) ?? []),
@@ -405,14 +506,7 @@ function mapSnapshotRow(
   const ultimaData = datas[datas.length - 1] ?? '';
 
   const payload = safeJSONStringify(card);
-  const payloadBytes = Buffer.byteLength(payload, 'utf8');
-  let shardP1 = payload;
-  let shardP2 = '';
-  if (payload.length > PAYLOAD_SHARD_LIMIT) {
-    const cut = Math.floor(payload.length / 2);
-    shardP1 = payload.slice(0, cut);
-    shardP2 = payload.slice(cut);
-  }
+  const { shardP1, shardP2, bytes } = splitPayloadIntoShards(payload);
   const snapshotHash = sha256(shardP1 + shardP2);
 
   return {
@@ -426,11 +520,11 @@ function mapSnapshotRow(
     Qtd_REST: String(porFamilia?.REST ?? 0),
     Qtd_RESSARC: String(porFamilia?.RESSARC ?? 0),
 
-    Risco_Nivel: riscoNivel,
-    Risco_Tags_JSON: safeJSONStringify(riscoTags),
+    Risco_Nivel: risk.nivel ?? '',
+    Risco_Tags_JSON: safeJSONStringify(risk.tags ?? []),
 
     Por_Natureza_JSON: safeJSONStringify(porNatureza),
-    Por_Credito_JSON: safeJSONStringify(porCreditoFallback),
+    Por_Credito_JSON: safeJSONStringify(porCredito),
 
     Datas_JSON: safeJSONStringify(datas),
     Primeira_Data_ISO: primeiraData,
@@ -438,7 +532,7 @@ function mapSnapshotRow(
 
     Resumo_Ultima_Consulta_JSON_P1: shardP1,
     Resumo_Ultima_Consulta_JSON_P2: shardP2,
-    Payload_Bytes: String(payloadBytes),
+    Payload_Bytes: String(bytes),
     Snapshot_Hash: snapshotHash,
 
     Card_Schema_Version: meta.cardSchemaVersion ?? CARD_SCHEMA_VERSION_FALLBACK,
@@ -546,6 +640,14 @@ async function filterNewFacts(clienteId: string, rows: SheetRow[]): Promise<Filt
   }
 
   return { insert, skip };
+}
+
+async function readFactsByClienteId(clienteId: string): Promise<SheetRow[]> {
+  if (!clienteId) return [];
+  const { rows } = await getSheetData(SHEET_FACTS);
+  return rows
+    .filter((row) => toStringValue(row.Cliente_ID) === clienteId)
+    .map((row) => normalizeSheetRow(row));
 }
 
 async function appendFacts(rows: SheetRow[]): Promise<number> {
@@ -688,7 +790,7 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
   console.info('PERSIST_START', { clienteId: clienteIdFinal, consultaId: args.meta.consultaId });
 
   try {
-    const mappedFacts = (args.facts ?? []).map((raw) => mapFact(raw, ctx));
+    const mappedFacts = (args.facts ?? []).map((raw) => mapFact(raw, { ...ctx, card }));
     const { insert, skip } = await filterNewFacts(clienteIdFinal, mappedFacts);
     const insertedCount = await appendFacts(insert);
     console.info('FACTS_OK', { clienteId: clienteIdFinal, inserted: insertedCount, skipped: skip });
@@ -719,7 +821,36 @@ export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | n
   const payload = p1 + p2;
   if (!payload) return null;
   try {
-    return JSON.parse(payload);
+    const card = JSON.parse(payload || '{}');
+
+    const needsRisk = !card?.risk || !coalesceString(card?.risk?.nivel, card?.risk?.level);
+    const needsCredito =
+      !card?.agregados ||
+      !Array.isArray(card.agregados?.porCredito) ||
+      card.agregados.porCredito.length === 0;
+
+    if (needsRisk || needsCredito) {
+      const facts = await readFactsByClienteId(clienteId);
+      if (needsRisk) {
+        const derived = deriveRiskFromFacts(facts);
+        card.risk = {
+          ...(card?.risk ?? {}),
+          nivel: coalesceString(card?.risk?.nivel, card?.risk?.level, derived.nivel),
+          tags: Array.isArray(card?.risk?.tags) && card.risk.tags.length
+            ? card.risk.tags
+            : derived.tags,
+        };
+      }
+      if (needsCredito) {
+        const derived = derivePorCreditoFromFacts(facts);
+        card.agregados = {
+          ...(card?.agregados ?? {}),
+          porCredito: derived,
+        };
+      }
+    }
+
+    return card;
   } catch (error) {
     console.error('SNAPSHOT_PARSE_FAIL', {
       clienteId,
