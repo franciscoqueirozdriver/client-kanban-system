@@ -16,6 +16,8 @@ import {
 
 export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
 export const SHEET_FACTS = 'perdecomp_facts';
+const FACTS_PARTITION_REGEX = /^perdecomp_facts_\d{6}$/;
+const FACTS_PARTITION_PREFIX = 'perdecomp_facts_';
 const PAYLOAD_SHARD_LIMIT_BYTES = 90000;
 const CARD_SCHEMA_VERSION_FALLBACK = 'v1';
 export const CLT_ID_RE = /^CLT-\d{4,}$/;
@@ -65,6 +67,7 @@ type FilterResult = {
 
 let nextClienteSequence: number | null = null;
 let resolveOverride: ((opts: ResolveOpts) => Promise<string>) | null = null;
+let cachedFactsHeaders: string[] | null = null;
 
 const FACT_METADATA_FIELDS = new Set(['Row_Hash', 'Consulta_ID', 'Inserted_At']);
 
@@ -184,6 +187,15 @@ function splitPayloadIntoShards(payload: string): {
   };
 }
 
+function shortErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.length > 140 ? `${message.slice(0, 137)}...` : message;
+}
+
+function toFactsErrorMessage(error: unknown): string {
+  return `FACTS_APPEND_ERROR: ${shortErrorMessage(error)}`;
+}
+
 function getTipoNomeFromCodigo(codigo?: string): string {
   if (!codigo) return '';
   const numero = Number(codigo);
@@ -212,6 +224,94 @@ function columnNumberToLetter(columnNumber: number): string {
     num = (num - temp - 1) / 26;
   }
   return letter;
+}
+
+async function getSpreadsheetTitles(): Promise<string[]> {
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID is not set');
+  }
+  const sheets = await getSheetsClient();
+  const response = await withRetry(() =>
+    sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets(properties(title))',
+    })
+  );
+  const titles = (response.data.sheets ?? [])
+    .map((sheet) => sheet.properties?.title)
+    .filter((title): title is string => Boolean(title));
+  return titles;
+}
+
+async function getFactsHeaders(): Promise<string[]> {
+  if (cachedFactsHeaders) return cachedFactsHeaders;
+  const { headers } = await getSheetData(SHEET_FACTS, 'A1:ZZ1');
+  if (!headers.length) {
+    throw new Error(`Sheet ${SHEET_FACTS} is missing headers`);
+  }
+  cachedFactsHeaders = headers;
+  return headers;
+}
+
+async function ensureFactsPartitionSheet(sheetName: string, headers: string[]): Promise<void> {
+  if (sheetName === SHEET_FACTS) return;
+  const titles = await getSpreadsheetTitles();
+  if (titles.includes(sheetName)) return;
+
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID is not set');
+  }
+
+  const sheets = await getSheetsClient();
+  await withRetry(() =>
+    sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: sheetName,
+                gridProperties: { frozenRowCount: 1 },
+              },
+            },
+          },
+        ],
+      },
+    })
+  );
+
+  if (!headers.length) return;
+  const lastColumn = columnNumberToLetter(headers.length) || 'A';
+  await withRetry(() =>
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!A1:${lastColumn}1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [headers] },
+    })
+  );
+}
+
+async function listFactsSheetNames(): Promise<string[]> {
+  const titles = await getSpreadsheetTitles();
+  const relevant = titles.filter(
+    (title) => title === SHEET_FACTS || FACTS_PARTITION_REGEX.test(title),
+  );
+  if (!relevant.includes(SHEET_FACTS)) {
+    relevant.unshift(SHEET_FACTS);
+  }
+  return Array.from(new Set(relevant));
+}
+
+async function pickFactsPartition(now: Date = new Date()): Promise<string> {
+  const headers = await getFactsHeaders();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const sheetName = `${FACTS_PARTITION_PREFIX}${now.getUTCFullYear()}${month}`;
+  await ensureFactsPartitionSheet(sheetName, headers);
+  return sheetName;
 }
 
 function pickCardString(card: any, ...paths: string[]): string | undefined {
@@ -462,7 +562,6 @@ function mapSnapshotRow(
   ctx: PersistContext & {
     card: any;
     facts: SheetRow[];
-    insertedCount: number;
   }
 ): SheetRow {
   const { card, facts, meta, nowISO } = ctx;
@@ -541,7 +640,7 @@ function mapSnapshotRow(
     Data_Consulta: meta.dataConsultaISO ?? nowISO,
     URL_Comprovante_HTML: meta.urlComprovante ?? '',
 
-    Facts_Count: String(ctx.insertedCount ?? 0),
+    Facts_Count: '0',
 
     Last_Updated_ISO: nowISO,
     Consulta_ID: meta.consultaId,
@@ -611,18 +710,24 @@ async function upsertSnapshot(row: SheetRow) {
 
 async function filterNewFacts(clienteId: string, rows: SheetRow[]): Promise<FilterResult> {
   if (!rows.length) return { insert: [], skip: 0 };
-  const { headers, rows: existingRows } = await getSheetData(SHEET_FACTS);
-  if (!headers.length) {
-    throw new Error(`Sheet ${SHEET_FACTS} is missing headers`);
+  const sheetNames = await listFactsSheetNames();
+  const existingKeys = new Set<string>();
+
+  for (const sheetName of sheetNames) {
+    try {
+      const { rows: existingRows } = await getSheetData(sheetName);
+      for (const row of existingRows) {
+        if (toStringValue(row.Cliente_ID) !== clienteId) continue;
+        const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
+        const hash = toStringValue(row.Row_Hash ?? '');
+        const key = `${clienteId}|${numero}|${hash}`;
+        existingKeys.add(key);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('FACTS_PARTITION_READ_FAIL', { sheetName, message });
+    }
   }
-  const relevant = existingRows.filter((row) => toStringValue(row.Cliente_ID) === clienteId);
-  const existingKeys = new Set(
-    relevant.map((row) => {
-      const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
-      const hash = toStringValue(row.Row_Hash ?? '');
-      return `${numero}|${hash}`;
-    })
-  );
 
   const insert: SheetRow[] = [];
   let skip = 0;
@@ -630,7 +735,7 @@ async function filterNewFacts(clienteId: string, rows: SheetRow[]): Promise<Filt
   for (const row of rows) {
     const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
     const hash = toStringValue(row.Row_Hash ?? '');
-    const key = `${numero}|${hash}`;
+    const key = `${clienteId}|${numero}|${hash}`;
     if (existingKeys.has(key)) {
       skip += 1;
       continue;
@@ -644,95 +749,142 @@ async function filterNewFacts(clienteId: string, rows: SheetRow[]): Promise<Filt
 
 async function readFactsByClienteId(clienteId: string): Promise<SheetRow[]> {
   if (!clienteId) return [];
-  const { rows } = await getSheetData(SHEET_FACTS);
-  return rows
-    .filter((row) => toStringValue(row.Cliente_ID) === clienteId)
-    .map((row) => normalizeSheetRow(row));
+  const sheetNames = await listFactsSheetNames();
+  const all: SheetRow[] = [];
+  for (const sheetName of sheetNames) {
+    try {
+      const { rows } = await getSheetData(sheetName);
+      for (const row of rows) {
+        if (toStringValue(row.Cliente_ID) !== clienteId) continue;
+        all.push(normalizeSheetRow(row));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('FACTS_PARTITION_READ_FAIL', { sheetName, message });
+    }
+  }
+  return all;
 }
 
-async function appendFacts(rows: SheetRow[]): Promise<number> {
-  if (!rows.length) return 0;
-  const { headers } = await getSheetData(SHEET_FACTS);
-  if (!headers.length) {
-    throw new Error(`Sheet ${SHEET_FACTS} is missing headers`);
+async function appendFactsBatched(
+  sheetName: string,
+  rows: SheetRow[],
+  batchSize = 2000,
+  maxRetries = 4,
+): Promise<{ inserted: number; errors: Error[] }> {
+  if (!rows.length) return { inserted: 0, errors: [] };
+  const headers = await getFactsHeaders();
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID is not set');
   }
   const sheets = await getSheetsClient();
-  const rowsToAppend = rows.map((row) => headers.map((header) => row[header] ?? ''));
-  const batches = chunk(rowsToAppend, 500);
+  const values = rows.map((row) => headers.map((header) => row[header] ?? ''));
+  const batches = chunk(values, batchSize);
+  let inserted = 0;
+  const errors: Error[] = [];
+
   for (const batch of batches) {
-    await withRetry(() =>
-      sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.SPREADSHEET_ID,
-        range: SHEET_FACTS,
-        valueInputOption: 'RAW',
-        insertDataOption: 'INSERT_ROWS',
-        requestBody: {
-          values: batch,
-        },
-      })
-    );
+    try {
+      await withRetry(
+        () =>
+          sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: sheetName,
+            valueInputOption: 'RAW',
+            insertDataOption: 'INSERT_ROWS',
+            requestBody: { values: batch },
+          }),
+        maxRetries,
+      );
+      inserted += batch.length;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      errors.push(err);
+      console.warn('FACTS_BATCH_APPEND_FAIL', {
+        sheetName,
+        batchSize: batch.length,
+        message: err.message,
+      });
+    }
   }
-  return rows.length;
+
+  return { inserted, errors };
+}
+
+async function updateSnapshotFields(
+  clienteId: string,
+  updates: Record<string, string>,
+): Promise<boolean> {
+  if (!clienteId) return false;
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID is not set');
+  }
+  const { headers, rows } = await getSheetData(SHEET_SNAPSHOT);
+  if (!headers.length) return false;
+  const existing = rows.find((row) => toStringValue(row.Cliente_ID) === clienteId);
+  if (!existing) return false;
+
+  const data: Array<{ range: string; values: string[][] }> = [];
+  const sheets = await getSheetsClient();
+
+  Object.entries(updates).forEach(([header, value]) => {
+    const index = headers.indexOf(header);
+    if (index === -1) return;
+    const colLetter = columnNumberToLetter(index + 1);
+    data.push({
+      range: `${SHEET_SNAPSHOT}!${colLetter}${existing._rowNumber}`,
+      values: [[toStringValue(value)]],
+    });
+  });
+
+  if (!data.length) return false;
+
+  await withRetry(() =>
+    sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        valueInputOption: 'RAW',
+        data,
+      },
+    })
+  );
+  return true;
 }
 
 async function markSnapshotError(clienteId: string, message: string, nowISO: string) {
   try {
-    const { headers, rows } = await getSheetData(SHEET_SNAPSHOT);
-    const sheets = await getSheetsClient();
-    const existing = rows.find((row) => toStringValue(row.Cliente_ID) === clienteId);
-    const errorIdx = headers.indexOf('Erro_Ultima_Consulta');
-    const lastUpdatedIdx = headers.indexOf('Last_Updated_ISO');
-
-    if (existing && errorIdx !== -1) {
-      const data: Array<{ range: string; values: string[][] }> = [];
-      const errorLetter = columnNumberToLetter(errorIdx + 1);
-      data.push({
-        range: `${SHEET_SNAPSHOT}!${errorLetter}${existing._rowNumber}`,
-        values: [[message]],
-      });
-      if (lastUpdatedIdx !== -1) {
-        const lastLetter = columnNumberToLetter(lastUpdatedIdx + 1);
-        data.push({
-          range: `${SHEET_SNAPSHOT}!${lastLetter}${existing._rowNumber}`,
-          values: [[nowISO]],
-        });
-      }
-      if (data.length) {
-        await withRetry(() =>
-          sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId: process.env.SPREADSHEET_ID,
-            requestBody: {
-              valueInputOption: 'RAW',
-              data,
-            },
-          })
-        );
-      }
-      return;
-    }
-
-    if (!headers.length || errorIdx === -1) return;
-
-    const values = headers.map((header) => {
-      if (header === 'Cliente_ID') return clienteId;
-      if (header === 'Erro_Ultima_Consulta') return message;
-      if (header === 'Last_Updated_ISO') return nowISO;
-      return '';
+    const updated = await updateSnapshotFields(clienteId, {
+      Erro_Ultima_Consulta: message,
+      Last_Updated_ISO: nowISO,
     });
-
-    await withRetry(() =>
-      sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.SPREADSHEET_ID,
-        range: SHEET_SNAPSHOT,
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: [values],
-        },
-      })
-    );
+    if (!updated) {
+      console.warn('PERSIST_FAIL_MARK_ERROR_ROW_MISSING', { clienteId, message });
+    }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('PERSIST_FAIL_MARK_ERROR', { clienteId, message: msg });
+  }
+}
+
+async function markSnapshotPostFacts(
+  clienteId: string,
+  params: { factsCount: number; error: string | null; nowISO: string },
+) {
+  const { factsCount, error, nowISO } = params;
+  try {
+    const updated = await updateSnapshotFields(clienteId, {
+      Facts_Count: String(factsCount ?? 0),
+      Erro_Ultima_Consulta: error ?? '',
+      Last_Updated_ISO: nowISO,
+    });
+    if (!updated) {
+      console.warn('PERSIST_FAIL_MARK_POST_FACTS', { clienteId, error });
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('PERSIST_FAIL_POST_FACTS', { clienteId, message });
   }
 }
 
@@ -790,18 +942,58 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
   console.info('PERSIST_START', { clienteId: clienteIdFinal, consultaId: args.meta.consultaId });
 
   try {
-    const mappedFacts = (args.facts ?? []).map((raw) => mapFact(raw, { ...ctx, card }));
-    const { insert, skip } = await filterNewFacts(clienteIdFinal, mappedFacts);
-    const insertedCount = await appendFacts(insert);
-    console.info('FACTS_OK', { clienteId: clienteIdFinal, inserted: insertedCount, skipped: skip });
+    const sanitizedCard = { ...card, clienteId: clienteIdFinal };
+    const mappedFacts = (args.facts ?? []).map((raw) =>
+      mapFact(raw, { ...ctx, card: sanitizedCard }),
+    );
 
-    const snapshotRow = mapSnapshotRow({ ...ctx, card, facts: mappedFacts, insertedCount });
+    const snapshotRow = mapSnapshotRow({ ...ctx, card: sanitizedCard, facts: mappedFacts });
     await upsertSnapshot(snapshotRow);
     console.info('SNAPSHOT_OK', {
       clienteId: clienteIdFinal,
       snapshotHash: snapshotRow.Snapshot_Hash,
-      factsCount: Number(snapshotRow.Facts_Count) || 0,
+      factsCount: mappedFacts.length,
     });
+
+    let inserted = 0;
+    let skip = 0;
+    let factsError: string | null = null;
+
+    try {
+      const { insert, skip: skipCount } = await filterNewFacts(clienteIdFinal, mappedFacts);
+      skip = skipCount;
+      if (insert.length) {
+        const targetSheet = await pickFactsPartition(new Date());
+        const { inserted: appended, errors } = await appendFactsBatched(targetSheet, insert);
+        inserted = appended;
+        if (errors.length) {
+          factsError = toFactsErrorMessage(errors[0]);
+        }
+      }
+    } catch (error) {
+      factsError = toFactsErrorMessage(error);
+    }
+
+    await markSnapshotPostFacts(clienteIdFinal, {
+      factsCount: factsError ? mappedFacts.length : inserted,
+      error: factsError,
+      nowISO,
+    });
+
+    if (factsError) {
+      console.warn('FACTS_FAIL_SOFT', {
+        clienteId: clienteIdFinal,
+        error: factsError,
+        inserted,
+        skipped: skip,
+      });
+    } else {
+      console.info('FACTS_OK', {
+        clienteId: clienteIdFinal,
+        inserted,
+        skipped: skip,
+      });
+    }
 
     console.info('PERSIST_END', { clienteId: clienteIdFinal });
   } catch (error) {
@@ -863,6 +1055,7 @@ export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | n
 export function __resetClienteIdSequenceForTests() {
   nextClienteSequence = null;
   resolveOverride = null;
+  cachedFactsHeaders = null;
 }
 
 export function __setResolveClienteIdOverrideForTests(

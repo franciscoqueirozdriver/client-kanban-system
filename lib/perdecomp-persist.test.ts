@@ -29,6 +29,9 @@ const { getSheetData, getSheetsClient, withRetry, chunk } = jest.requireMock('./
 describe('perdecomp-persist', () => {
   const appendMock = jest.fn();
   const batchUpdateMock = jest.fn();
+  const valuesUpdateMock = jest.fn();
+  const spreadsheetsBatchUpdateMock = jest.fn();
+  const spreadsheetsGetMock = jest.fn();
   const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
   const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -43,17 +46,33 @@ describe('perdecomp-persist', () => {
     chunk.mockClear();
     appendMock.mockReset();
     batchUpdateMock.mockReset();
+    valuesUpdateMock.mockReset();
+    spreadsheetsBatchUpdateMock.mockReset();
+    spreadsheetsGetMock.mockReset();
+    process.env.SPREADSHEET_ID = 'test-sheet-id';
     infoSpy.mockClear();
     errorSpy.mockClear();
     warnSpy.mockClear();
     getSheetsClient.mockResolvedValue({
       spreadsheets: {
+        get: spreadsheetsGetMock,
+        batchUpdate: spreadsheetsBatchUpdateMock,
         values: {
           append: appendMock,
+          update: valuesUpdateMock,
           batchUpdate: batchUpdateMock,
         },
       },
     });
+    spreadsheetsGetMock.mockResolvedValue({
+      data: {
+        sheets: [
+          { properties: { title: 'perdecomp_snapshot' } },
+          { properties: { title: 'perdecomp_facts' } },
+        ],
+      },
+    });
+    spreadsheetsBatchUpdateMock.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -212,32 +231,45 @@ describe('perdecomp-persist', () => {
       ],
     };
 
-    getSheetData
-      .mockResolvedValueOnce(snapshotData) // resolveClienteId find
-      .mockResolvedValueOnce(snapshotData) // nextClienteId scan
-      .mockResolvedValueOnce({
-        headers: factsHeaders,
-        rows: [
-          {
-            Cliente_ID: 'CLT-3684',
-            Perdcomp_Numero: duplicateFact.Perdcomp_Numero,
-            Row_Hash: duplicateHash,
-            _rowNumber: 2,
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        headers: factsHeaders,
-        rows: [
-          {
-            Cliente_ID: 'CLT-3684',
-            Perdcomp_Numero: duplicateFact.Perdcomp_Numero,
-            Row_Hash: duplicateHash,
-            _rowNumber: 2,
-          },
-        ],
-      })
-      .mockResolvedValueOnce(snapshotData); // upsert snapshot
+    const snapshotRows = [...snapshotData.rows];
+
+    getSheetData.mockImplementation((sheetName: string, range?: string) => {
+      if (sheetName === 'perdecomp_snapshot') {
+        return Promise.resolve({ headers: snapshotHeaders, rows: snapshotRows });
+      }
+      if (sheetName === 'perdecomp_facts') {
+        if (range === 'A1:ZZ1') {
+          return Promise.resolve({ headers: factsHeaders, rows: [] });
+        }
+        return Promise.resolve({
+          headers: factsHeaders,
+          rows: [
+            {
+              Cliente_ID: 'CLT-3684',
+              Perdcomp_Numero: duplicateFact.Perdcomp_Numero,
+              Row_Hash: duplicateHash,
+              _rowNumber: 2,
+            },
+          ],
+        });
+      }
+      if (sheetName === 'perdecomp_facts_202401') {
+        return Promise.resolve({ headers: factsHeaders, rows: [] });
+      }
+      throw new Error(`Unexpected sheet request: ${sheetName}`);
+    });
+
+    appendMock.mockImplementation((request) => {
+      if (request.range === 'perdecomp_snapshot') {
+        const values = request.requestBody.values[0];
+        const newRow: any = { _rowNumber: snapshotRows.length + 2 };
+        snapshotHeaders.forEach((header, index) => {
+          newRow[header] = values[index] ?? '';
+        });
+        snapshotRows.push(newRow);
+      }
+      return Promise.resolve({});
+    });
 
     const card = {
       nomeEmpresa: 'Empresa Teste',
@@ -280,23 +312,44 @@ describe('perdecomp-persist', () => {
     });
 
     expect(warnSpy).not.toHaveBeenCalled();
-    expect(appendMock).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ range: 'perdecomp_facts' }),
+    expect(spreadsheetsBatchUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: expect.objectContaining({
+          requests: expect.arrayContaining([
+            expect.objectContaining({
+              addSheet: expect.objectContaining({
+                properties: expect.objectContaining({ title: 'perdecomp_facts_202401' }),
+              }),
+            }),
+          ]),
+        }),
+      }),
     );
+    expect(valuesUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        range: expect.stringMatching(/^perdecomp_facts_202401!A1:/),
+        requestBody: expect.objectContaining({ values: [factsHeaders] }),
+      }),
+    );
+
     expect(appendMock).toHaveBeenNthCalledWith(
       2,
+      expect.objectContaining({ range: 'perdecomp_facts_202401' }),
+    );
+
+    expect(appendMock).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({ range: 'perdecomp_snapshot' }),
     );
 
-    const factsAppendCall = appendMock.mock.calls[0][0];
-    const snapshotAppendCall = appendMock.mock.calls[1][0];
+    const snapshotAppendCall = appendMock.mock.calls[0][0];
+    const factsAppendCall = appendMock.mock.calls[1][0];
 
     const snapshotValues = snapshotAppendCall.requestBody.values[0];
     const appendedFacts = factsAppendCall.requestBody.values;
     expect(snapshotValues[snapshotHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
     expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('12345678000190');
-    expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('1');
+    expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('0');
     expect(snapshotValues[snapshotHeaders.indexOf('Risco_Nivel')]).toBe('DESCONHECIDO');
     expect(
       JSON.parse(snapshotValues[snapshotHeaders.indexOf('Risco_Tags_JSON')]),
@@ -337,7 +390,7 @@ describe('perdecomp-persist', () => {
     expect(infoSpy).toHaveBeenCalledWith('SNAPSHOT_OK', {
       clienteId: 'CLT-3684',
       snapshotHash: expect.any(String),
-      factsCount: 1,
+      factsCount: 2,
     });
     expect(infoSpy).toHaveBeenCalledWith('FACTS_OK', {
       clienteId: 'CLT-3684',
@@ -346,6 +399,18 @@ describe('perdecomp-persist', () => {
     });
     expect(infoSpy).toHaveBeenCalledWith('PERSIST_END', { clienteId: 'CLT-3684' });
     expect(errorSpy).not.toHaveBeenCalledWith('PERSIST_FAIL', expect.anything());
+
+    const nowISO = new Date().toISOString();
+    const batchCalls = batchUpdateMock.mock.calls.map((call) => call[0]);
+    expect(batchCalls.length).toBeGreaterThan(0);
+    const lastCall = batchCalls[batchCalls.length - 1];
+    expect(lastCall.requestBody.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ values: [['1']] }),
+        expect.objectContaining({ values: [['']] }),
+        expect.objectContaining({ values: [[nowISO]] }),
+      ]),
+    );
   });
 
   it('marks snapshot error when persistence fails', async () => {
@@ -409,18 +474,24 @@ describe('perdecomp-persist', () => {
   });
 
   it('loads snapshot card by concatenating shards', async () => {
-    getSheetData
-      .mockResolvedValueOnce({
-      headers: ['Cliente_ID', 'Resumo_Ultima_Consulta_JSON_P1', 'Resumo_Ultima_Consulta_JSON_P2'],
-      rows: [
-        {
-          Cliente_ID: 'CLT-3683',
-          Resumo_Ultima_Consulta_JSON_P1: '{"nome":"Empresa"',
-          Resumo_Ultima_Consulta_JSON_P2: ',"valor":1}',
-        },
-      ],
-    })
-      .mockResolvedValueOnce({ headers: ['Cliente_ID'], rows: [] });
+    getSheetData.mockImplementation((sheetName: string) => {
+      if (sheetName === 'perdecomp_snapshot') {
+        return Promise.resolve({
+          headers: ['Cliente_ID', 'Resumo_Ultima_Consulta_JSON_P1', 'Resumo_Ultima_Consulta_JSON_P2'],
+          rows: [
+            {
+              Cliente_ID: 'CLT-3683',
+              Resumo_Ultima_Consulta_JSON_P1: '{"nome":"Empresa"',
+              Resumo_Ultima_Consulta_JSON_P2: ',"valor":1}',
+            },
+          ],
+        });
+      }
+      if (sheetName === 'perdecomp_facts') {
+        return Promise.resolve({ headers: ['Cliente_ID'], rows: [] });
+      }
+      throw new Error(`Unexpected sheet request: ${sheetName}`);
+    });
 
     const card = await loadSnapshotCard({ clienteId: 'CLT-3683' });
     expect(card).toEqual({ nome: 'Empresa', valor: 1, risk: { nivel: '', tags: [] }, agregados: { porCredito: [] } });
