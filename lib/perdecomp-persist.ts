@@ -675,16 +675,16 @@ async function upsertSnapshot(row: SheetRow) {
 
 async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<FilterResult> {
   if (!rows.length) return { insert: [], skip: 0 };
-  const existingKeys = new Set<string>();
+  const existingPerdcompNumbers = new Set<string>();
 
   try {
     const { rows: existingRows } = await getSheetData(SHEET_FACTS);
     for (const row of existingRows) {
       if (toStringValue(row.Cliente_ID) !== clienteId) continue;
-      const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
-      const hash = toStringValue(row.Row_Hash ?? '');
-      const key = `${clienteId}|${numero}|${hash}`;
-      existingKeys.add(key);
+      const numero = toStringValue(row.Perdcomp_Numero).trim();
+      if (numero) {
+        existingPerdcompNumbers.add(numero);
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -693,16 +693,19 @@ async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<Filt
 
   const insert: FactsRow[] = [];
   let skip = 0;
+  const processedInBatch = new Set<string>();
 
   for (const row of rows) {
-    const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
-    const hash = toStringValue(row.Row_Hash ?? '');
-    const key = `${clienteId}|${numero}|${hash}`;
-    if (existingKeys.has(key)) {
-      skip += 1;
-      continue;
+    const numero = toStringValue(row.Perdcomp_Numero).trim();
+
+    if (numero) {
+      if (existingPerdcompNumbers.has(numero) || processedInBatch.has(numero)) {
+        skip += 1;
+        continue;
+      }
+      processedInBatch.add(numero);
     }
-    existingKeys.add(key);
+
     insert.push(row);
   }
 
