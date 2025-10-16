@@ -1,4 +1,4 @@
-import { normalizeCNPJ, toDigits, isValidCNPJ } from '@/src/utils/cnpj';
+import { normalizeCNPJ, toDigits, isValidCNPJ } from '@/utils/cnpj';
 
 const is14 = (d: string) => /^\d{14}$/.test(d);
 export const ordem = (cnpj: string) => {
@@ -35,3 +35,6 @@ export const toMatrizCNPJ = (cnpj: string) => {
 
 export const fmtCNPJ = (d: string) =>
   toDigits(d).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+
+export { onlyDigits } from '@/utils/cnpj';
+

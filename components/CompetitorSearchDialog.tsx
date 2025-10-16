@@ -46,7 +46,7 @@ export default function CompetitorSearchDialog({
   const blockedSet = useMemo(() => {
     const set = new Set<string>();
     blockedCnpjs
-      .map(value => normalizeCnpj(value))
+      .map(value => normalizeCNPJ(value))
       .filter((value): value is string => Boolean(value))
       .forEach(value => set.add(value));
     return set;
@@ -164,7 +164,7 @@ export default function CompetitorSearchDialog({
       let mutated = false;
       const next: Record<string, Suggestion> = {};
       Object.entries(prev).forEach(([key, value]) => {
-        const norm = normalizeCnpj(value.cnpj);
+        const norm = normalizeCNPJ(value.cnpj);
         if (norm && blockedSet.has(norm)) {
           mutated = true;
         } else {

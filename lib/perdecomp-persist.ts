@@ -7,6 +7,7 @@ import {
   withRetry,
 } from './googleSheets.js';
 import { formatPerdcompNumero } from '@/utils/perdcomp';
+import { normalizeCNPJ } from '@/src/utils/cnpj';
 import {
   parsePerdcomp as parsePerdcompCodigo,
   TIPOS_DOCUMENTO,
@@ -16,6 +17,8 @@ import {
 
 export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
 export const SHEET_FACTS = 'perdecomp_facts';
+const SHEET_DIC_CREDITOS = 'DIC_CREDITOS';
+const SHEET_DIC_NATUREZA = 'DIC_NATUREZA';
 
 const FACTS_COLUMNS = [
   'Cliente_ID',
@@ -80,6 +83,7 @@ type LoadArgs = {
 
 type SheetRow = Record<string, string>;
 type FactsRow = Record<FactsColumn, string>;
+type DicRow = Record<string, string>;
 
 type RiskTag = { label: string; count: number };
 
@@ -134,10 +138,6 @@ function coalesceString(...values: Array<unknown>): string {
     if (str.trim() !== '') return str;
   }
   return '';
-}
-
-function onlyDigits(input?: string | null): string {
-  return (input ?? '').replace(/\D+/g, '');
 }
 
 function toDDMMAA(iso?: string | null): string {
@@ -323,11 +323,11 @@ export function derivePorCreditoFromFacts(
 }
 
 async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<string | null> {
-  const normalized = onlyDigits(cnpj);
+  const normalized = normalizeCNPJ(cnpj ?? '');
   if (!normalized) return null;
   const { rows } = await getSheetData(SHEET_SNAPSHOT);
   for (const row of rows) {
-    const rowCnpj = onlyDigits(toStringValue(row.CNPJ));
+    const rowCnpj = normalizeCNPJ(toStringValue(row.CNPJ));
     if (rowCnpj !== normalized) continue;
     const candidate = toStringValue(row.Cliente_ID);
     if (CLT_ID_RE.test(candidate)) {
@@ -490,7 +490,7 @@ function mapFact(raw: any, ctx: PersistContext & { card?: any }): FactsRow {
     Cliente_ID: ctx.clienteId,
     Empresa_ID: toStringValue(ctx.empresaId ?? ''),
     'Nome da Empresa': nomeEmpresa,
-    CNPJ: onlyDigits(ctx.cnpj),
+    CNPJ: normalizeCNPJ(ctx.cnpj),
 
     Perdcomp_Numero: perdcomp,
     Perdcomp_Formatado: perdcomp ? formatPerdcompNumero(perdcomp) : '',
@@ -577,7 +577,7 @@ function mapSnapshotRow(
     Cliente_ID: ctx.clienteId,
     Empresa_ID: toStringValue(ctx.empresaId ?? ''),
     'Nome da Empresa': ctx.nomeEmpresa ?? '',
-    CNPJ: onlyDigits(ctx.cnpj),
+    CNPJ: normalizeCNPJ(ctx.cnpj),
 
     Qtd_Total: String(resumo?.total ?? facts.length ?? 0),
     Qtd_DCOMP: String(porFamilia?.DCOMP ?? 0),
@@ -777,6 +777,149 @@ async function appendFactsBatched(
   return { inserted, errors };
 }
 
+function normalizeDictionaryKey(value: string): string {
+  const str = toStringValue(value).trim();
+  if (!str) return '';
+  try {
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase();
+  } catch {
+    return str.toUpperCase();
+  }
+}
+
+function buildNaturezaKey(natureza: string, familia: string, tipoCodigo: string): string {
+  const parts = [natureza, familia, tipoCodigo].map(normalizeDictionaryKey);
+  if (!parts.some(Boolean)) return '';
+  return parts.join('|');
+}
+
+async function buildDictionaryIndex(
+  sheetName: string,
+  keyFn: (row: SheetRow) => string,
+): Promise<Set<string>> {
+  const keys = new Set<string>();
+  try {
+    const { rows } = await getSheetData(sheetName);
+    for (const row of rows) {
+      const normalized = normalizeSheetRow(row);
+      const key = keyFn(normalized);
+      if (key) keys.add(key);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('DIC_INDEX_FAIL', { sheetName, message });
+  }
+  return keys;
+}
+
+async function appendDictionaryRows(sheetName: string, rows: DicRow[]): Promise<void> {
+  if (!rows.length) return;
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID is not set');
+  }
+
+  const { headers } = await getSheetData(sheetName);
+  const headerList = headers.length ? headers : Object.keys(rows[0] ?? {});
+  if (!headerList.length) {
+    console.warn('DIC_APPEND_SKIP_NO_HEADERS', { sheetName });
+    return;
+  }
+
+  const sheets = await getSheetsClient();
+  const values = rows.map((row) =>
+    headerList.map((header) => toStringValue(row[header as keyof DicRow] ?? '')),
+  );
+
+  await withRetry(
+    () =>
+      sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: sheetName,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: { values },
+      }),
+    3,
+  );
+}
+
+async function upsertDicionariosFromFacts(
+  rows: FactsRow[],
+  nowISO: string,
+): Promise<{ creditosAdded: number; naturezasAdded: number }> {
+  if (!rows.length) return { creditosAdded: 0, naturezasAdded: 0 };
+
+  const creditosIndex = await buildDictionaryIndex(
+    SHEET_DIC_CREDITOS,
+    (row) => normalizeDictionaryKey(row.Credito_Codigo ?? row.Codigo ?? row.Chave ?? ''),
+  );
+  const novosCreditos: DicRow[] = [];
+  const seenCreditos = new Set<string>();
+
+  for (const row of rows) {
+    const codigo = toStringValue(row.Credito_Codigo).trim();
+    if (!codigo) continue;
+    const descricao = toStringValue(row.Credito_Descricao).trim() || codigo;
+    const key = normalizeDictionaryKey(codigo);
+    if (!key || creditosIndex.has(key) || seenCreditos.has(key)) continue;
+    seenCreditos.add(key);
+    novosCreditos.push({
+      Credito_Codigo: codigo,
+      Credito_Descricao: descricao,
+      Ativo: '1',
+      Criado_Em_ISO: nowISO,
+    });
+  }
+
+  if (novosCreditos.length) {
+    await appendDictionaryRows(SHEET_DIC_CREDITOS, novosCreditos);
+  }
+
+  const naturezasIndex = await buildDictionaryIndex(
+    SHEET_DIC_NATUREZA,
+    (row) =>
+      buildNaturezaKey(
+        row.Natureza ?? row.Codigo ?? row.Chave ?? '',
+        row.Familia ?? '',
+        row.Tipo_Codigo ?? row.Tipo ?? row.TipoCodigo ?? '',
+      ),
+  );
+  const novasNaturezas: DicRow[] = [];
+  const seenNaturezas = new Set<string>();
+
+  for (const row of rows) {
+    const natureza = toStringValue(row.Natureza).trim();
+    const familia = toStringValue(row.Familia).trim();
+    const tipoCodigo = toStringValue(row.Tipo_Codigo).trim();
+    if (!natureza && !familia && !tipoCodigo) continue;
+    const tipoNome = toStringValue(row.Tipo_Nome).trim() || tipoCodigo;
+    const key = buildNaturezaKey(natureza, familia, tipoCodigo);
+    if (!key || naturezasIndex.has(key) || seenNaturezas.has(key)) continue;
+    seenNaturezas.add(key);
+    novasNaturezas.push({
+      Natureza: natureza,
+      Familia: familia,
+      Tipo_Codigo: tipoCodigo,
+      Tipo_Nome: tipoNome,
+      Ativo: '1',
+      Criado_Em_ISO: nowISO,
+    });
+  }
+
+  if (novasNaturezas.length) {
+    await appendDictionaryRows(SHEET_DIC_NATUREZA, novasNaturezas);
+  }
+
+  return {
+    creditosAdded: novosCreditos.length,
+    naturezasAdded: novasNaturezas.length,
+  };
+}
+
 async function updateSnapshotFields(
   clienteId: string,
   updates: Record<string, string>,
@@ -861,23 +1004,24 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
   const nowISO = new Date().toISOString();
   const card = args.card ?? {};
 
-  const cnpjFinal =
+  const cnpjRaw =
     args.cnpj ??
     pickCardString(card, 'header.cnpj', 'CNPJ', 'cnpj', 'CNPJ_Empresa') ??
     '';
+  const cnpjFinal = normalizeCNPJ(cnpjRaw);
 
   const resolverFn = resolveOverride ?? resolveClienteId;
 
   const clienteIdFinal = await resolverFn({
     providedClienteId: args.clienteId,
-    cnpj: cnpjFinal ?? null,
+    cnpj: cnpjFinal || null,
   });
 
   if (!CLT_ID_RE.test(clienteIdFinal)) {
     console.warn('PERSIST_ABORT_INVALID_CLIENTE_ID', {
       provided: args.clienteId ?? null,
       resolved: clienteIdFinal,
-      cnpj: args.cnpj,
+      cnpj: cnpjFinal,
     });
     throw new Error('Invalid Cliente_ID for persistence');
   }
@@ -907,64 +1051,110 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
   console.info('PERSIST_START', { clienteId: clienteIdFinal, consultaId: args.meta.consultaId });
 
   let mappedFacts: FactsRow[] = [];
+  let factsCount = 0;
+  let inserted = 0;
+  let skip = 0;
+  let factsError: string | null = null;
+  let snapshotError: string | null = null;
+  let insertedRows: FactsRow[] = [];
+  let persistFailed = false;
+
   try {
     const sanitizedCard = { ...card, clienteId: clienteIdFinal };
     mappedFacts = (args.facts ?? []).map((raw) =>
       mapFact(raw, { ...ctx, card: sanitizedCard }),
     );
 
-    const snapshotRow = mapSnapshotRow({ ...ctx, card: sanitizedCard, facts: mappedFacts });
-    await upsertSnapshot(snapshotRow);
-    console.info('SNAPSHOT_OK', {
-      clienteId: clienteIdFinal,
-      snapshotHash: snapshotRow.Snapshot_Hash,
-      factsCount: mappedFacts.length,
-    });
+    factsCount = mappedFacts.length;
 
-    let inserted = 0;
-    let skip = 0;
-    let factsError: string | null = null;
+    if (factsCount === 0) {
+      console.info('FACTS_SKIP_EMPTY', { clienteId: clienteIdFinal });
+    } else {
+      try {
+        const { insert, skip: skipCount } = await filterNewFacts(clienteIdFinal, mappedFacts);
+        skip = skipCount;
+        if (insert.length) {
+          const { inserted: appended, errors } = await appendFactsBatched(insert);
+          inserted = appended;
+          if (errors.length) {
+            factsError = toFactsErrorMessage(errors[0]);
+          } else if (appended > 0) {
+            insertedRows = insert;
+          }
+        }
+      } catch (error) {
+        factsError = toFactsErrorMessage(error);
+      }
 
-    try {
-      const { insert, skip: skipCount } = await filterNewFacts(clienteIdFinal, mappedFacts);
-      skip = skipCount;
-      if (insert.length) {
-        const { inserted: appended, errors } = await appendFactsBatched(insert);
-        inserted = appended;
-        if (errors.length) {
-          factsError = toFactsErrorMessage(errors[0]);
+      if (!factsError && insertedRows.length) {
+        try {
+          const { creditosAdded, naturezasAdded } = await upsertDicionariosFromFacts(
+            insertedRows,
+            nowISO,
+          );
+          if (creditosAdded || naturezasAdded) {
+            console.info('DIC_UPSERT_OK', {
+              clienteId: clienteIdFinal,
+              creditosAdded,
+              naturezasAdded,
+            });
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn('DIC_UPSERT_FAIL', { clienteId: clienteIdFinal, message });
         }
       }
-    } catch (error) {
-      factsError = toFactsErrorMessage(error);
+
+      if (factsError) {
+        console.warn('FACTS_FAIL_SOFT', {
+          clienteId: clienteIdFinal,
+          error: factsError,
+          inserted,
+          skipped: skip,
+        });
+      } else {
+        console.info('FACTS_OK', {
+          clienteId: clienteIdFinal,
+          inserted,
+          skipped: skip,
+        });
+      }
     }
 
-    await markSnapshotPostFacts(clienteIdFinal, {
-      factsCount: mappedFacts.length,
-      error: factsError,
-      nowISO,
-    });
-
-    if (factsError) {
-      console.warn('FACTS_FAIL_SOFT', {
+    try {
+      const snapshotRow = mapSnapshotRow({ ...ctx, card: sanitizedCard, facts: mappedFacts });
+      await upsertSnapshot(snapshotRow);
+      console.info('SNAPSHOT_OK', {
         clienteId: clienteIdFinal,
+        snapshotHash: snapshotRow.Snapshot_Hash,
+        factsCount,
+      });
+      await markSnapshotPostFacts(clienteIdFinal, {
+        factsCount,
         error: factsError,
-        inserted,
-        skipped: skip,
+        nowISO,
       });
-    } else {
-      console.info('FACTS_OK', {
-        clienteId: clienteIdFinal,
-        inserted,
-        skipped: skip,
-      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      snapshotError = message;
+      console.warn('SNAPSHOT_FAIL_SOFT', { clienteId: clienteIdFinal, message });
+      await markSnapshotError(clienteIdFinal, message, nowISO);
     }
-
-    console.info('PERSIST_END', { clienteId: clienteIdFinal });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('PERSIST_FAIL', { clienteId: clienteIdFinal, message });
     await markSnapshotError(clienteIdFinal, message, nowISO);
+    persistFailed = true;
+  } finally {
+    if (!persistFailed) {
+      console.info('PERSIST_END', {
+        clienteId: clienteIdFinal,
+        factsInserted: inserted,
+        factsSkipped: skip,
+        factsError: factsError ?? null,
+        snapshotError: snapshotError ?? null,
+      });
+    }
   }
 }
 
