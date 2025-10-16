@@ -1051,17 +1051,21 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
   console.info('PERSIST_START', { clienteId: clienteIdFinal, consultaId: args.meta.consultaId });
 
   let mappedFacts: FactsRow[] = [];
+  let factsCount = 0;
+  let inserted = 0;
+  let skip = 0;
+  let factsError: string | null = null;
+  let snapshotError: string | null = null;
+  let insertedRows: FactsRow[] = [];
+  let persistFailed = false;
+
   try {
     const sanitizedCard = { ...card, clienteId: clienteIdFinal };
     mappedFacts = (args.facts ?? []).map((raw) =>
       mapFact(raw, { ...ctx, card: sanitizedCard }),
     );
 
-    const factsCount = mappedFacts.length;
-    let inserted = 0;
-    let skip = 0;
-    let factsError: string | null = null;
-    let insertedRows: FactsRow[] = [];
+    factsCount = mappedFacts.length;
 
     if (factsCount === 0) {
       console.info('FACTS_SKIP_EMPTY', { clienteId: clienteIdFinal });
@@ -1132,16 +1136,25 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      snapshotError = message;
       console.warn('SNAPSHOT_FAIL_SOFT', { clienteId: clienteIdFinal, message });
       await markSnapshotError(clienteIdFinal, message, nowISO);
-      return;
     }
-
-    console.info('PERSIST_END', { clienteId: clienteIdFinal });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('PERSIST_FAIL', { clienteId: clienteIdFinal, message });
     await markSnapshotError(clienteIdFinal, message, nowISO);
+    persistFailed = true;
+  } finally {
+    if (!persistFailed) {
+      console.info('PERSIST_END', {
+        clienteId: clienteIdFinal,
+        factsInserted: inserted,
+        factsSkipped: skip,
+        factsError: factsError ?? null,
+        snapshotError: snapshotError ?? null,
+      });
+    }
   }
 }
 

@@ -434,7 +434,16 @@ describe('perdecomp-persist', () => {
       inserted: 1,
       skipped: 1,
     });
-    expect(infoSpy).toHaveBeenCalledWith('PERSIST_END', { clienteId: 'CLT-3684' });
+    expect(infoSpy).toHaveBeenCalledWith(
+      'PERSIST_END',
+      expect.objectContaining({
+        clienteId: 'CLT-3684',
+        factsInserted: 1,
+        factsSkipped: 1,
+        factsError: null,
+        snapshotError: null,
+      }),
+    );
     expect(errorSpy).not.toHaveBeenCalledWith('PERSIST_FAIL', expect.anything());
 
     const batchCalls = batchUpdateMock.mock.calls.map((call) => call[0]);
