@@ -53,3 +53,10 @@ export const formatCnpj = formatCNPJ;
 export const padCNPJ14 = normalizeCNPJ;
 // @deprecated use isValidCNPJ
 export const isCnpj = isValidCNPJ;
+
+// --- Additional compatibility helpers ---
+
+export const normalizeCnpj = normalizeCNPJ;
+export const ensureValidCnpj = normalizeCNPJ;
+export const isEmptyCNPJLike = (v: string | number | null | undefined): boolean =>
+  toDigits(v).length === 0;
