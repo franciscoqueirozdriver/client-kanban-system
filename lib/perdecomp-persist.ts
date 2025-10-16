@@ -7,6 +7,7 @@ import {
   withRetry,
 } from './googleSheets.js';
 import { formatPerdcompNumero } from '@/utils/perdcomp';
+import { normalizeCNPJ } from '@/src/utils/cnpj';
 import {
   parsePerdcomp as parsePerdcompCodigo,
   TIPOS_DOCUMENTO,
@@ -134,10 +135,6 @@ function coalesceString(...values: Array<unknown>): string {
     if (str.trim() !== '') return str;
   }
   return '';
-}
-
-function onlyDigits(input?: string | null): string {
-  return (input ?? '').replace(/\D+/g, '');
 }
 
 function toDDMMAA(iso?: string | null): string {
@@ -323,11 +320,11 @@ export function derivePorCreditoFromFacts(
 }
 
 async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<string | null> {
-  const normalized = onlyDigits(cnpj);
+  const normalized = normalizeCNPJ(cnpj ?? '');
   if (!normalized) return null;
   const { rows } = await getSheetData(SHEET_SNAPSHOT);
   for (const row of rows) {
-    const rowCnpj = onlyDigits(toStringValue(row.CNPJ));
+    const rowCnpj = normalizeCNPJ(toStringValue(row.CNPJ));
     if (rowCnpj !== normalized) continue;
     const candidate = toStringValue(row.Cliente_ID);
     if (CLT_ID_RE.test(candidate)) {
@@ -490,7 +487,7 @@ function mapFact(raw: any, ctx: PersistContext & { card?: any }): FactsRow {
     Cliente_ID: ctx.clienteId,
     Empresa_ID: toStringValue(ctx.empresaId ?? ''),
     'Nome da Empresa': nomeEmpresa,
-    CNPJ: onlyDigits(ctx.cnpj),
+    CNPJ: normalizeCNPJ(ctx.cnpj),
 
     Perdcomp_Numero: perdcomp,
     Perdcomp_Formatado: perdcomp ? formatPerdcompNumero(perdcomp) : '',
@@ -577,7 +574,7 @@ function mapSnapshotRow(
     Cliente_ID: ctx.clienteId,
     Empresa_ID: toStringValue(ctx.empresaId ?? ''),
     'Nome da Empresa': ctx.nomeEmpresa ?? '',
-    CNPJ: onlyDigits(ctx.cnpj),
+    CNPJ: normalizeCNPJ(ctx.cnpj),
 
     Qtd_Total: String(resumo?.total ?? facts.length ?? 0),
     Qtd_DCOMP: String(porFamilia?.DCOMP ?? 0),
@@ -861,23 +858,24 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
   const nowISO = new Date().toISOString();
   const card = args.card ?? {};
 
-  const cnpjFinal =
+  const cnpjRaw =
     args.cnpj ??
     pickCardString(card, 'header.cnpj', 'CNPJ', 'cnpj', 'CNPJ_Empresa') ??
     '';
+  const cnpjFinal = normalizeCNPJ(cnpjRaw);
 
   const resolverFn = resolveOverride ?? resolveClienteId;
 
   const clienteIdFinal = await resolverFn({
     providedClienteId: args.clienteId,
-    cnpj: cnpjFinal ?? null,
+    cnpj: cnpjFinal || null,
   });
 
   if (!CLT_ID_RE.test(clienteIdFinal)) {
     console.warn('PERSIST_ABORT_INVALID_CLIENTE_ID', {
       provided: args.clienteId ?? null,
       resolved: clienteIdFinal,
-      cnpj: args.cnpj,
+      cnpj: cnpjFinal,
     });
     throw new Error('Invalid Cliente_ID for persistence');
   }
@@ -921,43 +919,53 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
       factsCount: mappedFacts.length,
     });
 
-    let inserted = 0;
-    let skip = 0;
-    let factsError: string | null = null;
-
-    try {
-      const { insert, skip: skipCount } = await filterNewFacts(clienteIdFinal, mappedFacts);
-      skip = skipCount;
-      if (insert.length) {
-        const { inserted: appended, errors } = await appendFactsBatched(insert);
-        inserted = appended;
-        if (errors.length) {
-          factsError = toFactsErrorMessage(errors[0]);
-        }
-      }
-    } catch (error) {
-      factsError = toFactsErrorMessage(error);
-    }
-
-    await markSnapshotPostFacts(clienteIdFinal, {
-      factsCount: mappedFacts.length,
-      error: factsError,
-      nowISO,
-    });
-
-    if (factsError) {
-      console.warn('FACTS_FAIL_SOFT', {
-        clienteId: clienteIdFinal,
-        error: factsError,
-        inserted,
-        skipped: skip,
+    const factsCount = mappedFacts.length;
+    if (factsCount === 0) {
+      await markSnapshotPostFacts(clienteIdFinal, {
+        factsCount: 0,
+        error: null,
+        nowISO,
       });
+      console.info('FACTS_SKIP_EMPTY', { clienteId: clienteIdFinal });
     } else {
-      console.info('FACTS_OK', {
-        clienteId: clienteIdFinal,
-        inserted,
-        skipped: skip,
+      let inserted = 0;
+      let skip = 0;
+      let factsError: string | null = null;
+
+      try {
+        const { insert, skip: skipCount } = await filterNewFacts(clienteIdFinal, mappedFacts);
+        skip = skipCount;
+        if (insert.length) {
+          const { inserted: appended, errors } = await appendFactsBatched(insert);
+          inserted = appended;
+          if (errors.length) {
+            factsError = toFactsErrorMessage(errors[0]);
+          }
+        }
+      } catch (error) {
+        factsError = toFactsErrorMessage(error);
+      }
+
+      await markSnapshotPostFacts(clienteIdFinal, {
+        factsCount,
+        error: factsError,
+        nowISO,
       });
+
+      if (factsError) {
+        console.warn('FACTS_FAIL_SOFT', {
+          clienteId: clienteIdFinal,
+          error: factsError,
+          inserted,
+          skipped: skip,
+        });
+      } else {
+        console.info('FACTS_OK', {
+          clienteId: clienteIdFinal,
+          inserted,
+          skipped: skip,
+        });
+      }
     }
 
     console.info('PERSIST_END', { clienteId: clienteIdFinal });

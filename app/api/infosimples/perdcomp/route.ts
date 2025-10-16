@@ -1,7 +1,11 @@
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
-import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
-import { savePerdecompResults, loadSnapshotCard } from '@/lib/perdecomp-persist';
+
+import {
+  loadSnapshotCard,
+  resolveClienteId,
+  savePerdecompResults,
+} from '@/lib/perdecomp-persist';
 import { normalizeCNPJ, isValidCNPJ } from '@/src/utils/cnpj';
 import {
   agregaPerdcomp,
@@ -11,33 +15,9 @@ import {
 
 export const runtime = 'nodejs';
 
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 const CARD_SCHEMA_VERSION = 'perdecomp-card-v1';
-
-const REQUIRED_HEADERS = [
-  'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
-  'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Quantidade_PERDCOMP',
-  'Qtd_PERDCOMP_DCOMP', 'Qtd_PERDCOMP_REST', 'Qtd_PERDCOMP_RESSARC', 'Qtd_PERDCOMP_CANCEL',
-  'Numero_Processo', 'Data_Protocolo', 'Ultima_Atualizacao',
-  'Quantidade_Receitas', 'Quantidade_Origens', 'Quantidade_DARFs',
-  'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta',
-  'Tipo_Empresa', 'Concorrentes',
-  'Code', 'Code_Message', 'MappedCount', 'Perdcomp_Principal_ID',
-  'Perdcomp_Solicitante', 'Perdcomp_Tipo_Documento',
-  'Perdcomp_Tipo_Credito', 'Perdcomp_Data_Transmissao',
-  'Perdcomp_Situacao', 'Perdcomp_Situacao_Detalhamento'
-];
-
-function columnNumberToLetter(columnNumber: number) {
-  let temp;
-  let letter = '';
-  while (columnNumber > 0) {
-    temp = (columnNumber - 1) % 26;
-    letter = String.fromCharCode(temp + 65) + letter;
-    columnNumber = (columnNumber - temp - 1) / 26;
-  }
-  return letter;
-}
+const INFOSIMPLES_ENDPOINT =
+  'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp';
 
 function todayISO() {
   const d = new Date();
@@ -58,7 +38,11 @@ function jitter(base: number) {
   return Math.round(base * (0.8 + Math.random() * 0.4));
 }
 
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delays = [1500, 3000, 5000]): Promise<T> {
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  attempts = 3,
+  delays = [1500, 3000, 5000],
+): Promise<T> {
   let lastErr: any;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -80,6 +64,28 @@ function normalizeFactValue(value: any): string {
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return '';
 }
+
+type PickPerdecompSourceParams = {
+  refazer: boolean;
+  clienteId: string;
+  cnpj: string;
+  nomeEmpresa: string;
+  empresaId?: string | null;
+  dataInicio: string;
+  dataFim: string;
+  debugMode: boolean;
+  requestedAtISO: string;
+};
+
+type PickPerdecompSourceResult = {
+  source: 'LIVE' | 'SNAPSHOT';
+  card: any;
+  facts: any[];
+  meta: {
+    dataConsultaISO?: string;
+    urlComprovante?: string;
+  };
+};
 
 function normalizePerdcompFacts(
   perdcomp: any[],
@@ -120,53 +126,190 @@ function normalizePerdcompFacts(
   });
 }
 
-async function getLastPerdcompFromSheet({
-  cnpj,
-  clienteId,
-}: {
-  cnpj?: string;
-  clienteId?: string;
-}) {
-  const sheets = await getSheetsClient();
-  const head = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.SPREADSHEET_ID,
-    range: 'PERDECOMP!1:1',
+async function pickPerdecompSource(
+  params: PickPerdecompSourceParams,
+): Promise<PickPerdecompSourceResult> {
+  const {
+    refazer,
+    clienteId,
+    cnpj,
+    nomeEmpresa,
+    empresaId,
+    dataInicio,
+    dataFim,
+    debugMode,
+    requestedAtISO,
+  } = params;
+
+  if (!refazer) {
+    const snapshotCard = await loadSnapshotCard({ clienteId });
+    if (snapshotCard) {
+      const perdcompArray = Array.isArray(snapshotCard?.perdcomp)
+        ? snapshotCard.perdcomp
+        : [];
+      const mappedCount = snapshotCard?.mappedCount ?? perdcompArray.length ?? 0;
+      const headerRequestedAt =
+        snapshotCard?.header?.requested_at ?? snapshotCard?.requestedAt ?? null;
+      const card = {
+        ...snapshotCard,
+        ok: snapshotCard?.ok ?? true,
+        fonte: 'perdecomp_snapshot',
+        mappedCount: snapshotCard?.mappedCount ?? mappedCount,
+        header: {
+          ...(snapshotCard?.header ?? {}),
+          requested_at: headerRequestedAt,
+          cnpj,
+          nomeEmpresa,
+          clienteId,
+        },
+        clienteId,
+        nomeEmpresa,
+        empresaId: empresaId ?? null,
+      };
+
+      if (debugMode) {
+        card.debug = {
+          ...(card.debug ?? {}),
+          requestedAt: requestedAtISO,
+          fonte: 'perdecomp_snapshot',
+          mappedCount,
+        };
+      }
+
+      return {
+        source: 'SNAPSHOT',
+        card,
+        facts: [],
+        meta: {
+          dataConsultaISO: headerRequestedAt ?? undefined,
+          urlComprovante:
+            snapshotCard?.site_receipt ?? snapshotCard?.header?.site_receipt ?? undefined,
+        },
+      };
+    }
+  }
+
+  const token = process.env.INFOSIMPLES_TOKEN;
+  if (!token) {
+    throw new Error('INFOSIMPLES_TOKEN is not set in .env.local');
+  }
+
+  const paramsSearch = new URLSearchParams({
+    token: token,
+    cnpj: cnpj,
+    data_inicio: dataInicio,
+    data_fim: dataFim,
+    timeout: '600',
   });
-  const headers = head.data.values?.[0] || [];
-  const col = (name: string) => headers.indexOf(name);
-  const resp = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.SPREADSHEET_ID,
-    range: 'PERDECOMP!A2:Z',
+
+  const apiRequest = {
+    cnpj,
+    data_inicio: dataInicio,
+    data_fim: dataFim,
+    timeout: 600,
+    endpoint: INFOSIMPLES_ENDPOINT,
+  };
+
+  const doCall = async () => {
+    const resp = await fetch(INFOSIMPLES_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: paramsSearch.toString(),
+    });
+    const text = await resp.text();
+    const json = (() => {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return null;
+      }
+    })();
+    if (!resp.ok || (json && typeof json.code === 'number' && ![200, 612].includes(json.code))) {
+      const err: any = new Error('provider_error');
+      err.status = resp.status || 502;
+      err.statusText = resp.statusText || 'Bad Gateway';
+      err.providerCode = json?.code;
+      err.providerMessage = json?.code_message || json?.message || json?.errors?.[0]?.message || null;
+      throw err;
+    }
+    return json;
+  };
+
+  const apiResponse = await withRetry(doCall, 3, [1500, 3000, 5000]);
+  if (debugMode && apiResponse?.header?.parameters?.token) {
+    delete apiResponse.header.parameters.token;
+  }
+
+  const headerRequestedAt = apiResponse?.header?.requested_at || requestedAtISO;
+  const perdcompArrayRaw = apiResponse?.code === 612 ? [] : apiResponse?.data?.[0]?.perdcomp;
+  const perdcompArray = Array.isArray(perdcompArrayRaw) ? perdcompArrayRaw : [];
+  const resumo = agregaPerdcomp(perdcompArray);
+  const first = perdcompArray[0] || {};
+  const totalPerdcomp = resumo.total;
+  const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
+  const siteReceipt = apiResponse?.site_receipts?.[0] || '';
+
+  const card: any = {
+    ok: true,
+    fonte: 'api:infosimples',
+    header: {
+      ...(apiResponse?.header ?? {}),
+      requested_at: headerRequestedAt,
+      cnpj,
+      nomeEmpresa,
+      clienteId,
+    },
+    mappedCount,
+    total_perdcomp: totalPerdcomp,
+    site_receipt: siteReceipt,
+    perdcomp: perdcompArray,
+    perdcompResumo: resumo,
+    perdcompCodigos: perdcompArray
+      .map((item: any) => item?.perdcomp)
+      .filter(Boolean),
+    primeiro: {
+      perdcomp: first?.perdcomp,
+      solicitante: first?.solicitante,
+      tipo_documento: first?.tipo_documento,
+      tipo_credito: first?.tipo_credito,
+      data_transmissao: first?.data_transmissao,
+      situacao: first?.situacao,
+      situacao_detalhamento: first?.situacao_detalhamento,
+    },
+    cnpj,
+    clienteId,
+    nomeEmpresa,
+    empresaId: empresaId ?? null,
+  };
+
+  if (debugMode) {
+    card.debug = {
+      requestedAt: requestedAtISO,
+      fonte: 'api:infosimples',
+      apiRequest,
+      apiResponse,
+      mappedCount,
+      total_perdcomp: totalPerdcomp,
+    };
+  }
+
+  const normalizedFacts = normalizePerdcompFacts(perdcompArray, {
+    clienteId,
+    empresaId,
+    nomeEmpresa,
+    cnpj,
   });
-  const rows = resp.data.values || [];
-  const idxCliente = col('Cliente_ID');
-  const idxCnpj = col('CNPJ');
-  const idxQtd = col('Quantidade_PERDCOMP');
-  const idxHtml = col('URL_Comprovante_HTML');
-  const idxData = col('Data_Consulta');
-  const idxQtdDcomp = col('Qtd_PERDCOMP_DCOMP');
-  const idxQtdRest = col('Qtd_PERDCOMP_REST');
-  const idxQtdRessarc = col('Qtd_PERDCOMP_RESSARC');
-  const idxQtdCancel = col('Qtd_PERDCOMP_CANCEL');
-  const match = rows.find(
-    r =>
-      (clienteId && r[idxCliente] === clienteId) ||
-      (cnpj && normalizeCNPJ(r[idxCnpj]) === cnpj)
-  );
-  if (!match) return null;
-  const qtd = Number(match[idxQtd] ?? 0);
-  const dcomp = Number(match[idxQtdDcomp] ?? 0);
-  const rest = Number(match[idxQtdRest] ?? 0);
-  const ressarc = Number(match[idxQtdRessarc] ?? 0);
-  const canc = Number(match[idxQtdCancel] ?? 0);
+
   return {
-    quantidade: qtd || 0,
-    dcomp,
-    rest,
-    ressarc,
-    canc,
-    site_receipt: match[idxHtml] || null,
-    requested_at: match[idxData] || null,
+    source: 'LIVE',
+    card,
+    facts: normalizedFacts,
+    meta: {
+      dataConsultaISO: headerRequestedAt,
+      urlComprovante: siteReceipt || undefined,
+    },
   };
 }
 
@@ -180,7 +323,7 @@ export async function POST(request: Request) {
     if (!isValidCNPJ(cnpj)) {
       return NextResponse.json(
         { error: true, httpStatus: 400, httpStatusText: 'Bad Request', message: 'CNPJ inválido' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -192,9 +335,10 @@ export async function POST(request: Request) {
       data_inicio = addYears(data_fim, -5);
     }
 
-    const force = body?.force ?? false;
-    const debugMode = body?.debug ?? false;
-    const clienteId =
+    const force = Boolean(body?.force ?? false);
+    const debugMode = Boolean(body?.debug ?? false);
+
+    const clienteIdInput =
       body?.Cliente_ID ??
       body?.clienteId ??
       url.searchParams.get('Cliente_ID') ??
@@ -209,361 +353,74 @@ export async function POST(request: Request) {
       body?.empresaId ??
       url.searchParams.get('Empresa_ID') ??
       url.searchParams.get('empresaId');
-    if (!clienteId || !nomeEmpresa) {
+
+    if (!clienteIdInput || !nomeEmpresa) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
-    const requestedAt = new Date().toISOString();
-    const apiRequest = {
-      cnpj,
-      data_inicio,
-      data_fim,
-      timeout: 600,
-      endpoint: 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp',
-    };
-
-    // 1. If not forcing, check the snapshot first
-    if (!force) {
-      console.info('SNAPSHOT_MODE', { empresa: nomeEmpresa, clienteId, source: 'perdecomp_snapshot' });
-      
-      try {
-        const snapshotCard = await loadSnapshotCard({ clienteId });
-        
-        if (snapshotCard) {
-          console.info('SNAPSHOT_ROWS', { 
-            empresa: nomeEmpresa, 
-            clienteId,
-            count: Array.isArray(snapshotCard?.perdcomp) ? snapshotCard.perdcomp.length : 0 
-          });
-          
-          // Extract data from the rich snapshot card
-          const resumo = snapshotCard?.resumo ?? snapshotCard?.perdcompResumo ?? {};
-          const mappedCount = snapshotCard?.mappedCount ?? (Array.isArray(snapshotCard?.perdcomp) ? snapshotCard.perdcomp.length : 0);
-          const totalPerdcomp = snapshotCard?.total_perdcomp ?? resumo?.total ?? mappedCount;
-          const siteReceipt = snapshotCard?.site_receipt ?? snapshotCard?.header?.site_receipt ?? null;
-          const lastConsultation = snapshotCard?.header?.requested_at ?? snapshotCard?.requestedAt ?? null;
-          const primeiro = snapshotCard?.primeiro ?? (Array.isArray(snapshotCard?.perdcomp) && snapshotCard.perdcomp[0]) ?? null;
-          const perdcompCodigos = snapshotCard?.perdcompCodigos ?? [];
-          
-          const resp: any = {
-            ok: true,
-            fonte: 'perdecomp_snapshot',
-            mappedCount,
-            total_perdcomp: totalPerdcomp,
-            perdcompResumo: resumo,
-            perdcompCodigos,
-            site_receipt: siteReceipt,
-            primeiro,
-            header: {
-              requested_at: lastConsultation,
-              cnpj,
-              nomeEmpresa,
-              clienteId,
-            },
-            // Include the full card data for rich rendering
-            ...snapshotCard,
-          };
-          
-          if (debugMode) {
-            resp.debug = {
-              requestedAt,
-              fonte: 'perdecomp_snapshot',
-              apiRequest,
-              apiResponse: null,
-              mappedCount,
-              header: { requested_at: lastConsultation },
-              total_perdcomp: totalPerdcomp,
-            };
-          }
-          
-          return NextResponse.json(resp);
-        }
-      } catch (error) {
-        console.warn('SNAPSHOT_READ_FAIL', { 
-          clienteId, 
-          error: error instanceof Error ? error.message : String(error) 
-        });
-        // Fall through to API call if snapshot read fails
-      }
-      
-      // Fallback: check old PERDECOMP sheet for backward compatibility
-      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
-      if (fallback) {
-        const { quantidade, dcomp, rest, ressarc, canc, site_receipt, requested_at } = fallback;
-        const porFamilia = { DCOMP: dcomp, REST: rest, RESSARC: ressarc, CANC: canc, DESCONHECIDO: 0 };
-        const porNaturezaAgrupada = {
-          '1.3/1.7': dcomp,
-          '1.2/1.6': rest,
-          '1.1/1.5': ressarc,
-        };
-        const total = dcomp + rest + ressarc + canc;
-        const resumo = {
-          total,
-          totalSemCancelamento: quantidade || dcomp + rest + ressarc,
-          canc,
-          porFamilia,
-          porNaturezaAgrupada,
-        };
-        const resp: any = {
-          ok: true,
-          fonte: 'planilha_fallback',
-          perdcompResumo: resumo,
-          total_perdcomp: resumo.total,
-          perdcompCodigos: [],
-          site_receipt,
-          header: { requested_at },
-        };
-        if (debugMode) {
-          resp.debug = {
-            requestedAt,
-            fonte: 'planilha_fallback',
-            apiRequest,
-            apiResponse: null,
-            mappedCount: quantidade,
-            header: { requested_at },
-            total_perdcomp: resumo.total,
-          };
-        }
-        return NextResponse.json(resp);
-      }
-    }
-
-    // 2. If forced or no data found, call the Infosimples API
-    const token = process.env.INFOSIMPLES_TOKEN;
-    if (!token) {
-      throw new Error('INFOSIMPLES_TOKEN is not set in .env.local');
-    }
-
-    const params = new URLSearchParams({
-      token: token,
-      cnpj: cnpj,
-      data_inicio: data_inicio,
-      data_fim: data_fim,
-      timeout: '600',
-    });
-
-    const doCall = async () => {
-      const resp = await fetch(apiRequest.endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params.toString(),
-      });
-      const text = await resp.text();
-      const json = (() => {
-        try {
-          return JSON.parse(text);
-        } catch {
-          return null;
-        }
-      })();
-      // Allow 200 (OK) and 612 (No data found) to be treated as "successful" calls
-      if (!resp.ok || (json && typeof json.code === 'number' && ![200, 612].includes(json.code))) {
-        const err: any = new Error('provider_error');
-        err.status = resp.status || 502;
-        err.statusText = resp.statusText || 'Bad Gateway';
-        err.providerCode = json?.code;
-        err.providerMessage =
-          json?.code_message || json?.message || json?.errors?.[0]?.message || null;
-        throw err;
-      }
-      return json;
-    };
-
-    let apiResponse: any;
-    try {
-      apiResponse = await withRetry(doCall, 3, [1500, 3000, 5000]);
-    } catch (err: any) {
-      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
-      return NextResponse.json(
-        {
-          error: true,
-          httpStatus: err?.status || 502,
-          httpStatusText: err?.statusText || 'Bad Gateway',
-          providerCode: err?.providerCode ?? null,
-          providerMessage: err?.providerMessage ?? err?.message ?? 'API error',
-          fallback,
-        },
-        { status: err?.status || 502 }
-      );
-    }
-
-    if (debugMode && apiResponse?.header?.parameters?.token) {
-      delete apiResponse.header.parameters.token;
-    }
-
-    const headerRequestedAt = apiResponse?.header?.requested_at || requestedAt;
-    // If code is 612 (no data), treat perdcomp array as empty
-    const perdcompArrayRaw = apiResponse?.code === 612 ? [] : apiResponse?.data?.[0]?.perdcomp;
-    const perdcompArray = Array.isArray(perdcompArrayRaw) ? perdcompArrayRaw : [];
-    const resumo = agregaPerdcomp(perdcompArray);
-    const first = perdcompArray[0] || {};
-    const totalPerdcomp = resumo.total;
-    const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
-    const siteReceipt = apiResponse?.site_receipts?.[0] || '';
-
-    const writes: Record<string, any> = {
-      Code: apiResponse.code,
-      Code_Message: apiResponse.code_message || '',
-      MappedCount: mappedCount,
-      Quantidade_PERDCOMP: resumo.totalSemCancelamento,
-      Qtd_PERDCOMP_DCOMP: resumo.porFamilia.DCOMP,
-      Qtd_PERDCOMP_REST: resumo.porFamilia.REST,
-      Qtd_PERDCOMP_RESSARC: resumo.porFamilia.RESSARC,
-      Qtd_PERDCOMP_CANCEL: resumo.porFamilia.CANC,
-      URL_Comprovante_HTML: siteReceipt,
-      Data_Consulta: headerRequestedAt,
-      Perdcomp_Principal_ID: first?.perdcomp || '',
-      Perdcomp_Solicitante: first?.solicitante || '',
-      Perdcomp_Tipo_Documento: first?.tipo_documento || '',
-      Perdcomp_Tipo_Credito: first?.tipo_credito || '',
-      Perdcomp_Data_Transmissao: first?.data_transmissao || '',
-      Perdcomp_Situacao: first?.situacao || '',
-      Perdcomp_Situacao_Detalhamento: first?.situacao_detalhamento || '',
-    };
-
-    const sheets = await getSheetsClient();
-    // Call getSheetData ONCE and get both headers and rows
-    const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
-    const finalHeaders = [...headers];
-    let headerUpdated = false;
-    for (const h of REQUIRED_HEADERS) {
-      if (!finalHeaders.includes(h)) {
-        finalHeaders.push(h);
-        headerUpdated = true;
-      }
-    }
-    if (headerUpdated) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.SPREADSHEET_ID!,
-        range: `${PERDECOMP_SHEET_NAME}!1:1`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [finalHeaders] },
-      });
-    }
-
-    // Use the 'rows' we already fetched instead of calling getSheetData again
-    let rowNumber = -1;
-    for (const r of rows) {
-      if (r.Cliente_ID === clienteId || normalizeCNPJ(r.CNPJ) === cnpj) {
-        rowNumber = r._rowNumber;
-        break;
-      }
-    }
-
-    if (rowNumber !== -1) {
-      const data = [] as any[];
-      for (const [key, value] of Object.entries(writes)) {
-        if (value === undefined || value === '') continue;
-        const colIndex = finalHeaders.indexOf(key);
-        if (colIndex === -1) continue;
-        const colLetter = columnNumberToLetter(colIndex + 1);
-        data.push({
-          range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
-          values: [[value]],
-        });
-      }
-      if (data.length) {
-        await sheets.spreadsheets.values.batchUpdate({
-          spreadsheetId: process.env.SPREADSHEET_ID!,
-          requestBody: { valueInputOption: 'RAW', data },
-        });
-      }
-    } else {
-      const row: Record<string, any> = {};
-      finalHeaders.forEach(h => (row[h] = ''));
-      row['Cliente_ID'] = clienteId;
-      row['Nome da Empresa'] = nomeEmpresa;
-      row['CNPJ'] = `'${cnpj}`;
-      for (const [k, v] of Object.entries(writes)) {
-        if (v !== undefined) row[k] = v;
-      }
-      const values = finalHeaders.map(h => row[h]);
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.SPREADSHEET_ID!,
-        range: PERDECOMP_SHEET_NAME,
-        valueInputOption: 'RAW',
-        requestBody: { values: [values] },
-      });
-    }
-
-    const resp: any = {
-      ok: true,
-      header: { requested_at: headerRequestedAt },
-      mappedCount,
-      total_perdcomp: totalPerdcomp,
-      site_receipt: siteReceipt,
-      perdcomp: perdcompArray,
-      perdcompResumo: resumo,
-      perdcompCodigos: perdcompArray.map((item: any) => item.perdcomp).filter(Boolean),
-      primeiro: {
-        perdcomp: first?.perdcomp,
-        solicitante: first?.solicitante,
-        tipo_documento: first?.tipo_documento,
-        tipo_credito: first?.tipo_credito,
-        data_transmissao: first?.data_transmissao,
-        situacao: first?.situacao,
-        situacao_detalhamento: first?.situacao_detalhamento,
-      },
-      cnpj,
-    };
-    if (debugMode) {
-      resp.debug = {
-        requestedAt,
-        fonte: 'api',
-        apiRequest,
-        apiResponse,
-        mappedCount,
-        siteReceipts: apiResponse?.site_receipts,
-        header: apiResponse?.header,
-        total_perdcomp: totalPerdcomp,
-        perdcompResumo: resumo,
-      };
-    }
-
+    const requestedAtISO = new Date().toISOString();
     const consultaId = randomUUID();
-    const normalizedFacts = normalizePerdcompFacts(perdcompArray, {
-      clienteId,
-      empresaId,
-      nomeEmpresa,
+
+    console.info('FLOW_START', {
+      clienteIdInput,
+      refazer: force,
       cnpj,
     });
-    const snapshotCard = {
-      ...resp,
-      clienteId,
+
+    const resolvedClienteId = await resolveClienteId({
+      providedClienteId: clienteIdInput,
+      cnpj,
+    });
+
+    const { source, card, facts, meta } = await pickPerdecompSource({
+      refazer: force,
+      clienteId: resolvedClienteId,
+      cnpj,
       nomeEmpresa,
       empresaId: empresaId ?? null,
-    };
+      dataInicio: data_inicio,
+      dataFim: data_fim,
+      debugMode,
+      requestedAtISO,
+    });
+
+    console.info('FLOW_BUILT', {
+      clienteIdResolved: resolvedClienteId,
+      factsLen: Array.isArray(facts) ? facts.length : 0,
+      source,
+    });
+
+    const renderedAtISO = new Date().toISOString();
     await savePerdecompResults({
-      clienteId,
+      clienteId: resolvedClienteId,
       empresaId: empresaId ?? undefined,
       cnpj,
-      card: snapshotCard,
-      facts: normalizedFacts,
+      card,
+      facts: Array.isArray(facts) ? facts : [],
       meta: {
-        fonte: 'api:infosimples',
-        dataConsultaISO: headerRequestedAt,
-        urlComprovante: siteReceipt || undefined,
+        fonte: source === 'LIVE' ? 'api:infosimples' : 'snapshot:reuse',
+        dataConsultaISO: meta?.dataConsultaISO ?? requestedAtISO,
+        urlComprovante: meta?.urlComprovante,
         cardSchemaVersion: CARD_SCHEMA_VERSION,
-        renderedAtISO: new Date().toISOString(),
+        renderedAtISO,
         consultaId,
       },
     });
 
-    return NextResponse.json(resp);
-
+    return NextResponse.json(card);
   } catch (error: any) {
     console.error('[API /infosimples/perdcomp]', error);
+    const status = error?.status ?? 502;
+    const statusText = error?.statusText ?? 'Bad Gateway';
     return NextResponse.json(
       {
         error: true,
-        httpStatus: 502,
-        httpStatusText: 'Bad Gateway',
-        providerCode: null,
-        providerMessage: error?.message || 'API error',
+        httpStatus: status,
+        httpStatusText: statusText,
+        providerCode: error?.providerCode ?? null,
+        providerMessage: error?.providerMessage ?? error?.message ?? 'API error',
       },
-      { status: 502 }
+      { status },
     );
   }
 }
