@@ -1,21 +1,36 @@
 // --- Core Normalization ---
 
+export const onlyDigits = (v: string | number | null | undefined): string =>
+  String(v ?? "").replace(/\D+/g, "");
+
+export const normalizeCnpj = (v: string | number | null | undefined): string => {
+  const digits = onlyDigits(v);
+  if (!digits) return "";
+  return digits.padStart(14, "0").slice(-14);
+};
+
+export const ensureValidCnpj = (v: string | number | null | undefined): string =>
+  normalizeCnpj(v);
+
+export const isEmptyCNPJLike = (
+  v: string | number | null | undefined,
+): boolean => onlyDigits(v).length === 0;
+
+// Legacy names kept for backward compatibility with existing imports.
 export function toDigits(v: string | number | null | undefined): string {
-  return String(v ?? "").replace(/\D+/g, "");
+  return onlyDigits(v);
 }
 
 // Returns "" for empty; otherwise, 14 digits with leading zeros.
 export function normalizeCNPJ(v: string | number | null | undefined): string {
-  const d = toDigits(v);
-  if (!d) return "";
-  return d.padStart(14, "0").slice(-14);
+  return normalizeCnpj(v);
 }
 
 // --- Formatting ---
 
 // Formats to 00.000.000/0000-00
 export function formatCNPJ(v: string | null | undefined): string {
-  const d = normalizeCNPJ(v);
+  const d = normalizeCnpj(v);
   if (d.length !== 14) return d;
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 }
@@ -45,18 +60,9 @@ export const isValidCNPJ = (v: string | number | null | undefined): boolean => {
 };
 
 // --- Legacy Compatibility (to be removed gradually) ---
-// @deprecated use toDigits
-export const onlyDigits = toDigits;
 // @deprecated use formatCNPJ
 export const formatCnpj = formatCNPJ;
 // @deprecated use normalizeCNPJ
 export const padCNPJ14 = normalizeCNPJ;
 // @deprecated use isValidCNPJ
 export const isCnpj = isValidCNPJ;
-
-// --- Additional compatibility helpers ---
-
-export const normalizeCnpj = normalizeCNPJ;
-export const ensureValidCnpj = normalizeCNPJ;
-export const isEmptyCNPJLike = (v: string | number | null | undefined): boolean =>
-  toDigits(v).length === 0;
