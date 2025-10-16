@@ -3,9 +3,10 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { FaSpinner, FaSearch } from 'react-icons/fa';
 import type { CompanySuggestion } from '../lib/perplexity';
-import { onlyDigits, padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
+import { toDigits, normalizeCNPJ, isValidCNPJ } from '@/src/utils/cnpj';
 import { isEmptyCNPJLike } from '@/utils/cnpj-matriz';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
+import { CnpjField } from './inputs/CnpjField';
 
 // --- Types ---
 interface CompanyData {
@@ -64,7 +65,7 @@ function normalizePhones(s?: string) {
     .map(t => t.trim())
     .filter(Boolean);
   const uniq = Array.from(new Set(raw)).map(t => {
-    const d = onlyDigits(t);
+    const d = toDigits(t);
     if (!d) return '';
     return d.startsWith('55') ? `+${d}` : `+55${d}`;
   }).filter(Boolean);
@@ -74,12 +75,12 @@ function normalizePhones(s?: string) {
 function applySuggestionToForm(current: CompanyForm, suggestion: Partial<CompanyForm>, onlyEmpty = true): CompanyForm {
   const s: Partial<CompanyForm> = { ...suggestion };
 
-  if (s.CNPJ_Empresa) s.CNPJ_Empresa = padCNPJ14(s.CNPJ_Empresa);
+  if (s.CNPJ_Empresa) s.CNPJ_Empresa = normalizeCNPJ(s.CNPJ_Empresa);
   if (s.Estado_Empresa) s.Estado_Empresa = normalizeUF(s.Estado_Empresa);
   if (s.Telefones_Empresa) s.Telefones_Empresa = normalizePhones(s.Telefones_Empresa);
   if (s.Telefones_Contato) s.Telefones_Contato = normalizePhones(s.Telefones_Contato);
-  if (s.DDI_Empresa && !s.DDI_Empresa.startsWith('+')) s.DDI_Empresa = `+${onlyDigits(s.DDI_Empresa) || '55'}`;
-  if (s.DDI_Contato && !s.DDI_Contato.startsWith('+')) s.DDI_Contato = `+${onlyDigits(s.DDI_Contato) || '55'}`;
+  if (s.DDI_Empresa && !s.DDI_Empresa.startsWith('+')) s.DDI_Empresa = `+${toDigits(s.DDI_Empresa) || '55'}`;
+  if (s.DDI_Contato && !s.DDI_Contato.startsWith('+')) s.DDI_Contato = `+${toDigits(s.DDI_Contato) || '55'}`;
   if (s.Pais_Empresa === undefined) s.Pais_Empresa = 'Brasil';
 
   const next: CompanyForm = { ...current };
@@ -170,8 +171,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
         enrichedCNPJ: initialData?.CNPJ_Empresa,
         ask: async () => false,
       });
-      const digits = onlyDigits(decided);
-      const cnpj = isEmptyCNPJLike(digits) ? '' : padCNPJ14(digits);
+      const cnpj = normalizeCNPJ(decided);
       if (cnpj && !isValidCNPJ(cnpj)) {
         setIsLoading(false);
         setError('CNPJ inválido. Verifique e tente novamente.');
@@ -273,7 +273,14 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                     <div>
                       <label htmlFor="cnpj-empresa" className="block text-sm font-medium mb-1">CNPJ Empresa</label>
                       <div className="flex items-center gap-2">
-                      <input id="cnpj-empresa" type="text" name="CNPJ_Empresa" value={formData.CNPJ_Empresa || ''} onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: onlyDigits(e.target.value) }))} onBlur={() => setFormData(prev => ({ ...prev, CNPJ_Empresa: padCNPJ14(prev.CNPJ_Empresa ?? '') }))} className="flex-grow w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"/>
+                        <CnpjField
+                          id="cnpj-empresa"
+                          name="CNPJ_Empresa"
+                          value={formData.CNPJ_Empresa || ''}
+                          onChange={e => setFormData(prev => ({ ...prev, CNPJ_Empresa: e.target.value }))}
+                          className="flex-grow w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-2"
+                          formatVisual={true}
+                        />
                         <button
                           type="button"
                           onClick={() => {
@@ -287,7 +294,7 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
                           <FaSearch />
                         </button>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Apenas dígitos; validado no envio.</p>
+                      <p className="text-xs text-gray-500 mt-1">O CNPJ será formatado automaticamente.</p>
                     </div>
                     <div>
                       <label htmlFor="site-empresa" className="block text-sm font-medium mb-1">Site Empresa</label>

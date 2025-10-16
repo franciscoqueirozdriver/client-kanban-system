@@ -605,7 +605,7 @@ function mapSnapshotRow(
     Data_Consulta: meta.dataConsultaISO ?? nowISO,
     URL_Comprovante_HTML: meta.urlComprovante ?? '',
 
-    Facts_Count: '0',
+    Facts_Count: String(facts.length),
 
     Last_Updated_ISO: nowISO,
     Consulta_ID: meta.consultaId,
@@ -906,9 +906,10 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
 
   console.info('PERSIST_START', { clienteId: clienteIdFinal, consultaId: args.meta.consultaId });
 
+  let mappedFacts: FactsRow[] = [];
   try {
     const sanitizedCard = { ...card, clienteId: clienteIdFinal };
-    const mappedFacts = (args.facts ?? []).map((raw) =>
+    mappedFacts = (args.facts ?? []).map((raw) =>
       mapFact(raw, { ...ctx, card: sanitizedCard }),
     );
 

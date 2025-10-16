@@ -201,7 +201,7 @@ describe('perdecomp-persist', () => {
     const duplicateFact = {
       Cliente_ID: 'COMP-1',
       Empresa_ID: '',
-      CNPJ: '12345678000190',
+      CNPJ: '00001234567890',
       Perdcomp_Numero: duplicatePerdcompNumero,
       Natureza: '',
       Credito_Codigo: '',
@@ -290,7 +290,7 @@ describe('perdecomp-persist', () => {
       {
         Cliente_ID: 'COMP-1',
         Empresa_ID: '',
-        CNPJ: '12345678000190',
+        CNPJ: '00001234567890',
         Perdcomp_Numero: newPerdcompNumero,
         Natureza: '',
         Credito_Codigo: '',
@@ -304,7 +304,7 @@ describe('perdecomp-persist', () => {
     await savePerdecompResults({
       clienteId: 'COMP-9999',
       empresaId: undefined,
-      cnpj: '12345678000190',
+      cnpj: '00001234567890',
       card,
       facts,
       meta,
@@ -338,7 +338,7 @@ describe('perdecomp-persist', () => {
     const snapshotValues = snapshotAppendCall.requestBody.values[0];
     const appendedFacts = factsAppendCall.requestBody.values;
     expect(snapshotValues[snapshotHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
-    expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('12345678000190');
+    expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('00001234567890');
     expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('2');
     expect(snapshotValues[snapshotHeaders.indexOf('Risco_Nivel')]).toBe('DESCONHECIDO');
     expect(

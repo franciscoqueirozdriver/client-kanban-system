@@ -1,16 +1,17 @@
-export const onlyDigits = (v?: string) => (v ?? '').replace(/\D/g, '');
+import { normalizeCNPJ, toDigits, isValidCNPJ } from '@/src/utils/cnpj';
+
 const is14 = (d: string) => /^\d{14}$/.test(d);
 export const ordem = (cnpj: string) => {
-  const d = onlyDigits(cnpj);
+  const d = toDigits(cnpj);
   return d.length >= 12 ? d.slice(8, 12) : '';
 };
 export const isMatriz = (cnpj: string) => ordem(cnpj) === '0001';
 export const isFilial = (cnpj: string) => {
-  const d = onlyDigits(cnpj);
+  const d = toDigits(cnpj);
   return is14(d) && ordem(d) !== '0001';
 };
 export const isEmptyCNPJLike = (v?: string) => {
-  const d = onlyDigits(v);
+  const d = toDigits(v);
   return d.length === 0 || /^0+$/.test(d);
 };
 
@@ -25,7 +26,7 @@ function calcDVs(base12: string) {
   return `${dv1}${dv2}`;
 }
 export const toMatrizCNPJ = (cnpj: string) => {
-  const d = onlyDigits(cnpj);
+  const d = toDigits(cnpj);
   if (d.length < 12) return d;
   const raiz8 = d.slice(0, 8);
   const base12 = `${raiz8}0001`;
@@ -33,4 +34,4 @@ export const toMatrizCNPJ = (cnpj: string) => {
 };
 
 export const fmtCNPJ = (d: string) =>
-  onlyDigits(d).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  toDigits(d).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');

@@ -1,4 +1,5 @@
-import { onlyDigits, isEmptyCNPJLike, isFilial, isMatriz, toMatrizCNPJ } from '@/utils/cnpj-matriz';
+import { isEmptyCNPJLike, isFilial, isMatriz, toMatrizCNPJ } from '@/utils/cnpj-matriz';
+import { toDigits } from '@/src/utils/cnpj';
 
 export type MatrizFilialAskFn = (matriz: string, filial: string) => Promise<boolean>;
 
@@ -11,8 +12,8 @@ export async function decideCNPJFinal({
   enrichedCNPJ?: string;
   ask: MatrizFilialAskFn;
 }): Promise<string> {
-  const current = onlyDigits(currentFormCNPJ);
-  const enriched = onlyDigits(enrichedCNPJ);
+  const current = toDigits(currentFormCNPJ);
+  const enriched = toDigits(enrichedCNPJ);
 
   let candidate = isEmptyCNPJLike(current) && enriched ? enriched : current;
 
@@ -37,7 +38,7 @@ export async function decideCNPJFinalBeforeQuery({
   cnpjAtual,
   ask,
 }: DecideBeforeQueryOpts): Promise<string> {
-  const digits = onlyDigits(cnpjAtual || '');
+  const digits = toDigits(cnpjAtual || '');
   if (!digits || !isFilial(digits)) return digits;
 
   const matriz = toMatrizCNPJ(digits);

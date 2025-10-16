@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findCompetitors } from '@/lib/perplexity';
-import { onlyDigits } from '@/utils/cnpj';
+import { normalizeCNPJ, toDigits } from '@/src/utils/cnpj';
 
 export const runtime = 'nodejs';
 
@@ -9,8 +9,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const name = String(body?.name ?? '').trim();
     const limit = Math.min(Math.max(Number(body?.limit) || 0, 1), 50);
-    const rawCnpj = onlyDigits(body?.cnpj ?? '');
-    const normalizedCnpj = rawCnpj.length === 14 ? rawCnpj : undefined;
+    const normalizedCnpj = normalizeCNPJ(body?.cnpj);
 
     if (!name) {
       return NextResponse.json({ items: [] });
@@ -26,8 +25,7 @@ export async function POST(req: Request) {
       const nome = String(raw?.nome ?? raw?.name ?? '').trim();
       if (!nome) return;
 
-      const cnpjDigits = onlyDigits(raw?.cnpj ?? raw?.documento ?? raw?.cnpj_numero ?? '');
-      const cnpj = cnpjDigits.slice(0, 14);
+      const cnpj = normalizeCNPJ(raw?.cnpj ?? raw?.documento ?? raw?.cnpj_numero ?? '');
       const id = raw?.id ? String(raw.id) : undefined;
       const fallbackKey = id || `${nome}-${index}`;
 

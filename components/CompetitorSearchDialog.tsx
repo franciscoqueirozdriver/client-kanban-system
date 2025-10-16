@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FaSpinner } from 'react-icons/fa';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { formatCnpj, normalizeCnpj } from '@/utils/cnpj';
+import { formatCNPJ, normalizeCNPJ, toDigits } from '@/src/utils/cnpj';
 
 export type CompetitorItem = { nome: string; cnpj: string };
 
@@ -25,8 +25,6 @@ interface Props {
   onSearch: (term: string) => Promise<CompetitorItem[]>;
   onConfirm: (selected: CompetitorItem[]) => void;
 }
-
-const digits = (value: string) => (value || '').replace(/\D+/g, '');
 
 export default function CompetitorSearchDialog({
   isOpen,
@@ -64,7 +62,7 @@ export default function CompetitorSearchDialog({
         const nome = String(item?.nome ?? '').trim();
         if (!nome) return;
 
-        const cnpj = digits(String(item?.cnpj ?? ''));
+        const cnpj = normalizeCNPJ(item?.cnpj);
         if (cnpj && blockedSet.has(cnpj)) return;
 
         if (cnpj) {
@@ -202,7 +200,7 @@ export default function CompetitorSearchDialog({
   const handleConfirm = useCallback(() => {
     const chosen = Object.values(selected).map(item => ({
       nome: item.nome,
-      cnpj: digits(item.cnpj),
+      cnpj: normalizeCNPJ(item.cnpj),
     }));
 
     if (chosen.length === 0) {
@@ -289,7 +287,7 @@ export default function CompetitorSearchDialog({
                       <div className="flex flex-col">
                         <span className="text-sm font-semibold text-foreground">{item.nome}</span>
                         <span className="text-xs font-mono text-muted-foreground">
-                          {item.cnpj ? formatCnpj(item.cnpj) : 'CNPJ indisponível'}
+                          {item.cnpj ? formatCNPJ(item.cnpj) : 'CNPJ indisponível'}
                         </span>
                       </div>
                     </li>

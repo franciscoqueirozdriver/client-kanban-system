@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { padCNPJ14, isValidCNPJ, onlyDigits } from '@/utils/cnpj';
+import { normalizeCNPJ, isValidCNPJ, toDigits, formatCNPJ } from '@/src/utils/cnpj';
 
 // --- Helper Types ---
 interface Company {
@@ -53,7 +53,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
           const data = await response.json();
           setResults(data);
           // Check for invalid CNPJ only if the query looks like a full CNPJ but returns no results
-          if (data.length === 0 && /^\d{14}$/.test(onlyDigits(query)) && !isValidCNPJ(query)) {
+          if (data.length === 0 && /^\d{14}$/.test(toDigits(query)) && !isValidCNPJ(query)) {
               setError("CNPJ inválido.");
           }
         } else {
@@ -79,7 +79,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
     setQuery('');
     setResults([]);
     setShowSuggestions(false);
-    onSelect({ ...company, CNPJ_Empresa: padCNPJ14(company.CNPJ_Empresa) });
+    onSelect({ ...company, CNPJ_Empresa: normalizeCNPJ(company.CNPJ_Empresa) });
   };
 
   if (selectedCompany) {
@@ -88,7 +88,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
         <div className="flex items-center justify-between">
           <div className="flex-grow truncate">
             <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{padCNPJ14(selectedCompany.CNPJ_Empresa) || 'CNPJ não informado'}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{formatCNPJ(selectedCompany.CNPJ_Empresa) || 'CNPJ não informado'}</p>
           </div>
           <button type="button" onClick={onClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
         </div>
@@ -133,7 +133,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
 
           {!isLoading && results.map((company) => (
             <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
-              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{padCNPJ14(company.CNPJ_Empresa)}</span>
+              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{formatCNPJ(company.CNPJ_Empresa)}</span>
             </li>
           ))}
         </ul>

@@ -6,33 +6,7 @@ import {
   appendToSheets,
   updateInSheets, // Import the new update function
 } from '../../../../lib/googleSheets';
-
-// --- Helper Functions ---
-
-function normalizeCnpj(cnpj: string | undefined | null): string {
-  return String(cnpj || '').replace(/\D/g, '');
-}
-
-function isValidCnpj(cnpj: string | undefined | null): boolean {
-  const digits = normalizeCnpj(cnpj);
-  if (digits.length !== 14) return false;
-  if (/^(\d)\1+$/.test(digits)) return false;
-  // Calculation logic remains the same...
-  let size = 12, sum = 0, pos = 5;
-  for (let i = 0; i < size; i++) {
-    sum += parseInt(digits[i]) * pos--;
-    if (pos < 2) pos = 9;
-  }
-  let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
-  if (result !== parseInt(digits[12])) return false;
-  size = 13; sum = 0; pos = 6;
-  for (let i = 0; i < size; i++) {
-    sum += parseInt(digits[i]) * pos--;
-    if (pos < 2) pos = 9;
-  }
-  result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
-  return result === parseInt(digits[13]);
-}
+import { normalizeCNPJ, isValidCNPJ } from '@/src/utils/cnpj';
 
 // --- API Route Handler ---
 
@@ -46,8 +20,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'O "Nome da Empresa" é obrigatório.' }, { status: 400 });
     }
 
-    const normalizedCnpj = normalizeCnpj(Empresa.CNPJ_Empresa);
-    if (Empresa.CNPJ_Empresa && !isValidCnpj(normalizedCnpj)) {
+    const normalizedCnpj = normalizeCNPJ(Empresa.CNPJ_Empresa);
+    if (Empresa.CNPJ_Empresa && !isValidCNPJ(normalizedCnpj)) {
       return NextResponse.json({ message: 'O CNPJ informado é inválido.' }, { status: 400 });
     }
 
@@ -78,7 +52,7 @@ export async function POST(req: Request) {
     }
 
     const existingByName = await findByName(Empresa.Nome_da_Empresa);
-    if (existingByName && !normalizeCnpj(existingByName['CNPJ Empresa'])) {
+    if (existingByName && !normalizeCNPJ(existingByName['CNPJ Empresa'])) {
        return NextResponse.json(
         {
             message: 'Encontramos uma empresa com este nome mas sem CNPJ. Deseja enriquecer o cadastro existente?',

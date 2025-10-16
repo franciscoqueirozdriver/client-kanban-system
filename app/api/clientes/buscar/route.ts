@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets.js';
-import { padCNPJ14, onlyDigits } from '@/utils/cnpj';
+import { normalizeCNPJ, toDigits } from '@/src/utils/cnpj';
 
 const SHEET_NAME = 'Leads Exact Spotter';
 const RESULT_LIMIT = 20;
@@ -20,7 +20,7 @@ interface ScoredCompany {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q')?.trim() || '';
-  const qDigits = onlyDigits(q);
+  const qDigits = toDigits(q);
 
   if (q.length < 2 && qDigits.length < 2) {
     return NextResponse.json([]);
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       const cnpjRaw = row['CPF/CNPJ'] || '';
 
       const nome = norm(nomeRaw);
-      const cnpj = onlyDigits(cnpjRaw);
+      const cnpj = toDigits(cnpjRaw);
 
       if (!nome && !cnpj) {
         return null;
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       return {
         Cliente_ID: row['Cliente_ID'],
         Nome_da_Empresa: nomeRaw,
-        CNPJ_Empresa: padCNPJ14(cnpjRaw),
+        CNPJ_Empresa: normalizeCNPJ(cnpjRaw),
         score,
         nomeLength: nomeRaw.length,
       };

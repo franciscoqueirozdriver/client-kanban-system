@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { FaSpinner, FaExclamationTriangle, FaInfoCircle, FaLightbulb } from 'react-icons/fa';
 import { enriquecerPerdcomp, analisarPortfolioPerdcomp } from '@/lib/perdcomp';
-import { formatCnpj } from '@/utils/cnpj';
+import { formatCNPJ } from '@/src/utils/cnpj';
 
 interface Company {
   Cliente_ID: string;
@@ -121,7 +121,7 @@ export default function PerdcompEnrichedCard({
         <h3 className="text-lg font-semibold text-foreground" title={company.Nome_da_Empresa}>
           {company.Nome_da_Empresa}
         </h3>
-        <p className="text-xs text-muted-foreground">{formatCnpj(company.CNPJ_Empresa)}</p>
+        <p className="text-xs text-muted-foreground">{formatCNPJ(company.CNPJ_Empresa)}</p>
         {ultimaConsulta && (
           <p className="mt-1 text-xs text-muted-foreground">
             Última consulta: {new Date(ultimaConsulta).toLocaleDateString()}

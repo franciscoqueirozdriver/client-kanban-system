@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
 import { savePerdecompResults, loadSnapshotCard } from '@/lib/perdecomp-persist';
-import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
+import { normalizeCNPJ, isValidCNPJ } from '@/src/utils/cnpj';
 import {
   agregaPerdcomp,
   classificaFamiliaPorNatureza,
@@ -151,7 +151,7 @@ async function getLastPerdcompFromSheet({
   const match = rows.find(
     r =>
       (clienteId && r[idxCliente] === clienteId) ||
-      (cnpj && (r[idxCnpj] || '').replace(/\D/g, '') === cnpj)
+      (cnpj && normalizeCNPJ(r[idxCnpj]) === cnpj)
   );
   if (!match) return null;
   const qtd = Number(match[idxQtd] ?? 0);
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
     const url = new URL(request.url);
 
     const rawCnpj = body?.cnpj ?? url.searchParams.get('cnpj') ?? '';
-    const cnpj = padCNPJ14(rawCnpj);
+    const cnpj = normalizeCNPJ(rawCnpj);
     if (!isValidCNPJ(cnpj)) {
       return NextResponse.json(
         { error: true, httpStatus: 400, httpStatusText: 'Bad Request', message: 'CNPJ inválido' },
@@ -446,7 +446,7 @@ export async function POST(request: Request) {
     // Use the 'rows' we already fetched instead of calling getSheetData again
     let rowNumber = -1;
     for (const r of rows) {
-      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
+      if (r.Cliente_ID === clienteId || normalizeCNPJ(r.CNPJ) === cnpj) {
         rowNumber = r._rowNumber;
         break;
       }

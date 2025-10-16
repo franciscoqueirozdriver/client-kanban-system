@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { enrichCompanyData } from '@/lib/perplexity';
+import { normalizeCNPJ } from '@/src/utils/cnpj';
 
 export const runtime = 'nodejs';
 
@@ -7,7 +8,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const nome = body?.nome ?? '';
-    const cnpj = body?.cnpj ?? '';
+    const cnpj = normalizeCNPJ(body?.cnpj);
 
     const { suggestion, debug } = await enrichCompanyData({ nome, cnpj });
 
