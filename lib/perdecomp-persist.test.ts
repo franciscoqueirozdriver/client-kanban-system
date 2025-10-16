@@ -195,6 +195,7 @@ describe('perdecomp-persist', () => {
       renderedAtISO: '2024-01-01T12:00:00.000Z',
       consultaId: 'consulta-123',
     };
+    const nowISO = new Date().toISOString();
 
     const duplicatePerdcompNumero = '111112222201020311011234';
     const duplicatePerdcompISO = normalizeISO('2003-02-01');
@@ -253,6 +254,25 @@ describe('perdecomp-persist', () => {
               _rowNumber: 2,
             },
           ],
+        });
+      }
+      if (sheetName === 'DIC_CREDITOS') {
+        return Promise.resolve({
+          headers: ['Credito_Codigo', 'Credito_Descricao', 'Ativo', 'Criado_Em_ISO'],
+          rows: [
+            {
+              Credito_Codigo: '01',
+              Credito_Descricao: 'Crédito Existente',
+              Ativo: '1',
+              Criado_Em_ISO: '2023-01-01T00:00:00.000Z',
+            },
+          ],
+        });
+      }
+      if (sheetName === 'DIC_NATUREZA') {
+        return Promise.resolve({
+          headers: ['Natureza', 'Familia', 'Tipo_Codigo', 'Tipo_Nome', 'Ativo', 'Criado_Em_ISO'],
+          rows: [],
         });
       }
       throw new Error(`Unexpected sheet request: ${sheetName}`);
@@ -322,21 +342,34 @@ describe('perdecomp-persist', () => {
     );
     expect(valuesUpdateMock).not.toHaveBeenCalled();
 
-    expect(appendMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ range: 'perdecomp_facts' }),
-    );
+    const appendRanges = appendMock.mock.calls.map((call) => call[0].range);
+    expect(appendRanges).toEqual([
+      'perdecomp_facts',
+      'DIC_CREDITOS',
+      'DIC_NATUREZA',
+      'perdecomp_snapshot',
+    ]);
 
-    expect(appendMock).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ range: 'perdecomp_snapshot' }),
-    );
+    const snapshotAppendCall = appendMock.mock.calls.find(
+      ([request]) => request.range === 'perdecomp_snapshot',
+    )?.[0];
+    const factsAppendCall = appendMock.mock.calls.find(
+      ([request]) => request.range === 'perdecomp_facts',
+    )?.[0];
+    const dicCreditoAppendCall = appendMock.mock.calls.find(
+      ([request]) => request.range === 'DIC_CREDITOS',
+    )?.[0];
+    const dicNaturezaAppendCall = appendMock.mock.calls.find(
+      ([request]) => request.range === 'DIC_NATUREZA',
+    )?.[0];
 
-    const snapshotAppendCall = appendMock.mock.calls[0][0];
-    const factsAppendCall = appendMock.mock.calls[1][0];
+    expect(snapshotAppendCall).toBeDefined();
+    expect(factsAppendCall).toBeDefined();
+    expect(dicCreditoAppendCall).toBeDefined();
+    expect(dicNaturezaAppendCall).toBeDefined();
 
-    const snapshotValues = snapshotAppendCall.requestBody.values[0];
-    const appendedFacts = factsAppendCall.requestBody.values;
+    const snapshotValues = snapshotAppendCall!.requestBody.values[0];
+    const appendedFacts = factsAppendCall!.requestBody.values;
     expect(snapshotValues[snapshotHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
     expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('00001234567890');
     expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('2');
@@ -367,6 +400,13 @@ describe('perdecomp-persist', () => {
         .digest('hex'),
     );
 
+    const dicCreditoValues = dicCreditoAppendCall!.requestBody.values;
+    expect(dicCreditoValues).toEqual([['18', 'Outros Créditos', '1', nowISO]]);
+    const dicNaturezaValues = dicNaturezaAppendCall!.requestBody.values;
+    expect(dicNaturezaValues).toEqual([
+      ['1.3', 'DCOMP', '1', 'Declaração de Compensação', '1', nowISO],
+    ]);
+
     const porCredito = JSON.parse(
       snapshotValues[snapshotHeaders.indexOf('Por_Credito_JSON')],
     );
@@ -384,6 +424,11 @@ describe('perdecomp-persist', () => {
       snapshotHash: expect.any(String),
       factsCount: 2,
     });
+    expect(infoSpy).toHaveBeenCalledWith('DIC_UPSERT_OK', {
+      clienteId: 'CLT-3684',
+      creditosAdded: 1,
+      naturezasAdded: 1,
+    });
     expect(infoSpy).toHaveBeenCalledWith('FACTS_OK', {
       clienteId: 'CLT-3684',
       inserted: 1,
@@ -392,7 +437,6 @@ describe('perdecomp-persist', () => {
     expect(infoSpy).toHaveBeenCalledWith('PERSIST_END', { clienteId: 'CLT-3684' });
     expect(errorSpy).not.toHaveBeenCalledWith('PERSIST_FAIL', expect.anything());
 
-    const nowISO = new Date().toISOString();
     const batchCalls = batchUpdateMock.mock.calls.map((call) => call[0]);
     expect(batchCalls.length).toBeGreaterThan(0);
     const lastCall = batchCalls[batchCalls.length - 1];
@@ -432,10 +476,11 @@ describe('perdecomp-persist', () => {
       },
     });
 
-    expect(errorSpy).toHaveBeenCalledWith('PERSIST_FAIL', {
+    expect(warnSpy).toHaveBeenCalledWith('SNAPSHOT_FAIL_SOFT', {
       clienteId: 'CLT-9000',
       message: 'boom',
     });
+    expect(errorSpy).not.toHaveBeenCalledWith('PERSIST_FAIL', expect.anything());
     expect(batchUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         requestBody: expect.objectContaining({ valueInputOption: 'RAW' }),
@@ -460,7 +505,7 @@ describe('perdecomp-persist', () => {
     expect(warnSpy).toHaveBeenCalledWith('PERSIST_ABORT_INVALID_CLIENTE_ID', {
       provided: 'COMP-9999',
       resolved: expect.any(String),
-      cnpj: undefined,
+      cnpj: '',
     });
     __setResolveClienteIdOverrideForTests(null);
   });
