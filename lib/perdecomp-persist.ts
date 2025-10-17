@@ -17,6 +17,7 @@ import {
 
 export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
 export const SHEET_FACTS = 'perdecomp_facts';
+const SHEET_FACTS_ERRORS = 'perdecomp_facts_errors';
 const SHEET_DIC_CREDITOS = 'DIC_CREDITOS';
 const SHEET_DIC_NATUREZA = 'DIC_NATUREZA';
 
@@ -122,6 +123,44 @@ function toStringValue(value: unknown): string {
   }
 }
 
+function computeRowHash(row: Record<string, any>): string {
+  if (!row || typeof row !== 'object') {
+    return crypto.createHash('sha1').update('').digest('hex');
+  }
+
+  const stable: Record<string, string> = {};
+
+  Object.keys(row)
+    .filter((key) => key !== '_rowNumber' && !FACT_METADATA_FIELDS.has(key))
+    .sort()
+    .forEach((key) => {
+      stable[key] = toStringValue((row as Record<string, any>)[key]);
+    });
+
+  return crypto.createHash('sha1').update(JSON.stringify(stable)).digest('hex');
+}
+
+function factsKey(row: any): string {
+  if (!row || typeof row !== 'object') {
+    return '||';
+  }
+
+  const clienteId = String(row.Cliente_ID ?? '').trim();
+  const numero = String(row.Perdcomp_Numero ?? '').trim();
+  let hash = String(row.Row_Hash ?? '').trim();
+
+  if (!hash) {
+    hash = computeRowHash(row);
+    try {
+      row.Row_Hash = hash;
+    } catch {
+      // ignore assignment issues for read-only rows
+    }
+  }
+
+  return `${clienteId}|${numero}|${hash}`;
+}
+
 function normalizeSheetRow(row: Record<string, any>): SheetRow {
   const normalized: SheetRow = {};
   Object.entries(row ?? {}).forEach(([key, value]) => {
@@ -171,6 +210,25 @@ function safeJSONStringify(input: any): string {
   } catch (error) {
     return '';
   }
+}
+
+function safeStringify(obj: any, limit = 48000): string {
+  let result = '';
+  try {
+    result = JSON.stringify(obj ?? '');
+  } catch (error) {
+    try {
+      result = String(obj);
+    } catch {
+      result = '';
+    }
+  }
+
+  if (result.length > limit) {
+    return `${result.slice(0, limit)}…[truncated]`;
+  }
+
+  return result;
 }
 
 function splitPayloadIntoShards(payload: string): {
@@ -675,16 +733,13 @@ async function upsertSnapshot(row: SheetRow) {
 
 async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<FilterResult> {
   if (!rows.length) return { insert: [], skip: 0 };
-  const existingPerdcompNumbers = new Set<string>();
+  const existingKeys = new Set<string>();
 
   try {
     const { rows: existingRows } = await getSheetData(SHEET_FACTS);
     for (const row of existingRows) {
       if (toStringValue(row.Cliente_ID) !== clienteId) continue;
-      const numero = toStringValue(row.Perdcomp_Numero).trim();
-      if (numero) {
-        existingPerdcompNumbers.add(numero);
-      }
+      existingKeys.add(factsKey(row));
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -696,16 +751,12 @@ async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<Filt
   const processedInBatch = new Set<string>();
 
   for (const row of rows) {
-    const numero = toStringValue(row.Perdcomp_Numero).trim();
-
-    if (numero) {
-      if (existingPerdcompNumbers.has(numero) || processedInBatch.has(numero)) {
-        skip += 1;
-        continue;
-      }
-      processedInBatch.add(numero);
+    const key = factsKey(row);
+    if (existingKeys.has(key) || processedInBatch.has(key)) {
+      skip += 1;
+      continue;
     }
-
+    processedInBatch.add(key);
     insert.push(row);
   }
 
@@ -778,6 +829,97 @@ async function appendFactsBatched(
   }
 
   return { inserted, errors };
+}
+
+type AppendRowsArgs = {
+  sheetName: string;
+  header: string[];
+  rows: Array<Array<string | number | boolean | null | undefined>>;
+};
+
+async function appendRows({ sheetName, header, rows }: AppendRowsArgs): Promise<void> {
+  if (!rows.length) return;
+
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID is not set');
+  }
+
+  const sheets = await getSheetsClient();
+  let existingHeaders: string[] = [];
+  let needsHeaderUpdate = false;
+
+  try {
+    const data = await getSheetData(sheetName);
+    existingHeaders = data.headers;
+    if (!existingHeaders.length) {
+      existingHeaders = [...header];
+      needsHeaderUpdate = true;
+    }
+  } catch (error: any) {
+    const code = error?.code || error?.response?.status || 0;
+    if (code === 400 || code === 404) {
+      await withRetry(() =>
+        sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                addSheet: {
+                  properties: {
+                    title: sheetName,
+                  },
+                },
+              },
+            ],
+          },
+        })
+      );
+      existingHeaders = [...header];
+      needsHeaderUpdate = true;
+    } else {
+      throw error;
+    }
+  }
+
+  if (needsHeaderUpdate) {
+    await withRetry(() =>
+      sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${sheetName}!A1`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [header],
+        },
+      })
+    );
+  }
+
+  if (!existingHeaders.length) {
+    existingHeaders = [...header];
+  }
+
+  const headerIndex = new Map(header.map((col, idx) => [col, idx] as const));
+
+  const normalizedRows = rows.map((row) =>
+    existingHeaders.map((col) => {
+      const idx = headerIndex.get(col);
+      if (idx === undefined) return '';
+      const value = row[idx];
+      if (value === null || value === undefined) return '';
+      return toStringValue(value);
+    })
+  );
+
+  await withRetry(() =>
+    sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: sheetName,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: normalizedRows },
+    })
+  );
 }
 
 function normalizeDictionaryKey(value: string): string {
@@ -1073,16 +1215,72 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
     if (factsCount === 0) {
       console.info('FACTS_SKIP_EMPTY', { clienteId: clienteIdFinal });
     } else {
+      let toInsert: FactsRow[] = [];
       try {
-        const { insert, skip: skipCount } = await filterNewFacts(clienteIdFinal, mappedFacts);
+        const { insert, skip: skipCount } = await filterNewFacts(
+          clienteIdFinal,
+          mappedFacts,
+        );
         skip = skipCount;
-        if (insert.length) {
-          const { inserted: appended, errors } = await appendFactsBatched(insert);
-          inserted = appended;
-          if (errors.length) {
-            factsError = toFactsErrorMessage(errors[0]);
-          } else if (appended > 0) {
-            insertedRows = insert;
+        toInsert = insert;
+
+        if (toInsert.length) {
+          try {
+            const { inserted: appended, errors } = await appendFactsBatched(toInsert);
+            inserted = appended;
+            if (errors.length) {
+              factsError = toFactsErrorMessage(errors[0]);
+            } else if (appended > 0) {
+              insertedRows = toInsert;
+            }
+          } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            factsError = toFactsErrorMessage(err);
+            console.error('FACTS_WRITE_FAIL', {
+              clienteId: clienteIdFinal,
+              empresa: nomeEmpresa,
+              error: err.message,
+            });
+
+            const now = new Date().toISOString();
+            const errorRows = toInsert.map((row) => {
+              const key = factsKey(row);
+              const [, , hash] = key.split('|');
+              const resolvedHash = hash || toStringValue(row.Row_Hash ?? '');
+              return [
+                row.Cliente_ID ?? null,
+                row.Perdcomp_Numero ?? null,
+                resolvedHash || null,
+                (err as any)?.code ?? null,
+                err.message ?? String(err),
+                now,
+                safeStringify(row),
+              ];
+            });
+
+            try {
+              await appendRows({
+                sheetName: SHEET_FACTS_ERRORS,
+                header: [
+                  'Cliente_ID',
+                  'Perdcomp_Numero',
+                  'Row_Hash',
+                  'Error_Code',
+                  'Error_Message',
+                  'When_ISO',
+                  'Payload_JSON',
+                ],
+                rows: errorRows,
+              });
+            } catch (logError) {
+              const fallbackMsg =
+                logError instanceof Error ? logError.message : String(logError);
+              console.error('FACTS_ERROR_FALLBACK_FAIL', {
+                clienteId: clienteIdFinal,
+                empresa: nomeEmpresa,
+                message: fallbackMsg,
+              });
+            }
           }
         }
       } catch (error) {
@@ -1107,21 +1305,29 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
           console.warn('DIC_UPSERT_FAIL', { clienteId: clienteIdFinal, message });
         }
       }
+    }
 
-      if (factsError) {
-        console.warn('FACTS_FAIL_SOFT', {
-          clienteId: clienteIdFinal,
-          error: factsError,
-          inserted,
-          skipped: skip,
-        });
-      } else {
-        console.info('FACTS_OK', {
-          clienteId: clienteIdFinal,
-          inserted,
-          skipped: skip,
-        });
-      }
+    console.info('FACTS_WRITE_RESULT', {
+      clienteId: clienteIdFinal,
+      empresa: nomeEmpresa,
+      total: factsCount,
+      inserted,
+      skipped: skip,
+    });
+
+    if (factsError) {
+      console.warn('FACTS_FAIL_SOFT', {
+        clienteId: clienteIdFinal,
+        error: factsError,
+        inserted,
+        skipped: skip,
+      });
+    } else {
+      console.info('FACTS_OK', {
+        clienteId: clienteIdFinal,
+        inserted,
+        skipped: skip,
+      });
     }
 
     try {
