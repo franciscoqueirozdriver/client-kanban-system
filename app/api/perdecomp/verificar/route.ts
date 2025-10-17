@@ -1,45 +1,43 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets.js';
-import { normalizeCNPJ } from '@/src/utils/cnpj';
-
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
+import { SHEET_SNAPSHOT, getSheetData, normalizeCNPJ } from '@/lib/perdecomp-persist';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cnpj = searchParams.get('cnpj')?.trim();
+  const cnpj = searchParams.get('cnpj')?.trim() || null;
+  const clienteId = searchParams.get('clienteId')?.trim() || null;
 
-  if (!cnpj) {
-    return NextResponse.json({ message: 'Query parameter "cnpj" is required' }, { status: 400 });
+  console.info('PERDECOMP_VERIFY_SNAPSHOT', { by: clienteId ? 'clienteId' : cnpj ? 'cnpj' : 'none' });
+
+  if (!clienteId && !cnpj) {
+    return NextResponse.json(
+      { message: 'Query parameter "clienteId" or "cnpj" is required' },
+      { status: 400 },
+    );
   }
 
-  const cleanCnpj = normalizeCNPJ(cnpj);
-
   try {
-    const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    const { rows } = await getSheetData(SHEET_SNAPSHOT);
 
-    const dataForCnpj = rows.filter(row => {
-      const rowCnpj = normalizeCNPJ(row.CNPJ);
-      return rowCnpj === cleanCnpj;
-    });
+    let match: Record<string, any> | undefined;
 
-    if (dataForCnpj.length === 0) {
-      return NextResponse.json({ lastConsultation: null });
+    if (clienteId) {
+      match = rows.find((row: Record<string, any>) => row.Cliente_ID === clienteId);
     }
 
-    // Find the most recent consultation date
-    const mostRecentConsultation = dataForCnpj.reduce((latest, row) => {
-      const currentDate = new Date(row.Data_Consulta);
-      if (!latest || currentDate > new Date(latest)) {
-        return row.Data_Consulta;
-      }
-      return latest;
-    }, '' as string | null);
+    if (!match && cnpj) {
+      const clean = normalizeCNPJ(cnpj);
+      match = rows.find((row: Record<string, any>) => normalizeCNPJ(row.CNPJ) === clean);
+    }
 
-    return NextResponse.json({ lastConsultation: mostRecentConsultation });
+    const lastConsultation = match?.Last_Updated_ISO || match?.Data_Consulta || null;
 
-  } catch (error) {
-    console.error('[API /perdecomp/verificar]', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ message: 'Failed to verify consultation', error: errorMessage }, { status: 500 });
+    console.info('PERDECOMP_VERIFY_SNAPSHOT_OK', { lastConsultation, hit: !!match });
+
+    return NextResponse.json({ lastConsultation });
+  } catch (err) {
+    console.error('PERDECOMP_VERIFY_SNAPSHOT_FAIL', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json({ message: 'Failed to verify consultation' }, { status: 500 });
   }
 }

@@ -15,6 +15,8 @@ import {
   CREDITOS_DESCRICAO,
 } from '@/lib/perdcomp';
 
+export { getSheetData, normalizeCNPJ };
+
 export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
 export const SHEET_FACTS = 'perdecomp_facts';
 const SHEET_FACTS_ERRORS = 'perdecomp_facts_errors';
