@@ -28,7 +28,8 @@ export type PendingRow = {
   resolved?: string;
   spreadsheet_id?: string;
   route?: string;
-  extra?: string;
+  // <-- ampliado: pode receber qualquer payload; serializamos internamente
+  extra?: unknown;
 };
 
 let _sheetsClient: sheets_v4.Sheets | null = null;
@@ -69,20 +70,8 @@ async function ensurePendingSheet(spreadsheetId: string): Promise<void> {
 }
 
 function todayLocalISO(): string {
-  try {
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: DATE_TZ,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    return formatter.format(new Date());
-  } catch (err) {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-      d.getDate()
-    ).padStart(2, '0')}`;
-  }
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function dedupeKey(r: PendingRow): string {
@@ -108,6 +97,18 @@ export async function recordPending(
 
     await ensurePendingSheet(spreadsheetId);
 
+    // Serialização resiliente do "extra"
+    let extraStr = '';
+    if (typeof p.extra === 'string') {
+      extraStr = p.extra;
+    } else if (p.extra != null) {
+      try {
+        extraStr = JSON.stringify(p.extra);
+      } catch {
+        extraStr = String(p.extra);
+      }
+    }
+
     const row: PendingRow = {
       ts_iso: new Date().toISOString(),
       date_local: todayLocalISO(),
@@ -116,12 +117,7 @@ export async function recordPending(
       resolved: p.resolved || '',
       spreadsheet_id: spreadsheetId,
       route: p.route || '',
-      extra:
-        typeof p.extra === 'string'
-          ? p.extra
-          : p.extra
-          ? JSON.stringify(p.extra)
-          : '',
+      extra: extraStr, // guardamos como string na planilha
     };
 
     const key = dedupeKey(row);
@@ -143,7 +139,8 @@ export async function recordPending(
           row.resolved,
           row.spreadsheet_id,
           row.route,
-          row.extra
+          // grava a string serializada
+          typeof row.extra === 'string' ? row.extra : ''
         ]]
       },
     });
