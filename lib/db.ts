@@ -1,3 +1,4 @@
+import "server-only";
 import { Pool, type PoolClient, type QueryResult } from "pg";
 
 const pool = new Pool({
