@@ -1,8 +1,8 @@
-import dynamic from 'next/dynamic';
+import NextDynamic from 'next/dynamic';
 
 export const dynamic = 'force-dynamic';
 
-const PainelPGFN = dynamic(
+const PainelPGFN = NextDynamic(
   () => import('@/features/pgfn/PainelPGFNProspecao'),
   {
     ssr: false,
