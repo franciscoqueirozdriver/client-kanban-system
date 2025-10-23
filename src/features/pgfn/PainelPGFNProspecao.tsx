@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
   PieChart,
@@ -46,6 +46,19 @@ const formatPercent = (value: number) =>
 
 const COLORS = ['#6B4EFF', '#9B8CFF', '#22D3EE', '#34D399', '#F59E0B', '#EC4899'];
 
+const formatDate = (value: string) => {
+  if (!value) {
+    return '—';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return '—';
+  }
+
+  return parsed.toLocaleDateString('pt-BR');
+};
+
 type ProspeccaoFilters = {
   q: string;
   valor: [number, number];
@@ -53,17 +66,27 @@ type ProspeccaoFilters = {
   aju: 'all' | 'yes' | 'no';
   tipo: 'all' | 'FGTS' | 'Previdenciário' | 'CIDA' | 'Demais Débitos';
   uf: 'all' | string;
+  receita: string;
 };
 
 type ProspeccaoRow = {
   cnpj: string;
   nome: string;
   valor: number;
-  tipo: string;
+  tipo: string | null;
   data: string;
   ajuizado: boolean;
-  cnae: string;
   uf: string;
+  inscricao: string;
+  receitaPrincipal: string | null;
+};
+
+type ProspeccaoKpis = {
+  total: number;
+  soma: number;
+  media: number;
+  pctAju: number;
+  recentes: number;
 };
 
 const DEFAULT_FILTERS: ProspeccaoFilters = {
@@ -73,50 +96,16 @@ const DEFAULT_FILTERS: ProspeccaoFilters = {
   aju: 'all',
   tipo: 'all',
   uf: 'all',
+  receita: '',
 };
 
-const MOCK_ROWS: ProspeccaoRow[] = [
-  {
-    cnpj: '12345678000199',
-    nome: 'Alfa Tecnologia LTDA',
-    valor: 968234.21,
-    tipo: 'FGTS',
-    data: '2021-09-12',
-    ajuizado: true,
-    cnae: '6201-5/01',
-    uf: 'SP',
-  },
-  {
-    cnpj: '98765432000111',
-    nome: 'Beta Construções S/A',
-    valor: 1892340.55,
-    tipo: 'Previdenciário',
-    data: '2020-03-18',
-    ajuizado: false,
-    cnae: '4120-4/00',
-    uf: 'RJ',
-  },
-  {
-    cnpj: '55443322000177',
-    nome: 'Cooperativa Gama',
-    valor: 423781.9,
-    tipo: 'Demais Débitos',
-    data: '2019-11-01',
-    ajuizado: true,
-    cnae: '0141-8/01',
-    uf: 'MG',
-  },
-  {
-    cnpj: '00665544000155',
-    nome: 'Delta Saúde Integrada',
-    valor: 732123.44,
-    tipo: 'CIDA',
-    data: '2022-01-23',
-    ajuizado: false,
-    cnae: '8610-1/01',
-    uf: 'RS',
-  },
-];
+const INITIAL_KPIS: ProspeccaoKpis = {
+  total: 0,
+  soma: 0,
+  media: 0,
+  pctAju: 0,
+  recentes: 0,
+};
 
 const UF_OPTIONS = [
   'AC',
@@ -149,21 +138,19 @@ const UF_OPTIONS = [
 ];
 
 function formatCnpj(value: string) {
+  if (!value) {
+    return '—';
+  }
   const onlyDigits = value.replace(/\D/g, '').padStart(14, '0');
   return `${onlyDigits.slice(0, 2)}.${onlyDigits.slice(2, 5)}.${onlyDigits.slice(5, 8)}/${onlyDigits.slice(8, 12)}-${onlyDigits.slice(12)}`;
 }
 
 export default function PainelPGFNProspecao() {
   const [filters, setFilters] = useState<ProspeccaoFilters>(DEFAULT_FILTERS);
-  const [rows, setRows] = useState<ProspeccaoRow[]>(MOCK_ROWS);
-  const [kpis, setKpis] = useState({
-    total: 4286,
-    soma: 9_823_442_120,
-    media: 458_732,
-    pctAju: 0.37,
-    recentes: 612,
-  });
-
+  const [rows, setRows] = useState<ProspeccaoRow[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
+  const [kpis, setKpis] = useState<ProspeccaoKpis>(INITIAL_KPIS);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleFilterChange = <Key extends keyof ProspeccaoFilters>(key: Key, value: ProspeccaoFilters[Key]) => {
@@ -189,80 +176,166 @@ export default function PainelPGFNProspecao() {
     });
   };
 
-  const handleApplyFilters = async () => {
+  const fetchData = useCallback(async (currentFilters: ProspeccaoFilters) => {
     setLoading(true);
+    setError(null);
     try {
-      console.info('[PGFN][filters] apply', filters);
-      // const qs = new URLSearchParams({
-      //   q: filters.q,
-      //   min: String(filters.valor[0]),
-      //   max: String(filters.valor[1]),
-      //   tempo: filters.tempo,
-      //   aju: filters.aju,
-      //   tipo: filters.tipo,
-      //   uf: filters.uf,
-      // }).toString();
-      // const [kpisResponse, rowsResponse] = await Promise.all([
-      //   fetch(`/api/pgfn/kpis?${qs}`).then((res) => res.json()),
-      //   fetch(`/api/pgfn/search?${qs}`).then((res) => res.json()),
-      // ]);
-      // setKpis({
-      //   total: Number(kpisResponse.total || 0),
-      //   soma: Number(kpisResponse.soma || 0),
-      //   media: Number(kpisResponse.media || 0),
-      //   pctAju: Number(kpisResponse.pct_aju || 0) / 100,
-      //   recentes: Number(kpisResponse.recentes || 0),
-      // });
-      // setRows(rowsResponse.rows || []);
+      const receitaParam = currentFilters.receita.trim();
+      const params = new URLSearchParams({
+        q: currentFilters.q.trim(),
+        min: String(currentFilters.valor[0]),
+        max: String(currentFilters.valor[1]),
+        tempo: currentFilters.tempo,
+        aju: currentFilters.aju,
+        tipo: currentFilters.tipo,
+        uf: currentFilters.uf,
+        receita: receitaParam ? receitaParam : 'all',
+        page: '1',
+        size: '100',
+      });
+
+      if (!currentFilters.q.trim()) {
+        params.set('q', '');
+      }
+
+      const qs = params.toString();
+
+      const [searchResponse, kpisResponse] = await Promise.all([
+        fetch(`/api/pgfn/search?${qs}`, { cache: 'no-store' }),
+        fetch(`/api/pgfn/kpis?${qs}`, { cache: 'no-store' }),
+      ]);
+
+      if (!searchResponse.ok) {
+        throw new Error(`Falha ao carregar inscrições: ${searchResponse.status}`);
+      }
+
+      if (!kpisResponse.ok) {
+        throw new Error(`Falha ao carregar KPIs: ${kpisResponse.status}`);
+      }
+
+      const searchPayload = await searchResponse.json();
+      const kpisPayload = await kpisResponse.json();
+
+      const toNumber = (value: unknown) => {
+        const parsed = Number(value);
+        return Number.isNaN(parsed) ? 0 : parsed;
+      };
+
+      const parseBoolean = (value: unknown) =>
+        value === true || value === 't' || value === 'true' || value === 1;
+
+      const normalizedRows: ProspeccaoRow[] = Array.isArray(searchPayload?.rows)
+        ? searchPayload.rows.map((row: any) => ({
+            cnpj: String(row?.cnpj ?? ''),
+            nome: String(row?.nome ?? ''),
+            valor: toNumber(row?.valor),
+            tipo: row?.tipo ?? null,
+            data: String(row?.data ?? ''),
+            ajuizado: parseBoolean(row?.ajuizado),
+            uf: String(row?.uf ?? ''),
+            inscricao: String(row?.inscricao ?? ''),
+            receitaPrincipal: row?.receita_principal ?? null,
+          }))
+        : [];
+
+      setRows(normalizedRows);
+      setTotalRows(Math.max(0, toNumber(searchPayload?.total ?? normalizedRows.length)));
+
+      setKpis({
+        total: Math.max(0, toNumber(kpisPayload?.total)),
+        soma: toNumber(kpisPayload?.soma),
+        media: toNumber(kpisPayload?.media),
+        pctAju: toNumber(kpisPayload?.pct_aju) / 100,
+        recentes: Math.max(0, toNumber(kpisPayload?.recentes)),
+      });
+    } catch (caughtError) {
+      console.error('[PGFN][fetch] erro ao aplicar filtros', caughtError);
+      setError('Não foi possível carregar os dados no momento. Tente novamente.');
+      setRows([]);
+      setTotalRows(0);
+      setKpis(INITIAL_KPIS);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const handleApplyFilters = () => {
+    void fetchData(filters);
   };
 
   const handleResetFilters = () => {
-    setFilters(DEFAULT_FILTERS);
-    setRows(MOCK_ROWS);
-    setKpis({
-      total: 4286,
-      soma: 9_823_442_120,
-      media: 458_732,
-      pctAju: 0.37,
-      recentes: 612,
-    });
+    const defaults = { ...DEFAULT_FILTERS };
+    setFilters(defaults);
+    void fetchData(defaults);
   };
 
-  const creditTypeData = useMemo(
-    () => [
-      { name: 'FGTS', value: 42 },
-      { name: 'Previdenciário', value: 33 },
-      { name: 'Demais Débitos', value: 14 },
-      { name: 'CIDA', value: 7 },
-      { name: 'Outros', value: 4 },
-    ],
-    [],
-  );
+  useEffect(() => {
+    void fetchData({ ...DEFAULT_FILTERS });
+  }, [fetchData]);
 
-  const faixaValorData = useMemo(
-    () => [
-      { faixa: 'Até 250k', total: 1432 },
-      { faixa: '250k – 750k', total: 982 },
-      { faixa: '750k – 1.5M', total: 624 },
-      { faixa: '1.5M – 3M', total: 441 },
-      { faixa: 'Acima de 3M', total: 187 },
-    ],
-    [],
-  );
+  const creditTypeData = useMemo(() => {
+    if (!rows.length) {
+      return [];
+    }
 
-  const topCnaeData = useMemo(
-    () => [
-      { cnae: '6201-5/01', total: 18 },
-      { cnae: '4120-4/00', total: 14 },
-      { cnae: '8610-1/01', total: 11 },
-      { cnae: '4622-2/00', total: 9 },
-      { cnae: '4711-3/02', total: 8 },
-    ],
-    [],
-  );
+    const totals = new Map<string, number>();
+    rows.forEach((row) => {
+      const key = row.tipo?.trim() || 'Não informado';
+      totals.set(key, (totals.get(key) ?? 0) + row.valor);
+    });
+
+    return Array.from(totals.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [rows]);
+
+  const faixaValorData = useMemo(() => {
+    if (!rows.length) {
+      return [];
+    }
+
+    const buckets = [
+      { faixa: 'Até 250k', min: 0, max: 250_000 },
+      { faixa: '250k – 750k', min: 250_000, max: 750_000 },
+      { faixa: '750k – 1.5M', min: 750_000, max: 1_500_000 },
+      { faixa: '1.5M – 3M', min: 1_500_000, max: 3_000_000 },
+      { faixa: 'Acima de 3M', min: 3_000_000, max: Number.POSITIVE_INFINITY },
+    ];
+
+    const distribution = buckets.map((bucket) => ({ faixa: bucket.faixa, total: 0 }));
+
+    rows.forEach((row) => {
+      const value = row.valor;
+      const bucketIndex = buckets.findIndex((bucket) =>
+        bucket.max === Number.POSITIVE_INFINITY
+          ? value >= bucket.min
+          : value >= bucket.min && value < bucket.max,
+      );
+
+      if (bucketIndex >= 0) {
+        distribution[bucketIndex].total += 1;
+      }
+    });
+
+    return distribution;
+  }, [rows]);
+
+  const topReceitaData = useMemo(() => {
+    if (!rows.length) {
+      return [];
+    }
+
+    const totals = new Map<string, number>();
+    rows.forEach((row) => {
+      const key = row.receitaPrincipal?.trim() || 'Não informado';
+      totals.set(key, (totals.get(key) ?? 0) + row.valor);
+    });
+
+    return Array.from(totals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([receita, total]) => ({ receita, total }));
+  }, [rows]);
 
   const kpiCards = useMemo(
     () => [
@@ -319,7 +392,7 @@ export default function PainelPGFNProspecao() {
         <CardHeader className="flex flex-col gap-2">
           <CardTitle className="text-xl font-semibold">Filtros avançados</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Refine a base por inscrição, valor consolidado, tempo de dívida, judicialização, tipo de crédito e UF.
+            Refine a base por inscrição, valor consolidado, tempo de dívida, judicialização, tipo de crédito, UF e receita principal.
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -440,6 +513,17 @@ export default function PainelPGFNProspecao() {
                 ))}
               </select>
             </div>
+            <div className="space-y-2 md:col-span-3">
+              <label htmlFor="pgfn-receita" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Receita principal
+              </label>
+              <Input
+                id="pgfn-receita"
+                placeholder="Digite parte do nome da receita"
+                value={filters.receita}
+                onChange={(event) => handleFilterChange('receita', event.target.value)}
+              />
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -450,8 +534,11 @@ export default function PainelPGFNProspecao() {
               Limpar
             </Button>
             <p className="text-xs text-muted-foreground">
-              {rows.length.toLocaleString('pt-BR')} inscrições exibidas nesta amostra.
+              {loading ? 'Carregando inscrições…' : `${totalRows.toLocaleString('pt-BR')} inscrições encontradas.`}
             </p>
+            {error ? (
+              <p className="text-xs font-medium text-destructive">{error}</p>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -478,24 +565,30 @@ export default function PainelPGFNProspecao() {
             <CardTitle className="text-lg font-semibold">Distribuição por tipo de crédito</CardTitle>
           </CardHeader>
           <CardContent className="h-72 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie dataKey="value" data={creditTypeData} innerRadius={60} outerRadius={100} paddingAngle={6}>
-                  {creditTypeData.map((entry, index) => (
-                    <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Legend verticalAlign="bottom" height={32} />
-                <RechartsTooltip
-                  formatter={(value: number, name: string) => [`${value}%`, name]}
-                  contentStyle={{
-                    backgroundColor: 'var(--card)',
-                    borderColor: 'var(--border)',
-                    borderRadius: 12,
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {creditTypeData.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie dataKey="value" data={creditTypeData} innerRadius={60} outerRadius={100} paddingAngle={6}>
+                    {creditTypeData.map((entry, index) => (
+                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Legend verticalAlign="bottom" height={32} />
+                  <RechartsTooltip
+                    formatter={(value: number, name: string) => [formatCurrency(value as number), name]}
+                    contentStyle={{
+                      backgroundColor: 'var(--card)',
+                      borderColor: 'var(--border)',
+                      borderRadius: 12,
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Nenhum dado para exibir.
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -504,52 +597,68 @@ export default function PainelPGFNProspecao() {
             <CardTitle className="text-lg font-semibold">Faixa de valor consolidado</CardTitle>
           </CardHeader>
           <CardContent className="h-72 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={faixaValorData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="faixa" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
-                <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
-                <RechartsTooltip
-                  formatter={(value: number) => [`${value.toLocaleString('pt-BR')} inscrições`, 'Total']}
-                  contentStyle={{
-                    backgroundColor: 'var(--card)',
-                    borderColor: 'var(--border)',
-                    borderRadius: 12,
-                  }}
-                />
-                <Bar dataKey="total" radius={[8, 8, 0, 0]} fill="hsl(var(--primary))" />
-              </BarChart>
-            </ResponsiveContainer>
+            {faixaValorData.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={faixaValorData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="faixa" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} allowDecimals={false} />
+                  <RechartsTooltip
+                    formatter={(value: number) => [`${value.toLocaleString('pt-BR')} inscrições`, 'Total']}
+                    contentStyle={{
+                      backgroundColor: 'var(--card)',
+                      borderColor: 'var(--border)',
+                      borderRadius: 12,
+                    }}
+                  />
+                  <Bar dataKey="total" radius={[8, 8, 0, 0]} fill="hsl(var(--primary))" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Nenhum dado para exibir.
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card className="rounded-3xl border-border bg-card shadow-soft">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold">Top CNAEs (inscrições)</CardTitle>
+            <CardTitle className="text-lg font-semibold">Top receitas principais (valor consolidado)</CardTitle>
           </CardHeader>
           <CardContent className="h-72 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topCnaeData} layout="vertical" margin={{ top: 16, left: 12, right: 16, bottom: 16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
-                <YAxis
-                  type="category"
-                  dataKey="cnae"
-                  stroke="hsl(var(--muted-foreground))"
-                  tick={{ fontSize: 12 }}
-                  width={90}
-                />
-                <RechartsTooltip
-                  formatter={(value: number) => [`${value.toLocaleString('pt-BR')} inscrições`, 'Total']}
-                  contentStyle={{
-                    backgroundColor: 'var(--card)',
-                    borderColor: 'var(--border)',
-                    borderRadius: 12,
-                  }}
-                />
-                <Bar dataKey="total" radius={[8, 8, 8, 8]} fill="hsl(var(--secondary))" />
-              </BarChart>
-            </ResponsiveContainer>
+            {topReceitaData.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={topReceitaData}
+                  layout="vertical"
+                  margin={{ top: 16, left: 12, right: 16, bottom: 16 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="receita"
+                    stroke="hsl(var(--muted-foreground))"
+                    tick={{ fontSize: 12 }}
+                    width={140}
+                  />
+                  <RechartsTooltip
+                    formatter={(value: number) => [formatCurrency(value), 'Valor acumulado']}
+                    contentStyle={{
+                      backgroundColor: 'var(--card)',
+                      borderColor: 'var(--border)',
+                      borderRadius: 12,
+                    }}
+                  />
+                  <Bar dataKey="total" radius={[8, 8, 8, 8]} fill="hsl(var(--secondary))" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Nenhum dado para exibir.
+              </div>
+            )}
           </CardContent>
         </Card>
       </section>
@@ -558,14 +667,24 @@ export default function PainelPGFNProspecao() {
         <CardHeader className="flex flex-col gap-2">
           <CardTitle className="text-lg font-semibold">Inscrições selecionadas</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Visualize dados cadastrais, valores consolidados, CNAE e situação de judicialização das inscrições filtradas.
+            Visualize dados cadastrais, valores consolidados, receita principal e situação de judicialização das inscrições filtradas.
           </p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full min-w-[840px] border-separate border-spacing-y-2 text-sm">
             <thead>
               <tr className="text-xs uppercase tracking-wide text-muted-foreground">
-                {['CNPJ', 'Nome', 'Valor', 'Tipo', 'Data', 'Ajuizado', 'CNAE', 'UF', 'Ações'].map((header) => (
+                {[
+                  'CNPJ',
+                  'Nome',
+                  'Valor',
+                  'Tipo',
+                  'Data',
+                  'Ajuizado',
+                  'Receita Principal',
+                  'UF',
+                  'Ações',
+                ].map((header) => (
                   <th key={header} className="bg-muted/40 px-3 py-2 text-left font-semibold first:rounded-l-xl last:rounded-r-xl">
                     {header}
                   </th>
@@ -573,34 +692,49 @@ export default function PainelPGFNProspecao() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={`${row.cnpj}-${row.data}`} className="rounded-2xl border border-border/70 bg-card/80 shadow-sm">
-                  <td className="px-3 py-3 font-mono text-xs text-muted-foreground">{formatCnpj(row.cnpj)}</td>
-                  <td className="px-3 py-3 font-medium text-foreground">{row.nome}</td>
-                  <td className="px-3 py-3 font-semibold text-primary">{formatCurrency(row.valor)}</td>
-                  <td className="px-3 py-3 text-foreground">{row.tipo}</td>
-                  <td className="px-3 py-3 text-foreground">{new Date(row.data).toLocaleDateString('pt-BR')}</td>
-                  <td className="px-3 py-3">
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold',
-                        row.ajuizado
-                          ? 'bg-primary/10 text-primary'
-                          : 'bg-muted text-muted-foreground',
-                      )}
-                    >
-                      {row.ajuizado ? 'Sim' : 'Não'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-foreground">{row.cnae}</td>
-                  <td className="px-3 py-3 text-foreground">{row.uf}</td>
-                  <td className="px-3 py-3">
-                    <Button variant="outline" size="sm">
-                      Ver detalhes
-                    </Button>
+              {rows.length ? (
+                rows.map((row) => (
+                  <tr
+                    key={`${row.inscricao || row.cnpj}-${row.data}`}
+                    className="rounded-2xl border border-border/70 bg-card/80 shadow-sm"
+                  >
+                    <td className="px-3 py-3 font-mono text-xs text-muted-foreground">{formatCnpj(row.cnpj)}</td>
+                    <td className="px-3 py-3 font-medium text-foreground">{row.nome}</td>
+                    <td className="px-3 py-3 font-semibold text-primary">{formatCurrency(row.valor)}</td>
+                    <td className="px-3 py-3 text-foreground">{row.tipo ?? '—'}</td>
+                    <td className="px-3 py-3 text-foreground">{formatDate(row.data)}</td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={cn(
+                          'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold',
+                          row.ajuizado
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-muted text-muted-foreground',
+                        )}
+                      >
+                        {row.ajuizado ? 'Sim' : 'Não'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-foreground">
+                      {row.receitaPrincipal ? row.receitaPrincipal : '—'}
+                    </td>
+                    <td className="px-3 py-3 text-foreground">{row.uf}</td>
+                    <td className="px-3 py-3">
+                      <Button variant="outline" size="sm">
+                        Ver detalhes
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={9} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    {loading
+                      ? 'Carregando inscrições filtradas…'
+                      : 'Nenhuma inscrição encontrada para os filtros informados.'}
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </CardContent>

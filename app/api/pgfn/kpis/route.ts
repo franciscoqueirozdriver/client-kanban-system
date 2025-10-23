@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     aju: searchParams.get("aju") || "all",
     tipo: searchParams.get("tipo") || "all",
     uf: searchParams.get("uf") || "all",
+    receita: searchParams.get("receita") || "all",
   };
 
   const where: string[] = ["d.valor_consolidado BETWEEN $1 AND $2"];
@@ -32,6 +33,11 @@ export async function GET(req: NextRequest) {
   if (args.uf !== "all") {
     where.push(`d.uf_devedor = $${++p}`);
     params.push(args.uf);
+  }
+
+  if (args.receita !== "all") {
+    where.push(`d.receita_principal ILIKE $${++p}`);
+    params.push(`%${args.receita}%`);
   }
 
   let joinItens = "";

@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
   const aju = searchParams.get("aju") || "all"; // yes | no | all
   const tipo = searchParams.get("tipo") || "all"; // FGTS | Previdenciário | CIDA | Demais Débitos | all
   const uf = searchParams.get("uf") || "all";
+  const receita = searchParams.get("receita") || "all";
   const page = Math.max(Number(searchParams.get("page") || 1), 1);
   const size = Math.min(Math.max(Number(searchParams.get("size") || 25), 1), 200);
   const offset = (page - 1) * size;
@@ -39,6 +40,11 @@ export async function GET(req: NextRequest) {
     params.push(uf);
   }
 
+  if (receita !== "all") {
+    where.push(`d.receita_principal ILIKE $${++p}`);
+    params.push(`%${receita}%`);
+  }
+
   let joinItens = "";
   if (tipo !== "all") {
     joinItens =
@@ -61,6 +67,7 @@ export async function GET(req: NextRequest) {
     WITH base AS (
       SELECT d.cpf_cnpj, d.nome_devedor, d.valor_consolidado, d.data_inscricao,
              d.indicador_ajuizado, d.uf_devedor, d.numero_inscricao,
+             d.receita_principal,
              COALESCE(i.tipo_credito, NULL) AS tipo_credito
       FROM public.devedores_pgfn d
       ${joinItens}
@@ -83,7 +90,8 @@ export async function GET(req: NextRequest) {
                     'ajuizado', d.indicador_ajuizado,
                     'uf', d.uf_devedor,
                     'inscricao', d.numero_inscricao,
-                    'tipo', d.tipo_credito
+                    'tipo', d.tipo_credito,
+                    'receita_principal', d.receita_principal
                   ) ORDER BY 1 DESC),
       'total',    (SELECT total FROM total)
     ) AS payload
