@@ -34,6 +34,10 @@
       "@/utils/*": [
         "src/utils/*",
         "utils/*"
+      ],
+      "@/features/*": [
+        "src/features/*",
+        "features/*"
       ]
     }
   },

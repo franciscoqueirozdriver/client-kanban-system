@@ -14,6 +14,7 @@ import {
   SettingsIcon,
   SunIcon,
   UsersIcon,
+  ScaleIcon,
 } from '@/components/icons';
 import { useTheme } from '@/components/ThemeProvider';
 import { cn } from '@/lib/cn';
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: '/clientes', label: 'Clientes', icon: UsersIcon },
   { href: '/kanban', label: 'Consultas (Kanban)', icon: PanelsIcon },
   { href: '/consultas/perdecomp-comparativo', label: 'PER/DCOMP Comparativo', icon: DollarCircleIcon },
+  { href: '/prospeccao/pgfn', label: 'Prospecção PGFN', icon: ScaleIcon },
   { href: '/teses', label: 'Teses Tributárias', icon: BuildingIcon },
   { href: '/reports', label: 'Relatórios', icon: BarChartIcon },
   { href: '#', label: 'Configurações', icon: SettingsIcon },
