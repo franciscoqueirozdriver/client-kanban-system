@@ -78,12 +78,28 @@ export default function ClientCard({ client, onStatusChange }) {
   const [historyData, setHistoryData] = useState([]);
 
   const handleDoubleClick = async () => {
+    if (
+      client.status &&
+      client.status !== 'Perdido' &&
+      client.status !== 'Lead Selecionado'
+    ) {
+      try {
+        await fetch('/api/companies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client }),
+        });
+      } catch (err) {
+        console.error('Erro ao consultar empresa:', err);
+      }
+    }
+
     const newColor = 'green';
     const newStatus = 'Lead Selecionado';
     setColor(newColor);
     setStatus(newStatus);
 
-  if (onStatusChange) {
+    if (onStatusChange) {
       onStatusChange(client.id, newStatus, newColor);
     }
 
