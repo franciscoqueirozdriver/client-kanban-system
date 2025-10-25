@@ -1,4 +1,4 @@
-import { appendCompanyImportRow, getCompanySheetCached } from '../../lib/googleSheets';
+import { appendCompanyImportRow, getCompanySheetCached, getColumnName } from '../../lib/googleSheets';
 import { enrichCompanyData } from '../../lib/perplexity';
 
 export default async function handler(req, res) {
@@ -34,9 +34,14 @@ export default async function handler(req, res) {
     const sheet = await getCompanySheetCached();
     const rows = sheet.data.values || [];
     const [header, ...dataRows] = rows;
+    
+    // ✅ Usar nomes normalizados para buscar índices
+    const cnpjCol = getColumnName('cnpj_empresa');
+    const nomeCol = getColumnName('nome_da_empresa');
+    
     const idx = {
-      cnpj: header.indexOf('cnpj'),
-      nome: header.indexOf('nome'),
+      cnpj: header.indexOf(cnpjCol),
+      nome: header.indexOf(nomeCol),
     };
     const duplicate = dataRows.some((row) => {
       const cnpjVal = idx.cnpj >= 0 ? row[idx.cnpj] : '';
@@ -67,3 +72,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Erro ao registrar planilha' });
   }
 }
+

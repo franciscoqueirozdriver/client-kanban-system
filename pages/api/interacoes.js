@@ -1,4 +1,4 @@
-import { getHistorySheetCached, appendHistoryRow } from '../../lib/googleSheets';
+import { getHistorySheetCached, appendHistoryRow, getColumnName } from '../../lib/googleSheets';
 
 export default async function handler(req, res) {
   if (req.method === 'POST') {
@@ -44,15 +44,26 @@ export default async function handler(req, res) {
       const rows = sheet.data.values || [];
       if (rows.length === 0) return res.status(200).json([]);
       const [header, ...data] = rows;
+      
+      // ✅ Usar nomes normalizados para buscar índices
+      const clienteCol = getColumnName('Cliente_ID');
+      const dataHoraCol = getColumnName('Data_Hora');
+      const tipoCol = getColumnName('Tipo');
+      const deFaseCol = getColumnName('De_Fase');
+      const paraFaseCol = getColumnName('Para_Fase');
+      const canalCol = getColumnName('Canal');
+      const obsCol = getColumnName('Observacao');
+      const msgCol = getColumnName('Mensagem_Usada');
+      
       const idx = {
-        cliente: header.indexOf('Cliente_ID'),
-        dataHora: header.indexOf('Data_Hora'),
-        tipo: header.indexOf('Tipo'),
-        deFase: header.indexOf('De_Fase'),
-        paraFase: header.indexOf('Para_Fase'),
-        canal: header.indexOf('Canal'),
-        obs: header.indexOf('Observacao'),
-        msg: header.indexOf('Mensagem_Usada'),
+        cliente: header.indexOf(clienteCol),
+        dataHora: header.indexOf(dataHoraCol),
+        tipo: header.indexOf(tipoCol),
+        deFase: header.indexOf(deFaseCol),
+        paraFase: header.indexOf(paraFaseCol),
+        canal: header.indexOf(canalCol),
+        obs: header.indexOf(obsCol),
+        msg: header.indexOf(msgCol),
       };
 
       const itens = data
@@ -78,3 +89,4 @@ export default async function handler(req, res) {
 
   return res.status(405).end();
 }
+
