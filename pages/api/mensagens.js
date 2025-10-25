@@ -50,6 +50,8 @@ export async function getMensagens() {
 }
 
 export default async function handler(req, res) {
+  // Log request body for debugging purposes
+  console.log('/api/mensagens', req.method, 'body:', req.body);
   if (req.method !== 'GET') return res.status(405).end();
   try {
     const appFilter = req.query.app ? normalizeApp(req.query.app) : '';
