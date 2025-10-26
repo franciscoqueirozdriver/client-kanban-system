@@ -1,4 +1,5 @@
 // components/reportUtils.js
+import { getColumnName } from '../lib/googleSheets';
 
 export function normalizePhones(row, idx) {
   const val = (i) => (i >= 0 ? String(row[i] || '').trim() : '');
@@ -40,24 +41,44 @@ export function normalizePhones(row, idx) {
 
 export function buildReport(rows) {
   const [header, ...data] = rows;
+  
+  // ✅ Usar nomes normalizados para buscar índices
+  const orgCol = getColumnName('Organização - Nome');
+  const segmentoCol = getColumnName('Organização - Segmento');
+  const tamanhoCol = getColumnName('Organização - Tamanho da empresa');
+  const contatoCol = getColumnName('Negócio - Pessoa de contato');
+  const cargoCol = getColumnName('Pessoa - Cargo');
+  const phoneWorkCol = getColumnName('Pessoa - Phone - Work');
+  const phoneHomeCol = getColumnName('Pessoa - Phone - Home');
+  const phoneMobileCol = getColumnName('Pessoa - Phone - Mobile');
+  const phoneOtherCol = getColumnName('Pessoa - Phone - Other');
+  const telCol = getColumnName('Pessoa - Telefone');
+  const celCol = getColumnName('Pessoa - Celular');
+  const normalizadoCol = getColumnName('Telefone Normalizado');
+  const emailCol = getColumnName('Pessoa - Email - Work');
+  const linkedinCol = getColumnName('Pessoa - End. Linkedin');
+  const ufCol = getColumnName('uf');
+  const cidadeCol = getColumnName('cidade_estimada');
+  const impressoCol = getColumnName('Impresso_Lista');
+  
   const idx = {
-    org: header.indexOf('Organização - Nome'),
-    segmento: header.indexOf('Organização - Segmento'),
-    tamanho: header.indexOf('Organização - Tamanho da empresa'),
-    contato: header.indexOf('Negócio - Pessoa de contato'),
-    cargo: header.indexOf('Pessoa - Cargo'),
-    phoneWork: header.indexOf('Pessoa - Phone - Work'),
-    phoneHome: header.indexOf('Pessoa - Phone - Home'),
-    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
-    phoneOther: header.indexOf('Pessoa - Phone - Other'),
-    tel: header.indexOf('Pessoa - Telefone'),
-    cel: header.indexOf('Pessoa - Celular'),
-    normalizado: header.indexOf('Telefone Normalizado'),
-    email: header.indexOf('Pessoa - Email - Work'),
-    linkedin: header.indexOf('Pessoa - End. Linkedin'),
-    uf: header.indexOf('uf'),
-    cidade: header.indexOf('cidade_estimada'),
-    impresso: header.indexOf('Impresso_Lista'),
+    org: header.indexOf(orgCol),
+    segmento: header.indexOf(segmentoCol),
+    tamanho: header.indexOf(tamanhoCol),
+    contato: header.indexOf(contatoCol),
+    cargo: header.indexOf(cargoCol),
+    phoneWork: header.indexOf(phoneWorkCol),
+    phoneHome: header.indexOf(phoneHomeCol),
+    phoneMobile: header.indexOf(phoneMobileCol),
+    phoneOther: header.indexOf(phoneOtherCol),
+    tel: header.indexOf(telCol),
+    cel: header.indexOf(celCol),
+    normalizado: header.indexOf(normalizadoCol),
+    email: header.indexOf(emailCol),
+    linkedin: header.indexOf(linkedinCol),
+    uf: header.indexOf(ufCol),
+    cidade: header.indexOf(cidadeCol),
+    impresso: header.indexOf(impressoCol),
   };
 
   const normalizePhone = (v) => String(v || '').trim();

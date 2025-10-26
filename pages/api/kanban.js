@@ -1,4 +1,4 @@
-import { getSheet, getSheetCached, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
+import { getSheetCached, updateRow, getColumnName } from '../../lib/googleSheets';
 import { normalizePhones } from '../../lib/report';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
@@ -26,31 +26,56 @@ function collectEmails(row, idx) {
 
 function groupRows(rows) {
   const [header, ...data] = rows;
+  
+  // ✅ Usar nomes normalizados para buscar índices
+  const clienteIdCol = getColumnName('Cliente_ID');
+  const orgCol = getColumnName('Organização - Nome');
+  const tituloCol = getColumnName('Negócio - Título');
+  const contatoCol = getColumnName('Negócio - Pessoa de contato');
+  const cargoCol = getColumnName('Pessoa - Cargo');
+  const emailWorkCol = getColumnName('Pessoa - Email - Work');
+  const emailHomeCol = getColumnName('Pessoa - Email - Home');
+  const emailOtherCol = getColumnName('Pessoa - Email - Other');
+  const phoneWorkCol = getColumnName('Pessoa - Phone - Work');
+  const phoneHomeCol = getColumnName('Pessoa - Phone - Home');
+  const phoneMobileCol = getColumnName('Pessoa - Phone - Mobile');
+  const phoneOtherCol = getColumnName('Pessoa - Phone - Other');
+  const telCol = getColumnName('Pessoa - Telefone');
+  const celCol = getColumnName('Pessoa - Celular');
+  const normalizadoCol = getColumnName('Telefone Normalizado');
+  const segmentoCol = getColumnName('Organização - Segmento');
+  const tamanhoCol = getColumnName('Organização - Tamanho da empresa');
+  const ufCol = getColumnName('uf');
+  const cidadeCol = getColumnName('cidade_estimada');
+  const statusCol = getColumnName('Status_Kanban');
+  const dataCol = getColumnName('Data_Ultima_Movimentacao');
+  const linkedinCol = getColumnName('Pessoa - End. Linkedin');
+  const corCol = getColumnName('Cor_Card');
+  
   const idx = {
-    clienteId: header.indexOf('Cliente_ID'),
-    org: header.indexOf('Organização - Nome'),
-    titulo: header.indexOf('Negócio - Título'),
-    contato: header.indexOf('Negócio - Pessoa de contato'),
-    cargo: header.indexOf('Pessoa - Cargo'),
-    emailWork: header.indexOf('Pessoa - Email - Work'),
-    emailHome: header.indexOf('Pessoa - Email - Home'),
-    emailOther: header.indexOf('Pessoa - Email - Other'),
-    phoneWork: header.indexOf('Pessoa - Phone - Work'),
-    phoneHome: header.indexOf('Pessoa - Phone - Home'),
-    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
-    phoneOther: header.indexOf('Pessoa - Phone - Other'),
-    tel: header.indexOf('Pessoa - Telefone'),
-    cel: header.indexOf('Pessoa - Celular'),
-    normalizado: header.indexOf('Telefone Normalizado'),
-    segmento: header.indexOf('Organização - Segmento'),
-    tamanho: header.indexOf('Organização - Tamanho da empresa'),
-    uf: header.indexOf('uf'),
-    cidade: header.indexOf('cidade_estimada'),
-    status: header.indexOf('Status_Kanban'),
-    data: header.indexOf('Data_Ultima_Movimentacao'),
-    linkedin: header.indexOf('Pessoa - End. Linkedin'),
-    cor: header.indexOf('Cor_Card'),
-    produto: header.indexOf('Negócio - Nome do produto'),
+    clienteId: header.indexOf(clienteIdCol),
+    org: header.indexOf(orgCol),
+    titulo: header.indexOf(tituloCol),
+    contato: header.indexOf(contatoCol),
+    cargo: header.indexOf(cargoCol),
+    emailWork: header.indexOf(emailWorkCol),
+    emailHome: header.indexOf(emailHomeCol),
+    emailOther: header.indexOf(emailOtherCol),
+    phoneWork: header.indexOf(phoneWorkCol),
+    phoneHome: header.indexOf(phoneHomeCol),
+    phoneMobile: header.indexOf(phoneMobileCol),
+    phoneOther: header.indexOf(phoneOtherCol),
+    tel: header.indexOf(telCol),
+    cel: header.indexOf(celCol),
+    normalizado: header.indexOf(normalizadoCol),
+    segmento: header.indexOf(segmentoCol),
+    tamanho: header.indexOf(tamanhoCol),
+    uf: header.indexOf(ufCol),
+    cidade: header.indexOf(cidadeCol),
+    status: header.indexOf(statusCol),
+    data: header.indexOf(dataCol),
+    linkedin: header.indexOf(linkedinCol),
+    cor: header.indexOf(corCol),
   };
 
   const map = new Map();
@@ -69,24 +94,14 @@ function groupRows(rows) {
         size: row[idx.tamanho] || '',
         uf: row[idx.uf] || '',
         city: row[idx.cidade] || '',
-        status: '', // Will be overwritten by the latest row
-        dataMov: '', // Will be overwritten by the latest row
-        color: '', // Will be overwritten by the latest row
-        produto: row[idx.produto] || '',
+        status: row[idx.status] || '',
+        dataMov: row[idx.data] || '',
+        color: row[idx.cor] || '',
         rows: [],
       });
     }
 
-    // Always update status and color to reflect the latest row for a given ID
     const client = map.get(clienteId);
-    const newStatus = (row[idx.status] || '').trim();
-    const newColor = row[idx.cor] || '';
-    const newDataMov = row[idx.data] || '';
-
-    if (newStatus) client.status = newStatus;
-    if (newColor) client.color = newColor;
-    if (newDataMov) client.dataMov = newDataMov;
-
     client.opportunities.push(row[idx.titulo] || '');
     client.rows.push(i + 2);
 
@@ -121,7 +136,6 @@ function groupRows(rows) {
       status: c.status,
       dataMov: c.dataMov,
       color: c.color,
-      produto: c.produto,
       rows: c.rows,
     })),
   };
@@ -129,74 +143,74 @@ function groupRows(rows) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    try {
-      const sheet = await getSheet();
-      const rows = sheet.data.values || [];
-      const { clients } = groupRows(rows);
+    const sheet = await getSheetCached();
+    const rows = sheet.data.values || [];
+    const { clients } = groupRows(rows);
 
-      const limitParam = parseInt(req.query.limit, 10);
-      const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
+    const columns = [
+      'Lead Selecionado',
+      'Tentativa de Contato',
+      'Contato Efetuado',
+      'Conversa Iniciada',
+      'Reunião Agendada',
+      'Perdido',
+    ];
+    const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
 
-      const columns = [
-        'Lead Selecionado',
-        'Tentativa de Contato',
-        'Contato Efetuado',
-        'Conversa Iniciada',
-        'Reunião Agendada',
-        'Enviado Spotter',
-        'Perdido',
-      ];
-      const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
+    clients.forEach((client) => {
+      const col = board.find((c) => c.id === client.status);
+      if (col) {
+        col.cards.push({ id: client.id, client });
+      }
+    });
 
-      clients.slice(0, limit).forEach((client) => {
-        const col = board.find((c) => c.id === client.status);
-        if (col) {
-          col.cards.push({ id: client.id, client });
-        }
-      });
-
-      return res.status(200).json(board);
-    } catch (err) {
-      console.error('Erro ao listar kanban:', err);
-      return res.status(500).json({ error: 'Erro ao listar kanban' });
-    }
+    return res.status(200).json(board);
   }
 
   if (req.method === 'POST') {
-    try {
-      const { id, destination, status, color } = req.body;
-      const newStatus = status || (destination && destination.droppableId);
-      const newColor =
-        color !== undefined
-          ? color
-          : newStatus === 'Perdido'
-          ? 'red'
-          : undefined;
+    const { id, destination, status, color } = req.body;
+    const newStatus = status || (destination && destination.droppableId);
+    const newColor =
+      color !== undefined
+        ? color
+        : newStatus === 'Perdido'
+        ? 'red'
+        : undefined;
 
-      const sheetName = 'Sheet1';
-      const rowIndex = await findRowIndexById(sheetName, 1, 'Cliente_ID', id);
-      if (rowIndex < 0) {
-        return res.status(404).json({ error: 'ID não encontrado' });
+    const sheet = await getSheetCached();
+    const rows = sheet.data.values || [];
+    const [header, ...data] = rows;
+
+    // ✅ Usar nomes normalizados para buscar índices
+    const clienteIdCol = getColumnName('Cliente_ID');
+    const corCol = getColumnName('Cor_Card');
+    const statusCol = getColumnName('Status_Kanban');
+
+    const clienteIdIdx = header.indexOf(clienteIdCol);
+    const colorIdx = header.indexOf(corCol);
+    const statusIdx = header.indexOf(statusCol);
+
+    const promises = [];
+
+    data.forEach((row, i) => {
+      if (row[clienteIdIdx] === id) {
+        const rowNum = i + 2;
+        const values = {};
+        if (newStatus !== undefined && statusIdx !== -1) {
+          values.status_kanban = newStatus;
+        }
+        if (newColor !== undefined && colorIdx !== -1) {
+          values.cor_card = newColor;
+        }
+        values.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
+        promises.push(updateRow(rowNum, values));
       }
+    });
 
-      const updates = {};
-      if (newStatus !== undefined) {
-        updates['Status_Kanban'] = newStatus;
-      }
-      if (newColor !== undefined) {
-        updates['Cor_Card'] = newColor;
-      }
-      updates['Data_Ultima_Movimentacao'] = new Date().toISOString().split('T')[0];
-
-      await updateRowByIndex({ sheetName, rowIndex, updates });
-
-      return res.status(200).json({ status: newStatus, color: newColor });
-    } catch (err) {
-      console.error('Erro ao atualizar kanban:', err);
-      const statusCode = err?.response?.status || err?.code || 500;
-      return res.status(statusCode).json({ error: err.message || 'Erro ao atualizar kanban' });
-    }
+    await Promise.all(promises);
+    return res.status(200).json({ status: newStatus, color: newColor });
   }
 
   return res.status(405).end();
 }
+
