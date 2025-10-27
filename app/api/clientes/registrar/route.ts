@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { appendSheetData } from '../../../../lib/googleSheets.js';
-import { getSheetData } from '../../../../lib/googleSheets.js';
+import { appendSheetData, getSheetName } from '../../../../lib/googleSheets.js';
 
-const SHEET_NAME = 'layout_importacao_empresas';
+const SHEET_NAME = getSheetName('layout_importacao_empresas');
 
 const HEADERS = [
   'Cliente_ID', 'Nome da Empresa', 'Site Empresa', 'País Empresa', 'Estado Empresa',

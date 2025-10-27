@@ -4,9 +4,14 @@ import {
   findByCnpj,
   findByName,
   appendToSheets,
-  updateInSheets, // Import the new update function
+  updateInSheets,
+  getSheetName,
 } from '../../../../lib/googleSheets';
 import { normalizeCNPJ, isValidCNPJ } from '@/src/utils/cnpj';
+
+// Usar nomes de abas normalizados
+const SHEET_NAME = getSheetName('Sheet1');
+const COMPANY_IMPORT_SHEET_NAME = getSheetName('layout_importacao_empresas');
 
 // --- API Route Handler ---
 

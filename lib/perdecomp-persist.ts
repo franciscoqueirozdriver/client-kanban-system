@@ -5,6 +5,7 @@ import {
   getSheetData,
   getSheetsClient,
   withRetry,
+  getSheetName,
 } from './googleSheets.js';
 import { formatPerdcompNumero } from '@/utils/perdcomp';
 import { normalizeCNPJ } from '@/src/utils/cnpj';
@@ -17,11 +18,11 @@ import {
 
 export { getSheetData, normalizeCNPJ };
 
-export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
-export const SHEET_FACTS = 'perdecomp_facts';
-const SHEET_FACTS_ERRORS = 'perdecomp_facts_errors';
-const SHEET_DIC_CREDITOS = 'DIC_CREDITOS';
-const SHEET_DIC_NATUREZA = 'DIC_NATUREZA';
+export const SHEET_SNAPSHOT = getSheetName('perdecomp_snapshot');
+export const SHEET_FACTS = getSheetName('perdecomp_facts');
+const SHEET_FACTS_ERRORS = getSheetName('perdecomp_facts_errors');
+const SHEET_DIC_CREDITOS = getSheetName('DIC_CREDITOS');
+const SHEET_DIC_NATUREZA = getSheetName('DIC_NATUREZA');
 
 const FACTS_COLUMNS = [
   'Cliente_ID',
