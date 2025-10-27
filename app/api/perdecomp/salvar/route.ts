@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { appendSheetData } from '../../../../lib/googleSheets.js';
+import { appendSheetData, getSheetName } from '../../../../lib/googleSheets.js';
 
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
+const PERDECOMP_SHEET_NAME = getSheetName('PERDECOMP');
 
 const PERDECOMP_HEADERS = [
   'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
