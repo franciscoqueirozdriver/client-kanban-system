@@ -181,7 +181,9 @@ export default function KanbanCard({ card, index }) {
         body: JSON.stringify({ client }),
       });
       const data = await res.json();
-      if (res.ok) {
+      if (data.duplicate) {
+        alert('Esta empresa já está cadastrada na planilha.');
+      } else if (res.ok) {
         alert('Empresa cadastrada com sucesso!');
         setClient((prev) => ({ ...prev, sheetRow: data.row }));
       } else {
