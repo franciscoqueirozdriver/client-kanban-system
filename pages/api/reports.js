@@ -1,4 +1,4 @@
-import { getSheet, updateRow } from '../../lib/googleSheets';
+import { getSheetData, updateRow } from '../../lib/googleSheets';
 import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
 
 export default async function handler(req, res) {
@@ -7,14 +7,13 @@ export default async function handler(req, res) {
       const limitParam = parseInt(req.query.limit ?? req.query.maxLeads, 10);
       const onlyNew = req.query.onlyNew === '1';
 
-      const sheet = await getSheet();
-      const rows = sheet.data.values || [];
+      const { headers, rows } = await getSheetData('Sheet1');
 
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : rows.length;
       console.log('API /reports GET', { query: req.query, limit, onlyNew });
       // ✅ buildReport já agrupa por Cliente_ID agora
       // Evita atualizar telefones durante a geração do relatório
-      const { map, filters } = await buildReport(rows, { savePhones: false });
+      const { map, filters } = await buildReport({ headers, rows }, { savePhones: false });
       const { rows: reportRows, toMark } = mapToRows(
         map,
         req.query,

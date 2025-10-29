@@ -1,0 +1,69 @@
+{
+  "tabs": {
+    "Leads Exact Spotter": "leads_exact_spotter",
+    "layout_importacao_empresas": "layout_importacao_empresas",
+    "Sheet1": "sheet1",
+    "Padroes": "padroes",
+    "Usuarios": "usuarios"
+  },
+  "columns": {
+    "leads_exact_spotter": {
+      "Cliente_ID": "cliente_id",
+      "Nome do Lead": "nome_do_lead",
+      "Origem": "origem",
+      "Sub-Origem": "sub_origem",
+      "Mercado": "mercado",
+      "Produto": "produto",
+      "Site": "site",
+      "País": "pais",
+      "Estado": "estado",
+      "Cidade": "cidade",
+      "Logradouro": "logradouro",
+      "Número": "numero",
+      "Bairro": "bairro",
+      "Complemento": "complemento",
+      "CEP": "cep",
+      "DDI": "ddi",
+      "Telefones": "telefones",
+      "Observação": "observacao",
+      "CPF/CNPJ": "cpf_cnpj",
+      "Nome Contato": "nome_contato",
+      "E-mail Contato": "e_mail_contato",
+      "Cargo Contato": "cargo_contato",
+      "DDI Contato": "ddi_contato",
+      "Telefones Contato": "telefones_contato",
+      "Tipo do Serv. Comunicação": "tipo_do_serv_comunicacao",
+      "ID do Serv. Comunicação": "id_do_serv_comunicacao",
+      "Área": "area",
+      "Nome da Empresa": "nome_da_empresa",
+      "Etapa": "etapa",
+      "Funil": "funil"
+    },
+    "layout_importacao_empresas": "SAME_AS_leads_exact_spotter",
+    "sheet1": {
+      "Pessoa - Celular": "pessoa_celular",
+      "Telefone Normalizado": "telefone_normalizado",
+      "Organização - Segmento": "organizacao_segmento",
+      "Organização - Tamanho da empresa": "organizacao_tamanho_da_empresa",
+      "uf": "uf",
+      "cidade_estimada": "cidade_estimada",
+      "Status_Kanban": "status_kanban",
+      "Data_Ultima_Movimentacao": "data_ultima_movimentacao",
+      "Pessoa - End. Linkedin": "pessoa_end_linkedin",
+      "Cor_Card": "cor_card",
+      "Pessoa - Telefone": "pessoa_telefone",
+      "Organização - Nome": "organizacao_nome",
+      "Pessoa - Nome": "pessoa_nome",
+      "Pessoa - E-mail 1": "pessoa_email_work",
+      "Pessoa - E-mail 2": "pessoa_email_home",
+      "Pessoa - E-mail 3": "pessoa_email_other"
+    },
+    "padroes": {
+      "Produtos": "prudutos",
+      "Mercados": "mercados"
+    },
+    "usuarios": {
+      "Email": "email"
+    }
+  }
+}
