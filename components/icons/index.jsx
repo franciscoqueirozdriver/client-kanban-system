@@ -124,3 +124,14 @@ export function UsersIcon(props) {
     </IconBase>
   );
 }
+
+export function ScaleIcon(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 3v18" />
+      <path d="M3 6h18" />
+      <path d="M7.5 9.5 5 16a4 4 0 1 0 6.8 0l-2.5-6.5a4 4 0 1 0-1.8 0Z" />
+      <path d="M16.5 9.5 14 16a4 4 0 1 0 6.8 0l-2.5-6.5a4 4 0 1 0-1.8 0Z" />
+    </IconBase>
+  );
+}
