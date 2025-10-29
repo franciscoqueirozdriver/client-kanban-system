@@ -1,14 +1,5 @@
 import { NextResponse } from 'next/server';
-
-export const dynamic = 'force-dynamic';
-
-type Payload = {
-  cardId: string | number | null;
-  cor: string;
-};
-
 import { updateCorCard } from '@/lib/googleSheets';
-import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
