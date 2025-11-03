@@ -145,7 +145,7 @@ function formatCnpj(value: string) {
   return `${onlyDigits.slice(0, 2)}.${onlyDigits.slice(2, 5)}.${onlyDigits.slice(5, 8)}/${onlyDigits.slice(8, 12)}-${onlyDigits.slice(12)}`;
 }
 
-export default function PainelPGFNProspecao() {
+export default function PainelPgfnProspecao() {
   const [filters, setFilters] = useState<ProspeccaoFilters>(DEFAULT_FILTERS);
   const [rows, setRows] = useState<ProspeccaoRow[]>([]);
   const [totalRows, setTotalRows] = useState(0);

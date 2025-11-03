@@ -3,7 +3,7 @@ import NextDynamic from 'next/dynamic';
 export const dynamic = 'force-dynamic';
 
 const PainelPGFN = NextDynamic(
-  () => import('@/features/pgfn/PainelPGFNProspecao'),
+  () => import('@/features/pgfn/PainelPgfnProspecao'),
   {
     ssr: false,
     loading: () => (
