@@ -95,6 +95,9 @@ function useSearchQuery() {
   return { query, setQuery };
 }
 
+import { loadMetrics } from '@/lib/load/metrics';
+import BannerWarning from '@/components/BannerWarning';
+
 function KanbanPage() {
   const [columns, setColumns] = useState<Column[]>([]);
   const [allOptions, setAllOptions] = useState<Record<string, string[]>>({});
@@ -104,6 +107,7 @@ function KanbanPage() {
   const [isSubmittingSpotter, setIsSubmittingSpotter] = useState(false);
   const { state: filters, replace: replaceFilters, reset } = useFilterState<ActiveFilters>(filterDefaults);
   const { query, setQuery } = useSearchQuery();
+  const [hasPartialData, setHasPartialData] = useState(false);
 
   const viewParam = useQueryParam('view');
   const view =
@@ -112,18 +116,19 @@ function KanbanPage() {
     'kanban';
 
   useEffect(() => {
-    async function fetchColumns() {
-      const response = await fetch('/api/kanban');
-      const data = await response.json();
-      setColumns(data);
+    async function fetchData() {
+      const funnels = [22783, 22784]; // Example funnels
+      const fromISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // Example date
+      const { hasPartialData, ...data } = await loadMetrics({ funnels, fromISO });
+      setHasPartialData(hasPartialData);
+      if (!hasPartialData) {
+        // @ts-ignore
+        setColumns(data.columns ?? []);
+        // @ts-ignore
+        setAllOptions(data.filters || {});
+      }
     }
-    async function fetchFilterOptions() {
-      const response = await fetch('/api/clientes');
-      const data = await response.json();
-      setAllOptions(data.filters || {});
-    }
-    fetchColumns();
-    fetchFilterOptions();
+    fetchData();
   }, []);
 
   const filterOptionsForMultiSelect = useMemo<FilterOptions>(() => {
@@ -317,6 +322,7 @@ function KanbanPage() {
 
   return (
     <div className="flex flex-col gap-6 overflow-x-hidden">
+      {hasPartialData && <BannerWarning title="Dados temporariamente indisponíveis" />}
       <header className="flex flex-wrap items-start justify-between gap-6 rounded-3xl border border-border bg-card px-6 py-6 shadow-soft">
         <div className="max-w-2xl space-y-3">
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Painel de Consultas</p>

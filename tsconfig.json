@@ -1,5 +1,13 @@
 {
   "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["jest", "node", "@testing-library/jest-dom", "next"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["*"]
+    },
     "lib": [
       "dom",
       "dom.iterable",
@@ -7,47 +15,19 @@
     ],
     "allowJs": true,
     "skipLibCheck": true,
-    "strict": false,
-    "noEmit": true,
     "incremental": true,
     "module": "esnext",
     "esModuleInterop": true,
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
     "plugins": [
       {
         "name": "next"
       }
     ],
-    "strictNullChecks": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "./*"
-      ],
-      "@/components/*": [
-        "components/*",
-        "src/components/*"
-      ],
-      "@/utils/*": [
-        "src/utils/*",
-        "utils/*"
-      ],
-      "@/features/*": [
-        "src/features/*",
-        "features/*"
-      ]
-    }
+    "strictNullChecks": true
   },
-  "include": [
-    "next-env.d.ts",
-    ".next/types/**/*.ts",
-    "**/*.ts",
-    "**/*.tsx"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "jest.setup.ts"],
+  "exclude": ["node_modules", ".next", "dist"]
 }

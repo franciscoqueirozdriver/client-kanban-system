@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Lead } from "@/types/lead";
 import BulkActions from "./BulkActions";
@@ -16,13 +16,18 @@ const ETAPAS = [
 
 const PAGE_SIZE = 10;
 
-function CurrencyInput({ value, onChange }) {
-  const [local, setLocal] = useState(value ?? "");
+function CurrencyInput({ value, onChange }: { value: string | number | undefined; onChange: (value: string) => void }) {
+  const [local, setLocal] = useState(String(value ?? ""));
+
+  useEffect(() => {
+    setLocal(String(value ?? ""));
+  }, [value]);
+
   return (
     <input
       className="w-28 rounded border px-2 py-1 text-right"
       value={local}
-      onChange={(e) => {
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
         const v = e.target.value.replace(/[^\d,.-]/g, "");
         setLocal(v);
       }}

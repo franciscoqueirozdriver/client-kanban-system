@@ -6,7 +6,7 @@ import { onlyDigits } from '@/utils/cnpj-matriz';
 export const runtime = 'nodejs';
 
 const SHEETS = [
-  'Leads Exact Spotter',
+  'Sheet1',
   'layout_importacao_empresas',
   'Sheet1',
 ];

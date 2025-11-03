@@ -1,0 +1,31 @@
+app/api/clientes/buscar/route.ts(32,36): error TS7006: Parameter 'row' implicitly has an 'any' type.
+app/api/concorrentes/sugestoes/route.ts(2,10): error TS2305: Module '"@/lib/perplexity"' has no exported member 'findCompetitors'.
+app/api/empresas/concorrentes/route.ts(2,10): error TS2305: Module '"@/lib/perplexity"' has no exported member 'findCompetitors'.
+app/api/empresas/enriquecer/route.ts(2,10): error TS2305: Module '"@/lib/perplexity"' has no exported member 'enrichCompanyData'.
+app/api/perdecomp/salvar/route.ts(21,30): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{}'.
+  No index signature with a parameter of type 'string' was found on type '{}'.
+app/clientes/page.test.tsx(21,44): error TS7031: Binding element 'filters' implicitly has an 'any' type.
+app/clientes/page.test.tsx(21,53): error TS7031: Binding element 'onFilterChange' implicitly has an 'any' type.
+app/clientes/page.tsx(392,61): error TS2322: Type '(client: ClientRecord, meta?: { cardId: string; onUpdate: (update: Partial<ClientRecord>) => void; } | undefined) => void' is not assignable to type '(client: ClientRecord, meta: { cardId: string; onUpdate: (update: Partial<ClientRecord>) => void; }) => void'.
+  Types of parameters 'client' and 'client' are incompatible.
+    Type 'ClientRecord' is not assignable to type 'ClientRecord'. Two different types with this name exist, but they are unrelated.
+      Types of property 'company' are incompatible.
+        Type 'string | undefined' is not assignable to type 'string'.
+          Type 'undefined' is not assignable to type 'string'.
+app/consultas/perdecomp-comparativo/ClientPerdecompComparativo.tsx(14,97): error TS2307: Cannot find module '@/utils/cnpj' or its corresponding type declarations.
+app/prospeccao/pgfn/page.tsx(6,16): error TS2307: Cannot find module '@/features/pgfn/PainelPGFNProspecao' or its corresponding type declarations.
+lib/perdecomp-persist.test.ts(62,39): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+lib/perdecomp-persist.test.ts(73,43): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+lib/perdecomp-persist.test.ts(81,51): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+lib/perdecomp-persist.test.ts(103,42): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+lib/perdecomp-persist.test.ts(124,42): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+lib/perdecomp-persist.test.ts(124,85): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+lib/perdecomp-persist.test.ts(470,38): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+lib/perdecomp-persist.test.ts(472,30): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+lib/perdecomp-persist.test.ts(473,30): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+lib/spotter/api.ts(81,11): error TS7022: 'data' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+lib/spotter/api.ts(85,11): error TS7022: 'nl' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+lib/useLeads.ts(4,18): error TS7006: Parameter 'url' implicitly has an 'any' type.
+scripts/backfill-comp-ids.ts(62,46): error TS7006: Parameter 'row' implicitly has an 'any' type.
+scripts/backfill-comp-ids.ts(118,8): error TS7006: Parameter 'fact' implicitly has an 'any' type.
+scripts/backfill-comp-ids.ts(120,28): error TS7006: Parameter 'fact' implicitly has an 'any' type.
