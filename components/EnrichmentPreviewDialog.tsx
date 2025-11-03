@@ -6,29 +6,29 @@ import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 import { isFilial, toMatrizCNPJ, fmtCNPJ, onlyDigits } from '@/utils/cnpj-matriz';
 
 interface Prefill {
-  Nome_da_Empresa?: string;
-  Site_Empresa?: string;
-  Pais_Empresa?: string;
-  Estado_Empresa?: string;
-  Cidade_Empresa?: string;
-  Logradouro_Empresa?: string;
-  Numero_Empresa?: string;
-  Bairro_Empresa?: string;
-  Complemento_Empresa?: string;
-  CEP_Empresa?: string;
-  CNPJ_Empresa?: string;
+  nome_da_empresa?: string;
+  site_empresa?: string;
+  pais_empresa?: string;
+  estado_empresa?: string;
+  cidade_empresa?: string;
+  logradouro_empresa?: string;
+  numero_empresa?: string;
+  bairro_empresa?: string;
+  complemento_empresa?: string;
+  cep_empresa?: string;
+  cnpj_empresa?: string;
   cnpj?: string;
-  DDI_Empresa?: string;
-  Telefones_Empresa?: string;
-  Observacao_Empresa?: string;
-  Nome_Contato?: string;
-  Email_Contato?: string;
-  Cargo_Contato?: string;
-  DDI_Contato?: string;
-  Telefones_Contato?: string;
-  Mercado?: string;
-  Produto?: string;
-  Area?: string;
+  ddi_empresa?: string;
+  telefones_empresa?: string;
+  observacao_empresa?: string;
+  nome_contato?: string;
+  email_contato?: string;
+  cargo_contato?: string;
+  ddi_contato?: string;
+  telefones_contato?: string;
+  mercado?: string;
+  produto?: string;
+  area?: string;
 }
 
 interface Props {
@@ -62,7 +62,7 @@ export default function EnrichmentPreviewDialog({
   const handleConfirmClick = async () => {
     if (!suggestionFlat) return;
 
-    const enrichedCNPJ = suggestionFlat.CNPJ_Empresa;
+    const enrichedCNPJ = suggestionFlat.cnpj_empresa;
 
     if (!enrichedCNPJ || !isFilial(enrichedCNPJ)) {
       onConfirm(suggestionFlat);
@@ -76,12 +76,12 @@ export default function EnrichmentPreviewDialog({
     };
 
     const finalCNPJ = await decideCNPJFinal({
-      currentFormCNPJ: baseCompany?.CNPJ_Empresa,
-      enrichedCNPJ: suggestionFlat.CNPJ_Empresa,
+      currentFormCNPJ: baseCompany?.cnpj_empresa,
+      enrichedCNPJ: suggestionFlat.cnpj_empresa,
       ask,
     });
 
-    onConfirm({ ...suggestionFlat, CNPJ_Empresa: finalCNPJ });
+    onConfirm({ ...suggestionFlat, cnpj_empresa: finalCNPJ });
     setConfirmState({ isOpen: false });
   };
 

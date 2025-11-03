@@ -5,9 +5,9 @@ import { normalizeCNPJ, isValidCNPJ, toDigits, formatCNPJ } from '@/src/utils/cn
 
 // --- Helper Types ---
 interface Company {
-  Cliente_ID: string;
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
+  cliente_id: string;
+  nome_da_empresa: string;
+  cnpj_empresa: string;
   [key: string]: any;
 }
 
@@ -79,7 +79,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
     setQuery('');
     setResults([]);
     setShowSuggestions(false);
-    onSelect({ ...company, CNPJ_Empresa: normalizeCNPJ(company.CNPJ_Empresa) });
+    onSelect({ ...company, cnpj_empresa: normalizeCNPJ(company.cnpj_empresa) });
   };
 
   if (selectedCompany) {
@@ -87,12 +87,12 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
       <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded relative">
         <div className="flex items-center justify-between">
           <div className="flex-grow truncate">
-            <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{formatCNPJ(selectedCompany.CNPJ_Empresa) || 'CNPJ não informado'}</p>
+            <p className="font-semibold text-sm truncate" title={selectedCompany.nome_da_empresa}>{selectedCompany.nome_da_empresa}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{formatCNPJ(selectedCompany.cnpj_empresa) || 'CNPJ não informado'}</p>
           </div>
           <button type="button" onClick={onClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
         </div>
-        {onEnrichSelected && !isValidCNPJ(selectedCompany.CNPJ_Empresa) && (
+        {onEnrichSelected && !isValidCNPJ(selectedCompany.cnpj_empresa) && (
           <div className="mt-2">
             <button
               type="button"
@@ -132,8 +132,8 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
 
           {!isLoading && results.map((company) => (
-            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
-              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{formatCNPJ(company.CNPJ_Empresa)}</span>
+            <li key={company.cliente_id} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
+              {company.nome_da_empresa} <span className="text-sm text-gray-500">{formatCNPJ(company.cnpj_empresa)}</span>
             </li>
           ))}
         </ul>

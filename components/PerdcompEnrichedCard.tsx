@@ -6,9 +6,9 @@ import { enriquecerPerdcomp, analisarPortfolioPerdcomp } from '@/lib/perdcomp';
 import { formatCNPJ } from '@/src/utils/cnpj';
 
 interface Company {
-  Cliente_ID: string;
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
+  cliente_id: string;
+  nome_da_empresa: string;
+  cnpj_empresa: string;
   [key: string]: any;
 }
 
@@ -118,10 +118,10 @@ export default function PerdcompEnrichedCard({
   return (
     <article className="group relative mx-auto flex h-full w-full max-w-[420px] flex-col rounded-3xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg">
       <header className="mb-2">
-        <h3 className="text-lg font-semibold text-foreground" title={company.Nome_da_Empresa}>
-          {company.Nome_da_Empresa}
+        <h3 className="text-lg font-semibold text-foreground" title={company.nome_da_empresa}>
+          {company.nome_da_empresa}
         </h3>
-        <p className="text-xs text-muted-foreground">{formatCNPJ(company.CNPJ_Empresa)}</p>
+        <p className="text-xs text-muted-foreground">{formatCNPJ(company.cnpj_empresa)}</p>
         {ultimaConsulta && (
           <p className="mt-1 text-xs text-muted-foreground">
             Última consulta: {new Date(ultimaConsulta).toLocaleDateString()}

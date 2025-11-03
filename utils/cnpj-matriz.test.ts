@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import { toMatrizCNPJ, isFilial, ordem } from '@/utils/cnpj-matriz';
 
 test('filial Dalben 46241741000408 -> matriz 46241741000165', () => {

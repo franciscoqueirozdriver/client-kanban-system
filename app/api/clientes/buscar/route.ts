@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets.js';
 import { normalizeCNPJ, toDigits } from '@/src/utils/cnpj';
 
-const SHEET_NAME = 'Leads Exact Spotter';
+const SHEET_NAME = 'Sheet1';
 const RESULT_LIMIT = 20;
 
 // Normalizer function as specified

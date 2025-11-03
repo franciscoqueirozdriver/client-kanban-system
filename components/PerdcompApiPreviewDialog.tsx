@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 
 interface Company {
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
+  nome_da_empresa: string;
+  cnpj_empresa: string;
   [key: string]: any;
 }
 

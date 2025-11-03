@@ -1,5 +1,5 @@
 import "server-only";
-import { Pool, type PoolClient, type QueryResult } from "pg";
+import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
 
 const pool = new Pool({
   host: process.env.PGHOST,
@@ -12,7 +12,7 @@ const pool = new Pool({
   idleTimeoutMillis: 30_000,
 });
 
-export async function query<T = unknown>(
+export async function query<T extends QueryResultRow>(
   text: string,
   params?: any[],
 ): Promise<QueryResult<T>> {

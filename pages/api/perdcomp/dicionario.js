@@ -1,32 +1,18 @@
 // pages/api/perdcomp/dicionario.js - API para gerenciar dicionário PER/DCOMP
 
-import { getSheet } from '../../../lib/googleSheets';
+import { getSheet, getSheetData } from '../../../lib/googleSheets';
 
 // Função para obter coluna como mapa (chave -> linha)
-async function getColAsMap(sheetName, colA1 = 'A') {
-  const sheet = await getSheet();
-  const range = `${sheetName}!${colA1}:${colA1}`;
-  
-  try {
-    const response = await sheet.spreadsheets.values.get({
-      spreadsheetId: process.env.SPREADSHEET_ID,
-      range,
-    });
-    
+async function getColAsMap(sheetName, colKey) {
+    const { rows } = await getSheetData(sheetName);
     const map = new Map();
-    const values = response.data.values || [];
-    values.forEach((row, index) => {
-      const key = row?.[0];
-      if (key) {
-        map.set(String(key), index + 1);
-      }
+    rows.forEach((row) => {
+        const key = row[colKey];
+        if (key) {
+            map.set(String(key), row._rowNumber);
+        }
     });
-    
     return map;
-  } catch (error) {
-    console.error(`Erro ao obter coluna ${colA1} da aba ${sheetName}:`, error);
-    return new Map();
-  }
 }
 
 // Função para timestamp ISO
@@ -37,7 +23,7 @@ function nowISO() {
 // Upsert de tipos de documento
 async function upsertTipos(exemploPerdcomp, tipoFromAPI) {
   const sheet = await getSheet();
-  const map = await getColAsMap('DIC_TIPOS', 'A');
+  const map = await getColAsMap('dic_tipos', 'tipo_codigo');
   
   const tipos = [
     { codigo: 1, nome: 'DCOMP', desc: 'Declaração de Compensação' },
@@ -99,7 +85,7 @@ async function upsertTipos(exemploPerdcomp, tipoFromAPI) {
 // Upsert de naturezas
 async function upsertNatureza(codigoNat, exemploPerdcomp, fromAPI = {}) {
   const sheet = await getSheet();
-  const map = await getColAsMap('DIC_NATUREZAS', 'A');
+  const map = await getColAsMap('dic_naturezas', 'natureza');
   
   const naturezaFamilias = {
     '1.0': 'DCOMP',
@@ -174,7 +160,7 @@ async function upsertNatureza(codigoNat, exemploPerdcomp, fromAPI = {}) {
 // Upsert de créditos
 async function upsertCredito(codCred, exemploPerdcomp, descFromAPI) {
   const sheet = await getSheet();
-  const map = await getColAsMap('DIC_CREDITOS', 'A');
+  const map = await getColAsMap('dic_creditos', 'credito_codigo');
   
   const creditosDesc = {
     '01': 'Ressarcimento de IPI',
@@ -280,20 +266,9 @@ export default async function handler(req, res) {
       
       // Buscar dados dos dicionários
       const [tipos, naturezas, creditos] = await Promise.all([
-        sheet.spreadsheets.values.get({
-          spreadsheetId: process.env.SPREADSHEET_ID,
-          range: 'DIC_TIPOS!A:H'
-        }).catch(() => ({ data: { values: [] } })),
-        
-        sheet.spreadsheets.values.get({
-          spreadsheetId: process.env.SPREADSHEET_ID,
-          range: 'DIC_NATUREZAS!A:I'
-        }).catch(() => ({ data: { values: [] } })),
-        
-        sheet.spreadsheets.values.get({
-          spreadsheetId: process.env.SPREADSHEET_ID,
-          range: 'DIC_CREDITOS!A:G'
-        }).catch(() => ({ data: { values: [] } }))
+        getSheetData('dic_tipos'),
+        getSheetData('dic_naturezas'),
+        getSheetData('dic_creditos'),
       ]);
       
       return res.status(200).json({

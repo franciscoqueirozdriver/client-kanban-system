@@ -7,6 +7,8 @@ import ReportTable from '@/components/ReportTable';
 import ExportButton from '@/components/ExportButton';
 import SummaryCard from '@/components/SummaryCard';
 import { useFilterState } from '@/hooks/useFilterState';
+import { loadMetrics } from '@/lib/load/metrics';
+import BannerWarning from '@/components/BannerWarning';
 
 const filterDefaults: ActiveFilters = {
   segmento: [],
@@ -20,14 +22,6 @@ const filterDefaults: ActiveFilters = {
 };
 
 type ReportRow = Record<string, unknown>;
-
-type FiltersResponse = {
-  filters?: Record<string, string[]>;
-};
-
-type ReportsResponse = {
-  rows?: ReportRow[];
-};
 
 export default function ReportsClient({
   initialQuery,
@@ -47,6 +41,7 @@ export default function ReportsClient({
   const [query, setQuery] = useState<string>(initialQuery);
   const [hydrated, setHydrated] = useState(false);
   const [view, setView] = useState<string>(() => (initialView === 'detail' ? 'detail' : 'summary'));
+  const [hasPartialData, setHasPartialData] = useState(false);
 
   useEffect(() => {
     setQuery(initialQuery);
@@ -85,14 +80,19 @@ export default function ReportsClient({
   }, [hydrated, pathname, query, router, view]);
 
   useEffect(() => {
-    async function fetchOptions() {
-      const response = await fetch('/api/clientes');
-      const data: FiltersResponse = await response.json();
-      setOptions(data.filters ?? {});
+    async function fetchData() {
+      const funnels = [22783, 22784]; // Example funnels
+      const fromISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // Example date
+      const { hasPartialData, ...data } = await loadMetrics({ funnels, fromISO });
+      setHasPartialData(hasPartialData);
+      if (!hasPartialData) {
+        // @ts-ignore
+        setRows(data.rows ?? []);
+      }
     }
 
-    fetchOptions();
-  }, []);
+    fetchData();
+  }, [filters, maxLeads, query]);
 
   const filterOptions = useMemo<FilterOptions>(() => {
     const mapToOptions = (values: string[] = []) => values.map((value) => ({ label: value, value }));
@@ -111,33 +111,6 @@ export default function ReportsClient({
   const handleFilterChange = (next: ActiveFilters) => {
     replaceFilters(next);
   };
-
-  useEffect(() => {
-    async function fetchData() {
-      const params = new URLSearchParams();
-
-      (Object.entries(filters) as Array<[keyof ActiveFilters, string[]]>).forEach(([key, values]) => {
-        if (Array.isArray(values) && values.length > 0) {
-          params.set(key, values.join(','));
-        }
-      });
-
-      const trimmed = query.trim();
-      if (trimmed) {
-        params.set('q', trimmed);
-      }
-
-      if (maxLeads) {
-        params.set('maxLeads', String(maxLeads));
-      }
-
-      const response = await fetch(`/api/reports?${params.toString()}`);
-      const data: ReportsResponse = await response.json();
-      setRows(Array.isArray(data.rows) ? data.rows : []);
-    }
-
-    fetchData();
-  }, [filters, maxLeads, query]);
 
   const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
   const formatNumber = (value: number) => numberFormatter.format(value);
@@ -216,6 +189,7 @@ export default function ReportsClient({
 
   return (
     <div className="flex flex-col gap-6 overflow-x-hidden">
+      {hasPartialData && <BannerWarning title="Dados temporariamente indisponíveis" />}
       <header className="flex flex-wrap items-start justify-between gap-6 rounded-3xl border border-border bg-card px-6 py-6 shadow-soft">
         <div className="max-w-2xl space-y-3">
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Relatórios</p>
