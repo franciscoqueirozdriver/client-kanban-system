@@ -1,3 +1,5 @@
+import { asArray } from '@/lib/ui/safe';
+
 export function normalizePhones(row, idx) {
   const val = (key) => (row[key] ? String(row[key] || '').trim() : '');
   const existing = val('telefone_normalizado');
@@ -45,7 +47,7 @@ export function buildReport(rows) {
   };
 
   const map = new Map();
-  rows.forEach((row, i) => {
+  asArray(rows).forEach((row, i) => {
     const company = row.organizacao_nome;
     if (!company) return;
     if (row.impresso_lista) return;
@@ -102,7 +104,7 @@ export function mapToRows(map, query = {}, max = Infinity) {
 
     if (result.length >= max) return;
 
-    if (item.contacts.length === 0) {
+    if (asArray(item.contacts).length === 0) {
       result.push({
         company: item.company,
         segment: item.segment,
@@ -116,7 +118,7 @@ export function mapToRows(map, query = {}, max = Infinity) {
         linkedin: '',
       });
     } else {
-      item.contacts.forEach((c) => {
+      asArray(item.contacts).forEach((c) => {
         if (result.length >= max) return;
         result.push({
           company: item.company,
@@ -128,11 +130,11 @@ export function mapToRows(map, query = {}, max = Infinity) {
           celular: c.celular,
           email: c.email,
           linkedin: c.linkedin,
-          normalizedPhones: c.normalizedPhones || [],
+          normalizedPhones: asArray(c.normalizedPhones) || [],
         });
       });
     }
-    item.rows.forEach((r) => toMark.add(r));
+    asArray(item.rows).forEach((r) => toMark.add(r));
   });
 
   return { rows: result, toMark };

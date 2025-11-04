@@ -11,6 +11,7 @@ import SummaryCard from '@/components/SummaryCard';
 import SpotterModal from '@/components/spotter/SpotterModal';
 import { useFilterState } from '@/hooks/useFilterState';
 import { useQueryParam } from '@/hooks/useQueryParam';
+import { getSegmento, asArray } from '@/lib/ui/safe';
 
 interface ClientRecord {
   id: string;
@@ -123,7 +124,7 @@ function KanbanPage() {
       setHasPartialData(hasPartialData);
       if (!hasPartialData) {
         // @ts-ignore
-        setColumns(data.columns ?? []);
+        setColumns(asArray(data.columns));
         // @ts-ignore
         setAllOptions(data.filters || {});
       }
@@ -133,13 +134,13 @@ function KanbanPage() {
 
   const filterOptionsForMultiSelect = useMemo<FilterOptions>(() => {
     const mapToOptions = (values?: string[]) =>
-      (values || []).map((value) => ({ label: value, value }));
-    const phaseOptions = columns.map((column) => ({
+      asArray(values).map((value) => ({ label: value, value }));
+    const phaseOptions = asArray(columns).map((column) => ({
       label: column.title,
       value: column.id
     }));
     return {
-      segmento: mapToOptions((allOptions as any)?.segmento ?? (allOptions as any)?.organizacao_segmento),
+      segmento: mapToOptions(allOptions.segmento),
       porte: mapToOptions(allOptions.porte),
       uf: mapToOptions(allOptions.uf),
       cidade: mapToOptions(allOptions.cidade),
@@ -159,22 +160,21 @@ function KanbanPage() {
 
     const filterCard = (card: Card, column: Column) => {
       const client = card.client;
-      const seg = (client as any)?.segmento ?? (client as any)?.organizacao_segmento ?? '';
 
-      if (filters.segmento.length && !filters.segmento.includes((seg || '').trim())) return false;
-      if (filters.porte.length && !filters.porte.includes((client.size || '').trim())) return false;
-      if (filters.uf.length && !filters.uf.includes((client.uf || '').trim())) return false;
-      if (filters.cidade.length && !filters.cidade.includes((client.city || '').trim())) return false;
-      if (filters.erp.length && !filters.erp.includes(((client.erp as string) || '').trim())) return false;
-      if (filters.origem.length && !filters.origem.includes(((client.fonte as string) || '').trim())) return false;
-      if (filters.vendedor.length && !filters.vendedor.includes(((client.owner as string) || '').trim())) return false;
+      if (asArray(filters.segmento).length && !asArray(filters.segmento).includes(getSegmento(client).trim())) return false;
+      if (asArray(filters.porte).length && !asArray(filters.porte).includes((client.size || '').trim())) return false;
+      if (asArray(filters.uf).length && !asArray(filters.uf).includes((client.uf || '').trim())) return false;
+      if (asArray(filters.cidade).length && !asArray(filters.cidade).includes((client.city || '').trim())) return false;
+      if (asArray(filters.erp).length && !asArray(filters.erp).includes(((client.erp as string) || '').trim())) return false;
+      if (asArray(filters.origem).length && !asArray(filters.origem).includes(((client.fonte as string) || '').trim())) return false;
+      if (asArray(filters.vendedor).length && !asArray(filters.vendedor).includes(((client.owner as string) || '').trim())) return false;
 
       const statusValue = (client.status || '').trim();
       if (
-        filters.fase.length &&
-        !filters.fase.includes(statusValue) &&
-        !filters.fase.includes(column.id) &&
-        !filters.fase.includes(column.title)
+        asArray(filters.fase).length &&
+        !asArray(filters.fase).includes(statusValue) &&
+        !asArray(filters.fase).includes(column.id) &&
+        !asArray(filters.fase).includes(column.title)
       ) {
         return false;
       }
@@ -182,31 +182,27 @@ function KanbanPage() {
       if (!normalizedQuery) return true;
 
       const baseName = (client.company || '').toLowerCase();
-      const contactMatch = Array.isArray(client.contacts)
-        ? client.contacts.some((contact: any) =>
+      const contactMatch = asArray(client.contacts).some((contact: any) =>
             [contact?.name, contact?.nome, contact?.email]
               .filter(Boolean)
               .some((value: string) => value.toLowerCase().includes(normalizedQuery))
-          )
-        : false;
+          );
 
-      const opportunityMatch = Array.isArray(client.opportunities)
-        ? client.opportunities.some((opportunity) =>
+      const opportunityMatch = asArray(client.opportunities).some((opportunity) =>
             (opportunity || '').toLowerCase().includes(normalizedQuery)
-          )
-        : false;
+          );
 
       return baseName.includes(normalizedQuery) || contactMatch || opportunityMatch;
     };
 
-    return columns.map((column) => ({
+    return asArray(columns).map((column) => ({
       ...column,
-      cards: column.cards.filter((card) => filterCard(card, column))
+      cards: asArray(column.cards).filter((card) => filterCard(card, column))
     }));
   }, [columns, filters, query]);
 
   const summary = useMemo(() => {
-    const allCards = filteredColumns.flatMap((column) => column.cards);
+    const allCards = filteredColumns.flatMap((column) => asArray(column.cards));
     const totalLeads = allCards.length;
     const meetings = allCards.filter((card) =>
       ['Reunião Realizada', 'Conversa Iniciada', 'Contato Efetuado'].includes(card.client.status)
@@ -245,8 +241,8 @@ function KanbanPage() {
 
     if (!sourceCol || !destCol) return;
 
-    const [moved] = sourceCol.cards.splice(source.index, 1);
-    destCol.cards.splice(destination.index, 0, moved);
+    const [moved] = asArray(sourceCol.cards).splice(source.index, 1);
+    asArray(destCol.cards).splice(destination.index, 0, moved);
 
     const newStatus = destCol.id;
     if (newStatus === moved.client.status) {
@@ -271,12 +267,12 @@ function KanbanPage() {
       });
       const response = await fetch('/api/kanban');
       const data = await response.json();
-      setColumns(data);
+      setColumns(asArray(data));
     } catch (error) {
       console.error(error);
       const response = await fetch('/api/kanban');
       const data = await response.json();
-      setColumns(data);
+      setColumns(asArray(data));
     } finally {
       setIsUpdating(false);
     }
@@ -374,7 +370,7 @@ function KanbanPage() {
           </DragDropContext>
         </section>
       ) : (
-        <Views leads={filteredColumns.flatMap((column) => column.cards.map((card) => card.client))} />
+        <Views leads={filteredColumns.flatMap((column) => asArray(column.cards).map((card) => card.client))} />
       )}
 
       <SpotterModal

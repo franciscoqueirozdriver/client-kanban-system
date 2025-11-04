@@ -1,6 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getSegmento, asArray } from "@/lib/ui/safe";
 
 type Lead = {
   id: string | number;
@@ -24,7 +25,7 @@ export default function LeadDrawer({ data = [] as Lead[] }) {
   const selected = search?.get("selected") ?? null;
 
   const lead = useMemo(
-    () => data.find((x) => String(x.id) === String(selected)),
+    () => asArray(data).find((x) => String(x.id) === String(selected)),
     [data, selected]
   );
 
@@ -55,8 +56,8 @@ export default function LeadDrawer({ data = [] as Lead[] }) {
         <div><span className="font-medium">Contato:</span> {lead?.contato || "-"}</div>
         <div><span className="font-medium">E-mail:</span> {lead?.email ? <a className="underline break-words" href={`mailto:${lead.email}`}>{lead.email}</a> : "-"}</div>
         <div><span className="font-medium">LinkedIn:</span> {lead?.linkedin ? <a className="underline break-words" target="_blank" rel="noreferrer" href={lead.linkedin}>Abrir</a> : "-"}</div>
-        <div><span className="font-medium">Cidade/UF:</span> {[lead?.cidade, lead?.uf].filter(Boolean).join(" / ") || "-"}</div>
-        <div><span className="font-medium">Segmento:</span> {((lead as any)?.segmento ?? (lead as any)?.organizacao_segmento) || "-"}</div>
+        <div><span className="font-medium">Cidade/UF:</span> {asArray([lead?.cidade, lead?.uf]).filter(Boolean).join(" / ") || "-"}</div>
+        <div><span className="font-medium">Segmento:</span> {getSegmento(lead)}</div>
         <div><span className="font-medium">Etapa:</span> {lead?.etapa || "-"}</div>
         <div><span className="font-medium">Dono:</span> {lead?.owner || "-"}</div>
         <div><span className="font-medium">Valor:</span> {lead?.valor || "-"}</div>

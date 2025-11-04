@@ -13,8 +13,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const data = mapRows(TAB, raw);
 
+    const out = (Array.isArray(data) ? data : []).map((r: any) => ({
+      ...r,
+      segmento: r?.segmento ?? r?.organizacao_segmento ?? null,
+    }));
+
     // Failsafe: garante que o front nunca receba undefined e evita .length de undefined
-    res.status(200).json(Array.isArray(data) ? data : []);
+    res.status(200).json(out);
   } catch {
     // Enquanto mapeamento/planilha estiverem em transição, não deixe a página cair
     res.status(200).json([]);

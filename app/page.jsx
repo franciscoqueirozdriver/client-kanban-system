@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import SummaryCard from '../components/SummaryCard';
 import Charts from '../components/Charts';
+import { getSegmento, asArray } from '@/lib/ui/safe';
 
 export default function Dashboard() {
   const [allClients, setAllClients] = useState([]);
@@ -13,15 +14,16 @@ export default function Dashboard() {
     fetch('/api/clientes')
       .then((res) => res.json())
       .then((data) => {
-        setAllClients(data.clients || []);
-        setClients(data.clients || []);
-        setOptions({ segmento: data.filters.segmento ?? data.filters.organizacao_segmento, uf: data.filters.uf });
+        const safeClients = asArray(data.clients);
+        setAllClients(safeClients);
+        setClients(safeClients);
+        setOptions({ segmento: asArray(data.filters.segmento), uf: asArray(data.filters.uf) });
       });
   }, []);
 
   useEffect(() => {
     let filtered = allClients;
-    if (filters.segmento) filtered = filtered.filter((c) => ((c.segmento ?? c.organizacao_segmento) === filters.segmento));
+    if (filters.segmento) filtered = filtered.filter((c) => getSegmento(c) === filters.segmento);
     if (filters.uf) filtered = filtered.filter((c) => c.uf === filters.uf);
     setClients(filtered);
   }, [filters, allClients]);
@@ -43,7 +45,7 @@ export default function Dashboard() {
   const companies = clients.length;
   const contactsSet = new Set();
   clients.forEach((c) => {
-    c.contacts.forEach((ct) => {
+    asArray(c.contacts).forEach((ct) => {
       contactsSet.add(`${ct.nome}|${ct.email}`);
     });
   });
@@ -75,7 +77,7 @@ export default function Dashboard() {
           className="border p-2 rounded"
         >
           <option value="">Segmento</option>
-          {options.segmento.map((s) => (
+          {asArray(options.segmento).map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
@@ -87,7 +89,7 @@ export default function Dashboard() {
           className="border p-2 rounded"
         >
           <option value="">UF</option>
-          {options.uf.map((s) => (
+          {asArray(options.uf).map((s) => (
             <option key={s} value={s}>
               {s}
             </option>

@@ -9,6 +9,7 @@ import SummaryCard from '@/components/SummaryCard';
 import { useFilterState } from '@/hooks/useFilterState';
 import { loadMetrics } from '@/lib/load/metrics';
 import BannerWarning from '@/components/BannerWarning';
+import { getSegmento, asArray } from '@/lib/ui/safe';
 
 const filterDefaults: ActiveFilters = {
   segmento: [],
@@ -87,7 +88,7 @@ export default function ReportsClient({
       setHasPartialData(hasPartialData);
       if (!hasPartialData) {
         // @ts-ignore
-        setRows(data.rows ?? []);
+        setRows(asArray(data.rows));
       }
     }
 
@@ -97,7 +98,7 @@ export default function ReportsClient({
   const filterOptions = useMemo<FilterOptions>(() => {
     const mapToOptions = (values: string[] = []) => values.map((value) => ({ label: value, value }));
     return {
-      segmento: mapToOptions((options as any)?.segmento ?? (options as any)?.organizacao_segmento),
+      segmento: mapToOptions(options.segmento),
       porte: mapToOptions(options.porte),
       uf: mapToOptions(options.uf),
       cidade: mapToOptions(options.cidade),
@@ -116,14 +117,15 @@ export default function ReportsClient({
   const formatNumber = (value: number) => numberFormatter.format(value);
 
   const summary = useMemo(() => {
-    const totalLeads = rows.length;
+    const safeRows = asArray(rows);
+    const totalLeads = safeRows.length;
     const uniqueCompanies = new Set(
-      rows.map((row) => (typeof row.company === 'string' ? row.company.trim() : '')).filter(Boolean)
+      safeRows.map((row) => (typeof row.company === 'string' ? row.company.trim() : '')).filter(Boolean)
     ).size;
     const uniqueContacts = new Set(
-      rows.map((row) => (typeof row.nome === 'string' ? row.nome.trim().toLowerCase() : '')).filter(Boolean)
+      safeRows.map((row) => (typeof row.nome === 'string' ? row.nome.trim().toLowerCase() : '')).filter(Boolean)
     ).size;
-    const reachable = rows.filter((row) => {
+    const reachable = safeRows.filter((row) => {
       const phones = Array.isArray((row as { normalizedPhones?: unknown }).normalizedPhones)
         ? ((row as { normalizedPhones?: string[] }).normalizedPhones ?? [])
         : [];
@@ -137,7 +139,7 @@ export default function ReportsClient({
   const filtersSummary = useMemo(() => {
     const activeFilters = Object.entries(filters)
       .filter(([, values]) => Array.isArray(values) && values.length > 0)
-      .map(([key, values]) => `${key}: ${(values || []).join(', ')}`);
+      .map(([key, values]) => `${key}: ${asArray(values).join(', ')}`);
 
     const trimmed = query.trim();
     if (trimmed) {
@@ -159,7 +161,7 @@ export default function ReportsClient({
   const exportFilters = useMemo(() => {
     const entries = Object.entries(filters).reduce<Record<string, string | number>>((acc, [key, values]) => {
       if (Array.isArray(values) && values.length > 0) {
-        acc[key] = values.join(',');
+        acc[key] = asArray(values).join(',');
       }
       return acc;
     }, {});
