@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
+  if (process.env.DISABLE_PGFN === "true") {
+    return Response.json({ rows: [], total: 0, disabled: true }, { status: 200 });
+  }
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") || "").trim();
   const min = Number(searchParams.get("min") || 0);
@@ -18,7 +21,7 @@ export async function GET(req: NextRequest) {
   const offset = (page - 1) * size;
 
   const where: string[] = ["d.valor_consolidado BETWEEN $1 AND $2"];
-  const params: any[] = [min, max];
+  const params: Array<number | string | boolean> = [min, max];
   let p = params.length;
 
   if (q) {

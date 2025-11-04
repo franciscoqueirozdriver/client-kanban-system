@@ -10,6 +10,7 @@ const nextConfig = {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       '@': path.resolve(__dirname),
+      '@/features': path.resolve(__dirname, 'src/features'),
     };
     return config;
   },

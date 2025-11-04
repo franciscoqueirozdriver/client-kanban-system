@@ -3,10 +3,25 @@
     "strict": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["jest", "node", "@testing-library/jest-dom", "next"],
+    "types": [
+      "jest",
+      "node",
+      "@testing-library/jest-dom",
+      "next"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["*"]
+      "@/*": [
+        "*"
+      ],
+      "@/features/*": [
+        "src/features/*",
+        "features/*"
+      ],
+      "@/utils/*": [
+        "utils/*",
+        "src/utils/*"
+      ]
     },
     "lib": [
       "dom",
@@ -28,6 +43,15 @@
     ],
     "strictNullChecks": true
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "jest.setup.ts"],
-  "exclude": ["node_modules", ".next", "dist"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "jest.setup.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "dist"
+  ]
 }
