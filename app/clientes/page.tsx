@@ -14,7 +14,7 @@ import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 
 interface ClientRecord {
   id: string;
-  company: string;
+  company?: string;
   segment?: string;
   size?: string;
   uf?: string;
@@ -242,7 +242,7 @@ function ClientesPageComponent() {
     setCompanyModalOpen(true);
   }
 
-  function handleOpenSpotter(client: ClientRecord, meta?: { cardId: string; onUpdate: (update: Partial<ClientRecord>) => void }) {
+  function handleOpenSpotter(client: ClientRecord, meta: { cardId: string; onUpdate: (update: Partial<ClientRecord>) => void }) {
     setSpotterLead(client);
     setSpotterOpen(true);
   }

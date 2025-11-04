@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ items: [] });
     }
 
-    const { items: rawItems = [] } = await findCompetitors({ nome: name, max: limit });
+    const rawItems = await findCompetitors({ nome_da_empresa: name, max: limit });
 
     const seenCnpjs = new Set<string>();
     const seenFallback = new Set<string>();

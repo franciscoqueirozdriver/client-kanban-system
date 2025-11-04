@@ -10,8 +10,8 @@ export async function POST(req: Request) {
     const max  = body?.max ?? 20;
     if (!nome) return NextResponse.json({ items: [] }, { status: 200 });
 
-    const { items, debug } = await findCompetitors({ nome, max });
-    return NextResponse.json({ items: Array.isArray(items) ? items : [], debug }, { status: 200 });
+    const items = await findCompetitors({ nome_da_empresa: nome, max });
+    return NextResponse.json({ items: Array.isArray(items) ? items : [] }, { status: 200 });
   } catch (e: any) {
     return NextResponse.json({ items: [], error: e?.message || 'Erro ao buscar concorrentes' }, { status: 200 });
   }

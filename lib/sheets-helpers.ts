@@ -1,1 +1,1 @@
-export { findRowNumberByClienteId, getSheetData } from './googleSheets';
+export { findRowNumberByClienteId, getSheetData } from '@/lib/googleSheets.js';

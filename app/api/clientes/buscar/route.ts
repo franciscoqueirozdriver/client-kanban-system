@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets.js';
+import { getSheetData } from '@/lib/googleSheets.js';
 import { normalizeCNPJ, toDigits } from '@/src/utils/cnpj';
 
 const SHEET_NAME = 'Sheet1';

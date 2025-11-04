@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
     const rowsToAppend = linhas.map((linha: any) => {
       return originalHeaders.map(header => {
-        const snakeCaseKey = columnMapping[header];
+        const snakeCaseKey = (columnMapping as Record<string, string>)[header];
         return linha[snakeCaseKey] ?? '';
       });
     });

@@ -5,7 +5,7 @@ import {
   getSheetData,
   getSheetsClient,
   withRetry,
-} from './googleSheets.js';
+} from '@/lib/googleSheets.js';
 import { formatPerdcompNumero } from '@/utils/perdcomp';
 import { normalizeCNPJ } from '@/src/utils/cnpj';
 import {

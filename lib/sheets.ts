@@ -1,1 +1,1 @@
-export { updateRowByIndex } from './googleSheets';
+export { updateRowByIndex } from '@/lib/googleSheets.js';

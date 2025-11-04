@@ -1,7 +1,7 @@
 "use client";
 import useSWR from "swr";
 
-const fetcher = (url) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 /**
  * Hook simples para carregar leads (use a mesma fonte do Kanban).
