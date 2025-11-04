@@ -15,13 +15,13 @@ export default function Dashboard() {
       .then((data) => {
         setAllClients(data.clients || []);
         setClients(data.clients || []);
-        setOptions({ segmento: data.filters.segmento, uf: data.filters.uf });
+        setOptions({ segmento: data.filters.segmento ?? data.filters.organizacao_segmento, uf: data.filters.uf });
       });
   }, []);
 
   useEffect(() => {
     let filtered = allClients;
-    if (filters.segmento) filtered = filtered.filter((c) => c.segment === filters.segmento);
+    if (filters.segmento) filtered = filtered.filter((c) => ((c.segmento ?? c.organizacao_segmento) === filters.segmento));
     if (filters.uf) filtered = filtered.filter((c) => c.uf === filters.uf);
     setClients(filtered);
   }, [filters, allClients]);

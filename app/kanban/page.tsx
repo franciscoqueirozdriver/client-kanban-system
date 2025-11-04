@@ -139,7 +139,7 @@ function KanbanPage() {
       value: column.id
     }));
     return {
-      segmento: mapToOptions(allOptions.segmento),
+      segmento: mapToOptions((allOptions as any)?.segmento ?? (allOptions as any)?.organizacao_segmento),
       porte: mapToOptions(allOptions.porte),
       uf: mapToOptions(allOptions.uf),
       cidade: mapToOptions(allOptions.cidade),
@@ -159,8 +159,9 @@ function KanbanPage() {
 
     const filterCard = (card: Card, column: Column) => {
       const client = card.client;
+      const seg = (client as any)?.segmento ?? (client as any)?.organizacao_segmento ?? '';
 
-      if (filters.segmento.length && !filters.segmento.includes((client.segment || '').trim())) return false;
+      if (filters.segmento.length && !filters.segmento.includes((seg || '').trim())) return false;
       if (filters.porte.length && !filters.porte.includes((client.size || '').trim())) return false;
       if (filters.uf.length && !filters.uf.includes((client.uf || '').trim())) return false;
       if (filters.cidade.length && !filters.cidade.includes((client.city || '').trim())) return false;

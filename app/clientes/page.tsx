@@ -127,7 +127,7 @@ function ClientesPageComponent() {
   const filterOptionsForMultiSelect = useMemo<FilterOptions>(() => {
     const mapToOptions = (values?: string[]) => (values || []).map((value) => ({ label: value, value }));
     return {
-      segmento: mapToOptions(options.segmento),
+      segmento: mapToOptions((options as any)?.segmento ?? (options as any)?.organizacao_segmento),
       porte: mapToOptions(options.porte),
       uf: mapToOptions(options.uf),
       cidade: mapToOptions(options.cidade),
@@ -146,7 +146,8 @@ function ClientesPageComponent() {
     const normalizedQuery = query.trim().toLowerCase();
     if (!clients || !Array.isArray(clients)) return []; // Adiciona tratamento de erro
     return clients.filter((client) => {
-      const matchesSegment = !filters.segmento.length || filters.segmento.includes((client.segment || '').trim());
+      const seg = (client as any)?.segmento ?? (client as any)?.organizacao_segmento ?? '';
+      const matchesSegment = !filters.segmento.length || filters.segmento.includes((seg || '').trim());
       if (!matchesSegment) return false;
       const matchesSize = !filters.porte.length || filters.porte.includes((client.size || '').trim());
       if (!matchesSize) return false;

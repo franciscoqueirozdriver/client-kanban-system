@@ -56,7 +56,7 @@ export default function LeadDrawer({ data = [] as Lead[] }) {
         <div><span className="font-medium">E-mail:</span> {lead?.email ? <a className="underline break-words" href={`mailto:${lead.email}`}>{lead.email}</a> : "-"}</div>
         <div><span className="font-medium">LinkedIn:</span> {lead?.linkedin ? <a className="underline break-words" target="_blank" rel="noreferrer" href={lead.linkedin}>Abrir</a> : "-"}</div>
         <div><span className="font-medium">Cidade/UF:</span> {[lead?.cidade, lead?.uf].filter(Boolean).join(" / ") || "-"}</div>
-        <div><span className="font-medium">Segmento:</span> {lead?.segmento || "-"}</div>
+        <div><span className="font-medium">Segmento:</span> {(lead as any)?.segmento ?? (lead as any)?.organizacao_segmento || "-"}</div>
         <div><span className="font-medium">Etapa:</span> {lead?.etapa || "-"}</div>
         <div><span className="font-medium">Dono:</span> {lead?.owner || "-"}</div>
         <div><span className="font-medium">Valor:</span> {lead?.valor || "-"}</div>

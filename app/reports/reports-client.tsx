@@ -97,7 +97,7 @@ export default function ReportsClient({
   const filterOptions = useMemo<FilterOptions>(() => {
     const mapToOptions = (values: string[] = []) => values.map((value) => ({ label: value, value }));
     return {
-      segmento: mapToOptions(options.segmento),
+      segmento: mapToOptions((options as any)?.segmento ?? (options as any)?.organizacao_segmento),
       porte: mapToOptions(options.porte),
       uf: mapToOptions(options.uf),
       cidade: mapToOptions(options.cidade),
