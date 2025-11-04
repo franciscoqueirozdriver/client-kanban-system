@@ -11,6 +11,7 @@ import SummaryCard from '@/components/SummaryCard';
 import SpotterModal from '@/components/spotter/SpotterModal';
 import { useFilterState } from '@/hooks/useFilterState';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
+import { getSegmento, asArray } from '@/lib/ui/safe';
 
 interface ClientRecord {
   id: string;
@@ -118,14 +119,14 @@ function ClientesPageComponent() {
     async function loadClients() {
       const response = await fetch('/api/clientes');
       const json: ClientsResponse = await response.json();
-      setClients(json.clients);
+      setClients(asArray(json.clients));
       setOptions(json.filters || {});
     }
     loadClients();
   }, []);
 
   const filterOptionsForMultiSelect = useMemo<FilterOptions>(() => {
-    const mapToOptions = (values?: string[]) => (values || []).map((value) => ({ label: value, value }));
+    const mapToOptions = (values?: string[]) => asArray(values).map((value) => ({ label: value, value }));
     return {
       segmento: mapToOptions(options.segmento),
       porte: mapToOptions(options.porte),
@@ -144,23 +145,24 @@ function ClientesPageComponent() {
 
   const filteredClients = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!clients || !Array.isArray(clients)) return []; // Adiciona tratamento de erro
-    return clients.filter((client) => {
-      const matchesSegment = !filters.segmento.length || filters.segmento.includes((client.segment || '').trim());
+    const safeClients = asArray(clients);
+    if (safeClients.length === 0) return [];
+    return safeClients.filter((client) => {
+      const matchesSegment = !filters.segmento.length || asArray(filters.segmento).includes(getSegmento(client).trim());
       if (!matchesSegment) return false;
-      const matchesSize = !filters.porte.length || filters.porte.includes((client.size || '').trim());
+      const matchesSize = !filters.porte.length || asArray(filters.porte).includes((client.size || '').trim());
       if (!matchesSize) return false;
-      const matchesUf = !filters.uf.length || filters.uf.includes((client.uf || '').trim());
+      const matchesUf = !filters.uf.length || asArray(filters.uf).includes((client.uf || '').trim());
       if (!matchesUf) return false;
-      const matchesCity = !filters.cidade.length || filters.cidade.includes((client.city || '').trim());
+      const matchesCity = !filters.cidade.length || asArray(filters.cidade).includes((client.city || '').trim());
       if (!matchesCity) return false;
-      const matchesErp = !filters.erp.length || filters.erp.includes((client.erp as string || '').trim());
+      const matchesErp = !filters.erp.length || asArray(filters.erp).includes((client.erp as string || '').trim());
       if (!matchesErp) return false;
-      const matchesStage = !filters.fase.length || filters.fase.includes((client.status as string || '').trim());
+      const matchesStage = !filters.fase.length || asArray(filters.fase).includes((client.status as string || '').trim());
       if (!matchesStage) return false;
-      const matchesOrigin = !filters.origem.length || filters.origem.includes((client.fonte as string || '').trim());
+      const matchesOrigin = !filters.origem.length || asArray(filters.origem).includes((client.fonte as string || '').trim());
       if (!matchesOrigin) return false;
-      const matchesOwner = !filters.vendedor.length || filters.vendedor.includes((client.owner as string || '').trim());
+      const matchesOwner = !filters.vendedor.length || asArray(filters.vendedor).includes((client.owner as string || '').trim());
       if (!matchesOwner) return false;
 
       if (!normalizedQuery) {
@@ -168,16 +170,12 @@ function ClientesPageComponent() {
       }
 
       const baseName = (client.company || '').toLowerCase();
-      const contactMatch = Array.isArray(client.contacts)
-        ? client.contacts.some((contact: any) =>
+      const contactMatch = asArray(client.contacts).some((contact: any) =>
             [contact?.name, contact?.nome, contact?.email]
               .filter(Boolean)
               .some((value: string) => value.toLowerCase().includes(normalizedQuery))
-          )
-        : false;
-      const opportunityMatch = Array.isArray(client.opportunities)
-        ? client.opportunities.some((opportunity) => (opportunity || '').toLowerCase().includes(normalizedQuery))
-        : false;
+          );
+      const opportunityMatch = asArray(client.opportunities).some((opportunity) => (opportunity || '').toLowerCase().includes(normalizedQuery));
 
       return (
         baseName.includes(normalizedQuery) ||
@@ -191,11 +189,11 @@ function ClientesPageComponent() {
 
   const summary = useMemo(() => {
     const contacts = filteredClients.reduce((total, client) => {
-      const value = Array.isArray(client.contacts) ? client.contacts.length : 0;
+      const value = asArray(client.contacts).length;
       return total + value;
     }, 0);
 
-    const segments = new Set(filteredClients.map((client) => (client.segment || '').trim()).filter(Boolean));
+    const segments = new Set(filteredClients.map((client) => getSegmento(client).trim()).filter(Boolean));
     const states = new Set(filteredClients.map((client) => (client.uf || '').trim()).filter(Boolean));
 
     return {
@@ -291,7 +289,7 @@ function ClientesPageComponent() {
     fetch('/api/clientes')
       .then((res) => res.json())
       .then((json: ClientsResponse) => {
-        setClients(json.clients);
+        setClients(asArray(json.clients));
         setOptions(json.filters || {});
       });
   }

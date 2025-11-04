@@ -36,36 +36,36 @@ const normalizePhoneForSubmit = (rawPhone, rawDdi) => {
 };
 
 const fieldMap = {
-  "Nome do Lead": "nomeLead",
-  "Origem": "origem",
-  "Sub-Origem": "subOrigem",
-  "Mercado": "mercado",
-  "Produto": "produto",
-  "Site": "site",
-  "País": "pais",
-  "Estado": "estado",
-  "Cidade": "cidade",
-  "Logradouro": "logradouro",
-  "Número": "numero",
-  "Bairro": "bairro",
-  "Complemento": "complemento",
-  "CEP": "cep",
-  "DDI": "ddi",
-  "Telefones": "telefones",
-  "Observação": "observacao",
-  "CPF/CNPJ": "cpfCnpj",
-  "Nome Contato": "nomeContato",
-  "E-mail Contato": "emailContato",
-  "Cargo Contato": "cargoContato",
-  "DDI Contato": "ddiContato",
-  "Telefones Contato": "telefonesContato",
-  "Tipo do Serv. Comunicação": "tipoServComunicacao",
-  "ID do Serv. Comunicação": "idServComunicacao",
-  "Área": "area",
-  "Nome da Empresa": "nomeEmpresa",
-  "Etapa": "etapa",
-  "Funil": "funil",
-  "Email Pré-vendedor": "emailPrevendedor",
+  nome_do_lead: "nomeLead",
+  origem: "origem",
+  sub_origem: "subOrigem",
+  mercado: "mercado",
+  produto: "produto",
+  site: "site",
+  pais: "pais",
+  estado: "estado",
+  cidade: "cidade",
+  logradouro: "logradouro",
+  numero: "numero",
+  bairro: "bairro",
+  complemento: "complemento",
+  cep: "cep",
+  ddi: "ddi",
+  telefones: "telefones",
+  observacao: "observacao",
+  cpf_cnpj: "cpfCnpj",
+  nome_contato: "nomeContato",
+  e_mail_contato: "emailContato",
+  cargo_contato: "cargoContato",
+  ddi_contato: "ddiContato",
+  telefones_contato: "telefonesContato",
+  tipo_do_serv_comunicacao: "tipoServComunicacao",
+  id_do_serv_comunicacao: "idServComunicacao",
+  area: "area",
+  nome_da_empresa: "nomeEmpresa",
+  etapa: "etapa",
+  funil: "funil",
+  email_prevendedor: "emailPrevendedor",
 };
 
 export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSubmitting = false }) {
@@ -182,7 +182,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       }
 
       const client = lead ?? undefined;
-      const initialMarket = client?.segment ?? "";
+      const initialMarket = client?.organizacao_segmento ?? "";
       const foundMarket = fetchedMercados.find((m) => m.toLowerCase() === initialMarket.toLowerCase());
       const selectedMarket = foundMarket || "N/A";
 
@@ -195,37 +195,37 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         firstContact?.normalizedPhones?.join(";") || client?.normalizedPhones?.join(";") || "";
 
       const initialFormState = {
-        [fieldMap["Nome do Lead"]]: client?.company ?? "Lead sem título",
-        [fieldMap["Origem"]]: "Lista Francisco",
-        [fieldMap["Mercado"]]: selectedMarket,
-        [fieldMap["Produto"]]: client?.produto ?? "",
-        [fieldMap["Telefones"]]: telefonesEmpresa,
-        [fieldMap["Área"]]: Array.isArray(client?.opportunities) && client?.opportunities.length
+        [fieldMap["nome_do_lead"]]: client?.nome_da_empresa ?? "Lead sem título",
+        [fieldMap["origem"]]: "Lista Francisco",
+        [fieldMap["mercado"]]: selectedMarket,
+        [fieldMap["produto"]]: client?.produto ?? "",
+        [fieldMap["telefones"]]: telefonesEmpresa,
+        [fieldMap["area"]]: Array.isArray(client?.opportunities) && client?.opportunities.length
           ? client.opportunities.join(";")
-          : client?.segment ?? "Geral",
-        [fieldMap["Nome da Empresa"]]: client?.company ?? "",
-        [fieldMap["Nome Contato"]]: firstContact?.name ?? firstContact?.nome ?? "",
-        [fieldMap["E-mail Contato"]]:
+          : client?.organizacao_segmento ?? "Geral",
+        [fieldMap["nome_da_empresa"]]: client?.nome_da_empresa ?? "",
+        [fieldMap["nome_contato"]]: firstContact?.name ?? firstContact?.nome ?? "",
+        [fieldMap["e_mail_contato"]]:
           firstContact?.email?.split(";")[0].trim() ?? process.env.NEXT_PUBLIC_DEFAULT_CONTACT_EMAIL ?? "",
-        [fieldMap["Telefones Contato"]]: firstContact?.normalizedPhones?.join(";") ?? "",
-        [fieldMap["Cargo Contato"]]: firstContact?.role ?? firstContact?.cargo ?? "",
-        [fieldMap["CPF/CNPJ"]]: client?.document ?? client?.cnpj ?? client?.cpf ?? "",
-        [fieldMap["Estado"]]: client?.uf ?? "",
-        [fieldMap["Cidade"]]: client?.city ?? "",
-        [fieldMap["País"]]: client?.country ?? (client?.city ? "Brasil" : ""),
-        [fieldMap["DDI"]]: "55",
-        [fieldMap["DDI Contato"]]: "55",
-        [fieldMap["Site"]]: client?.site ?? "",
-        [fieldMap["Sub-Origem"]]: client?.subOrigem ?? "",
-        [fieldMap["Observação"]]: client?.observacao ?? client?.opportunitiesDescription ?? "",
-        [fieldMap["Logradouro"]]: client?.logradouro ?? "",
-        [fieldMap["Número"]]: client?.numero ?? "",
-        [fieldMap["Bairro"]]: client?.bairro ?? "",
-        [fieldMap["Complemento"]]: client?.complemento ?? "",
-        [fieldMap["CEP"]]: client?.cep ?? "",
-        [fieldMap["Tipo do Serv. Comunicação"]]: client?.tipoServComunicacao ?? "",
-        [fieldMap["ID do Serv. Comunicação"]]: client?.idServComunicacao ?? "",
-        [fieldMap["Email Pré-vendedor"]]: client?.emailPrevendedor ?? "",
+        [fieldMap["telefones_contato"]]: firstContact?.normalizedPhones?.join(";") ?? "",
+        [fieldMap["cargo_contato"]]: firstContact?.role ?? firstContact?.cargo ?? "",
+        [fieldMap["cpf_cnpj"]]: client?.cpf_cnpj ?? "",
+        [fieldMap["estado"]]: client?.estado_empresa ?? "",
+        [fieldMap["cidade"]]: client?.cidade_empresa ?? "",
+        [fieldMap["pais"]]: client?.pais_empresa ?? (client?.cidade_empresa ? "Brasil" : ""),
+        [fieldMap["ddi"]]: "55",
+        [fieldMap["ddi_contato"]]: "55",
+        [fieldMap["site"]]: client?.site_empresa ?? "",
+        [fieldMap["sub_origem"]]: client?.sub_origem ?? "",
+        [fieldMap["observacao"]]: client?.observacao_empresa ?? client?.opportunitiesDescription ?? "",
+        [fieldMap["logradouro"]]: client?.logradouro_empresa ?? "",
+        [fieldMap["numero"]]: client?.numero_empresa ?? "",
+        [fieldMap["bairro"]]: client?.bairro_empresa ?? "",
+        [fieldMap["complemento"]]: client?.complemento_empresa ?? "",
+        [fieldMap["cep"]]: client?.cep_empresa ?? "",
+        [fieldMap["tipo_do_serv_comunicacao"]]: client?.tipo_do_serv_comunicacao ?? "",
+        [fieldMap["id_do_serv_comunicacao"]]: client?.id_do_serv_comunicacao ?? "",
+        [fieldMap["email_prevendedor"]]: client?.email_prevendedor ?? "",
       };
 
       const fullForm = Object.values(fieldMap).reduce((acc, key) => {
@@ -274,7 +274,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   };
 
   const handleEnrich = () => {
-    const companyName = formData[fieldMap["Nome da Empresa"]];
+    const companyName = formData[fieldMap["nome_da_empresa"]];
     if (!companyName) {
       toast.warning("Por favor, preencha o nome da empresa para enriquecer.");
       return;
@@ -283,7 +283,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   };
 
   const handleEnrichConfirm = async () => {
-    const companyName = formData[fieldMap["Nome da Empresa"]];
+    const companyName = formData[fieldMap["nome_da_empresa"]];
     setIsEnrichConfirmOpen(false);
     if (!companyName) return;
 
@@ -309,10 +309,10 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
             next[formKey] = suggestion[layoutKey];
           }
         }
-        if (suggestion.Mercado) {
-          const foundMarket = mercadosList.find((m) => m.toLowerCase() === suggestion.Mercado.toLowerCase());
+        if (suggestion.mercado) {
+          const foundMarket = mercadosList.find((m) => m.toLowerCase() === suggestion.mercado.toLowerCase());
           if (foundMarket) {
-            next[fieldMap["Mercado"]] = foundMarket;
+            next[fieldMap["mercado"]] = foundMarket;
           }
         }
         return next;
@@ -366,7 +366,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
       return;
     }
 
-    const rawPhones = readValue("Telefones")
+    const rawPhones = readValue("telefones")
       .split(';')
       .map((item) => item.trim())
       .filter(Boolean);
@@ -374,48 +374,47 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     const secondaryPhone = normalizePhoneForSubmit(rawPhones[1]);
 
     const payload = {
-      nomeLead: readTrimmedValue("Nome do Lead"),
-      origem: readTrimmedValue("Origem"),
-      mercado: readTrimmedValue("Mercado"),
-      pais: readTrimmedValue("País"),
-      estado: readTrimmedValue("Estado"),
-      cidade: readTrimmedValue("Cidade"),
-      telefones: readValue("Telefones"),
-      nomeContato: readTrimmedValue("Nome Contato"),
-      telefonesContato: readValue("Telefones Contato"),
-      emailContato: readTrimmedValue("E-mail Contato"),
-      tipoServCom: readTrimmedValue("Tipo do Serv. Comunicação"),
-      idServCom: readTrimmedValue("ID do Serv. Comunicação"),
-      area: readValue("Área"),
+      nomeLead: readTrimmedValue("nome_do_lead"),
+      origem: readTrimmedValue("origem"),
+      mercado: readTrimmedValue("mercado"),
+      pais: readTrimmedValue("pais"),
+      estado: readTrimmedValue("estado"),
+      cidade: readTrimmedValue("cidade"),
+      telefones: readValue("telefones"),
+      nomeContato: readTrimmedValue("nome_contato"),
+      telefonesContato: readValue("telefones_contato"),
+      emailContato: readTrimmedValue("e_mail_contato"),
+      tipoServCom: readTrimmedValue("tipo_do_serv_comunicacao"),
+      idServCom: readTrimmedValue("id_do_serv_comunicacao"),
+      area: readValue("area"),
       funilId: numericFunnelId,
-      funnelId: numericFunnelId,
       stage: trimmedStageName,
       etapaNome: trimmedStageName,
-      address: readTrimmedValue("Logradouro"),
-      addressNumber: readTrimmedValue("Número"),
-      addressComplement: readTrimmedValue("Complemento"),
-      neighborhood: readTrimmedValue("Bairro"),
-      zipcode: readTrimmedValue("CEP"),
-      subSource: valueOrUndefined("Sub-Origem"),
-      subOrigem: valueOrUndefined("Sub-Origem"),
-      leadProduct: valueOrUndefined("Produto"),
-      produto: valueOrUndefined("Produto"),
-      website: valueOrUndefined("Site"),
-      site: valueOrUndefined("Site"),
-      cpfcnpj: valueOrUndefined("CPF/CNPJ"),
-      observacao: valueOrUndefined("Observação"),
-      description: valueOrUndefined("Observação"),
-      emailPrevendedor: valueOrUndefined("Email Pré-vendedor"),
-      nomeEmpresa: valueOrUndefined("Nome da Empresa"),
-      cargoContato: valueOrUndefined("Cargo Contato"),
-      ddiContato: valueOrUndefined("DDI Contato"),
-      logradouro: valueOrUndefined("Logradouro"),
-      numero: valueOrUndefined("Número"),
-      complemento: valueOrUndefined("Complemento"),
-      bairro: valueOrUndefined("Bairro"),
-      cep: valueOrUndefined("CEP"),
-      tipoServComunicacao: readTrimmedValue("Tipo do Serv. Comunicação"),
-      idServComunicacao: readTrimmedValue("ID do Serv. Comunicação"),
+      address: readTrimmedValue("logradouro"),
+      addressNumber: readTrimmedValue("numero"),
+      addressComplement: readTrimmedValue("complemento"),
+      neighborhood: readTrimmedValue("bairro"),
+      zipcode: readTrimmedValue("cep"),
+      subSource: valueOrUndefined("sub_origem"),
+      subOrigem: valueOrUndefined("sub_origem"),
+      leadProduct: valueOrUndefined("produto"),
+      produto: valueOrUndefined("produto"),
+      website: valueOrUndefined("site"),
+      site: valueOrUndefined("site"),
+      cpfcnpj: valueOrUndefined("cpf_cnpj"),
+      observacao: valueOrUndefined("observacao"),
+      description: valueOrUndefined("observacao"),
+      emailPrevendedor: valueOrUndefined("email_prevendedor"),
+      nomeEmpresa: valueOrUndefined("nome_da_empresa"),
+      cargoContato: valueOrUndefined("cargo_contato"),
+      ddiContato: valueOrUndefined("ddi_contato"),
+      logradouro: valueOrUndefined("logradouro"),
+      numero: valueOrUndefined("numero"),
+      complemento: valueOrUndefined("complemento"),
+      bairro: valueOrUndefined("bairro"),
+      cep: valueOrUndefined("cep"),
+      tipoServComunicacao: readTrimmedValue("tipo_do_serv_comunicacao"),
+      idServComunicacao: readTrimmedValue("id_do_serv_comunicacao"),
       ddiPhone: primaryPhone.phone ? primaryPhone.ddi : undefined,
       phone: primaryPhone.phone || undefined,
       ddiPhone2: secondaryPhone.phone ? secondaryPhone.ddi : undefined,
@@ -428,13 +427,11 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         throw new Error("Função de envio ao Spotter não definida.");
       }
       await onSubmit(payload);
-      // Toast verde apenas em envio bem-sucedido ao Spotter
       toast.success("Enviado ao Spotter com sucesso!", {
         theme: "colored",
         style: { background: "#16a34a", color: "#ffffff" },
       });
 
-      // Disparo fire-and-forget para registrar cor na planilha
       try {
         const cardId = lead?.id ?? null;
         fetch("/api/sheets/cor-card", {
@@ -443,7 +440,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
           body: JSON.stringify({ cardId, cor: "purple" }),
         }).catch(() => {});
       } catch (_) {
-        // Ignora falhas no disparo para não afetar UX de sucesso
       }
       onOpenChange?.(false);
     } catch (err) {
@@ -501,7 +497,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
     const baseClasses =
       "w-full rounded-xl border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
     
-    // Remove native HTML validation attributes
     const { required, type, ...cleanProps } = props;
     const showRequired = required || props.required;
     
@@ -532,7 +527,6 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
 
   const renderSelect = (label, key, options, props = {}) => {
     const errorMessage = formErrors?.[key];
-    // Remove native HTML validation attributes
     const { placeholder, className, required, ...selectProps } = props;
     const showRequired = required;
     const baseClasses =
@@ -579,8 +573,8 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
   const hasStagesForFunnel = stageList.length > 0;
 
   const modalTitle = useMemo(() => {
-    return lead?.company ? `Enviar ${lead.company} ao Spotter` : "Enviar ao Spotter";
-  }, [lead?.company]);
+    return lead?.nome_da_empresa ? `Enviar ${lead.nome_da_empresa} ao Spotter` : "Enviar ao Spotter";
+  }, [lead?.nome_da_empresa]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -613,24 +607,24 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
         >
           <div className="flex-1 overflow-y-auto px-6 py-5">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {renderInput("Nome do Lead", fieldMap["Nome do Lead"], { required: true })}
-              {renderInput("Nome da Empresa", fieldMap["Nome da Empresa"])}
+              {renderInput("Nome do Lead", fieldMap["nome_do_lead"], { required: true })}
+              {renderInput("Nome da Empresa", fieldMap["nome_da_empresa"])}
               <div>
-                <label htmlFor={fieldMap["CPF/CNPJ"]} className="mb-1 block text-sm font-medium text-foreground">
+                <label htmlFor={fieldMap["cpf_cnpj"]} className="mb-1 block text-sm font-medium text-foreground">
                   CPF/CNPJ
                 </label>
                 <div className="flex items-center gap-2">
                   <input
-                    id={fieldMap["CPF/CNPJ"]}
-                    name={fieldMap["CPF/CNPJ"]}
-                    value={formData[fieldMap["CPF/CNPJ"]] ?? ""}
+                    id={fieldMap["cpf_cnpj"]}
+                    name={fieldMap["cpf_cnpj"]}
+                    value={formData[fieldMap["cpf_cnpj"]] ?? ""}
                     onChange={handleChange}
                     className="flex-1 rounded border border-border bg-background p-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   />
                   <button
                     type="button"
                     onClick={() => {
-                      const query = encodeURIComponent(`${formData[fieldMap["Nome da Empresa"]]} CNPJ`);
+                      const query = encodeURIComponent(`${formData[fieldMap["nome_da_empresa"]]} CNPJ`);
                       window.open(`https://www.google.com/search?q=${query}`, "_blank");
                     }}
                     className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/60 text-sm text-muted-foreground transition hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -641,14 +635,14 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
                   </button>
                 </div>
               </div>
-              {renderInput("Site", fieldMap["Site"], { type: "url" })}
-              {renderInput("Sub-Origem", fieldMap["Sub-Origem"])}
-              {renderSelect("Mercado", fieldMap["Mercado"], mercadosList, { required: true, value: formData[fieldMap["Mercado"]] ?? "", onChange: handleChange })}
-              {renderSelect("Produto", fieldMap["Produto"], produtosList, { value: formData[fieldMap["Produto"]] ?? "", onChange: handleChange })}
-              {renderSelect("Email Pré-vendedor", fieldMap["Email Pré-vendedor"], prevendedoresList, { value: formData[fieldMap["Email Pré-vendedor"]] ?? "", onChange: handleChange })}
-              {renderInput("Área", fieldMap["Área"], { required: true, placeholder: "Separar múltiplas por ;" })}
-              {renderInput("Telefones", fieldMap["Telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
-              {renderInput("Observação", fieldMap["Observação"])}
+              {renderInput("Site", fieldMap["site"], { type: "url" })}
+              {renderInput("Sub-Origem", fieldMap["sub_origem"])}
+              {renderSelect("Mercado", fieldMap["mercado"], mercadosList, { required: true, value: formData[fieldMap["mercado"]] ?? "", onChange: handleChange })}
+              {renderSelect("Produto", fieldMap["produto"], produtosList, { value: formData[fieldMap["produto"]] ?? "", onChange: handleChange })}
+              {renderSelect("Email Pré-vendedor", fieldMap["email_prevendedor"], prevendedoresList, { value: formData[fieldMap["email_prevendedor"]] ?? "", onChange: handleChange })}
+              {renderInput("Área", fieldMap["area"], { required: true, placeholder: "Separar múltiplas por ;" })}
+              {renderInput("Telefones", fieldMap["telefones"], { required: true, placeholder: "Separar múltiplos por ;" })}
+              {renderInput("Observação", fieldMap["observacao"])}
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium">Funil{hasFunnels ? ' *' : ''}</label>
                 <select
@@ -695,26 +689,26 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               </div>
 
               <h3 className="col-span-full border-t border-border/60 pt-4 text-lg font-semibold text-foreground">Endereço</h3>
-              {renderInput("País", fieldMap["País"])}
-              {renderInput("Estado", fieldMap["Estado"])}
-              {renderInput("Cidade", fieldMap["Cidade"])}
-              {renderInput("Logradouro", fieldMap["Logradouro"])}
-              {renderInput("Número", fieldMap["Número"])}
-              {renderInput("Bairro", fieldMap["Bairro"])}
-              {renderInput("Complemento", fieldMap["Complemento"])}
-              {renderInput("CEP", fieldMap["CEP"])}
+              {renderInput("País", fieldMap["pais"])}
+              {renderInput("Estado", fieldMap["estado"])}
+              {renderInput("Cidade", fieldMap["cidade"])}
+              {renderInput("Logradouro", fieldMap["logradouro"])}
+              {renderInput("Número", fieldMap["numero"])}
+              {renderInput("Bairro", fieldMap["bairro"])}
+              {renderInput("Complemento", fieldMap["complemento"])}
+              {renderInput("CEP", fieldMap["cep"])}
 
               <h3 className="col-span-full border-t border-border/60 pt-4 text-lg font-semibold text-foreground">Contato</h3>
-              {renderInput("Nome Contato", fieldMap["Nome Contato"])}
-              {renderInput("Cargo Contato", fieldMap["Cargo Contato"])}
-              {renderInput("E-mail Contato", fieldMap["E-mail Contato"], { type: "email" })}
-              {renderInput("Telefones Contato", fieldMap["Telefones Contato"], {
+              {renderInput("Nome Contato", fieldMap["nome_contato"])}
+              {renderInput("Cargo Contato", fieldMap["cargo_contato"])}
+              {renderInput("E-mail Contato", fieldMap["e_mail_contato"], { type: "email" })}
+              {renderInput("Telefones Contato", fieldMap["telefones_contato"], {
                 placeholder: "Separar múltiplos por ;",
               })}
 
               <h3 className="col-span-full border-t border-border/60 pt-4 text-lg font-semibold text-foreground">Outros</h3>
-              {renderInput("Tipo do Serv. Comunicação", fieldMap["Tipo do Serv. Comunicação"])}
-              {renderInput("ID do Serv. Comunicação", fieldMap["ID do Serv. Comunicação"])}
+              {renderInput("Tipo do Serv. Comunicação", fieldMap["tipo_do_serv_comunicacao"])}
+              {renderInput("ID do Serv. Comunicação", fieldMap["id_do_serv_comunicacao"])}
             </div>
           </div>
 
@@ -765,7 +759,7 @@ export default function SpotterModal({ open, onOpenChange, lead, onSubmit, isSub
               <h2 className="text-lg font-semibold text-foreground">Confirmar Enriquecimento</h2>
               <p className="mt-3 text-sm text-muted-foreground">
                 Deseja buscar e atualizar os dados para a empresa
-                <span className="font-semibold"> {formData[fieldMap["Nome da Empresa"]] || ""}</span>?
+                <span className="font-semibold"> {formData[fieldMap["nome_da_empresa"]] || ""}</span>?
               </p>
               <div className="mt-6 flex justify-end gap-3">
                 <button

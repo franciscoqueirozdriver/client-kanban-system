@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Lead } from "@/types/lead";
 import BulkActions from "./BulkActions";
+import { getSegmento, asArray } from "@/lib/ui/safe";
 
 const ETAPAS = [
   "Lead Selecionado",
@@ -87,7 +88,7 @@ export default function LeadsTable({
   }, []);
 
   const filtered: Lead[] = useMemo(() => {
-    const result = data.filter((lead) => {
+    const result = asArray(data).filter((lead) => {
       if (stage !== "all" && stage && lead.etapa !== stage) {
         return false;
       }
@@ -95,7 +96,7 @@ export default function LeadsTable({
       if (!query) return true;
 
       const q = query.toLowerCase();
-      return [lead.empresa, lead.contato, lead.cidade, lead.uf, lead.segmento, lead.etapa, lead.owner, lead.fonte]
+      return [lead.empresa, lead.contato, lead.cidade, lead.uf, getSegmento(lead), lead.etapa, lead.owner, lead.fonte]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
     });
@@ -217,8 +218,8 @@ export default function LeadsTable({
                     </button>
                   </td>
                   <td className="px-4 align-top text-muted-foreground">{r.contato || "-"}</td>
-                  <td className="px-4 align-top text-muted-foreground">{[r.cidade, r.uf].filter(Boolean).join(" / ") || "-"}</td>
-                  <td className="px-4 align-top text-muted-foreground">{r.segmento || "-"}</td>
+                  <td className="px-4 align-top text-muted-foreground">{asArray([r.cidade, r.uf]).filter(Boolean).join(" / ") || "-"}</td>
+                  <td className="px-4 align-top text-muted-foreground">{getSegmento(r)}</td>
                   <td className="px-4 align-top">
                     <select
                       className="w-full rounded-lg border border-border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"

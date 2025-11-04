@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import { appendSheetData } from '../../../../lib/googleSheets.js';
-import { getSheetData } from '../../../../lib/googleSheets.js';
 
 const SHEET_NAME = 'layout_importacao_empresas';
 
 const HEADERS = [
-  'Cliente_ID', 'Nome da Empresa', 'Site Empresa', 'País Empresa', 'Estado Empresa',
-  'Cidade Empresa', 'Logradouro Empresa', 'Numero Empresa', 'Bairro Empresa',
-  'Complemento Empresa', 'CEP Empresa', 'CNPJ Empresa', 'DDI Empresa',
-  'Telefones Empresa', 'Observação Empresa'
+  'cliente_id', 'nome_da_empresa', 'site_empresa', 'pais_empresa', 'estado_empresa',
+  'cidade_empresa', 'logradouro_empresa', 'numero_empresa', 'bairro_empresa',
+  'complemento_empresa', 'cep_empresa', 'cnpj_empresa', 'ddi_empresa',
+  'telefones_empresa', 'observacao_empresa'
 ];
 
 function generateClienteId() {
@@ -22,16 +21,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Basic validation
-    if (!body['Nome da Empresa'] || !body['CNPJ Empresa']) {
+    if (!body['nome_da_empresa'] || !body['cnpj_empresa']) {
       return NextResponse.json({ ok: false, message: 'Nome da Empresa e CNPJ são obrigatórios.' }, { status: 400 });
     }
 
-    // Generate a new Cliente_ID
     const newId = generateClienteId();
-    const newRowObject = { ...body, Cliente_ID: newId };
+    const newRowObject = { ...body, cliente_id: newId };
 
-    // Ensure the row has all headers in the correct order
     const rowToAppend = HEADERS.map(header => newRowObject[header] ?? '');
 
     const spreadsheetId = process.env.SPREADSHEET_ID;

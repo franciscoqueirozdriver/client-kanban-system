@@ -1,15 +1,15 @@
-// components/reportUtils.js
+import { asArray } from '@/lib/ui/safe';
 
 export function normalizePhones(row, idx) {
-  const val = (i) => (i >= 0 ? String(row[i] || '').trim() : '');
-  const existing = val(idx.normalizado);
+  const val = (key) => (row[key] ? String(row[key] || '').trim() : '');
+  const existing = val('telefone_normalizado');
   const rawList = [
-    val(idx.phoneWork),
-    val(idx.phoneHome),
-    val(idx.phoneMobile),
-    val(idx.phoneOther),
-    val(idx.tel),
-    val(idx.cel),
+    val('pessoa_phone_work'),
+    val('pessoa_phone_home'),
+    val('pessoa_phone_mobile'),
+    val('pessoa_phone_other'),
+    val('pessoa_telefone'),
+    val('pessoa_celular'),
   ];
 
   if (existing) {
@@ -39,33 +39,6 @@ export function normalizePhones(row, idx) {
 }
 
 export function buildReport(rows) {
-  const [header, ...data] = rows;
-  const idx = {
-    org: header.indexOf('Organização - Nome'),
-    segmento: header.indexOf('Organização - Segmento'),
-    tamanho: header.indexOf('Organização - Tamanho da empresa'),
-    contato: header.indexOf('Negócio - Pessoa de contato'),
-    cargo: header.indexOf('Pessoa - Cargo'),
-    phoneWork: header.indexOf('Pessoa - Phone - Work'),
-    phoneHome: header.indexOf('Pessoa - Phone - Home'),
-    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
-    phoneOther: header.indexOf('Pessoa - Phone - Other'),
-    tel: header.indexOf('Pessoa - Telefone'),
-    cel: header.indexOf('Pessoa - Celular'),
-    normalizado: header.indexOf('Telefone Normalizado'),
-    email: header.indexOf('Pessoa - Email - Work'),
-    linkedin: header.indexOf('Pessoa - End. Linkedin'),
-    uf: header.indexOf('uf'),
-    cidade: header.indexOf('cidade_estimada'),
-    impresso: header.indexOf('Impresso_Lista'),
-  };
-
-  const normalizePhone = (v) => String(v || '').trim();
-
-  if (idx.tel === -1 || idx.cel === -1) {
-    console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
-  }
-
   const filters = {
     segmento: new Set(),
     porte: new Set(),
@@ -74,18 +47,18 @@ export function buildReport(rows) {
   };
 
   const map = new Map();
-  data.forEach((row, i) => {
-    const company = row[idx.org];
+  asArray(rows).forEach((row, i) => {
+    const company = row.organizacao_nome;
     if (!company) return;
-    if (row[idx.impresso]) return;
+    if (row.impresso_lista) return;
 
     if (!map.has(company)) {
       map.set(company, {
         company,
-        segment: row[idx.segmento] || '',
-        size: row[idx.tamanho] || '',
-        uf: row[idx.uf] || '',
-        cidade: row[idx.cidade] || '',
+        segment: row.organizacao_segmento || '',
+        size: row.organizacao_tamanho_da_empresa || '',
+        uf: row.uf || '',
+        cidade: row.cidade_estimada || '',
         contacts: [],
         rows: [],
       });
@@ -93,27 +66,27 @@ export function buildReport(rows) {
     const item = map.get(company);
     item.rows.push(i + 2);
 
-    const telefone = normalizePhone(row[idx.tel]);
-    const celular = normalizePhone(row[idx.cel]);
-    const normalizedPhones = normalizePhones(row, idx);
+    const telefone = String(row.pessoa_telefone || '').trim();
+    const celular = String(row.pessoa_celular || '').trim();
+    const normalizedPhones = normalizePhones(row);
     if (normalizedPhones.length === 0) {
       console.warn('Contato sem telefone', { row: i + 2, company });
     }
 
     item.contacts.push({
-      nome: (row[idx.contato] || '').trim(),
-      cargo: (row[idx.cargo] || '').trim(),
+      nome: (row.negocio_pessoa_de_contato || '').trim(),
+      cargo: (row.pessoa_cargo || '').trim(),
       telefone,
       celular,
       normalizedPhones,
-      email: (row[idx.email] || '').trim(),
-      linkedin: (row[idx.linkedin] || '').trim(),
+      email: (row.pessoa_email_work || '').trim(),
+      linkedin: (row.pessoa_end_linkedin || '').trim(),
     });
 
-    if (row[idx.segmento]) filters.segmento.add(row[idx.segmento]);
-    if (row[idx.tamanho]) filters.porte.add(row[idx.tamanho]);
-    if (row[idx.uf]) filters.uf.add(row[idx.uf]);
-    if (row[idx.cidade]) filters.cidade.add(row[idx.cidade]);
+    if (row.organizacao_segmento) filters.segmento.add(row.organizacao_segmento);
+    if (row.organizacao_tamanho_da_empresa) filters.porte.add(row.organizacao_tamanho_da_empresa);
+    if (row.uf) filters.uf.add(row.uf);
+    if (row.cidade_estimada) filters.cidade.add(row.cidade_estimada);
   });
 
   return { map, filters };
@@ -131,7 +104,7 @@ export function mapToRows(map, query = {}, max = Infinity) {
 
     if (result.length >= max) return;
 
-    if (item.contacts.length === 0) {
+    if (asArray(item.contacts).length === 0) {
       result.push({
         company: item.company,
         segment: item.segment,
@@ -145,7 +118,7 @@ export function mapToRows(map, query = {}, max = Infinity) {
         linkedin: '',
       });
     } else {
-      item.contacts.forEach((c) => {
+      asArray(item.contacts).forEach((c) => {
         if (result.length >= max) return;
         result.push({
           company: item.company,
@@ -157,11 +130,11 @@ export function mapToRows(map, query = {}, max = Infinity) {
           celular: c.celular,
           email: c.email,
           linkedin: c.linkedin,
-          normalizedPhones: c.normalizedPhones || [],
+          normalizedPhones: asArray(c.normalizedPhones) || [],
         });
       });
     }
-    item.rows.forEach((r) => toMark.add(r));
+    asArray(item.rows).forEach((r) => toMark.add(r));
   });
 
   return { rows: result, toMark };
@@ -172,4 +145,3 @@ export async function markPrintedRows(updateRowFn, rows) {
     Array.from(rows).map((rowNum) => updateRowFn(rowNum, { impresso_lista: 'Em Lista' }))
   );
 }
-

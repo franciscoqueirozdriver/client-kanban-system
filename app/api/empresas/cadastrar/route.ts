@@ -4,43 +4,34 @@ import {
   findByCnpj,
   findByName,
   appendToSheets,
-  updateInSheets, // Import the new update function
+  updateInSheets,
 } from '../../../../lib/googleSheets';
 import { normalizeCNPJ, isValidCNPJ } from '@/src/utils/cnpj';
-
-// --- API Route Handler ---
 
 export async function POST(req: Request) {
   try {
     const payload = await req.json();
-    const { Cliente_ID, Empresa, Contato, Comercial } = payload;
+    const { cliente_id, empresa, contato, comercial } = payload;
 
-    // 1. Validation
-    if (!Empresa?.Nome_da_Empresa) {
+    if (!empresa?.nome_da_empresa) {
       return NextResponse.json({ message: 'O "Nome da Empresa" é obrigatório.' }, { status: 400 });
     }
 
-    const normalizedCnpj = normalizeCNPJ(Empresa.CNPJ_Empresa);
-    if (Empresa.CNPJ_Empresa && !isValidCNPJ(normalizedCnpj)) {
+    const normalizedCnpj = normalizeCNPJ(empresa.cnpj_empresa);
+    if (empresa.cnpj_empresa && !isValidCNPJ(normalizedCnpj)) {
       return NextResponse.json({ message: 'O CNPJ informado é inválido.' }, { status: 400 });
     }
 
-    // --- UPDATE FLOW ---
-    if (Cliente_ID) {
-      // In update mode, we assume the user has confirmed and we just save the data.
-      // A more robust check could re-verify the CNPJ isn't being changed to a conflicting one, but we'll keep it simple.
-      await updateInSheets(Cliente_ID, payload);
+    if (cliente_id) {
+      await updateInSheets(cliente_id, payload);
       const savedCompany = {
-          Cliente_ID,
-          Nome_da_Empresa: Empresa.Nome_da_Empresa,
-          CNPJ_Empresa: normalizedCnpj,
+          cliente_id,
+          nome_da_empresa: empresa.nome_da_empresa,
+          cnpj_empresa: normalizedCnpj,
       };
       return NextResponse.json({ ok: true, company: savedCompany }, { status: 200 });
     }
 
-    // --- CREATE FLOW ---
-
-    // 2. Duplicate & Enrichment Check
     if (normalizedCnpj) {
       const existingByCnpj = await findByCnpj(normalizedCnpj);
       if (existingByCnpj) {
@@ -51,8 +42,8 @@ export async function POST(req: Request) {
       }
     }
 
-    const existingByName = await findByName(Empresa.Nome_da_Empresa);
-    if (existingByName && !normalizeCNPJ(existingByName['CNPJ Empresa'])) {
+    const existingByName = await findByName(empresa.nome_da_empresa);
+    if (existingByName && !normalizeCNPJ(existingByName['cnpj_empresa'])) {
        return NextResponse.json(
         {
             message: 'Encontramos uma empresa com este nome mas sem CNPJ. Deseja enriquecer o cadastro existente?',
@@ -63,18 +54,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3. Generate New ID
     const newClienteId = await getNextClienteId();
-    const finalPayload = { ...payload, Cliente_ID: newClienteId };
+    const finalPayload = { ...payload, cliente_id: newClienteId };
 
-    // 4. Write to Sheets
-    await appendToSheets('Sheet1', finalPayload);
+    await appendToSheets('sheet1', finalPayload);
 
-    // 5. Return Success
     const savedCompany = {
-        Cliente_ID: newClienteId,
-        Nome_da_Empresa: Empresa.Nome_da_Empresa,
-        CNPJ_Empresa: normalizedCnpj,
+        cliente_id: newClienteId,
+        nome_da_empresa: empresa.nome_da_empresa,
+        cnpj_empresa: normalizedCnpj,
     };
     return NextResponse.json({ ok: true, company: savedCompany }, { status: 201 });
 

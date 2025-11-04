@@ -1,0 +1,37 @@
+import { Cliente } from '@/types/cliente';
+
+export function mapClienteRow(row: Record<string, unknown>): Partial<Cliente> {
+  return {
+    cliente_id: String(row['cliente_id'] ?? ''),
+    nome_da_empresa: String(row['nome_da_empresa'] || row['Nome do Lead'] || ''),
+    empresa_id: String(row['empresa_id'] ?? ''),
+    organizacao_segmento: String(row['organizacao_segmento'] ?? ''),
+    organizacao_tamanho_da_empresa: String(row['organizacao_tamanho_da_empresa'] ?? ''),
+    organizacao_nome: String(row['organizacao_nome'] ?? ''),
+    pessoa_nome: String(row['pessoa_nome'] ?? ''),
+    pessoa_cargo: String(row['pessoa_cargo'] ?? ''),
+    pessoa_email_work: String(row['pessoa_email_work'] || row['pessoa_e_mail_1'] || ''),
+    pessoa_email_home: String(row['pessoa_email_home'] || row['pessoa_e_mail_2'] || ''),
+    pessoa_email_other: String(row['pessoa_email_other'] || row['pessoa_e_mail_3'] || ''),
+    pessoa_phone_work: String(row['pessoa_phone_work'] ?? ''),
+    pessoa_phone_home: String(row['pessoa_phone_home'] ?? ''),
+    pessoa_phone_mobile: String(row['pessoa_phone_mobile'] ?? ''),
+    pessoa_phone_other: String(row['pessoa_phone_other'] ?? ''),
+    pessoa_celular: String(row['pessoa_celular'] ?? ''),
+    pessoa_telefone: String(row['pessoa_telefone'] ?? ''),
+    pessoa_end_linkedin: String(row['pessoa_end_linkedin'] ?? ''),
+    status_kanban: String(row['status_kanban'] ?? ''),
+    data_ultima_movimentacao: String(row['data_ultima_movimentacao'] ?? ''),
+    cor_card: String(row['cor_card'] ?? ''),
+    telefone_normalizado: String(row['telefone_normalizado'] ?? ''),
+    impresso_lista: String(row['impresso_lista'] ?? ''),
+    negocio_titulo: String(row['negocio_titulo'] ?? ''),
+    negocio_valor: String(row['negocio_valor'] ?? ''),
+    negocio_organizacao: String(row['negocio_organizacao'] ?? ''),
+    negocio_pessoa_de_contato: String(row['negocio_pessoa_de_contato'] ?? ''),
+    negocio_data_de_fechamento_esperada: String(row['negocio_data_de_fechamento_esperada'] ?? ''),
+    negocio_data_da_proxima_atividade: String(row['negocio_data_da_proxima_atividade'] ?? ''),
+    negocio_proprietario: String(row['negocio_proprietario'] ?? ''),
+    cpf_cnpj: String(row['cpf_cnpj'] || ''),
+  };
+}
