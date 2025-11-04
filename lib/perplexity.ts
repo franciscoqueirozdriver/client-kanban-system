@@ -240,3 +240,67 @@ function findJsonBlocks(s: string): string[] {
   }
   return out;
 }
+
+/* --- Compat shims: exports esperados pelas rotas --- */
+
+/**
+ * findCompetitors: usa a LLM para sugerir concorrentes e retorna em snake_case.
+ * Aceita string (nome da empresa) ou um objeto parcial de CompanySuggestion.
+ */
+export async function findCompetitors(
+  input: string | Partial<CompanySuggestion>,
+): Promise<CompanySuggestion[]> {
+  const base = typeof input === "string" ? { nome_da_empresa: input } : { ...input };
+
+  const nome = base.nome_da_empresa ?? "";
+  const segmento = base.segmento ? ` (segmento: ${base.segmento})` : "";
+
+  const prompt = [
+    `Liste concorrentes diretos e relevantes para a empresa "${nome}"${segmento}.`,
+    `Responda em JSON, como um array de objetos com chaves snake_case:`,
+    `[{ "nome_da_empresa": "...", "segmento": "...", "cidade": "...", "estado": "SP", "pais": "Brasil", "site": "https://...", "email": "contato@..." }]`,
+    `Inclua pelo menos 3 e no máximo 10 entradas. Não inclua a própria empresa na lista.`,
+  ].join(" ");
+
+  const answer = await askPerplexity(prompt);
+  const suggestions = extractCompanySuggestions(answer);
+  return suggestions;
+}
+
+/**
+ * enrichCompanyData: pede à LLM dados adicionais e devolve um objeto CompanySuggestion enriquecido.
+ * Mescla o input com o que vier validado do modelo (snake_case).
+ */
+export async function enrichCompanyData(
+  input: Partial<CompanySuggestion> & { nome_da_empresa: string },
+): Promise<CompanySuggestion> {
+  const base = { ...input };
+
+  const hintSegmento = base.segmento ? ` (segmento atual: ${base.segmento})` : "";
+  const prompt = [
+    `Enriqueça os dados da empresa "${base.nome_da_empresa}"${hintSegmento}.`,
+    `Responda em JSON com chaves snake_case, contendo campos possíveis:`,
+    `{"nome_da_empresa":"...","cnpj":"...","segmento":"...","cidade":"...","estado":"SP","pais":"Brasil","site":"https://...","email":"...@..."}`,
+    `Se não souber algum campo, omita-o.`,
+  ].join(" ");
+
+  const answer = await askPerplexity(prompt);
+
+  // Tenta extrair um único objeto (ou o primeiro de uma lista)
+  const list = extractCompanySuggestions(answer);
+  const enriched = list[0] ?? toCompanySuggestion(answer.text) ?? null;
+
+  // Merge conservador: entrada tem precedência quando já preenchida
+  const out: CompanySuggestion = {
+    nome_da_empresa: base.nome_da_empresa,
+    cnpj: base.cnpj ?? enriched?.cnpj,
+    segmento: base.segmento ?? enriched?.segmento,
+    cidade: base.cidade ?? enriched?.cidade,
+    estado: base.estado ?? enriched?.estado,
+    pais: base.pais ?? enriched?.pais,
+    site: base.site ?? enriched?.site,
+    email: base.email ?? enriched?.email,
+  };
+
+  return out;
+}
