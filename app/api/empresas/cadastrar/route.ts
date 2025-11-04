@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     const finalPayload = { ...payload, Cliente_ID: newClienteId };
 
     // 4. Write to Sheets
-    await appendToSheets(finalPayload);
+    await appendToSheets('Sheet1', finalPayload);
 
     // 5. Return Success
     const savedCompany = {

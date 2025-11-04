@@ -78,7 +78,7 @@ export async function fetchPaginated<T>(
     page += 1;
     if (doLog) console.log(`[Spotter] GET page ${page}: ${nextUrl}`);
 
-    const data = await getJson<PaginatedResponse<T>>(nextUrl);
+    const data: PaginatedResponse<T> = await getJson<PaginatedResponse<T>>(nextUrl);
     const chunk = Array.isArray(data.value) ? data.value : [];
     out.push(...chunk);
 

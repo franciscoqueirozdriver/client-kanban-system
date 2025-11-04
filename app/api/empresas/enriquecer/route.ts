@@ -10,10 +10,10 @@ export async function POST(req: Request) {
     const nome = body?.nome ?? '';
     const cnpj = normalizeCNPJ(body?.cnpj);
 
-    const { suggestion, debug } = await enrichCompanyData({ nome, cnpj });
+    const suggestion = await enrichCompanyData({ nome_da_empresa: nome, cnpj });
 
     const payload: any = { suggestion };
-    if (debug) payload.debug = debug;
+    
     return NextResponse.json(payload, { status: 200 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'Erro ao enriquecer' }, { status: 400 });

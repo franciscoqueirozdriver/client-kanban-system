@@ -14,7 +14,9 @@ import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 
 interface ClientRecord {
   id: string;
-  company: string;
+  company?: string; // Alterado para opcional
+  nome?: string;
+  Nome_da_Empresa?: string;
   segment?: string;
   size?: string;
   uf?: string;
@@ -22,6 +24,9 @@ interface ClientRecord {
   contacts?: any[];
   opportunities?: string[];
   color?: string;
+  cnpj?: string;
+  CNPJ?: string;
+  CNPJ_Empresa?: string;
   [key: string]: unknown;
 }
 
@@ -139,6 +144,7 @@ function ClientesPageComponent() {
 
   const filteredClients = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
+    if (!clients || !Array.isArray(clients)) return []; // Adiciona tratamento de erro
     return clients.filter((client) => {
       const matchesSegment = !filters.segmento.length || filters.segmento.includes((client.segment || '').trim());
       if (!matchesSegment) return false;
