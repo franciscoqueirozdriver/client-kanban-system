@@ -144,6 +144,7 @@ function ClientesPageComponent() {
 
   const filteredClients = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
+    if (!clients || !Array.isArray(clients)) return []; // Adiciona tratamento de erro
     return clients.filter((client) => {
       const matchesSegment = !filters.segmento.length || filters.segmento.includes((client.segment || '').trim());
       if (!matchesSegment) return false;
