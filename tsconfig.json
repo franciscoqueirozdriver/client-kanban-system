@@ -2,7 +2,7 @@
   "compilerOptions": {
     "strict": true,
     "noEmit": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "types": [
       "jest",
       "node",
@@ -47,7 +47,8 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "jest.setup.ts"
+    "jest.setup.ts",
+    ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
