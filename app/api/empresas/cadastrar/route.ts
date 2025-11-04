@@ -5,7 +5,7 @@ import {
   findByName,
   appendToSheets,
   updateInSheets, // Import the new update function
-} from '../../../../lib/googleSheets';
+} from '@/lib/googleSheets.js';
 import { normalizeCNPJ, isValidCNPJ } from '@/src/utils/cnpj';
 
 // --- API Route Handler ---
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     const finalPayload = { ...payload, Cliente_ID: newClienteId };
 
     // 4. Write to Sheets
-    await appendToSheets('Sheet1', finalPayload);
+    await appendToSheets(finalPayload);
 
     // 5. Return Success
     const savedCompany = {

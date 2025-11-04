@@ -82,7 +82,7 @@ export async function fetchPaginated<T>(
     const chunk = Array.isArray(data.value) ? data.value : [];
     out.push(...chunk);
 
-    const nl = data["@odata.nextLink"];
+    const nl: string | undefined = data["@odata.nextLink"] as string | undefined;
     if (typeof nl === "string" && nl.length > 0) {
       // nextLink já vem completo
       nextUrl = nl;

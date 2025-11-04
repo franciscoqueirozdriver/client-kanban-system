@@ -25,29 +25,29 @@ function collectEmails(row, idx) {
 function groupRows(rows) {
   const [header, ...data] = rows;
   const idx = {
-    clienteId: header.indexOf('cliente_id'),
-    org: header.indexOf('organizacao_nome'),
-    titulo: header.indexOf('negocio_titulo'),
-    contato: header.indexOf('negocio_pessoa_de_contato'),
-    cargo: header.indexOf('pessoa_cargo'),
-    emailWork: header.indexOf('pessoa_email_work'),
-    emailHome: header.indexOf('pessoa_email_home'),
-    emailOther: header.indexOf('pessoa_email_other'),
-    phoneWork: header.indexOf('pessoa_phone_work'),
-    phoneHome: header.indexOf('pessoa_phone_home'),
-    phoneMobile: header.indexOf('pessoa_phone_mobile'),
-    phoneOther: header.indexOf('pessoa_phone_other'),
-    tel: header.indexOf('pessoa_telefone'),
-    cel: header.indexOf('pessoa_celular'),
-    normalizado: header.indexOf('telefone_normalizado'),
-    segmento: header.indexOf('organizacao_segmento'),
-    tamanho: header.indexOf('organizacao_tamanho_da_empresa'),
+    clienteId: header.indexOf('Cliente_ID'),
+    org: header.indexOf('Organização - Nome'),
+    titulo: header.indexOf('Negócio - Título'),
+    contato: header.indexOf('Negócio - Pessoa de contato'),
+    cargo: header.indexOf('Pessoa - Cargo'),
+    emailWork: header.indexOf('Pessoa - Email - Work'),
+    emailHome: header.indexOf('Pessoa - Email - Home'),
+    emailOther: header.indexOf('Pessoa - Email - Other'),
+    phoneWork: header.indexOf('Pessoa - Phone - Work'),
+    phoneHome: header.indexOf('Pessoa - Phone - Home'),
+    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
+    phoneOther: header.indexOf('Pessoa - Phone - Other'),
+    tel: header.indexOf('Pessoa - Telefone'),
+    cel: header.indexOf('Pessoa - Celular'),
+    normalizado: header.indexOf('Telefone Normalizado'),
+    segmento: header.indexOf('Organização - Segmento'),
+    tamanho: header.indexOf('Organização - Tamanho da empresa'),
     uf: header.indexOf('uf'),
     cidade: header.indexOf('cidade_estimada'),
-    status: header.indexOf('status_kanban'),
-    data: header.indexOf('data_ultima_movimentacao'),
-    linkedin: header.indexOf('pessoa_end_linkedin'),
-    cor: header.indexOf('cor_card'),
+    status: header.indexOf('Status_Kanban'),
+    data: header.indexOf('Data_Ultima_Movimentacao'),
+    linkedin: header.indexOf('Pessoa - End. Linkedin'),
+    cor: header.indexOf('Cor_Card'),
   };
 
   const filters = {
@@ -62,9 +62,6 @@ function groupRows(rows) {
   data.forEach((row) => {
     const clienteId = row[idx.clienteId] || '';
     const company = row[idx.org] || '';
-
-    if (!clienteId) return; // Ignora linhas sem Cliente_ID
-    if (!company) return; // Ignora linhas sem nome da empresa
     const segment = row[idx.segmento] || '';
     const size = row[idx.tamanho] || '';
     const uf = row[idx.uf] || '';
@@ -136,11 +133,8 @@ function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const sheet = await getSheetCached('Sheet1');
-      if (!sheet || !sheet.data || !sheet.data.values) {
-        throw new Error('Falha ao obter dados da planilha ou dados vazios.');
-      }
-      const rows = sheet.data.values;
+      const sheet = await getSheetCached();
+      const rows = sheet.data.values || [];
       const { clients, filters } = groupRows(rows);
 
       const limitParam = parseInt(req.query.limit, 10);

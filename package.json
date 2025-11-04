@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm run check:imports",
+    "check:imports": "node scripts/check-imports.mjs",
     "build": "next build",
     "start": "next start",
     "test": "jest",

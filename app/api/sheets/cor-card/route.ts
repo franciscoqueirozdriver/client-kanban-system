@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
     // updateCorCard usa o findRowNumberByClienteId (que usa cliente_id) 
     // e o updateCorCard atualizado usa o campo 'cor_card' em snake_case
-    await updateCorCard(cardId, cor);
+    await updateCorCard(parseInt(cardId, 10), cor);
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error('[Sheets] Falha ao gravar Cor_Card:', error);

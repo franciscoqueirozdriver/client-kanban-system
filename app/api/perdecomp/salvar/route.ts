@@ -13,12 +13,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: 'Payload inválido: "linhas" deve ser um array não-vazio.' }, { status: 400 });
     }
 
-    const columnMapping: Record<string, string> = getColumnMapping(PERDECOMP_SHEET_NAME);
+    const columnMapping = getColumnMapping(PERDECOMP_SHEET_NAME);
     const originalHeaders = Object.keys(columnMapping);
 
     const rowsToAppend = linhas.map((linha: any) => {
       return originalHeaders.map(header => {
-        const snakeCaseKey = columnMapping[header];
+        const snakeCaseKey = (columnMapping as Record<string, string>)[header];
         return linha[snakeCaseKey] ?? '';
       });
     });
