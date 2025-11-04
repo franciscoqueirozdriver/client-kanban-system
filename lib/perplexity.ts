@@ -248,18 +248,19 @@ function findJsonBlocks(s: string): string[] {
  * Aceita string (nome da empresa) ou um objeto parcial de CompanySuggestion.
  */
 export async function findCompetitors(
-  input: string | Partial<CompanySuggestion>,
+  input: string | (Partial<CompanySuggestion> & { max?: number }),
 ): Promise<CompanySuggestion[]> {
-  const base = typeof input === "string" ? { nome_da_empresa: input } : { ...input };
-  const nome = base.nome_da_empresa ?? "";
-  const segmento = base.segmento ? ` (segmento: ${base.segmento})` : "";
+  const base = typeof input === 'string' ? { nome_da_empresa: input, max: 10 } : { max: 10, ...input };
+  const nome = base.nome_da_empresa ?? '';
+  const segmento = base.segmento ? ` (segmento: ${base.segmento})` : '';
+  const clampedMax = Math.min(Math.max(base.max, 1), 20); // Garante que o limite está entre 1 e 20
 
   const prompt = [
     `Liste concorrentes diretos e relevantes para a empresa "${nome}"${segmento}.`,
     `Responda em JSON, array de objetos com chaves snake_case:`,
     `[{ "nome_da_empresa": "...", "segmento": "...", "cidade": "...", "estado": "SP", "pais": "Brasil", "site": "https://...", "email": "contato@..." }]`,
-    `3 a 10 entradas, sem incluir a própria empresa.`,
-  ].join(" ");
+    `Retorne ${clampedMax} sugestões, sem incluir a própria empresa.`,
+  ].join(' ');
 
   const answer = await askPerplexity(prompt);
   return extractCompanySuggestions(answer);
