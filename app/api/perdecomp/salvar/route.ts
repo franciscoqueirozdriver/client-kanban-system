@@ -23,8 +23,16 @@ export async function POST(request: Request) {
       });
     });
 
-    // The appendSheetData function expects an array of arrays.
-    await appendSheetData(PERDECOMP_SHEET_NAME, rowsToAppend);
+    const spreadsheetId = process.env.SPREADSHEET_ID;
+    if (!spreadsheetId) {
+      throw new Error('SPREADSHEET_ID não configurado no ambiente.');
+    }
+
+    await appendSheetData({
+      spreadsheetId,
+      range: PERDECOMP_SHEET_NAME,
+      values: rowsToAppend,
+    });
 
     return NextResponse.json({ ok: true, inseridos: rowsToAppend.length });
   } catch (error) {

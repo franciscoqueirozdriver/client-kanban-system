@@ -4,6 +4,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
+  if (process.env.DISABLE_PGFN === "true") {
+    return Response.json(
+      {
+        disabled: true,
+        total: 0,
+        soma: 0,
+        media: 0,
+        pctAju: 0,
+        recentes: 0,
+      },
+      { status: 200 },
+    );
+  }
   const { searchParams } = new URL(req.url);
   const args = {
     q: (searchParams.get("q") || "").trim(),
@@ -17,7 +30,7 @@ export async function GET(req: NextRequest) {
   };
 
   const where: string[] = ["d.valor_consolidado BETWEEN $1 AND $2"];
-  const params: any[] = [args.min, args.max];
+  const params: Array<number | string | boolean> = [args.min, args.max];
   let p = params.length;
 
   if (args.q) {

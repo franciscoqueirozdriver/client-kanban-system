@@ -1,19 +1,16 @@
-import NextDynamic from 'next/dynamic';
+"use client";
 
-export const dynamic = 'force-dynamic';
+import { redirect } from "next/navigation";
 
-const PainelPGFN = NextDynamic(
-  () => import('@/features/pgfn/PainelPGFNProspecao'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-[50vh] items-center justify-center text-sm text-muted-foreground">
-        Carregando painel da PGFN...
-      </div>
-    ),
-  },
-);
+export default function PGFNPage() {
+  const disabled = process.env.NEXT_PUBLIC_DISABLE_PGFN === "true";
 
-export default function PGFNProspecaoPage() {
-  return <PainelPGFN />;
+  if (disabled) {
+    redirect("/");
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Painel = require("@/features/pgfn/PainelPGFNProspecao").default;
+
+  return <Painel />;
 }

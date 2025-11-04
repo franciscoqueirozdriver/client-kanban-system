@@ -32,6 +32,10 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const showPGFN = process.env.NEXT_PUBLIC_DISABLE_PGFN !== 'true';
+  const navItems = showPGFN
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter(({ href }) => href !== '/prospeccao/pgfn');
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
@@ -93,7 +97,7 @@ export default function Sidebar() {
         </div>
 
         <nav className="mt-8 flex-1 space-y-1" role="navigation">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {navItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
             return (
               <Link

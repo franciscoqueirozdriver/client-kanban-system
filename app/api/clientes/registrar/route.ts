@@ -34,7 +34,16 @@ export async function POST(request: Request) {
     // Ensure the row has all headers in the correct order
     const rowToAppend = HEADERS.map(header => newRowObject[header] ?? '');
 
-    await appendSheetData(SHEET_NAME, [rowToAppend]);
+    const spreadsheetId = process.env.SPREADSHEET_ID;
+    if (!spreadsheetId) {
+      throw new Error('SPREADSHEET_ID não configurado no ambiente.');
+    }
+
+    await appendSheetData({
+      spreadsheetId,
+      range: SHEET_NAME,
+      values: [rowToAppend],
+    });
 
     return NextResponse.json({ ok: true, message: 'Cliente cadastrado com sucesso!', newClient: newRowObject });
   } catch (error) {
