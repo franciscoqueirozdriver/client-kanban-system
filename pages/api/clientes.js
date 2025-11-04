@@ -22,32 +22,31 @@ function collectEmails(row, idx) {
   return Array.from(new Set(emails)).join(';');
 }
 
-function groupRows(rows) {
-  const [header, ...data] = rows;
+function groupRows(header, data) {
   const idx = {
-    clienteId: header.indexOf('Cliente_ID'),
-    org: header.indexOf('Organização - Nome'),
-    titulo: header.indexOf('Negócio - Título'),
-    contato: header.indexOf('Negócio - Pessoa de contato'),
-    cargo: header.indexOf('Pessoa - Cargo'),
-    emailWork: header.indexOf('Pessoa - Email - Work'),
-    emailHome: header.indexOf('Pessoa - Email - Home'),
-    emailOther: header.indexOf('Pessoa - Email - Other'),
-    phoneWork: header.indexOf('Pessoa - Phone - Work'),
-    phoneHome: header.indexOf('Pessoa - Phone - Home'),
-    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
-    phoneOther: header.indexOf('Pessoa - Phone - Other'),
-    tel: header.indexOf('Pessoa - Telefone'),
-    cel: header.indexOf('Pessoa - Celular'),
-    normalizado: header.indexOf('Telefone Normalizado'),
-    segmento: header.indexOf('Organização - Segmento'),
-    tamanho: header.indexOf('Organização - Tamanho da empresa'),
+    clienteId: header.indexOf('cliente_id'),
+    org: header.indexOf('organizacao_nome'),
+    titulo: header.indexOf('negocio_titulo'),
+    contato: header.indexOf('negocio_pessoa_de_contato'),
+    cargo: header.indexOf('pessoa_cargo'),
+    emailWork: header.indexOf('pessoa_email_work'),
+    emailHome: header.indexOf('pessoa_email_home'),
+    emailOther: header.indexOf('pessoa_email_other'),
+    phoneWork: header.indexOf('pessoa_phone_work'),
+    phoneHome: header.indexOf('pessoa_phone_home'),
+    phoneMobile: header.indexOf('pessoa_phone_mobile'),
+    phoneOther: header.indexOf('pessoa_phone_other'),
+    tel: header.indexOf('pessoa_telefone'),
+    cel: header.indexOf('pessoa_celular'),
+    normalizado: header.indexOf('telefone_normalizado'),
+    segmento: header.indexOf('organizacao_segmento'),
+    tamanho: header.indexOf('organizacao_tamanho_da_empresa'),
     uf: header.indexOf('uf'),
     cidade: header.indexOf('cidade_estimada'),
-    status: header.indexOf('Status_Kanban'),
-    data: header.indexOf('Data_Ultima_Movimentacao'),
-    linkedin: header.indexOf('Pessoa - End. Linkedin'),
-    cor: header.indexOf('Cor_Card'),
+    status: header.indexOf('status_kanban'),
+    data: header.indexOf('data_ultima_movimentacao'),
+    linkedin: header.indexOf('pessoa_end_linkedin'),
+    cor: header.indexOf('cor_card'),
   };
 
   const filters = {
@@ -133,9 +132,9 @@ function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const sheet = await getSheetCached();
-      const rows = sheet.data.values || [];
-      const { clients, filters } = groupRows(rows);
+      const sheetData = await getSheetCached('Sheet1');
+      const { headers, rows } = sheetData;
+      const { clients, filters } = groupRows(headers, rows);
 
       const limitParam = parseInt(req.query.limit, 10);
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
