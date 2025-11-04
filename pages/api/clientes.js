@@ -22,7 +22,8 @@ function collectEmails(row, idx) {
   return Array.from(new Set(emails)).join(';');
 }
 
-function groupRows(header, data) {
+function groupRows(rows) {
+  const [header, ...data] = rows;
   const idx = {
     clienteId: header.indexOf('cliente_id'),
     org: header.indexOf('organizacao_nome'),
@@ -60,8 +61,9 @@ function groupRows(header, data) {
 
   data.forEach((row) => {
     const clienteId = row[idx.clienteId] || '';
-    if (!clienteId) return; // Ignora linhas sem Cliente_ID
     const company = row[idx.org] || '';
+
+    if (!clienteId) return; // Ignora linhas sem Cliente_ID
     if (!company) return; // Ignora linhas sem nome da empresa
     const segment = row[idx.segmento] || '';
     const size = row[idx.tamanho] || '';
@@ -134,9 +136,9 @@ function groupRows(header, data) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const sheetData = await getSheetCached('Sheet1');
-      const { headers, rows } = sheetData;
-      const { clients, filters } = groupRows(headers, rows);
+      const sheet = await getSheetCached('Sheet1');
+      const rows = sheet.data.values || [];
+      const { clients, filters } = groupRows(rows);
 
       const limitParam = parseInt(req.query.limit, 10);
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
