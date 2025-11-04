@@ -137,7 +137,10 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const sheet = await getSheetCached('Sheet1');
-      const rows = sheet.data.values || [];
+      if (!sheet || !sheet.data || !sheet.data.values) {
+        throw new Error('Falha ao obter dados da planilha ou dados vazios.');
+      }
+      const rows = sheet.data.values;
       const { clients, filters } = groupRows(rows);
 
       const limitParam = parseInt(req.query.limit, 10);
