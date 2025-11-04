@@ -45,7 +45,7 @@ describe('GET /api/clientes', () => {
 
   it('returns all clients', async () => {
     const rows = makeRows(1205);
-    (getSheetData as jest.Mock).mockResolvedValue(rows);
+    (getSheetData as jest.Mock).mockResolvedValue({ rows });
 
     const req = { method: 'GET', query: {} };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };

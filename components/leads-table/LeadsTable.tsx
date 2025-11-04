@@ -219,7 +219,7 @@ export default function LeadsTable({
                   </td>
                   <td className="px-4 align-top text-muted-foreground">{r.contato || "-"}</td>
                   <td className="px-4 align-top text-muted-foreground">{[r.cidade, r.uf].filter(Boolean).join(" / ") || "-"}</td>
-                  <td className="px-4 align-top text-muted-foreground">{(r as any)?.segmento ?? (r as any)?.organizacao_segmento || "-"}</td>
+                  <td className="px-4 align-top text-muted-foreground">{((r as any)?.segmento ?? (r as any)?.organizacao_segmento) || "-"}</td>
                   <td className="px-4 align-top">
                     <select
                       className="w-full rounded-lg border border-border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"

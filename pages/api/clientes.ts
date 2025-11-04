@@ -9,7 +9,7 @@ const TAB = 'layout_importacao_empresas' as const;
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     // getSheetData deve retornar array de objetos com chaves = cabeçalhos originais
-    const raw = (await getSheetData(process.env.SPREADSHEET_ID!, TAB)) as Record<string, unknown>[] | null | undefined;
+    const { rows: raw } = await getSheetData(process.env.SPREADSHEET_ID!, TAB);
 
     const data = mapRows(TAB, raw);
 
