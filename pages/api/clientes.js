@@ -60,7 +60,9 @@ function groupRows(header, data) {
 
   data.forEach((row) => {
     const clienteId = row[idx.clienteId] || '';
+    if (!clienteId) return; // Ignora linhas sem Cliente_ID
     const company = row[idx.org] || '';
+    if (!company) return; // Ignora linhas sem nome da empresa
     const segment = row[idx.segmento] || '';
     const size = row[idx.tamanho] || '';
     const uf = row[idx.uf] || '';
