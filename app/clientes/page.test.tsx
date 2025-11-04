@@ -18,7 +18,7 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => mockParams,
 }));
 
-jest.mock('@/components/Filters', () => ({ filters, onFilterChange }) => (
+jest.mock('@/components/Filters', () => ({ filters, onFilterChange }: { filters: any; onFilterChange: any; }) => (
   <div>
     <button
       type="button"
