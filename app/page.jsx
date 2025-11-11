@@ -13,9 +13,12 @@ export default function Dashboard() {
     fetch('/api/clientes')
       .then((res) => res.json())
       .then((data) => {
-        setAllClients(data.clients || []);
-        setClients(data.clients || []);
-        setOptions({ segmento: data.filters.segmento, uf: data.filters.uf });
+        const safeData = data || {};
+        const safeClients = safeData.clients || [];
+        const safeFilters = safeData.filters || { segmento: [], uf: [] };
+        setAllClients(safeClients);
+        setClients(safeClients);
+        setOptions({ segmento: safeFilters.segmento, uf: safeFilters.uf });
       });
   }, []);
 

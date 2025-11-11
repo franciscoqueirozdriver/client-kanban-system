@@ -23,7 +23,7 @@ function collectEmails(row, idx) {
 }
 
 function groupRows(rows) {
-  const [header, ...data] = rows;
+  const [header, ...data] = rows.length > 0 ? rows : [[]];
   const idx = {
     clienteId: header.indexOf('cliente_id'),
     org: header.indexOf('organizacao_nome'),
@@ -136,6 +136,11 @@ export default async function handler(req, res) {
       const sheet = await getSheetCached();
       const rows = sheet.rows || [];
       const { clients, filters } = groupRows(rows);
+
+      // Garante que o objeto filters seja sempre retornado, mesmo que vazio
+      if (!filters) {
+        return res.status(200).json({ clients: [], filters: { segmento: [], porte: [], uf: [], cidade: [] } });
+      }
 
       const limitParam = parseInt(req.query.limit, 10);
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
