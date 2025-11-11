@@ -6,8 +6,7 @@ export type MetricsDTO = { hasPartialData: boolean; /* ...cards/gráficos */ };
 export async function loadMetrics(params: { funnels: number[]; fromISO?: string }): Promise<MetricsDTO> {
   const funnels = params.funnels.join(";");
   const filter = params.fromISO ? `registerDate ge ${params.fromISO}` : undefined;
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const url = new URL(`${baseUrl}/api/spotter`);
+  const url = new URL(`/api/spotter`, window.location.origin);
   url.searchParams.set("resource", "Bundle");
   url.searchParams.set("funnels", funnels);
   if (filter) url.searchParams.set("filter", filter);
