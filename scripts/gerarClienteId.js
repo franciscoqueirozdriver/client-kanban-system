@@ -9,15 +9,15 @@ async function gerarClienteIds() {
   const rows = res.data.values || [];
   const [header, ...data] = rows;
 
-  const idxOrg = header.indexOf('Organização - Nome');
-  const idxClienteId = header.indexOf('Cliente_ID');
+  const idxOrg = header.indexOf('organizacao_nome');
+  const idxClienteId = header.indexOf('cliente_id');
 
   if (idxOrg === -1) {
-    console.error('❌ Coluna "Organização - Nome" não encontrada.');
+    console.error('❌ Coluna "organizacao_nome" não encontrada.');
     return;
   }
   if (idxClienteId === -1) {
-    console.error('❌ Coluna "Cliente_ID" não encontrada. Crie a coluna na planilha.');
+    console.error('❌ Coluna "cliente_id" não encontrada. Crie a coluna na planilha.');
     return;
   }
 
@@ -55,8 +55,8 @@ async function gerarClienteIds() {
       rowObj[col] = data[i][idx] || '';
     });
 
-    // Força a gravação do Cliente_ID independente do estado anterior
-    await updateRow(rowNum, { ...rowObj, Cliente_ID: novoId });
+    // Força a gravação do cliente_id independente do estado anterior
+    await updateRow(rowNum, { ...rowObj, cliente_id: novoId });
   }
 
   console.log('✅ IDs de clientes gerados/atualizados com sucesso.');
