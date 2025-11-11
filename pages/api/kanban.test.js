@@ -3,7 +3,7 @@ import handler from './kanban';
 import { findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
 
 jest.mock('../../lib/googleSheets', () => ({
-  getSheetCached: jest.fn(),
+  getSheetData: jest.fn(),
   findRowIndexById: jest.fn(),
   updateRowByIndex: jest.fn(),
 }));
@@ -22,11 +22,11 @@ describe('POST /api/kanban', () => {
     };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     await handler(req, res);
-    expect(findRowIndexById).toHaveBeenCalledWith('Sheet1', 1, 'Cliente_ID', '1');
+    expect(findRowIndexById).toHaveBeenCalledWith('sheet1', 1, 'cliente_id', '1');
     expect(updateRowByIndex).toHaveBeenCalled();
     const call = updateRowByIndex.mock.calls[0][0];
-    expect(call.updates.Status_Kanban).toBe('Lead Selecionado');
-    expect(call.updates.Cor_Card).toBe('green');
+    expect(call.updates.status_kanban).toBe('Lead Selecionado');
+    expect(call.updates.cor_card).toBe('green');
     expect(res.status).toHaveBeenCalledWith(200);
   });
 
@@ -34,13 +34,13 @@ describe('POST /api/kanban', () => {
     findRowIndexById.mockResolvedValue(5);
     const req = {
       method: 'POST',
-      body: { id: '1', destination: { droppableId: 'Contato Efetuado' } },
+      body: { id: '1', status: 'Contato Efetuado' },
     };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     await handler(req, res);
     expect(updateRowByIndex).toHaveBeenCalled();
     const call = updateRowByIndex.mock.calls[0][0];
-    expect(call.updates.Status_Kanban).toBe('Contato Efetuado');
+    expect(call.updates.status_kanban).toBe('Contato Efetuado');
     expect(res.status).toHaveBeenCalledWith(200);
   });
 
@@ -52,4 +52,3 @@ describe('POST /api/kanban', () => {
     expect(res.status).toHaveBeenCalledWith(404);
   });
 });
-

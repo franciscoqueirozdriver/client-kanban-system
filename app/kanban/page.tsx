@@ -95,7 +95,6 @@ function useSearchQuery() {
   return { query, setQuery };
 }
 
-import { loadMetrics } from '@/lib/load/metrics';
 import BannerWarning from '@/components/BannerWarning';
 
 function KanbanPage() {
@@ -108,6 +107,7 @@ function KanbanPage() {
   const { state: filters, replace: replaceFilters, reset } = useFilterState<ActiveFilters>(filterDefaults);
   const { query, setQuery } = useSearchQuery();
   const [hasPartialData, setHasPartialData] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const viewParam = useQueryParam('view');
   const view =
@@ -117,16 +117,13 @@ function KanbanPage() {
 
   useEffect(() => {
     async function fetchData() {
-      const funnels = [22783, 22784]; // Example funnels
-      const fromISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // Example date
-      const { hasPartialData, ...data } = await loadMetrics({ funnels, fromISO });
-      setHasPartialData(hasPartialData);
-      if (!hasPartialData) {
-        // @ts-ignore
-        setColumns(data.columns ?? []);
-        // @ts-ignore
-        setAllOptions(data.filters || {});
+      setLoading(true);
+      const response = await fetch('/api/kanban');
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setColumns(data);
       }
+      setLoading(false);
     }
     fetchData();
   }, []);
@@ -318,6 +315,10 @@ function KanbanPage() {
     } finally {
       setIsSubmittingSpotter(false);
     }
+  }
+
+  if (loading) {
+    return <div>Loading...</div>;
   }
 
   return (
