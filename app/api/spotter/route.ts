@@ -3,9 +3,10 @@ import { NextResponse } from "next/server";
 
 /**
  * Proxy para o Exact Spotter.
- * Ajusta o encoding do $filter para evitar '+' (quebra no OData).
- * Mantém 'funnels' como recebido (';'-separado).
- * Respostas de erro são saneadas para não vazar detalhes sensíveis.
+ * - Usa as VARS EXISTENTES: EXACT_SPOTTER_BASE_URL / EXACT_SPOTTER_API_VERSION / EXACT_SPOTTER_TOKEN
+ * - Corrige encoding do $filter: usa encodeURIComponent (gera %20, não '+').
+ * - Mantém 'funnels' como recebido (';'-separado).
+ * - Erros upstream são saneados (sem vazar detalhes sensíveis).
  */
 
 type JsonOk<T> = { ok: true; data: T };
@@ -13,17 +14,27 @@ type JsonErr = { ok: false; error: string };
 
 export const revalidate = 60;
 
-function ensureEnv(name: string): string {
+function mustEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
 }
 
+/** Normaliza concatenação de base + versão + resource sem barras duplicadas. */
+function joinUrl(...parts: string[]): string {
+  return parts
+    .filter(Boolean)
+    .map((p, i) =>
+      i === 0 ? p.replace(/\/+$/g, "") : p.replace(/^\/+/g, "").replace(/\/+$/g, "")
+    )
+    .join("/");
+}
+
 export async function GET(req: Request) {
   const incoming = new URL(req.url);
-  const resource = incoming.searchParams.get("resource");
-  const funnels = incoming.searchParams.get("funnels");
-  const filter = incoming.searchParams.get("filter");
+  const resource = incoming.searchParams.get("resource"); // ex: Bundle
+  const funnels = incoming.searchParams.get("funnels"); // ex: 22783;22784
+  const filter = incoming.searchParams.get("filter"); // ex: registerDate ge 2025-10-12T19:01:43.571Z
 
   if (!resource) {
     return NextResponse.json<JsonErr>(
@@ -32,35 +43,41 @@ export async function GET(req: Request) {
     );
   }
 
-  // Base/Token do Spotter
-  let base: string;
+  // === VARIÁVEIS EXISTENTES DO PROJETO ===
+  // Ex: EXACT_SPOTTER_BASE_URL = https://api.exactspotter.com
+  //     EXACT_SPOTTER_API_VERSION = v3
+  //     EXACT_SPOTTER_TOKEN = <token>
+  let baseUrl: string;
+  let apiVersion: string | undefined;
   let token: string;
+
   try {
-    base = ensureEnv("SPOTTER_API_BASE"); // ex: https://api.exactspotter.com/v3
-    token = ensureEnv("SPOTTER_TOKEN");
+    baseUrl = mustEnv("EXACT_SPOTTER_BASE_URL");
+    apiVersion = process.env.EXACT_SPOTTER_API_VERSION || undefined;
+    token = mustEnv("EXACT_SPOTTER_TOKEN");
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json<JsonErr>({ ok: false, error: msg }, { status: 500 });
   }
 
-  // Monta a URL upstream
-  const upstream = new URL(
-    `${base.replace(/\/+$/, "")}/${resource.replace(/^\//, "")}`
-  );
+  // Monta URL upstream respeitando base + versão + resource
+  // Aceita tanto base já contendo /v3 quanto separada via EXACT_SPOTTER_API_VERSION.
+  // Se base já tiver /v3, joinUrl não duplica.
+  const upstreamBase = apiVersion ? joinUrl(baseUrl, apiVersion) : baseUrl;
+  const upstreamUrl = new URL(joinUrl(upstreamBase, resource));
 
-  // 'funnels' vai direto (já vem '22783;22784', que o backend entende)
-  if (funnels) upstream.searchParams.set("funnels", funnels);
+  // 'funnels' vai direto (o backend entende "22783;22784")
+  if (funnels) upstreamUrl.searchParams.set("funnels", funnels);
 
-  // Para $filter, NÃO usar searchParams.set (converte espaço em '+')
-  // Anexar manualmente usando encodeURIComponent no valor (gera %20).
+  // $filter: anexar manualmente com encodeURIComponent para evitar '+'
   if (filter) {
     const enc = encodeURIComponent(filter);
-    const hasQuery = upstream.search.length > 0;
-    upstream.search = (hasQuery ? upstream.search + "&" : "?") + `$filter=${enc}`;
+    const hasQuery = upstreamUrl.search.length > 0;
+    upstreamUrl.search = (hasQuery ? upstreamUrl.search + "&" : "?") + `$filter=${enc}`;
   }
 
   try {
-    const resp = await fetch(upstream.toString(), {
+    const resp = await fetch(upstreamUrl.toString(), {
       headers: { token_exact: token },
       cache: "no-store",
     });
@@ -69,33 +86,13 @@ export async function GET(req: Request) {
     const isJson = contentType.includes("application/json");
 
     if (!resp.ok) {
-      let body: unknown = undefined;
-      if (isJson) {
-        try {
-          body = await resp.json();
-        } catch {
-          body = { message: "Upstream returned invalid JSON body" };
-        }
-      } else {
-        try {
-          const text = await resp.text();
-          body = { message: text.slice(0, 500) };
-        } catch {
-          body = { message: "Upstream error without readable body" };
-        }
-      }
-
+      // Saneia resposta de erro
       const status = [401, 403, 404, 429, 500, 502, 503].includes(resp.status)
         ? resp.status
         : 502;
 
       return NextResponse.json<JsonErr>(
-        {
-          ok: false,
-          error:
-            `Upstream Spotter error (status ${resp.status})` +
-            (isJson ? "" : " - non JSON body"),
-        },
+        { ok: false, error: `Upstream Spotter error (status ${resp.status})` },
         { status }
       );
     }
