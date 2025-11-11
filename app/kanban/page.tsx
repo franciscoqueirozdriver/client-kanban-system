@@ -120,8 +120,35 @@ function KanbanPage() {
         const response = await fetch('/api/kanban');
         if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
-        setColumns(Array.isArray(data) ? data : []);
-        setAllOptions({}); // TODO: Carregar filtros de um endpoint dedicado
+        const kanbanData = Array.isArray(data) ? data : [];
+        setColumns(kanbanData);
+
+        // Extract unique options from the data for filtering
+        const options = kanbanData.flatMap(col => col.cards.map(card => card.client)).reduce((acc, client) => {
+          const fields = {
+            negocio_proprietario: 'negocio_proprietario',
+            negocio_etapa: 'negocio_etapa',
+            organizacao_segmento: 'organizacao_segmento',
+            cor_card: 'cor_card',
+            porte: 'organizacao_tamanho_da_empresa'
+          };
+          Object.entries(fields).forEach(([key, dataKey]) => {
+            const value = client[dataKey];
+            if (value) {
+              if (!acc[key]) {
+                acc[key] = new Set();
+              }
+              acc[key].add(value);
+            }
+          });
+          return acc;
+        }, {});
+
+        // Convert sets to sorted arrays for the filter dropdowns
+        for (const key in options) {
+          options[key] = Array.from(options[key]).sort();
+        }
+        setAllOptions(options);
       } catch (error) {
         console.error('Failed to fetch kanban data:', error);
         setHasPartialData(true);
@@ -133,19 +160,25 @@ function KanbanPage() {
   const filterOptionsForMultiSelect = useMemo<FilterOptions>(() => {
     const mapToOptions = (values?: string[]) =>
       (values || []).map((value) => ({ label: value, value }));
-    const phaseOptions = columns.map((column) => ({
+
+    // Combine column titles with unique stages from data for the phase filter
+    const dynamicPhaseOptions = mapToOptions(allOptions['negocio_etapa']);
+    const columnPhaseOptions = columns.map((column) => ({
       label: column.title,
       value: column.id
     }));
+    const combinedPhaseOptions = [...new Map([...dynamicPhaseOptions, ...columnPhaseOptions].map(item => [item.value, item])).values()];
+
+
     return {
-      segmento: mapToOptions(allOptions.segmento),
-      porte: mapToOptions(allOptions.porte),
+      segmento: mapToOptions(allOptions['organizacao_segmento']),
+      porte: mapToOptions(allOptions['porte']),
       uf: mapToOptions(allOptions.uf),
       cidade: mapToOptions(allOptions.cidade),
       erp: mapToOptions(allOptions.erp),
       origem: mapToOptions(allOptions.origem),
-      vendedor: mapToOptions(allOptions.vendedor),
-      fase: phaseOptions
+      vendedor: mapToOptions(allOptions['negocio_proprietario']),
+      fase: combinedPhaseOptions
     };
   }, [allOptions, columns]);
 
@@ -159,15 +192,16 @@ function KanbanPage() {
     const filterCard = (card: Card, column: Column) => {
       const client = card.client;
 
-      if (filters.segmento.length && !filters.segmento.includes((client.segment || '').trim())) return false;
-      if (filters.porte.length && !filters.porte.includes((client.size || '').trim())) return false;
+      // Updated to use snake_case properties from the new API response
+      if (filters.segmento.length && !filters.segmento.includes((client.organizacao_segmento || '').trim())) return false;
+      if (filters.porte.length && !filters.porte.includes(((client.organizacao_tamanho_da_empresa as string) || '').trim())) return false;
       if (filters.uf.length && !filters.uf.includes((client.uf || '').trim())) return false;
       if (filters.cidade.length && !filters.cidade.includes((client.city || '').trim())) return false;
       if (filters.erp.length && !filters.erp.includes(((client.erp as string) || '').trim())) return false;
       if (filters.origem.length && !filters.origem.includes(((client.fonte as string) || '').trim())) return false;
-      if (filters.vendedor.length && !filters.vendedor.includes(((client.owner as string) || '').trim())) return false;
+      if (filters.vendedor.length && !filters.vendedor.includes(((client.negocio_proprietario as string) || '').trim())) return false;
 
-      const statusValue = (client.status || '').trim();
+      const statusValue = (client.negocio_etapa || '').trim();
       if (
         filters.fase.length &&
         !filters.fase.includes(statusValue) &&

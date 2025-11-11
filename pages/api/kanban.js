@@ -25,6 +25,9 @@ function collectEmails(row, idx) {
 }
 
 function groupRows(rows) {
+  if (!rows || rows.length === 0) {
+    return { clients: [] };
+  }
   const [header, ...data] = rows;
   const idx = {
     clienteId: header.indexOf('cliente_id'),
@@ -131,7 +134,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const sheet = await getSheet();
-      const rows = sheet.data.values || [];
+      const rows = sheet && sheet.data ? sheet.data.values || [] : [];
       const { clients } = groupRows(rows);
 
       const limitParam = parseInt(req.query.limit, 10);
