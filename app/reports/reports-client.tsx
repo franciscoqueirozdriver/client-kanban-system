@@ -7,7 +7,6 @@ import ReportTable from '@/components/ReportTable';
 import ExportButton from '@/components/ExportButton';
 import SummaryCard from '@/components/SummaryCard';
 import { useFilterState } from '@/hooks/useFilterState';
-import { loadMetrics } from '@/lib/load/metrics';
 import BannerWarning from '@/components/BannerWarning';
 
 const filterDefaults: ActiveFilters = {
@@ -81,13 +80,14 @@ export default function ReportsClient({
 
   useEffect(() => {
     async function fetchData() {
-      const funnels = [22783, 22784]; // Example funnels
-      const fromISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // Example date
-      const { hasPartialData, ...data } = await loadMetrics({ funnels, fromISO });
-      setHasPartialData(hasPartialData);
-      if (!hasPartialData) {
-        // @ts-ignore
+      try {
+        const response = await fetch('/api/reports');
+        if (!response.ok) throw new Error('Network response was not ok');
+        const data = await response.json();
         setRows(data.rows ?? []);
+      } catch (error) {
+        console.error('Failed to fetch report data:', error);
+        setHasPartialData(true);
       }
     }
 

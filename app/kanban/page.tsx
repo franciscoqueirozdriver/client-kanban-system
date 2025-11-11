@@ -95,7 +95,6 @@ function useSearchQuery() {
   return { query, setQuery };
 }
 
-import { loadMetrics } from '@/lib/load/metrics';
 import BannerWarning from '@/components/BannerWarning';
 
 function KanbanPage() {
@@ -117,15 +116,15 @@ function KanbanPage() {
 
   useEffect(() => {
     async function fetchData() {
-      const funnels = [22783, 22784]; // Example funnels
-      const fromISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // Example date
-      const { hasPartialData, ...data } = await loadMetrics({ funnels, fromISO });
-      setHasPartialData(hasPartialData);
-      if (!hasPartialData) {
-        // @ts-ignore
-        setColumns(data.columns ?? []);
-        // @ts-ignore
-        setAllOptions(data.filters || {});
+      try {
+        const response = await fetch('/api/kanban');
+        if (!response.ok) throw new Error('Network response was not ok');
+        const data = await response.json();
+        setColumns(Array.isArray(data) ? data : []);
+        setAllOptions({}); // TODO: Carregar filtros de um endpoint dedicado
+      } catch (error) {
+        console.error('Failed to fetch kanban data:', error);
+        setHasPartialData(true);
       }
     }
     fetchData();
