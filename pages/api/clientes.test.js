@@ -1,50 +1,41 @@
 /** @jest-environment node */
 import handler from './clientes';
-import { getSheetCached } from '../../lib/googleSheets';
+import { getSheetData } from '../../lib/googleSheets';
 
 jest.mock('../../lib/googleSheets', () => ({
-  getSheetCached: jest.fn()
+  getSheetData: jest.fn(),
 }));
 
 describe('GET /api/clientes', () => {
-  const header = [
-    'Cliente_ID',
-    'Organização - Nome',
-    'Negócio - Título',
-    'Negócio - Pessoa de contato',
-    'Pessoa - Cargo',
-    'Pessoa - Email - Work',
-    'Pessoa - Email - Home',
-    'Pessoa - Email - Other',
-    'Pessoa - Phone - Work',
-    'Pessoa - Phone - Home',
-    'Pessoa - Phone - Mobile',
-    'Pessoa - Phone - Other',
-    'Pessoa - Telefone',
-    'Pessoa - Celular',
-    'Telefone Normalizado',
-    'Organização - Segmento',
-    'Organização - Tamanho da empresa',
+  const headers = [
+    'cliente_id',
+    'nome_da_empresa',
+    'segmento',
+    'tamanho_da_empresa',
     'uf',
     'cidade_estimada',
-    'Status_Kanban',
-    'Data_Ultima_Movimentacao',
-    'Pessoa - End. Linkedin',
-    'Cor_Card'
+    'status_kanban',
+    'data_ultima_movimentacao',
+    'cor_card',
   ];
 
   function makeRows(count) {
-    return Array.from({ length: count }, (_, i) => {
-      const row = Array(header.length).fill('');
-      row[0] = `id${i}`;
-      row[1] = `Company ${i}`;
-      return row;
-    });
+    return Array.from({ length: count }, (_, i) => ({
+      cliente_id: `id${i}`,
+      nome_da_empresa: `Company ${i}`,
+      segmento: '',
+      tamanho_da_empresa: '',
+      uf: '',
+      cidade_estimada: '',
+      status_kanban: '',
+      data_ultima_movimentacao: '',
+      cor_card: '',
+    }));
   }
 
   it('returns all clients when limit not provided', async () => {
-    const rows = [header, ...makeRows(1205)];
-    getSheetCached.mockResolvedValue({ data: { values: rows } });
+    const rows = makeRows(1205);
+    getSheetData.mockResolvedValue({ headers, rows });
 
     const req = { method: 'GET', query: {} };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -56,8 +47,8 @@ describe('GET /api/clientes', () => {
   });
 
   it('respects explicit limit', async () => {
-    const rows = [header, ...makeRows(50)];
-    getSheetCached.mockResolvedValue({ data: { values: rows } });
+    const rows = makeRows(50);
+    getSheetData.mockResolvedValue({ headers, rows });
 
     const req = { method: 'GET', query: { limit: '10' } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -68,8 +59,8 @@ describe('GET /api/clientes', () => {
   });
 
   it('returns count when countOnly=1', async () => {
-    const rows = [header, ...makeRows(30)];
-    getSheetCached.mockResolvedValue({ data: { values: rows } });
+    const rows = makeRows(30);
+    getSheetData.mockResolvedValue({ headers, rows });
 
     const req = { method: 'GET', query: { countOnly: '1' } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };

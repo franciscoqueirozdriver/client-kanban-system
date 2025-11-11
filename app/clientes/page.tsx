@@ -112,9 +112,13 @@ function ClientesPageComponent() {
   useEffect(() => {
     async function loadClients() {
       const response = await fetch('/api/clientes');
-      const json: ClientsResponse = await response.json();
-      setClients(json.clients);
-      setOptions(json.filters || {});
+      const json = await response.json();
+      if (json && Array.isArray(json.clients)) {
+        setClients(json.clients);
+      }
+      if (json && typeof json.filters === 'object' && json.filters !== null) {
+        setOptions(json.filters);
+      }
     }
     loadClients();
   }, []);

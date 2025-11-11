@@ -1,141 +1,22 @@
-import { getSheet, getSheetCached, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
-import { normalizePhones } from '../../lib/report';
+import { getSheetData, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
 
-// ✅ Protege números de telefone para salvar como texto no Sheets
-function protectPhoneValue(value) {
-  if (!value) return '';
-  const str = String(value).trim();
-  if (/^\+?\d{8,}$/.test(str)) {
-    return str.startsWith("'") ? str : `'${str}`;
-  }
-  return str;
-}
-
-// ✅ Junta os 3 tipos de e-mail e remove duplicados
-function collectEmails(row, idx) {
-  const emails = [
-    row[idx.emailWork] || '',
-    row[idx.emailHome] || '',
-    row[idx.emailOther] || '',
-  ]
-    .map((e) => String(e).trim())
-    .filter(Boolean);
-
-  return Array.from(new Set(emails)).join(';');
-}
-
-function groupRows(rows) {
-  const [header, ...data] = rows;
-  const idx = {
-    clienteId: header.indexOf('Cliente_ID'),
-    org: header.indexOf('Organização - Nome'),
-    titulo: header.indexOf('Negócio - Título'),
-    contato: header.indexOf('Negócio - Pessoa de contato'),
-    cargo: header.indexOf('Pessoa - Cargo'),
-    emailWork: header.indexOf('Pessoa - Email - Work'),
-    emailHome: header.indexOf('Pessoa - Email - Home'),
-    emailOther: header.indexOf('Pessoa - Email - Other'),
-    phoneWork: header.indexOf('Pessoa - Phone - Work'),
-    phoneHome: header.indexOf('Pessoa - Phone - Home'),
-    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
-    phoneOther: header.indexOf('Pessoa - Phone - Other'),
-    tel: header.indexOf('Pessoa - Telefone'),
-    cel: header.indexOf('Pessoa - Celular'),
-    normalizado: header.indexOf('Telefone Normalizado'),
-    segmento: header.indexOf('Organização - Segmento'),
-    tamanho: header.indexOf('Organização - Tamanho da empresa'),
-    uf: header.indexOf('uf'),
-    cidade: header.indexOf('cidade_estimada'),
-    status: header.indexOf('Status_Kanban'),
-    data: header.indexOf('Data_Ultima_Movimentacao'),
-    linkedin: header.indexOf('Pessoa - End. Linkedin'),
-    cor: header.indexOf('Cor_Card'),
-    produto: header.indexOf('Negócio - Nome do produto'),
-  };
-
-  const map = new Map();
-
-  data.forEach((row, i) => {
-    const clienteId = row[idx.clienteId];
-    if (!clienteId) return;
-
-    if (!map.has(clienteId)) {
-      map.set(clienteId, {
-        id: clienteId,
-        company: row[idx.org] || '',
-        opportunities: [],
-        contactsMap: new Map(),
-        segment: row[idx.segmento] || '',
-        size: row[idx.tamanho] || '',
-        uf: row[idx.uf] || '',
-        city: row[idx.cidade] || '',
-        status: '', // Will be overwritten by the latest row
-        dataMov: '', // Will be overwritten by the latest row
-        color: '', // Will be overwritten by the latest row
-        produto: row[idx.produto] || '',
-        rows: [],
-      });
-    }
-
-    // Always update status and color to reflect the latest row for a given ID
-    const client = map.get(clienteId);
-    const newStatus = (row[idx.status] || '').trim();
-    const newColor = row[idx.cor] || '';
-    const newDataMov = row[idx.data] || '';
-
-    if (newStatus) client.status = newStatus;
-    if (newColor) client.color = newColor;
-    if (newDataMov) client.dataMov = newDataMov;
-
-    client.opportunities.push(row[idx.titulo] || '');
-    client.rows.push(i + 2);
-
-    const contactName = (row[idx.contato] || '').trim();
-    const allEmails = collectEmails(row, idx);
-    const key = `${contactName}|${allEmails}`;
-
-    if (!client.contactsMap.has(key)) {
-      const normalized = normalizePhones(row, idx).map(protectPhoneValue);
-      client.contactsMap.set(key, {
-        name: contactName,
-        role: (row[idx.cargo] || '').trim(),
-        email: allEmails,
-        phone: protectPhoneValue(row[idx.tel]),
-        mobile: protectPhoneValue(row[idx.cel]),
-        normalizedPhones: normalized,
-        linkedin: (row[idx.linkedin] || '').trim(),
-      });
-    }
-  });
+function normalizeCard(row) {
+  const get = (key, fallback = '') => row[key] || fallback;
 
   return {
-    clients: Array.from(map.values()).map((c) => ({
-      id: c.id,
-      company: c.company,
-      opportunities: Array.from(new Set(c.opportunities)),
-      contacts: Array.from(c.contactsMap.values()),
-      segment: c.segment,
-      size: c.size,
-      uf: c.uf,
-      city: c.city,
-      status: c.status,
-      dataMov: c.dataMov,
-      color: c.color,
-      produto: c.produto,
-      rows: c.rows,
-    })),
+    id: get('cliente_id') || get('Cliente_ID'),
+    company: get('nome_da_empresa') || get('Organização - Nome'),
+    status: get('status_kanban') || get('Status_Kanban'),
+    color: get('cor_card') || get('Cor_Card'),
+    // Add other fields as needed
   };
 }
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const sheet = await getSheet();
-      const rows = sheet.data.values || [];
-      const { clients } = groupRows(rows);
-
-      const limitParam = parseInt(req.query.limit, 10);
-      const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
+      const { rows } = await getSheetData('sheet1');
+      const clients = rows.map(normalizeCard);
 
       const columns = [
         'Lead Selecionado',
@@ -148,7 +29,7 @@ export default async function handler(req, res) {
       ];
       const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
 
-      clients.slice(0, limit).forEach((client) => {
+      clients.forEach((client) => {
         const col = board.find((c) => c.id === client.status);
         if (col) {
           col.cards.push({ id: client.id, client });
@@ -164,37 +45,26 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { id, destination, status, color } = req.body;
-      const newStatus = status || (destination && destination.droppableId);
-      const newColor =
-        color !== undefined
-          ? color
-          : newStatus === 'Perdido'
-          ? 'red'
-          : undefined;
+      const { id, status, color } = req.body;
 
-      const sheetName = 'Sheet1';
-      const rowIndex = await findRowIndexById(sheetName, 1, 'Cliente_ID', id);
+      const sheetName = 'sheet1';
+      const rowIndex = await findRowIndexById(sheetName, 1, 'cliente_id', id);
       if (rowIndex < 0) {
         return res.status(404).json({ error: 'ID não encontrado' });
       }
 
-      const updates = {};
-      if (newStatus !== undefined) {
-        updates['Status_Kanban'] = newStatus;
-      }
-      if (newColor !== undefined) {
-        updates['Cor_Card'] = newColor;
-      }
-      updates['Data_Ultima_Movimentacao'] = new Date().toISOString().split('T')[0];
+      const updates = {
+        status_kanban: status,
+        cor_card: color,
+        data_ultima_movimentacao: new Date().toISOString().split('T')[0],
+      };
 
       await updateRowByIndex({ sheetName, rowIndex, updates });
 
-      return res.status(200).json({ status: newStatus, color: newColor });
+      return res.status(200).json({ status, color });
     } catch (err) {
       console.error('Erro ao atualizar kanban:', err);
-      const statusCode = err?.response?.status || err?.code || 500;
-      return res.status(statusCode).json({ error: err.message || 'Erro ao atualizar kanban' });
+      return res.status(500).json({ error: 'Erro ao atualizar kanban' });
     }
   }
 

@@ -19,9 +19,9 @@ export async function loadMetrics(params: { funnels: number[]; fromISO?: string 
     if (!parsed.success) throw new Error(parsed.error.message);
 
     // TODO: mapear para DTO dos cards/gráficos usados no dashboard
-    return { hasPartialData: false };
+    return { hasPartialData: false, cards: [], graphs: [] };
   } catch (err) {
     console.error("[loadMetrics] fallback:", err);
-    return { hasPartialData: true /* + estruturas vazias tipadas */ };
+    return { hasPartialData: true, cards: [], graphs: [] };
   }
 }
