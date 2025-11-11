@@ -11,7 +11,7 @@ function normalizeApp(str) {
 }
 
 async function fetchMensagens() {
-  const { headers, rows } = await getSheetData('Mensagens');
+  const { headers, rows } = await getSheetData('mensagens');
 
   // Find header names safely, accommodating for variations.
   const lowerHeaders = headers.map(h => (h || '').toLowerCase());
@@ -21,7 +21,7 @@ async function fetchMensagens() {
 
   // If essential headers are missing, log an error and return empty.
   if (!tituloHeader || !appHeader || !msgHeader) {
-    console.error('Could not find required headers (título/titulo, aplicativo, mensagem) in "Mensagens" sheet.');
+    console.error('Could not find required headers (título/titulo, aplicativo, mensagem) in "mensagens" sheet.');
     return [];
   }
 

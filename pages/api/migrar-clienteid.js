@@ -1,6 +1,6 @@
 import { getSheetsClient, withRetry } from '../../lib/googleSheets';
 
-const SHEETS = ['Sheet1', 'layout_importacao_empresas'];
+const SHEETS = ['sheet1', 'layout_importacao_empresas'];
 
 const clean = (v) => (v ?? '').toString().trim();
 const colLetter = (n) => { let s=''; while(n>=0){ s=String.fromCharCode((n%26)+65)+s; n=Math.floor(n/26)-1; } return s; };
@@ -35,24 +35,24 @@ export default async function handler(req, res) {
       const header = headerResp.data.values?.[0] || [];
       if (!header.length) { out.warnings.push(`Aba vazia: ${title}`); continue; }
 
-      let idxCliente = header.findIndex(h => clean(h) === 'Cliente_ID');
-      let idxClient  = header.findIndex(h => clean(h) === 'Client_ID');
+      let idxCliente = header.findIndex(h => clean(h) === 'cliente_id');
+      let idxClient  = header.findIndex(h => clean(h) === 'client_id');
 
       if (idxCliente === -1 && idxClient === -1) {
-        out.warnings.push(`Nenhuma coluna Cliente_ID/Client_ID em ${title}`);
+        out.warnings.push(`Nenhuma coluna cliente_id/client_id em ${title}`);
         continue;
       }
 
-      // Apenas Client_ID -> renomear para Cliente_ID
+      // Apenas client_id -> renomear para cliente_id
       if (idxCliente === -1 && idxClient !== -1) {
-        header[idxClient] = 'Cliente_ID';
+        header[idxClient] = 'cliente_id';
         await sheets.spreadsheets.values.update({
           spreadsheetId,
           range: `'${title}'!1:1`,
           valueInputOption: 'RAW',
           requestBody: { values: [header] }
         });
-        out.renamedHeaders.push({ sheet: title, from: 'Client_ID', to: 'Cliente_ID' });
+        out.renamedHeaders.push({ sheet: title, from: 'client_id', to: 'cliente_id' });
         idxCliente = idxClient;
         idxClient = -1; // já renomeado
         out.changedSheets.push(title);
@@ -67,7 +67,7 @@ export default async function handler(req, res) {
         const rows = bodyResp.data.values || [];
         let moved = 0;
 
-        // Copiar valores Client_ID -> Cliente_ID quando Cliente_ID estiver vazio
+        // Copiar valores client_id -> cliente_id quando cliente_id estiver vazio
         for (let r = 0; r < rows.length; r++) {
           const row = rows[r];
           const vCliente = clean(row[idxCliente] ?? '');
@@ -88,7 +88,7 @@ export default async function handler(req, res) {
           out.movedValues.push({ sheet: title, moved });
         }
 
-        // Deletar coluna Client_ID
+        // Deletar coluna client_id
         await withRetry(() => sheets.spreadsheets.batchUpdate({
           spreadsheetId,
           requestBody: {

@@ -49,7 +49,7 @@ async function upsertTipos(exemploPerdcomp, tipoFromAPI) {
     
     if (map.has(key)) {
       updates.push({
-        range: `DIC_TIPOS!A${map.get(key)}:H${map.get(key)}`,
+        range: `dic_tipos!A${map.get(key)}:H${map.get(key)}`,
         values: [row]
       });
     } else {
@@ -72,7 +72,7 @@ async function upsertTipos(exemploPerdcomp, tipoFromAPI) {
   if (inserts.length > 0) {
     await sheet.spreadsheets.values.append({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'DIC_TIPOS!A:H',
+      range: 'dic_tipos!A:H',
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
@@ -138,7 +138,7 @@ async function upsertNatureza(codigoNat, exemploPerdcomp, fromAPI = {}) {
   if (map.has(key)) {
     await sheet.spreadsheets.values.update({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: `DIC_NATUREZAS!A${map.get(key)}:I${map.get(key)}`,
+      range: `dic_naturezas!A${map.get(key)}:I${map.get(key)}`,
       valueInputOption: 'RAW',
       requestBody: {
         values: [row]
@@ -147,7 +147,7 @@ async function upsertNatureza(codigoNat, exemploPerdcomp, fromAPI = {}) {
   } else {
     await sheet.spreadsheets.values.append({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'DIC_NATUREZAS!A:I',
+      range: 'dic_naturezas!A:I',
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
@@ -193,7 +193,7 @@ async function upsertCredito(codCred, exemploPerdcomp, descFromAPI) {
   if (map.has(key)) {
     await sheet.spreadsheets.values.update({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: `DIC_CREDITOS!A${map.get(key)}:G${map.get(key)}`,
+      range: `dic_creditos!A${map.get(key)}:G${map.get(key)}`,
       valueInputOption: 'RAW',
       requestBody: {
         values: [row]
@@ -202,7 +202,7 @@ async function upsertCredito(codCred, exemploPerdcomp, descFromAPI) {
   } else {
     await sheet.spreadsheets.values.append({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'DIC_CREDITOS!A:G',
+      range: 'dic_creditos!A:G',
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {

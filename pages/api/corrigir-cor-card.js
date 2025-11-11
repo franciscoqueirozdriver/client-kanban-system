@@ -1,8 +1,8 @@
 import { getSheetsClient, getSheetData } from '../../lib/googleSheets';
 
-const SHEET_NAME = 'Sheet1';
-const KEY = 'Cliente_ID';
-const COLOR_COLUMN = 'Cor_Card';
+const SHEET_NAME = 'sheet1';
+const KEY = 'cliente_id';
+const COLOR_COLUMN = 'cor_card';
 
 const clean = (v) => (v ?? '').toString().trim();
 
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const { headers, rows } = await getSheetData(SHEET_NAME);
     const colorIdx = headers.indexOf(COLOR_COLUMN);
     if (colorIdx === -1) {
-      return res.status(400).json({ error: 'Coluna Cor_Card não encontrada' });
+      return res.status(400).json({ error: 'Coluna cor_card não encontrada' });
     }
 
     const updates = [];

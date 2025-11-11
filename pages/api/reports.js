@@ -7,7 +7,7 @@ export default async function handler(req, res) {
       const limitParam = parseInt(req.query.limit ?? req.query.maxLeads, 10);
       const onlyNew = req.query.onlyNew === '1';
 
-      const { headers, rows } = await getSheetData('Sheet1');
+      const { headers, rows } = await getSheetData('sheet1');
 
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : rows.length;
       console.log('API /reports GET', { query: req.query, limit, onlyNew });

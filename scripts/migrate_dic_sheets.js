@@ -17,7 +17,7 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 
 const HEADERS = {
-  DIC_TIPOS: [
+  dic_tipos: [
     "Chave",
     "Bloco",
     "Codigo",
@@ -27,7 +27,7 @@ const HEADERS = {
     "Exemplo",
     "Ult_Atualizacao",
   ],
-  DIC_NATUREZAS: [
+  dic_naturezas: [
     "Chave",
     "Bloco",
     "Codigo",
@@ -38,7 +38,7 @@ const HEADERS = {
     "Exemplo",
     "Ult_Atualizacao",
   ],
-  DIC_CREDITOS: [
+  dic_creditos: [
     "Chave",
     "Bloco",
     "Codigo",
@@ -47,7 +47,7 @@ const HEADERS = {
     "Exemplo",
     "Ult_Atualizacao",
   ],
-  EVENTOS_PERDCOMP: [
+  eventos_perdcomp: [
     "Perdcomp_Bruto",
     "Perdcomp_Formatado",
     "Data_ISO",
