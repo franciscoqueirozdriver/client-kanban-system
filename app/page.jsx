@@ -21,7 +21,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     let filtered = allClients;
-    if (filters.segmento) filtered = filtered.filter((c) => c.segment === filters.segmento);
+    if (filters.segmento) filtered = filtered.filter((c) => c.segment === filters.segment);
     if (filters.uf) filtered = filtered.filter((c) => c.uf === filters.uf);
     setClients(filtered);
   }, [filters, allClients]);
