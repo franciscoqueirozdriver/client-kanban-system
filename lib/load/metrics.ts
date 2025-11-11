@@ -9,7 +9,12 @@ export async function loadMetrics(params: { funnels: number[]; fromISO?: string 
   const url = new URL(`/api/spotter`, window.location.origin);
   url.searchParams.set("resource", "Bundle");
   url.searchParams.set("funnels", funnels);
-  if (filter) url.searchParams.set("filter", filter);
+
+  if (filter) {
+    const enc = encodeURIComponent(filter);
+    const hasQuery = url.search.length > 0;
+    url.search = (hasQuery ? `${url.search}&` : "?") + `filter=${enc}`;
+  }
 
   try {
     const { ok, data, error } = await safeFetchJSON<{ ok: boolean; data?: unknown; error?: string }>(url.toString());
