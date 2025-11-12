@@ -112,24 +112,25 @@ function ClientesPageComponent() {
   useEffect(() => {
     async function loadClients() {
       const response = await fetch('/api/clientes');
-      const json: ClientsResponse = await response.json();
-      setClients(json.clients);
-      setOptions(json.filters || {});
+      const json: ClientsResponse = await response.json().catch(() => ({ clients: [], filters: {} }));
+      setClients(Array.isArray(json.clients) ? json.clients : []);
+      setOptions(json.filters && typeof json.filters === 'object' ? json.filters : {});
     }
     loadClients();
   }, []);
 
   const filterOptionsForMultiSelect = useMemo<FilterOptions>(() => {
+    const validOptions = options && typeof options === 'object' ? options : {};
     const mapToOptions = (values?: string[]) => (values || []).map((value) => ({ label: value, value }));
     return {
-      segmento: mapToOptions(options.segmento),
-      porte: mapToOptions(options.porte),
-      uf: mapToOptions(options.uf),
-      cidade: mapToOptions(options.cidade),
-      erp: mapToOptions(options.erp),
-      fase: mapToOptions(options.fase),
-      origem: mapToOptions(options.origem),
-      vendedor: mapToOptions(options.vendedor)
+      segmento: mapToOptions(validOptions.segmento),
+      porte: mapToOptions(validOptions.porte),
+      uf: mapToOptions(validOptions.uf),
+      cidade: mapToOptions(validOptions.cidade),
+      erp: mapToOptions(validOptions.erp),
+      fase: mapToOptions(validOptions.fase),
+      origem: mapToOptions(validOptions.origem),
+      vendedor: mapToOptions(validOptions.vendedor)
     };
   }, [options]);
 
@@ -139,7 +140,7 @@ function ClientesPageComponent() {
 
   const filteredClients = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return clients.filter((client) => {
+    return (Array.isArray(clients) ? clients : []).filter((client) => {
       const matchesSegment = !filters.segmento.length || filters.segmento.includes((client.segment || '').trim());
       if (!matchesSegment) return false;
       const matchesSize = !filters.porte.length || filters.porte.includes((client.size || '').trim());
@@ -184,13 +185,13 @@ function ClientesPageComponent() {
   const numberFormatter = useMemo(() => new Intl.NumberFormat('pt-BR'), []);
 
   const summary = useMemo(() => {
-    const contacts = filteredClients.reduce((total, client) => {
+    const contacts = (Array.isArray(filteredClients) ? filteredClients : []).reduce((total, client) => {
       const value = Array.isArray(client.contacts) ? client.contacts.length : 0;
       return total + value;
     }, 0);
 
-    const segments = new Set(filteredClients.map((client) => (client.segment || '').trim()).filter(Boolean));
-    const states = new Set(filteredClients.map((client) => (client.uf || '').trim()).filter(Boolean));
+    const segments = new Set((Array.isArray(filteredClients) ? filteredClients : []).map((client) => (client.segment || '').trim()).filter(Boolean));
+    const states = new Set((Array.isArray(filteredClients) ? filteredClients : []).map((client) => (client.uf || '').trim()).filter(Boolean));
 
     return {
       visible: filteredClients.length,
@@ -285,8 +286,8 @@ function ClientesPageComponent() {
     fetch('/api/clientes')
       .then((res) => res.json())
       .then((json: ClientsResponse) => {
-        setClients(json.clients);
-        setOptions(json.filters || {});
+        setClients(Array.isArray(json.clients) ? json.clients : []);
+        setOptions(json.filters && typeof json.filters === 'object' ? json.filters : {});
       });
   }
 

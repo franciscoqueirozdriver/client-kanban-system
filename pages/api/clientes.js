@@ -1,5 +1,5 @@
 import { getSheetCached, appendRow, updateRow, getSheetData } from '../../lib/googleSheets';
-import { buildColumnResolver } from '../../lib/sheets/headerResolver';
+import { buildColumnResolver, normalizeHeader } from '../../lib/sheets/headerResolver';
 import { normalizePhones } from '../../lib/report';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
@@ -25,32 +25,43 @@ function collectEmails(row, idx) {
 
 async function groupRows(rows) {
   const [header, ...data] = rows;
+  const requiredColumns = ['cliente_id', 'segmento', 'organizacao_nome', 'negocio_titulo', 'negocio_pessoa_de_contato', 'pessoa_cargo', 'pessoa_email_work', 'pessoa_email_home', 'pessoa_email_other', 'pessoa_phone_work', 'pessoa_phone_home', 'pessoa_phone_mobile', 'pessoa_phone_other', 'pessoa_telefone', 'pessoa_celular', 'telefone_normalizado', 'organizacao_tamanho_da_empresa', 'uf', 'cidade_estimada', 'status_kanban', 'data_ultima_movimentacao', 'pessoa_end_linkedin', 'cor_card'];
+
+  const headersNorm = header.map(h => normalizeHeader(h)).filter(Boolean);
+  const missing = requiredColumns.filter(r => !headersNorm.includes(r));
+
+  if (missing.length) {
+    console.warn('[api/clientes] Missing required columns:', missing);
+    // Retorna 200 com array vazio para não quebrar o front
+    return { clients: [], filters: { segmento: [], porte: [], uf: [], cidade: [] } };
+  }
+
   const SHEET = 'Sheet1';
   const COL = await buildColumnResolver(SHEET);
   const idx = {
-    clienteId: header.indexOf(COL('Cliente_ID')),
-    org: header.indexOf(COL('Organização - Nome')),
-    titulo: header.indexOf(COL('Negócio - Título')),
-    contato: header.indexOf(COL('Negócio - Pessoa de contato')),
-    cargo: header.indexOf(COL('Pessoa - Cargo')),
-    emailWork: header.indexOf(COL('Pessoa - Email - Work')),
-    emailHome: header.indexOf(COL('Pessoa - Email - Home')),
-    emailOther: header.indexOf(COL('Pessoa - Email - Other')),
-    phoneWork: header.indexOf(COL('Pessoa - Phone - Work')),
-    phoneHome: header.indexOf(COL('Pessoa - Phone - Home')),
-    phoneMobile: header.indexOf(COL('Pessoa - Phone - Mobile')),
-    phoneOther: header.indexOf(COL('Pessoa - Phone - Other')),
-    tel: header.indexOf(COL('Pessoa - Telefone')),
-    cel: header.indexOf(COL('Pessoa - Celular')),
-    normalizado: header.indexOf(COL('Telefone Normalizado')),
-    segmento: header.indexOf(COL('Organização - Segmento')),
-    tamanho: header.indexOf(COL('Organização - Tamanho da empresa')),
+    clienteId: header.indexOf(COL('cliente_id')),
+    org: header.indexOf(COL('organizacao_nome')),
+    titulo: header.indexOf(COL('negocio_titulo')),
+    contato: header.indexOf(COL('negocio_pessoa_de_contato')),
+    cargo: header.indexOf(COL('pessoa_cargo')),
+    emailWork: header.indexOf(COL('pessoa_email_work')),
+    emailHome: header.indexOf(COL('pessoa_email_home')),
+    emailOther: header.indexOf(COL('pessoa_email_other')),
+    phoneWork: header.indexOf(COL('pessoa_phone_work')),
+    phoneHome: header.indexOf(COL('pessoa_phone_home')),
+    phoneMobile: header.indexOf(COL('pessoa_phone_mobile')),
+    phoneOther: header.indexOf(COL('pessoa_phone_other')),
+    tel: header.indexOf(COL('pessoa_telefone')),
+    cel: header.indexOf(COL('pessoa_celular')),
+    normalizado: header.indexOf(COL('telefone_normalizado')),
+    segmento: header.indexOf(COL('segmento')),
+    tamanho: header.indexOf(COL('organizacao_tamanho_da_empresa')),
     uf: header.indexOf(COL('uf')),
     cidade: header.indexOf(COL('cidade_estimada')),
-    status: header.indexOf(COL('Status_Kanban')),
-    data: header.indexOf(COL('Data_Ultima_Movimentacao')),
-    linkedin: header.indexOf(COL('Pessoa - End. Linkedin')),
-    cor: header.indexOf(COL('Cor_Card')),
+    status: header.indexOf(COL('status_kanban')),
+    data: header.indexOf(COL('data_ultima_movimentacao')),
+    linkedin: header.indexOf(COL('pessoa_end_linkedin')),
+    cor: header.indexOf(COL('cor_card')),
   };
 
   const filters = {

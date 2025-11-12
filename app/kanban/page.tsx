@@ -114,8 +114,8 @@ function KanbanPage() {
   useEffect(() => {
     async function fetchColumns() {
       const response = await fetch('/api/kanban');
-      const data = await response.json();
-      setColumns(data);
+      const data = await response.json().catch(() => []);
+      setColumns(Array.isArray(data) ? data : []);
     }
     async function fetchFilterOptions() {
       const response = await fetch('/api/clientes');
@@ -129,7 +129,7 @@ function KanbanPage() {
   const filterOptionsForMultiSelect = useMemo<FilterOptions>(() => {
     const mapToOptions = (values?: string[]) =>
       (values || []).map((value) => ({ label: value, value }));
-    const phaseOptions = columns.map((column) => ({
+    const phaseOptions = (Array.isArray(columns) ? columns : []).map((column) => ({
       label: column.title,
       value: column.id
     }));
@@ -200,7 +200,7 @@ function KanbanPage() {
   }, [columns, filters, query]);
 
   const summary = useMemo(() => {
-    const allCards = filteredColumns.flatMap((column) => column.cards);
+    const allCards = (Array.isArray(filteredColumns) ? filteredColumns : []).flatMap((column) => column.cards);
     const totalLeads = allCards.length;
     const meetings = allCards.filter((card) =>
       ['Reunião Realizada', 'Conversa Iniciada', 'Contato Efetuado'].includes(card.client.status)
@@ -233,7 +233,7 @@ function KanbanPage() {
     if (isUpdating) return;
 
     const { source, destination, draggableId } = result;
-    const allCols = [...columns];
+    const allCols = [...(Array.isArray(columns) ? columns : [])];
     const sourceCol = allCols.find((column) => column.id === source.droppableId);
     const destCol = allCols.find((column) => column.id === destination.droppableId);
 
@@ -264,13 +264,13 @@ function KanbanPage() {
         body: JSON.stringify({ id: draggableId, status: newStatus, color: newColor })
       });
       const response = await fetch('/api/kanban');
-      const data = await response.json();
-      setColumns(data);
+      const data = await response.json().catch(() => []);
+      setColumns(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error(error);
       const response = await fetch('/api/kanban');
-      const data = await response.json();
-      setColumns(data);
+      const data = await response.json().catch(() => []);
+      setColumns(Array.isArray(data) ? data : []);
     } finally {
       setIsUpdating(false);
     }
