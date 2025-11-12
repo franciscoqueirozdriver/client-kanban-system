@@ -1,5 +1,6 @@
 import { getSheet, getSheetCached, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
 import { normalizePhones } from '../../lib/report';
+import { KanbanDataZ } from '../../lib/schemas/kanban';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
 function protectPhoneValue(value) {
@@ -25,6 +26,9 @@ function collectEmails(row, idx) {
 }
 
 function groupRows(rows) {
+  if (!rows || rows.length === 0) {
+    return { clients: [] };
+  }
   const [header, ...data] = rows;
   const idx = {
     clienteId: header.indexOf('cliente_id'),
@@ -131,7 +135,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const sheet = await getSheet();
-      const rows = sheet.data.values || [];
+      const rows = sheet && sheet.data ? sheet.data.values || [] : [];
       const { clients } = groupRows(rows);
 
       const limitParam = parseInt(req.query.limit, 10);
@@ -155,10 +159,12 @@ export default async function handler(req, res) {
         }
       });
 
-      return res.status(200).json(board);
+      const safeBoard = KanbanDataZ.parse(board);
+      return res.status(200).json(safeBoard);
     } catch (err) {
-      console.error('Erro ao listar kanban:', err);
-      return res.status(500).json({ error: 'Erro ao listar kanban' });
+      console.error('[KANBAN][API] fail:', err);
+      // Nunca 500 por dado ruim: devolve shape consistente
+      return res.status(200).json([]);
     }
   }
 
