@@ -11,6 +11,12 @@ const {
   savePerdecompResults,
 } = persistModule;
 
+const normalizeISO = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+};
+
 jest.mock('./googleSheets.js', () => ({
   getSheetData: jest.fn(),
   getSheetsClient: jest.fn(),
@@ -23,6 +29,9 @@ const { getSheetData, getSheetsClient, withRetry, chunk } = jest.requireMock('./
 describe('perdecomp-persist', () => {
   const appendMock = jest.fn();
   const batchUpdateMock = jest.fn();
+  const valuesUpdateMock = jest.fn();
+  const spreadsheetsBatchUpdateMock = jest.fn();
+  const spreadsheetsGetMock = jest.fn();
   const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
   const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -37,17 +46,33 @@ describe('perdecomp-persist', () => {
     chunk.mockClear();
     appendMock.mockReset();
     batchUpdateMock.mockReset();
+    valuesUpdateMock.mockReset();
+    spreadsheetsBatchUpdateMock.mockReset();
+    spreadsheetsGetMock.mockReset();
+    process.env.SPREADSHEET_ID = 'test-sheet-id';
     infoSpy.mockClear();
     errorSpy.mockClear();
     warnSpy.mockClear();
     getSheetsClient.mockResolvedValue({
       spreadsheets: {
+        get: spreadsheetsGetMock,
+        batchUpdate: spreadsheetsBatchUpdateMock,
         values: {
           append: appendMock,
+          update: valuesUpdateMock,
           batchUpdate: batchUpdateMock,
         },
       },
     });
+    spreadsheetsGetMock.mockResolvedValue({
+      data: {
+        sheets: [
+          { properties: { title: 'perdecomp_snapshot' } },
+          { properties: { title: 'perdecomp_facts' } },
+        ],
+      },
+    });
+    spreadsheetsBatchUpdateMock.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -123,23 +148,43 @@ describe('perdecomp-persist', () => {
       'Data_Consulta',
       'URL_Comprovante_HTML',
       'Payload_Bytes',
-      'Last_Updated_ISO',
       'Snapshot_Hash',
       'Facts_Count',
+      'Last_Updated_ISO',
       'Consulta_ID',
       'Erro_Ultima_Consulta',
     ];
     const factsHeaders = [
       'Cliente_ID',
+      'Empresa_ID',
+      'Nome da Empresa',
+      'CNPJ',
       'Perdcomp_Numero',
-      'Protocolo',
-      'Natureza',
-      'Credito',
+      'Perdcomp_Formatado',
+      'B1',
+      'B2',
+      'Data_DDMMAA',
       'Data_ISO',
-      'Valor',
+      'Tipo_Codigo',
+      'Tipo_Nome',
+      'Natureza',
+      'Familia',
+      'Credito_Codigo',
+      'Credito_Descricao',
+      'Risco_Nivel',
+      'Protocolo',
+      'Situacao',
+      'Situacao_Detalhamento',
+      'Motivo_Normalizado',
+      'Solicitante',
+      'Fonte',
+      'Data_Consulta',
+      'URL_Comprovante_HTML',
       'Row_Hash',
-      'Consulta_ID',
       'Inserted_At',
+      'Consulta_ID',
+      'Version',
+      'Deleted_Flag',
     ];
 
     const meta = {
@@ -151,27 +196,30 @@ describe('perdecomp-persist', () => {
       consultaId: 'consulta-123',
     };
 
+    const duplicatePerdcompNumero = '111112222201020311011234';
+    const duplicatePerdcompISO = normalizeISO('2003-02-01');
     const duplicateFact = {
       Cliente_ID: 'COMP-1',
       Empresa_ID: '',
       CNPJ: '12345678000190',
-      Perdcomp_Numero: '123451234512345123451234',
-      Natureza: '1.3',
-      Credito: '01',
+      Perdcomp_Numero: duplicatePerdcompNumero,
+      Natureza: '',
+      Credito_Codigo: '',
       Data_ISO: '',
-      Valor: '',
-      Data_Consulta: meta.dataConsultaISO,
-      Fonte: meta.fonte,
+      Valor: '0',
+      Tipo_Codigo: '',
+      Tipo_Nome: '',
+      Situacao: 'Em análise',
     };
     const duplicateHash = crypto
       .createHash('sha256')
       .update(
         [
-          duplicateFact.Perdcomp_Numero,
-          '',
-          duplicateFact.Natureza,
-          duplicateFact.Credito,
-          duplicateFact.Data_ISO,
+          duplicatePerdcompNumero,
+          '1',
+          '1.1',
+          '01',
+          duplicatePerdcompISO,
           duplicateFact.Valor,
         ].join('|'),
       )
@@ -185,21 +233,42 @@ describe('perdecomp-persist', () => {
       ],
     };
 
-    getSheetData
-      .mockResolvedValueOnce(snapshotData) // resolveClienteId find
-      .mockResolvedValueOnce(snapshotData) // resolveClienteId next
-      .mockResolvedValueOnce(snapshotData) // upsert snapshot
-      .mockResolvedValueOnce({
-        headers: factsHeaders,
-        rows: [
-          {
-            Cliente_ID: 'CLT-3684',
-            Perdcomp_Numero: duplicateFact.Perdcomp_Numero,
-            Row_Hash: duplicateHash,
-            _rowNumber: 2,
-          },
-        ],
-      });
+    const snapshotRows = [...snapshotData.rows];
+
+    getSheetData.mockImplementation((sheetName: string, range?: string) => {
+      if (sheetName === 'perdecomp_snapshot') {
+        return Promise.resolve({ headers: snapshotHeaders, rows: snapshotRows });
+      }
+      if (sheetName === 'perdecomp_facts') {
+        if (range === 'A1:ZZ1') {
+          return Promise.resolve({ headers: factsHeaders, rows: [] });
+        }
+        return Promise.resolve({
+          headers: factsHeaders,
+          rows: [
+            {
+              Cliente_ID: 'CLT-3684',
+              Perdcomp_Numero: duplicateFact.Perdcomp_Numero,
+              Row_Hash: duplicateHash,
+              _rowNumber: 2,
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected sheet request: ${sheetName}`);
+    });
+
+    appendMock.mockImplementation((request) => {
+      if (request.range === 'perdecomp_snapshot') {
+        const values = request.requestBody.values[0];
+        const newRow: any = { _rowNumber: snapshotRows.length + 2 };
+        snapshotHeaders.forEach((header, index) => {
+          newRow[header] = values[index] ?? '';
+        });
+        snapshotRows.push(newRow);
+      }
+      return Promise.resolve({});
+    });
 
     const card = {
       nomeEmpresa: 'Empresa Teste',
@@ -213,17 +282,22 @@ describe('perdecomp-persist', () => {
       perdcompCodigos: ['123451234512345123451234', '987659876598765987659876'],
     };
 
+    const newPerdcompNumero = '226629052425092513189471';
+    const newPerdcompISO = normalizeISO('2025-09-25');
+
     const facts = [
       { ...duplicateFact },
       {
         Cliente_ID: 'COMP-1',
         Empresa_ID: '',
         CNPJ: '12345678000190',
-        Perdcomp_Numero: '987659876598765987659876',
-        Natureza: '1.2',
-        Credito: '02',
+        Perdcomp_Numero: newPerdcompNumero,
+        Natureza: '',
+        Credito_Codigo: '',
         Data_ISO: '',
         Valor: '',
+        Tipo_Codigo: '',
+        Tipo_Nome: '',
       },
     ];
 
@@ -237,31 +311,69 @@ describe('perdecomp-persist', () => {
     });
 
     expect(warnSpy).not.toHaveBeenCalled();
-    expect(appendMock).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ range: 'perdecomp_snapshot' }),
+    expect(spreadsheetsBatchUpdateMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: expect.objectContaining({
+          requests: expect.arrayContaining([
+            expect.objectContaining({ addSheet: expect.anything() }),
+          ]),
+        }),
+      }),
     );
+    expect(valuesUpdateMock).not.toHaveBeenCalled();
+
     expect(appendMock).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ range: 'perdecomp_facts' }),
     );
 
-    const snapshotValues = appendMock.mock.calls[0][0].requestBody.values[0];
+    expect(appendMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ range: 'perdecomp_snapshot' }),
+    );
+
+    const snapshotAppendCall = appendMock.mock.calls[0][0];
+    const factsAppendCall = appendMock.mock.calls[1][0];
+
+    const snapshotValues = snapshotAppendCall.requestBody.values[0];
+    const appendedFacts = factsAppendCall.requestBody.values;
     expect(snapshotValues[snapshotHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
     expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('12345678000190');
     expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('2');
-
-    const appendedFacts = appendMock.mock.calls[1][0].requestBody.values;
+    expect(snapshotValues[snapshotHeaders.indexOf('Risco_Nivel')]).toBe('DESCONHECIDO');
+    expect(
+      JSON.parse(snapshotValues[snapshotHeaders.indexOf('Risco_Tags_JSON')]),
+    ).toEqual([{ label: 'DESCONHECIDO', count: 2 }]);
     expect(appendedFacts).toHaveLength(1);
-    const factHeaders = appendMock.mock.calls[1][0].requestBody.values[0];
-    expect(factHeaders[factsHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
-    expect(factHeaders[factsHeaders.indexOf('Perdcomp_Numero')]).toBe('987659876598765987659876');
-    expect(factHeaders[factsHeaders.indexOf('Row_Hash')]).toBe(
+    const factRow = appendedFacts[0];
+    expect(factRow[factsHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
+    expect(factRow[factsHeaders.indexOf('Nome da Empresa')]).toBe('Empresa Teste');
+    expect(factRow[factsHeaders.indexOf('Perdcomp_Numero')]).toBe(newPerdcompNumero);
+    expect(factRow[factsHeaders.indexOf('B1')]).toBe('');
+    expect(factRow[factsHeaders.indexOf('B2')]).toBe('');
+    expect(factRow[factsHeaders.indexOf('Data_ISO')]).toBe(newPerdcompISO);
+    expect(factRow[factsHeaders.indexOf('Data_DDMMAA')]).toBe('250925');
+    expect(factRow[factsHeaders.indexOf('Tipo_Codigo')]).toBe('1');
+    expect(factRow[factsHeaders.indexOf('Tipo_Nome')]).toBe('Declaração de Compensação');
+    expect(factRow[factsHeaders.indexOf('Natureza')]).toBe('1.3');
+    expect(factRow[factsHeaders.indexOf('Familia')]).toBe('DCOMP');
+    expect(factRow[factsHeaders.indexOf('Credito_Codigo')]).toBe('18');
+    expect(factRow[factsHeaders.indexOf('Credito_Descricao')]).toBe('Outros Créditos');
+    expect(factRow[factsHeaders.indexOf('Protocolo')]).toBe('9471');
+    expect(factRow[factsHeaders.indexOf('Row_Hash')]).toBe(
       crypto
         .createHash('sha256')
-        .update(['987659876598765987659876', '', '1.2', '02', '', ''].join('|'))
+        .update([newPerdcompNumero, '1', '1.3', '18', newPerdcompISO, ''].join('|'))
         .digest('hex'),
     );
+
+    const porCredito = JSON.parse(
+      snapshotValues[snapshotHeaders.indexOf('Por_Credito_JSON')],
+    );
+    expect(porCredito).toEqual([
+      { label: 'Ressarcimento de IPI', count: 1 },
+      { label: 'Outros Créditos', count: 1 },
+    ]);
 
     expect(infoSpy).toHaveBeenCalledWith('PERSIST_START', {
       clienteId: 'CLT-3684',
@@ -279,6 +391,18 @@ describe('perdecomp-persist', () => {
     });
     expect(infoSpy).toHaveBeenCalledWith('PERSIST_END', { clienteId: 'CLT-3684' });
     expect(errorSpy).not.toHaveBeenCalledWith('PERSIST_FAIL', expect.anything());
+
+    const nowISO = new Date().toISOString();
+    const batchCalls = batchUpdateMock.mock.calls.map((call) => call[0]);
+    expect(batchCalls.length).toBeGreaterThan(0);
+    const lastCall = batchCalls[batchCalls.length - 1];
+    expect(lastCall.requestBody.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ values: [['2']] }),
+        expect.objectContaining({ values: [['']] }),
+        expect.objectContaining({ values: [[nowISO]] }),
+      ]),
+    );
   });
 
   it('marks snapshot error when persistence fails', async () => {
@@ -342,18 +466,26 @@ describe('perdecomp-persist', () => {
   });
 
   it('loads snapshot card by concatenating shards', async () => {
-    getSheetData.mockResolvedValueOnce({
-      headers: ['Cliente_ID', 'Resumo_Ultima_Consulta_JSON_P1', 'Resumo_Ultima_Consulta_JSON_P2'],
-      rows: [
-        {
-          Cliente_ID: 'CLT-3683',
-          Resumo_Ultima_Consulta_JSON_P1: '{"nome":"Empresa"',
-          Resumo_Ultima_Consulta_JSON_P2: ',"valor":1}',
-        },
-      ],
+    getSheetData.mockImplementation((sheetName: string) => {
+      if (sheetName === 'perdecomp_snapshot') {
+        return Promise.resolve({
+          headers: ['Cliente_ID', 'Resumo_Ultima_Consulta_JSON_P1', 'Resumo_Ultima_Consulta_JSON_P2'],
+          rows: [
+            {
+              Cliente_ID: 'CLT-3683',
+              Resumo_Ultima_Consulta_JSON_P1: '{"nome":"Empresa"',
+              Resumo_Ultima_Consulta_JSON_P2: ',"valor":1}',
+            },
+          ],
+        });
+      }
+      if (sheetName === 'perdecomp_facts') {
+        return Promise.resolve({ headers: ['Cliente_ID'], rows: [] });
+      }
+      throw new Error(`Unexpected sheet request: ${sheetName}`);
     });
 
     const card = await loadSnapshotCard({ clienteId: 'CLT-3683' });
-    expect(card).toEqual({ nome: 'Empresa', valor: 1 });
+    expect(card).toEqual({ nome: 'Empresa', valor: 1, risk: { nivel: '', tags: [] }, agregados: { porCredito: [] } });
   });
 });

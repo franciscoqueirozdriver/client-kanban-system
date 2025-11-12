@@ -6,108 +6,246 @@ import {
   getSheetsClient,
   withRetry,
 } from './googleSheets.js';
-import { analisarPortfolioPerdcomp } from '@/lib/perdcomp';
-import { classificaFamiliaPorNatureza } from '@/utils/perdcomp';
+import { formatPerdcompNumero } from '@/utils/perdcomp';
+import {
+  parsePerdcomp as parsePerdcompCodigo,
+  TIPOS_DOCUMENTO,
+  NATUREZA_FAMILIA,
+  CREDITOS_DESCRICAO,
+} from '@/lib/perdcomp';
 
-const SNAPSHOT_SHEET = 'perdecomp_snapshot';
-const FACTS_SHEET = 'perdecomp_facts';
-const PAYLOAD_SHARD_LIMIT = 45000;
-const CARD_SCHEMA_VERSION_FALLBACK = 'v1.0.0';
+export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
+export const SHEET_FACTS = 'perdecomp_facts';
+
+const FACTS_COLUMNS = [
+  'Cliente_ID',
+  'Empresa_ID',
+  'Nome da Empresa',
+  'CNPJ',
+  'Perdcomp_Numero',
+  'Perdcomp_Formatado',
+  'B1',
+  'B2',
+  'Data_DDMMAA',
+  'Data_ISO',
+  'Tipo_Codigo',
+  'Tipo_Nome',
+  'Natureza',
+  'Familia',
+  'Credito_Codigo',
+  'Credito_Descricao',
+  'Risco_Nivel',
+  'Protocolo',
+  'Situacao',
+  'Situacao_Detalhamento',
+  'Motivo_Normalizado',
+  'Solicitante',
+  'Fonte',
+  'Data_Consulta',
+  'URL_Comprovante_HTML',
+  'Row_Hash',
+  'Inserted_At',
+  'Consulta_ID',
+  'Version',
+  'Deleted_Flag',
+] as const;
+
+type FactsColumn = (typeof FACTS_COLUMNS)[number];
+const PAYLOAD_SHARD_LIMIT_BYTES = 90000;
+const CARD_SCHEMA_VERSION_FALLBACK = 'v1';
 export const CLT_ID_RE = /^CLT-\d{4,}$/;
 
+export type Meta = {
+  fonte?: string;
+  dataConsultaISO?: string;
+  urlComprovante?: string;
+  cardSchemaVersion?: string;
+  renderedAtISO?: string;
+  consultaId: string;
+};
+
 type ResolveOpts = { providedClienteId?: string | null; cnpj?: string | null };
-
-let nextClienteSequence: number | null = null;
-let resolveOverride: ((opts: ResolveOpts) => Promise<string>) | null = null;
-
 type SaveArgs = {
-  clienteId: string;
-  empresaId?: string;
-  cnpj?: string;
+  clienteId?: string | null;
+  empresaId?: string | null;
+  cnpj?: string | null;
   card: any;
   facts: any[];
-  meta: {
-    fonte?: string;
-    dataConsultaISO?: string;
-    urlComprovante?: string;
-    cardSchemaVersion?: string;
-    renderedAtISO?: string;
-    consultaId: string;
-  };
+  meta: Meta;
 };
 
 type LoadArgs = {
   clienteId: string;
 };
 
-type SnapshotRow = Record<string, string>;
+type SheetRow = Record<string, string>;
+type FactsRow = Record<FactsColumn, string>;
 
-const FACT_METADATA_FIELDS = new Set([
-  'Row_Hash',
-  'Consulta_ID',
-  'Inserted_At',
-]);
+type RiskTag = { label: string; count: number };
 
-function normalizeDigits(value: string | null | undefined): string {
-  return (value || '').replace(/\D+/g, '');
+export type DerivedRisk = { nivel: string; tags: RiskTag[] };
+
+type PersistContext = {
+  clienteId: string;
+  empresaId?: string | null;
+  nomeEmpresa: string;
+  cnpj: string;
+  meta: Meta;
+  nowISO: string;
+};
+
+type FilterResult = {
+  insert: FactsRow[];
+  skip: number;
+};
+
+let nextClienteSequence: number | null = null;
+let resolveOverride: ((opts: ResolveOpts) => Promise<string>) | null = null;
+let cachedFactsHeaders: string[] | null = null;
+
+const FACT_METADATA_FIELDS = new Set(['Row_Hash', 'Consulta_ID', 'Inserted_At']);
+
+function toStringValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
 }
 
-async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<string | null> {
-  const normalized = normalizeDigits(cnpj || '');
-  if (!normalized) return null;
-  const { rows } = await getSheetData(SNAPSHOT_SHEET);
-  const match = rows.find(row => normalizeDigits(toStringValue(row.CNPJ)) === normalized);
-  if (!match) return null;
-  const id = toStringValue(match.Cliente_ID);
-  return CLT_ID_RE.test(id) ? id : null;
+function normalizeSheetRow(row: Record<string, any>): SheetRow {
+  const normalized: SheetRow = {};
+  Object.entries(row ?? {}).forEach(([key, value]) => {
+    if (key === '_rowNumber') return;
+    normalized[key] = toStringValue(value);
+  });
+  return normalized;
 }
 
-async function nextClienteId(): Promise<string> {
-  if (nextClienteSequence === null) {
-    const { rows } = await getSheetData(SNAPSHOT_SHEET);
-    let max = 0;
-    for (const row of rows) {
-      const id = toStringValue(row.Cliente_ID);
-      const match = id.match(/^CLT-(\d{4,})$/);
-      if (!match) continue;
-      const value = Number(match[1]);
-      if (!Number.isNaN(value) && value > max) {
-        max = value;
-      }
-    }
-    nextClienteSequence = max + 1;
-  } else {
-    nextClienteSequence += 1;
+function coalesceString(...values: Array<unknown>): string {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    const str = toStringValue(value);
+    if (str.trim() !== '') return str;
   }
-  const next = nextClienteSequence;
-  return `CLT-${String(next).padStart(4, '0')}`;
+  return '';
 }
 
-export async function resolveClienteId({ providedClienteId, cnpj }: ResolveOpts): Promise<string> {
-  if (providedClienteId && CLT_ID_RE.test(providedClienteId)) {
-    const match = providedClienteId.match(/^CLT-(\d{4,})$/);
-    if (match) {
-      const value = Number(match[1]);
-      if (!Number.isNaN(value)) {
-        nextClienteSequence = Math.max(nextClienteSequence ?? value, value);
-      }
-    }
-    return providedClienteId;
+function onlyDigits(input?: string | null): string {
+  return (input ?? '').replace(/\D+/g, '');
+}
+
+function toDDMMAA(iso?: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const aa = String(date.getUTCFullYear()).slice(-2);
+  return `${dd}${mm}${aa}`;
+}
+
+function normalizeISO(value?: string | null): string {
+  if (!value) return '';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+function sha256(value: string): string {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function uniqSortedISO(values: string[]): string[] {
+  const set = new Set(values.filter(Boolean));
+  return Array.from(set).sort();
+}
+
+function safeJSONStringify(input: any): string {
+  try {
+    return JSON.stringify(input ?? '');
+  } catch (error) {
+    return '';
+  }
+}
+
+function splitPayloadIntoShards(payload: string): {
+  shardP1: string;
+  shardP2: string;
+  bytes: number;
+} {
+  const totalBytes = Buffer.byteLength(payload, 'utf8');
+  if (totalBytes <= PAYLOAD_SHARD_LIMIT_BYTES) {
+    return { shardP1: payload, shardP2: '', bytes: totalBytes };
   }
 
-  const found = await findClienteIdByCnpj(cnpj);
-  if (found && CLT_ID_RE.test(found)) {
-    const match = found.match(/^CLT-(\d{4,})$/);
-    if (match) {
-      const value = Number(match[1]);
-      if (!Number.isNaN(value)) {
-        nextClienteSequence = Math.max(nextClienteSequence ?? value, value);
-      }
-    }
-    return found;
+  let endIndex = Math.min(payload.length, Math.floor(payload.length * 0.6));
+  let shardP1 = payload.slice(0, endIndex);
+  let shardP2 = payload.slice(endIndex);
+
+  while (Buffer.byteLength(shardP1, 'utf8') > PAYLOAD_SHARD_LIMIT_BYTES && endIndex > 0) {
+    endIndex -= Math.max(1, Math.floor(endIndex * 0.05));
+    shardP1 = payload.slice(0, endIndex);
+    shardP2 = payload.slice(endIndex);
   }
 
-  return nextClienteId();
+  if (Buffer.byteLength(shardP1, 'utf8') > PAYLOAD_SHARD_LIMIT_BYTES) {
+    // Fallback: binary split by iterating backwards until it fits.
+    endIndex = payload.length;
+    shardP1 = payload;
+    shardP2 = '';
+    for (let i = payload.length - 1; i >= 0; i -= 1) {
+      shardP1 = payload.slice(0, i);
+      if (Buffer.byteLength(shardP1, 'utf8') <= PAYLOAD_SHARD_LIMIT_BYTES) {
+        shardP2 = payload.slice(i);
+        break;
+      }
+    }
+  }
+
+  if (Buffer.byteLength(shardP2, 'utf8') > PAYLOAD_SHARD_LIMIT_BYTES) {
+    console.warn('PAYLOAD_SHARD_OVERFLOW', {
+      shard: 'P2',
+      bytes: Buffer.byteLength(shardP2, 'utf8'),
+    });
+  }
+
+  return {
+    shardP1,
+    shardP2,
+    bytes: totalBytes,
+  };
+}
+
+function shortErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.length > 140 ? `${message.slice(0, 137)}...` : message;
+}
+
+function toFactsErrorMessage(error: unknown): string {
+  return `FACTS_APPEND_ERROR: ${shortErrorMessage(error)}`;
+}
+
+function getTipoNomeFromCodigo(codigo?: string): string {
+  if (!codigo) return '';
+  const numero = Number(codigo);
+  if (Number.isNaN(numero)) return '';
+  const tipo = TIPOS_DOCUMENTO[numero];
+  return tipo?.desc ?? tipo?.nome ?? '';
+}
+
+function getFamiliaFromNatureza(natureza?: string): string {
+  if (!natureza) return '';
+  return NATUREZA_FAMILIA[natureza] ?? '';
+}
+
+function getCreditoDescricaoFromCodigo(codigo?: string): string {
+  if (!codigo) return '';
+  return CREDITOS_DESCRICAO[codigo] ?? '';
 }
 
 function columnNumberToLetter(columnNumber: number): string {
@@ -122,248 +260,371 @@ function columnNumberToLetter(columnNumber: number): string {
   return letter;
 }
 
-function toStringValue(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
-    return String(value);
+async function getFactsHeaders(): Promise<string[]> {
+  if (cachedFactsHeaders) return cachedFactsHeaders;
+  const { headers } = await getSheetData(SHEET_FACTS, 'A1:ZZ1');
+  if (!headers.length) {
+    throw new Error(`Sheet ${SHEET_FACTS} is missing headers`);
   }
-  return JSON.stringify(value);
+  cachedFactsHeaders = headers;
+  return headers;
 }
 
-function pickCardString(card: any, key: string): string {
-  if (!card) return '';
-  if (typeof card[key] === 'string') return card[key];
-  if (typeof card[key] === 'number' || typeof card[key] === 'boolean') {
-    return String(card[key]);
+function pickCardString(card: any, ...paths: string[]): string | undefined {
+  for (const path of paths) {
+    const segments = path.split('.');
+    let current: any = card;
+    for (const key of segments) {
+      if (current === null || current === undefined) {
+        current = undefined;
+        break;
+      }
+      current = current[key];
+    }
+    if (typeof current === 'string' && current.trim() !== '') {
+      return current;
+    }
+    if (typeof current === 'number' || typeof current === 'boolean') {
+      return String(current);
+    }
   }
-  return '';
+  return undefined;
 }
 
-function aggregateByKey(facts: any[], keys: string[]): Record<string, number> {
-  const counts: Record<string, number> = {};
+export function deriveRiskFromFacts(facts: SheetRow[]): DerivedRisk {
+  const counts = new Map<string, number>();
   for (const fact of facts ?? []) {
-    for (const key of keys) {
-      const value = fact?.[key];
-      if (!value) continue;
-      const normalized = toStringValue(value).trim();
-      if (!normalized) continue;
-      counts[normalized] = (counts[normalized] || 0) + 1;
-      break;
-    }
+    const nivel = coalesceString(fact?.Risco_Nivel, fact?.risco) || 'DESCONHECIDO';
+    counts.set(nivel, (counts.get(nivel) ?? 0) + 1);
   }
-  return counts;
-}
 
-function aggregateFamilias(facts: any[]): Record<string, number> {
-  const counters: Record<string, number> = {
-    DCOMP: 0,
-    REST: 0,
-    RESSARC: 0,
-    CANC: 0,
-  };
-  for (const fact of facts ?? []) {
-    const familia = toStringValue(
-      fact?.Familia ||
-        fact?.familia ||
-        classificaFamiliaPorNatureza(toStringValue(fact?.Natureza || fact?.natureza)),
-    ).toUpperCase();
-    if (familia && counters[familia] !== undefined) {
-      counters[familia] += 1;
-    }
-  }
-  return counters;
-}
-
-function collectDates(facts: any[], meta: SaveArgs['meta']): string[] {
-  const set = new Set<string>();
-  const push = (value: string) => {
-    const match = value?.match?.(/^(\d{4}-\d{2}-\d{2})/);
-    if (match) {
-      set.add(match[1]);
-    }
-  };
-  if (meta?.dataConsultaISO) push(meta.dataConsultaISO);
-  for (const fact of facts ?? []) {
-    if (!fact) continue;
-    Object.values(fact).forEach(value => {
-      if (typeof value === 'string') push(value);
-    });
-  }
-  return Array.from(set).sort();
-}
-
-function computeSnapshotRow({
-  clienteId,
-  empresaId,
-  cnpj,
-  card,
-  facts,
-  meta,
-  nowISO,
-}: SaveArgs & { nowISO: string }): SnapshotRow {
-  const resumo = card?.perdcompResumo || {};
-  const porFamilia = resumo?.porFamilia || {};
-  const porNatureza = resumo?.porNaturezaAgrupada || aggregateByKey(facts, ['Natureza', 'natureza']);
-  const porCredito = (() => {
-    const cardCodigos: string[] = Array.isArray(card?.perdcompCodigos)
-      ? card.perdcompCodigos.filter((c: any) => typeof c === 'string')
-      : [];
-    if (cardCodigos.length) {
-      const analysis = analisarPortfolioPerdcomp(cardCodigos);
-      return analysis.distribuicaoPorCredito;
-    }
-    return aggregateByKey(facts, ['Credito', 'credito']);
-  })();
-
-  const riskAnalysis = (() => {
-    const cardCodigos: string[] = Array.isArray(card?.perdcompCodigos)
-      ? card.perdcompCodigos.filter((c: any) => typeof c === 'string')
-      : [];
-    if (!cardCodigos.length) return null;
-    return analisarPortfolioPerdcomp(cardCodigos);
-  })();
-
-  const datas = collectDates(facts, meta);
-  const payloadString = JSON.stringify(card ?? {});
-  const shardP1 = payloadString.slice(0, PAYLOAD_SHARD_LIMIT);
-  const shardP2 = payloadString.length > PAYLOAD_SHARD_LIMIT ? payloadString.slice(PAYLOAD_SHARD_LIMIT) : '';
-  const snapshotHash = crypto.createHash('sha256').update(shardP1 + shardP2).digest('hex');
-  const payloadBytes = Buffer.byteLength(payloadString, 'utf8');
-
-  const familiasFallback = aggregateFamilias(facts);
+  const tags: RiskTag[] = Array.from(counts.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => (b.count === a.count ? a.label.localeCompare(b.label) : b.count - a.count));
 
   return {
-    Cliente_ID: clienteId,
-    Empresa_ID: empresaId ?? '',
-    'Nome da Empresa':
-      pickCardString(card, 'nomeEmpresa') ||
-      pickCardString(card, 'Nome_da_Empresa') ||
-      pickCardString(card, 'Nome da Empresa'),
-    CNPJ:
-      (
-        cnpj ??
-        (pickCardString(card, 'cnpj') ||
-          pickCardString(card, 'CNPJ') ||
-          pickCardString(card, 'CNPJ_Empresa'))
-      ) || '',
-    Qtd_Total: String(resumo?.total ?? facts?.length ?? 0),
-    Qtd_DCOMP: String(porFamilia?.DCOMP ?? familiasFallback.DCOMP ?? 0),
-    Qtd_REST: String(porFamilia?.REST ?? familiasFallback.REST ?? 0),
-    Qtd_RESSARC: String(porFamilia?.RESSARC ?? familiasFallback.RESSARC ?? 0),
-    Risco_Nivel: riskAnalysis?.nivelRiscoGeral ?? '',
-    Risco_Tags_JSON: riskAnalysis ? JSON.stringify(riskAnalysis) : '',
-    Por_Natureza_JSON: Object.keys(porNatureza || {}).length ? JSON.stringify(porNatureza) : '',
-    Por_Credito_JSON: Object.keys(porCredito || {}).length ? JSON.stringify(porCredito) : '',
-    Datas_JSON: datas.length ? JSON.stringify(datas) : '',
-    Primeira_Data_ISO: datas[0] ?? '',
-    Ultima_Data_ISO: datas[datas.length - 1] ?? '',
-    Resumo_Ultima_Consulta_JSON_P1: shardP1,
-    Resumo_Ultima_Consulta_JSON_P2: shardP2,
-    Card_Schema_Version: meta?.cardSchemaVersion || CARD_SCHEMA_VERSION_FALLBACK,
-    Rendered_At_ISO: meta?.renderedAtISO || nowISO,
-    Fonte: meta?.fonte || '',
-    Data_Consulta: meta?.dataConsultaISO || '',
-    URL_Comprovante_HTML: meta?.urlComprovante || pickCardString(card, 'site_receipt'),
-    Payload_Bytes: String(payloadBytes),
-    Last_Updated_ISO: nowISO,
-    Snapshot_Hash: snapshotHash,
-    Facts_Count: String(facts?.length ?? 0),
-    Consulta_ID: meta?.consultaId || '',
-    Erro_Ultima_Consulta: '',
-  } as SnapshotRow;
+    nivel: tags[0]?.label ?? '',
+    tags,
+  };
 }
 
-function computeFactHash(fact: Record<string, any>): string {
-  const numeroOuProtocolo =
-    toStringValue(
-      fact.Perdcomp_Numero ||
-        fact.perdcomp ||
-        fact.Perdcomp ||
-        fact.Protocolo ||
-        fact.protocolo ||
-        '',
-    ) || '';
-  const tipo =
-    toStringValue(fact.Tipo || fact.tipo || fact.Tipo_Documento || fact.tipo_documento || '') || '';
-  const natureza = toStringValue(fact.Natureza || fact.natureza || '') || '';
-  const credito =
-    toStringValue(fact.Credito || fact.credito || fact.Tipo_Credito || fact.tipo_credito || '') || '';
-  const dataISO =
-    toStringValue(
-      fact.Data_ISO ||
-        fact.data_iso ||
-        fact.Data_Protocolo ||
-        fact.data_protocolo ||
-        fact.Data_Transmissao ||
-        fact.data_transmissao ||
-        '',
-    ) || '';
-  const valor = toStringValue(fact.Valor || fact.valor || fact.Valor_Total || fact.valor_total || '') || '';
-
-  const baseParts = [numeroOuProtocolo, tipo, natureza, credito, dataISO, valor];
-  if (baseParts.some(part => part)) {
-    return crypto.createHash('sha256').update(baseParts.join('|')).digest('hex');
+export function derivePorCreditoFromFacts(
+  facts: SheetRow[],
+): Array<{ label: string; count: number }> {
+  const aggregates = new Map<string, { label: string; count: number }>();
+  for (const fact of facts ?? []) {
+    const label =
+      coalesceString(fact?.Credito_Descricao, fact?.Credito_Codigo) || 'DESCONHECIDO';
+    const existing = aggregates.get(label) ?? { label, count: 0 };
+    existing.count += 1;
+    aggregates.set(label, existing);
   }
-
-  const fallback = JSON.stringify(
-    Object.keys(fact)
-      .filter(key => !FACT_METADATA_FIELDS.has(key))
-      .sort()
-      .reduce<Record<string, any>>((acc, key) => {
-        acc[key] = fact[key];
-        return acc;
-      }, {}),
-  );
-  return crypto.createHash('sha256').update(fallback).digest('hex');
+  return Array.from(aggregates.values());
 }
 
-function ensureFactBase(
-  fact: any,
-  {
-    clienteId,
-    empresaId,
-    cnpj,
-    meta,
-    nowISO,
-  }: { clienteId: string; empresaId?: string; cnpj?: string; meta: SaveArgs['meta']; nowISO: string },
-) {
-  const normalized: Record<string, any> = { ...fact };
-  normalized.Cliente_ID = clienteId;
-  normalized.Empresa_ID = normalized.Empresa_ID || empresaId || '';
-  normalized.CNPJ = normalized.CNPJ || cnpj || '';
-  const numero = toStringValue(
-    normalized.Perdcomp_Numero || normalized.perdcomp || normalized.Perdcomp || '',
-  );
-  if (numero) {
-    normalized.Perdcomp_Numero = numero;
-  }
-  if (!normalized.Protocolo && typeof numero === 'string' && numero.length) {
-    const protoMatch = numero.match(/-(\d{4})$/);
-    if (protoMatch) {
-      normalized.Protocolo = protoMatch[1];
+async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<string | null> {
+  const normalized = onlyDigits(cnpj);
+  if (!normalized) return null;
+  const { rows } = await getSheetData(SHEET_SNAPSHOT);
+  for (const row of rows) {
+    const rowCnpj = onlyDigits(toStringValue(row.CNPJ));
+    if (rowCnpj !== normalized) continue;
+    const candidate = toStringValue(row.Cliente_ID);
+    if (CLT_ID_RE.test(candidate)) {
+      return candidate;
     }
   }
-  normalized.Data_Consulta = normalized.Data_Consulta || meta?.dataConsultaISO || '';
-  normalized.Fonte = normalized.Fonte || meta?.fonte || '';
-  normalized.Consulta_ID = meta?.consultaId || '';
-  normalized.Inserted_At = nowISO;
-  normalized.Row_Hash = computeFactHash(normalized);
-  return normalized;
+  return null;
 }
 
-async function upsertSnapshot(row: SnapshotRow) {
-  const { headers, rows } = await getSheetData(SNAPSHOT_SHEET);
-  const sheets = await getSheetsClient();
-  const existing = rows.find(r => toStringValue(r.Cliente_ID) === row.Cliente_ID);
-
-  if (!headers.length) {
-    throw new Error(`Sheet ${SNAPSHOT_SHEET} is missing headers`);
+function syncNextSequenceFromId(id: string) {
+  const match = id.match(/^CLT-(\d{4,})$/);
+  if (!match) return;
+  const value = Number(match[1]);
+  if (!Number.isNaN(value)) {
+    nextClienteSequence = Math.max(nextClienteSequence ?? value, value);
   }
+}
+
+export async function nextClienteId(): Promise<string> {
+  if (nextClienteSequence === null) {
+    const { rows } = await getSheetData(SHEET_SNAPSHOT);
+    let max = 0;
+    for (const row of rows) {
+      const id = toStringValue(row.Cliente_ID);
+      const match = id.match(/^CLT-(\d{4,})$/);
+      if (!match) continue;
+      const value = Number(match[1]);
+      if (!Number.isNaN(value)) {
+        max = Math.max(max, value);
+      }
+    }
+    nextClienteSequence = max;
+  }
+  nextClienteSequence = (nextClienteSequence ?? 0) + 1;
+  return `CLT-${String(nextClienteSequence).padStart(4, '0')}`;
+}
+
+export async function resolveClienteId({ providedClienteId, cnpj }: ResolveOpts): Promise<string> {
+  if (providedClienteId && CLT_ID_RE.test(providedClienteId)) {
+    syncNextSequenceFromId(providedClienteId);
+    return providedClienteId;
+  }
+
+  const found = await findClienteIdByCnpj(cnpj ?? null);
+  if (found && CLT_ID_RE.test(found)) {
+    syncNextSequenceFromId(found);
+    return found;
+  }
+
+  const nextId = await nextClienteId();
+  syncNextSequenceFromId(nextId);
+  return nextId;
+}
+
+function mapFact(raw: any, ctx: PersistContext & { card?: any }): FactsRow {
+  const perdcomp = coalesceString(
+    raw.Perdcomp_Numero,
+    raw.perdcompNumero,
+    raw.perdcomp,
+    raw.numero
+  );
+  const parsed = perdcomp ? parsePerdcompCodigo(perdcomp) : null;
+  const parsedValid = Boolean(parsed?.valido);
+  const parsedTipoCod =
+    parsedValid && parsed?.bloco4 !== undefined ? String(parsed.bloco4) : '';
+  const parsedNatureza = parsedValid ? toStringValue(parsed?.natureza ?? '') : '';
+  const parsedFamilia = parsedNatureza ? getFamiliaFromNatureza(parsedNatureza) : '';
+  const parsedCreditoCod = parsedValid ? toStringValue(parsed?.credito ?? '') : '';
+  const parsedProtocolo = parsedValid ? toStringValue(parsed?.protocolo ?? '') : '';
+  const parsedTipoNome = parsedValid ? getTipoNomeFromCodigo(parsedTipoCod) : '';
+  const parsedCreditoDesc = parsedValid
+    ? getCreditoDescricaoFromCodigo(parsedCreditoCod)
+    : '';
+  const parsedDataISO = parsedValid ? normalizeISO(parsed?.dataISO ?? '') : '';
+
+  const protocolo = coalesceString(raw.Protocolo, raw.protocolo, parsedProtocolo);
+  const idLinha = perdcomp || protocolo;
+
+  const dataISO = normalizeISO(
+    raw.Data_ISO ??
+      raw.dataISO ??
+      raw.data ??
+      raw.dataConsulta ??
+      parsedDataISO ??
+      ctx.meta.dataConsultaISO ??
+      ''
+  );
+  const dataISOFinal = dataISO || parsedDataISO || '';
+
+  const tipoCod = coalesceString(raw.Tipo_Codigo, raw.tipoCodigo, parsedTipoCod);
+  const tipoNome = coalesceString(
+    raw.Tipo_Nome,
+    raw.tipoNome,
+    raw.tipo,
+    parsedTipoNome
+  );
+  const natureza = coalesceString(raw.Natureza, raw.natureza, parsedNatureza);
+  const familia = coalesceString(
+    raw.Familia,
+    raw.familia,
+    parsedFamilia,
+    parsedTipoCod === '1' || tipoCod === '1' ? 'DCOMP' : '',
+    parsedTipoCod === '2' || tipoCod === '2' ? 'REST' : '',
+    parsedTipoCod === '8' || tipoCod === '8' ? 'CANC' : '',
+  );
+  const creditoCod = coalesceString(
+    raw.Credito_Codigo,
+    raw.creditoCodigo,
+    parsedCreditoCod
+  );
+  const creditoDesc = coalesceString(
+    raw.Credito_Descricao,
+    raw.creditoDescricao,
+    raw.Credito,
+    raw.credito,
+    parsedCreditoDesc
+  );
+  const riscoNivel = coalesceString(
+    raw.Risco_Nivel,
+    raw.risco,
+    ctx.card?.risk?.nivel,
+    ctx.card?.risk?.level,
+  );
+  const situacao = toStringValue(raw.Situacao ?? raw.situacao ?? '');
+  const situacaoDetalhamento = toStringValue(
+    raw.Situacao_Detalhamento ?? raw.situacaoDetalhamento ?? ''
+  );
+  const solicitante = toStringValue(raw.Solicitante ?? raw.solicitante ?? '');
+  const motivoNormalizado = toStringValue(raw.Motivo_Normalizado ?? '');
+  const valor = toStringValue(raw.Valor ?? raw.valor ?? '');
+  const nomeEmpresa =
+    ctx.nomeEmpresa ||
+    toStringValue(
+      coalesceString(
+        raw['Nome da Empresa'],
+        raw.Nome_da_Empresa,
+        raw.nomeEmpresa,
+        raw.empresa,
+      ),
+    );
+
+  const rowHash = idLinha
+    ? sha256([idLinha, tipoCod, natureza, creditoCod, dataISOFinal, valor].join('|'))
+    : sha256(
+        JSON.stringify(
+          Object.keys(raw ?? {})
+            .filter((key) => !FACT_METADATA_FIELDS.has(key))
+            .sort()
+            .reduce<Record<string, any>>((acc, key) => {
+              acc[key] = raw[key];
+              return acc;
+            }, {})
+        )
+      );
+
+  const b1 = toStringValue(raw.B1 ?? '');
+  const b2 = toStringValue(raw.B2 ?? '');
+
+  const row: FactsRow = {
+    Cliente_ID: ctx.clienteId,
+    Empresa_ID: toStringValue(ctx.empresaId ?? ''),
+    'Nome da Empresa': nomeEmpresa,
+    CNPJ: onlyDigits(ctx.cnpj),
+
+    Perdcomp_Numero: perdcomp,
+    Perdcomp_Formatado: perdcomp ? formatPerdcompNumero(perdcomp) : '',
+    B1: b1,
+    B2: b2,
+    Data_DDMMAA: toDDMMAA(dataISOFinal),
+    Data_ISO: dataISOFinal,
+    Tipo_Codigo: tipoCod,
+    Tipo_Nome: tipoNome,
+    Natureza: natureza,
+    Familia: familia,
+    Credito_Codigo: creditoCod,
+    Credito_Descricao: creditoDesc,
+    Risco_Nivel: riscoNivel,
+    Protocolo: protocolo,
+    Situacao: situacao,
+    Situacao_Detalhamento: situacaoDetalhamento,
+    Motivo_Normalizado: motivoNormalizado,
+    Solicitante: solicitante,
+    Fonte: toStringValue(ctx.meta.fonte ?? ''),
+    Data_Consulta: toStringValue(ctx.meta.dataConsultaISO ?? ctx.nowISO),
+    URL_Comprovante_HTML: toStringValue(ctx.meta.urlComprovante ?? ''),
+    Row_Hash: rowHash,
+    Inserted_At: ctx.nowISO,
+    Consulta_ID: toStringValue(ctx.meta.consultaId),
+    Version: toStringValue(ctx.meta.cardSchemaVersion ?? 'v1'),
+    Deleted_Flag: '0',
+  };
+
+  return row;
+}
+
+function mapSnapshotRow(
+  ctx: PersistContext & {
+    card: any;
+    facts: FactsRow[];
+  }
+): SheetRow {
+  const { card, facts, meta, nowISO } = ctx;
+  const resumo = card?.resumo ?? card?.perdcompResumo ?? {};
+  const porFamilia =
+    card?.agregados?.porFamilia ?? resumo?.porFamilia ?? {
+      DCOMP: 0,
+      REST: 0,
+      RESSARC: 0,
+    };
+  const porNatureza =
+    card?.agregados?.porNatureza ?? card?.porNatureza ?? resumo?.porNaturezaAgrupada ?? [];
+
+  const cardRiskNivel = coalesceString(
+    card?.risk?.nivel,
+    card?.risk?.level,
+    card?.risco?.nivel,
+  );
+  const cardRiskTags = Array.isArray(card?.risk?.tags ?? card?.riskTags)
+    ? (card?.risk?.tags ?? card?.riskTags ?? [])
+    : [];
+  const derivedRisk = deriveRiskFromFacts(facts);
+  const risk = {
+    nivel: cardRiskNivel || derivedRisk.nivel,
+    tags: (cardRiskNivel || cardRiskTags.length)
+      ? cardRiskTags
+      : derivedRisk.tags,
+  };
+
+  const porCreditoCandidate = card?.agregados?.porCredito ?? card?.porCredito ?? null;
+  const porCredito =
+    Array.isArray(porCreditoCandidate) && porCreditoCandidate.length
+      ? porCreditoCandidate
+      : derivePorCreditoFromFacts(facts);
+
+  const datas = uniqSortedISO([
+    ...((card?.datas as string[]) ?? []),
+    ...facts.map((fact) => fact.Data_ISO).filter(Boolean),
+  ]);
+  const primeiraData = datas[0] ?? '';
+  const ultimaData = datas[datas.length - 1] ?? '';
+
+  const payload = safeJSONStringify(card);
+  const { shardP1, shardP2, bytes } = splitPayloadIntoShards(payload);
+  const snapshotHash = sha256(shardP1 + shardP2);
+
+  return {
+    Cliente_ID: ctx.clienteId,
+    Empresa_ID: toStringValue(ctx.empresaId ?? ''),
+    'Nome da Empresa': ctx.nomeEmpresa ?? '',
+    CNPJ: onlyDigits(ctx.cnpj),
+
+    Qtd_Total: String(resumo?.total ?? facts.length ?? 0),
+    Qtd_DCOMP: String(porFamilia?.DCOMP ?? 0),
+    Qtd_REST: String(porFamilia?.REST ?? 0),
+    Qtd_RESSARC: String(porFamilia?.RESSARC ?? 0),
+
+    Risco_Nivel: risk.nivel ?? '',
+    Risco_Tags_JSON: safeJSONStringify(risk.tags ?? []),
+
+    Por_Natureza_JSON: safeJSONStringify(porNatureza),
+    Por_Credito_JSON: safeJSONStringify(porCredito),
+
+    Datas_JSON: safeJSONStringify(datas),
+    Primeira_Data_ISO: primeiraData,
+    Ultima_Data_ISO: ultimaData,
+
+    Resumo_Ultima_Consulta_JSON_P1: shardP1,
+    Resumo_Ultima_Consulta_JSON_P2: shardP2,
+    Payload_Bytes: String(bytes),
+    Snapshot_Hash: snapshotHash,
+
+    Card_Schema_Version: meta.cardSchemaVersion ?? CARD_SCHEMA_VERSION_FALLBACK,
+    Rendered_At_ISO: meta.renderedAtISO ?? nowISO,
+    Fonte: meta.fonte ?? '',
+    Data_Consulta: meta.dataConsultaISO ?? nowISO,
+    URL_Comprovante_HTML: meta.urlComprovante ?? '',
+
+    Facts_Count: '0',
+
+    Last_Updated_ISO: nowISO,
+    Consulta_ID: meta.consultaId,
+
+    Erro_Ultima_Consulta: '',
+  };
+}
+
+async function upsertSnapshot(row: SheetRow) {
+  const { headers, rows } = await getSheetData(SHEET_SNAPSHOT);
+  const sheets = await getSheetsClient();
+  if (!headers.length) {
+    throw new Error(`Sheet ${SHEET_SNAPSHOT} is missing headers`);
+  }
+  const existing = rows.find((r) => toStringValue(r.Cliente_ID) === row.Cliente_ID);
 
   if (existing) {
     const merged: Record<string, string> = {};
-    headers.forEach(header => {
+    headers.forEach((header) => {
       if (!header) return;
       if (row[header] !== undefined) {
         merged[header] = row[header];
@@ -379,7 +640,7 @@ async function upsertSnapshot(row: SnapshotRow) {
         if (!header) return null;
         const colLetter = columnNumberToLetter(index + 1);
         return {
-          range: `${SNAPSHOT_SHEET}!${colLetter}${existing._rowNumber}`,
+          range: `${SHEET_SNAPSHOT}!${colLetter}${existing._rowNumber}`,
           values: [[merged[header] ?? '']],
         };
       })
@@ -393,195 +654,311 @@ async function upsertSnapshot(row: SnapshotRow) {
             valueInputOption: 'RAW',
             data: updates,
           },
-        }),
+        })
       );
     }
-  } else {
-    const values = headers.map(header => row[header] ?? '');
-    await withRetry(() =>
-      sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.SPREADSHEET_ID,
-        range: SNAPSHOT_SHEET,
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: [values],
-        },
-      }),
-    );
+    return;
   }
+
+  const values = headers.map((header) => row[header] ?? '');
+  await withRetry(() =>
+    sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: SHEET_SNAPSHOT,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [values],
+      },
+    })
+  );
 }
 
-async function appendFacts({
-  clienteId,
-  empresaId,
-  cnpj,
-  facts,
-  meta,
-  nowISO,
-}: SaveArgs & { nowISO: string }) {
-  if (!facts?.length) {
-    return { inserted: 0, skipped: 0 };
+async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<FilterResult> {
+  if (!rows.length) return { insert: [], skip: 0 };
+  const existingKeys = new Set<string>();
+
+  try {
+    const { rows: existingRows } = await getSheetData(SHEET_FACTS);
+    for (const row of existingRows) {
+      if (toStringValue(row.Cliente_ID) !== clienteId) continue;
+      const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
+      const hash = toStringValue(row.Row_Hash ?? '');
+      const key = `${clienteId}|${numero}|${hash}`;
+      existingKeys.add(key);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('FACTS_READ_FAIL', { sheetName: SHEET_FACTS, message });
   }
 
-  const { headers, rows } = await getSheetData(FACTS_SHEET);
-  const sheets = await getSheetsClient();
+  const insert: FactsRow[] = [];
+  let skip = 0;
 
-  const existingKeys = new Set(
-    rows
-      .filter(row => toStringValue(row.Cliente_ID) === clienteId)
-      .map(row => {
-        const numero = toStringValue(row.Perdcomp_Numero || row.Protocolo || '');
-        const hash = toStringValue(row.Row_Hash || '');
-        return `${numero}#${hash}`;
-      }),
-  );
-
-  let inserted = 0;
-  let skipped = 0;
-  const rowsToAppend: string[][] = [];
-
-  for (const fact of facts) {
-    const normalized = ensureFactBase(fact, { clienteId, empresaId, cnpj, meta, nowISO });
-    const numero = toStringValue(normalized.Perdcomp_Numero || normalized.Protocolo || '');
-    const key = `${numero}#${normalized.Row_Hash}`;
+  for (const row of rows) {
+    const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
+    const hash = toStringValue(row.Row_Hash ?? '');
+    const key = `${clienteId}|${numero}|${hash}`;
     if (existingKeys.has(key)) {
-      skipped += 1;
+      skip += 1;
       continue;
     }
     existingKeys.add(key);
-    inserted += 1;
-    const rowValues = headers.map(header => toStringValue(normalized[header] ?? ''));
-    rowsToAppend.push(rowValues);
+    insert.push(row);
   }
 
-  if (rowsToAppend.length) {
-    const batches = chunk(rowsToAppend, 500);
-    for (const batch of batches) {
-      await withRetry(() =>
-        sheets.spreadsheets.values.append({
-          spreadsheetId: process.env.SPREADSHEET_ID,
-          range: FACTS_SHEET,
-          valueInputOption: 'RAW',
-          insertDataOption: 'INSERT_ROWS',
-          requestBody: {
-            values: batch,
-          },
-        }),
+  return { insert, skip };
+}
+
+async function readFactsByClienteId(clienteId: string): Promise<SheetRow[]> {
+  if (!clienteId) return [];
+  const all: SheetRow[] = [];
+  try {
+    const { rows } = await getSheetData(SHEET_FACTS);
+    for (const row of rows) {
+      if (toStringValue(row.Cliente_ID) !== clienteId) continue;
+      all.push(normalizeSheetRow(row));
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('FACTS_READ_FAIL', { sheetName: SHEET_FACTS, message });
+  }
+  return all;
+}
+
+async function appendFactsBatched(
+  rows: FactsRow[],
+  batchSize = 2000,
+  maxRetries = 4,
+): Promise<{ inserted: number; errors: Error[] }> {
+  if (!rows.length) return { inserted: 0, errors: [] };
+  const headers = await getFactsHeaders();
+  const orderedHeaders =
+    headers.length === FACTS_COLUMNS.length &&
+    FACTS_COLUMNS.every((column, index) => headers[index] === column)
+      ? headers
+      : [...FACTS_COLUMNS];
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID is not set');
+  }
+  const sheets = await getSheetsClient();
+  const values = rows.map((row) =>
+    orderedHeaders.map((header) => row[header as FactsColumn] ?? ''),
+  );
+  const batches = chunk(values, batchSize);
+  let inserted = 0;
+  const errors: Error[] = [];
+
+  for (const batch of batches) {
+    try {
+      await withRetry(
+        () =>
+          sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: SHEET_FACTS,
+            valueInputOption: 'RAW',
+            insertDataOption: 'INSERT_ROWS',
+            requestBody: { values: batch },
+          }),
+        maxRetries,
       );
+      inserted += batch.length;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      errors.push(err);
+      console.warn('FACTS_BATCH_APPEND_FAIL', {
+        sheetName: SHEET_FACTS,
+        batchSize: batch.length,
+        message: err.message,
+      });
     }
   }
 
-  return { inserted, skipped };
+  return { inserted, errors };
+}
+
+async function updateSnapshotFields(
+  clienteId: string,
+  updates: Record<string, string>,
+): Promise<boolean> {
+  if (!clienteId) return false;
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID is not set');
+  }
+  const { headers, rows } = await getSheetData(SHEET_SNAPSHOT);
+  if (!headers.length) return false;
+  const existing = rows.find((row) => toStringValue(row.Cliente_ID) === clienteId);
+  if (!existing) return false;
+
+  const data: Array<{ range: string; values: string[][] }> = [];
+  const sheets = await getSheetsClient();
+
+  Object.entries(updates).forEach(([header, value]) => {
+    const index = headers.indexOf(header);
+    if (index === -1) return;
+    const colLetter = columnNumberToLetter(index + 1);
+    data.push({
+      range: `${SHEET_SNAPSHOT}!${colLetter}${existing._rowNumber}`,
+      values: [[toStringValue(value)]],
+    });
+  });
+
+  if (!data.length) return false;
+
+  await withRetry(() =>
+    sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        valueInputOption: 'RAW',
+        data,
+      },
+    })
+  );
+  return true;
 }
 
 async function markSnapshotError(clienteId: string, message: string, nowISO: string) {
   try {
-    const { headers, rows } = await getSheetData(SNAPSHOT_SHEET);
-    const sheets = await getSheetsClient();
-    const existing = rows.find(row => toStringValue(row.Cliente_ID) === clienteId);
-
-    const errorIdx = headers.indexOf('Erro_Ultima_Consulta');
-    const lastUpdatedIdx = headers.indexOf('Last_Updated_ISO');
-
-    if (existing && errorIdx !== -1) {
-      const updates: Array<{ range: string; values: string[][] }> = [];
-      const errorLetter = columnNumberToLetter(errorIdx + 1);
-      updates.push({
-        range: `${SNAPSHOT_SHEET}!${errorLetter}${existing._rowNumber}`,
-        values: [[message]],
-      });
-      if (lastUpdatedIdx !== -1) {
-        const lastLetter = columnNumberToLetter(lastUpdatedIdx + 1);
-        updates.push({
-          range: `${SNAPSHOT_SHEET}!${lastLetter}${existing._rowNumber}`,
-          values: [[nowISO]],
-        });
-      }
-      await withRetry(() =>
-        sheets.spreadsheets.values.batchUpdate({
-          spreadsheetId: process.env.SPREADSHEET_ID,
-          requestBody: {
-            valueInputOption: 'RAW',
-            data: updates,
-          },
-        }),
-      );
-      return;
-    }
-
-    if (!headers.length || errorIdx === -1) {
-      return;
-    }
-
-    const values = headers.map(header => {
-      if (header === 'Cliente_ID') return clienteId;
-      if (header === 'Erro_Ultima_Consulta') return message;
-      if (header === 'Last_Updated_ISO') return nowISO;
-      return '';
+    const updated = await updateSnapshotFields(clienteId, {
+      Erro_Ultima_Consulta: message,
+      Last_Updated_ISO: nowISO,
     });
-    await withRetry(() =>
-      sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.SPREADSHEET_ID,
-        range: SNAPSHOT_SHEET,
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: [values],
-        },
-      }),
-    );
+    if (!updated) {
+      console.warn('PERSIST_FAIL_MARK_ERROR_ROW_MISSING', { clienteId, message });
+    }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('PERSIST_FAIL_MARK_ERROR', { clienteId, message: msg });
   }
 }
 
+async function markSnapshotPostFacts(
+  clienteId: string,
+  params: { factsCount: number; error: string | null; nowISO: string },
+) {
+  const { factsCount, error, nowISO } = params;
+  try {
+    const updated = await updateSnapshotFields(clienteId, {
+      Facts_Count: String(factsCount ?? 0),
+      Erro_Ultima_Consulta: error ?? '',
+      Last_Updated_ISO: nowISO,
+    });
+    if (!updated) {
+      console.warn('PERSIST_FAIL_MARK_POST_FACTS', { clienteId, error });
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('PERSIST_FAIL_POST_FACTS', { clienteId, message });
+  }
+}
+
 export async function savePerdecompResults(args: SaveArgs): Promise<void> {
-  const { card, meta } = args;
-  if (!meta?.consultaId) {
+  if (!args?.meta?.consultaId) {
     throw new Error('meta.consultaId is required');
   }
 
   const nowISO = new Date().toISOString();
-  const resolvedCnpj =
-    args.cnpj ||
-    pickCardString(card, 'CNPJ') ||
-    pickCardString(card, 'CNPJ_Empresa') ||
-    pickCardString(card, 'cnpj') ||
+  const card = args.card ?? {};
+
+  const cnpjFinal =
+    args.cnpj ??
+    pickCardString(card, 'header.cnpj', 'CNPJ', 'cnpj', 'CNPJ_Empresa') ??
     '';
 
-  const resolver = resolveOverride ?? resolveClienteId;
-  const clienteIdFinal = await resolver({
+  const resolverFn = resolveOverride ?? resolveClienteId;
+
+  const clienteIdFinal = await resolverFn({
     providedClienteId: args.clienteId,
-    cnpj: resolvedCnpj || null,
+    cnpj: cnpjFinal ?? null,
   });
 
   if (!CLT_ID_RE.test(clienteIdFinal)) {
     console.warn('PERSIST_ABORT_INVALID_CLIENTE_ID', {
-      provided: args.clienteId,
+      provided: args.clienteId ?? null,
       resolved: clienteIdFinal,
       cnpj: args.cnpj,
     });
     throw new Error('Invalid Cliente_ID for persistence');
   }
 
-  console.info('PERSIST_START', { clienteId: clienteIdFinal, consultaId: meta.consultaId });
+  const empresaId =
+    args.empresaId ?? pickCardString(card, 'header.empresaId', 'empresaId', 'Empresa_ID') ?? '';
+  const nomeEmpresa =
+    pickCardString(
+      card,
+      'nomeEmpresa',
+      'header.nomeEmpresa',
+      'Nome_da_Empresa',
+      'Nome da Empresa',
+      'empresa',
+      'empresa.nome'
+    ) ?? '';
+
+  const ctx: PersistContext = {
+    clienteId: clienteIdFinal,
+    empresaId,
+    nomeEmpresa,
+    cnpj: cnpjFinal ?? '',
+    meta: args.meta,
+    nowISO,
+  };
+
+  console.info('PERSIST_START', { clienteId: clienteIdFinal, consultaId: args.meta.consultaId });
 
   try {
-    const snapshotRow = computeSnapshotRow({ ...args, clienteId: clienteIdFinal, cnpj: resolvedCnpj, nowISO });
+    const sanitizedCard = { ...card, clienteId: clienteIdFinal };
+    const mappedFacts = (args.facts ?? []).map((raw) =>
+      mapFact(raw, { ...ctx, card: sanitizedCard }),
+    );
+
+    const snapshotRow = mapSnapshotRow({ ...ctx, card: sanitizedCard, facts: mappedFacts });
     await upsertSnapshot(snapshotRow);
     console.info('SNAPSHOT_OK', {
       clienteId: clienteIdFinal,
       snapshotHash: snapshotRow.Snapshot_Hash,
-      factsCount: Number(snapshotRow.Facts_Count) || 0,
+      factsCount: mappedFacts.length,
     });
 
-    const { inserted, skipped } = await appendFacts({
-      ...args,
-      clienteId: clienteIdFinal,
-      cnpj: resolvedCnpj,
+    let inserted = 0;
+    let skip = 0;
+    let factsError: string | null = null;
+
+    try {
+      const { insert, skip: skipCount } = await filterNewFacts(clienteIdFinal, mappedFacts);
+      skip = skipCount;
+      if (insert.length) {
+        const { inserted: appended, errors } = await appendFactsBatched(insert);
+        inserted = appended;
+        if (errors.length) {
+          factsError = toFactsErrorMessage(errors[0]);
+        }
+      }
+    } catch (error) {
+      factsError = toFactsErrorMessage(error);
+    }
+
+    await markSnapshotPostFacts(clienteIdFinal, {
+      factsCount: mappedFacts.length,
+      error: factsError,
       nowISO,
     });
-    console.info('FACTS_OK', { clienteId: clienteIdFinal, inserted, skipped });
+
+    if (factsError) {
+      console.warn('FACTS_FAIL_SOFT', {
+        clienteId: clienteIdFinal,
+        error: factsError,
+        inserted,
+        skipped: skip,
+      });
+    } else {
+      console.info('FACTS_OK', {
+        clienteId: clienteIdFinal,
+        inserted,
+        skipped: skip,
+      });
+    }
+
     console.info('PERSIST_END', { clienteId: clienteIdFinal });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -592,16 +969,44 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
 
 export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | null> {
   if (!clienteId) return null;
-  const { rows } = await getSheetData(SNAPSHOT_SHEET);
-  const row = rows.find(r => toStringValue(r.Cliente_ID) === clienteId);
+  const { rows } = await getSheetData(SHEET_SNAPSHOT);
+  const row = rows.find((item) => toStringValue(item.Cliente_ID) === clienteId);
   if (!row) return null;
-
-  const p1 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P1 || '');
-  const p2 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P2 || '');
+  const p1 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P1 ?? '');
+  const p2 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P2 ?? '');
   const payload = p1 + p2;
   if (!payload) return null;
   try {
-    return JSON.parse(payload);
+    const card = JSON.parse(payload || '{}');
+
+    const needsRisk = !card?.risk || !coalesceString(card?.risk?.nivel, card?.risk?.level);
+    const needsCredito =
+      !card?.agregados ||
+      !Array.isArray(card.agregados?.porCredito) ||
+      card.agregados.porCredito.length === 0;
+
+    if (needsRisk || needsCredito) {
+      const facts = await readFactsByClienteId(clienteId);
+      if (needsRisk) {
+        const derived = deriveRiskFromFacts(facts);
+        card.risk = {
+          ...(card?.risk ?? {}),
+          nivel: coalesceString(card?.risk?.nivel, card?.risk?.level, derived.nivel),
+          tags: Array.isArray(card?.risk?.tags) && card.risk.tags.length
+            ? card.risk.tags
+            : derived.tags,
+        };
+      }
+      if (needsCredito) {
+        const derived = derivePorCreditoFromFacts(facts);
+        card.agregados = {
+          ...(card?.agregados ?? {}),
+          porCredito: derived,
+        };
+      }
+    }
+
+    return card;
   } catch (error) {
     console.error('SNAPSHOT_PARSE_FAIL', {
       clienteId,
@@ -614,6 +1019,7 @@ export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | n
 export function __resetClienteIdSequenceForTests() {
   nextClienteSequence = null;
   resolveOverride = null;
+  cachedFactsHeaders = null;
 }
 
 export function __setResolveClienteIdOverrideForTests(
@@ -621,4 +1027,3 @@ export function __setResolveClienteIdOverrideForTests(
 ) {
   resolveOverride = fn;
 }
-

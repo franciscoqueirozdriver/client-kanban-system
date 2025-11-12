@@ -1,4 +1,4 @@
-import { getSheet, updateRow } from '../../lib/googleSheets';
+import { getSheet, updateRow, getSheetData } from '../../lib/googleSheets';
 import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
 
 export default async function handler(req, res) {
@@ -7,8 +7,8 @@ export default async function handler(req, res) {
       const limitParam = parseInt(req.query.limit ?? req.query.maxLeads, 10);
       const onlyNew = req.query.onlyNew === '1';
 
-      const sheet = await getSheet();
-      const rows = sheet.data.values || [];
+      const { headers, rows: dataRows } = await getSheetData('Sheet1');
+      const rows = [headers, ...dataRows.map(row => headers.map(header => row[header]))]; // Reconstroi o array de arrays para buildReport
 
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : rows.length;
       console.log('API /reports GET', { query: req.query, limit, onlyNew });
