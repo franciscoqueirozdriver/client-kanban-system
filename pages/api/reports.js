@@ -1,24 +1,24 @@
-import { getSheet, updateRow, getSheetData } from '../../lib/googleSheets';
+import { getSheet, updateRow } from '../../lib/googleSheets';
 import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const limitParam = parseInt(req.query.limit ?? req.query.maxLeads, 10);
+      const maxLeads = parseInt(req.query.maxLeads || '100', 10);
       const onlyNew = req.query.onlyNew === '1';
 
-      const { headers, rows: dataRows } = await getSheetData('Sheet1');
-      const rows = [headers, ...dataRows.map(row => headers.map(header => row[header]))]; // Reconstroi o array de arrays para buildReport
+      console.log('API /reports GET', { query: req.query, maxLeads, onlyNew });
 
-      const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : rows.length;
-      console.log('API /reports GET', { query: req.query, limit, onlyNew });
+      const sheet = await getSheet();
+      const rows = sheet.data.values || [];
+
       // ✅ buildReport já agrupa por Cliente_ID agora
       // Evita atualizar telefones durante a geração do relatório
       const { map, filters } = await buildReport(rows, { savePhones: false });
       const { rows: reportRows, toMark } = mapToRows(
         map,
         req.query,
-        limit,
+        maxLeads,
         onlyNew
       );
 

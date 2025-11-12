@@ -11,12 +11,8 @@ export default async function handler(req, res) {
     const rows = sheet.data.values || [];
     const { map } = buildReport(rows);
 
-    const { max = 300, ...query } = req.query || {};
-    const requested = Number(max) || 300;
-    if (requested > 300) {
-      return res.status(400).json({ error: 'Use max <= 300 ou refine os filtros' });
-    }
-    const limit = requested;
+    const { max = Infinity, ...query } = req.query || {};
+    const limit = Number(max) || Infinity;
 
     // ✅ Normalizar valores que venham como array em query params
     const normalizedQuery = {};

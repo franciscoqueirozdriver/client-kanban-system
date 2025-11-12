@@ -1,4 +1,4 @@
-import { getSheetData } from '../../lib/googleSheets';
+import { google } from 'googleapis';
 
 // Simple in-memory cache
 const cache = { time: 0, data: null };
@@ -11,25 +11,30 @@ function normalizeApp(str) {
 }
 
 async function fetchMensagens() {
-  const { headers, rows } = await getSheetData('Mensagens');
+  const auth = new google.auth.JWT({
+    email: process.env.GOOGLE_CLIENT_EMAIL,
+    key: process.env.GOOGLE_PRIVATE_KEY,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+  await auth.authorize();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SPREADSHEET_ID,
+    range: 'Mensagens',
+  });
+  const rows = response.data.values || [];
+  if (rows.length === 0) return [];
+  const [header, ...data] = rows;
+  const lower = header.map((h) => h.toLowerCase());
+  const tituloIdx = lower.indexOf('título') !== -1 ? lower.indexOf('título') : lower.indexOf('titulo');
+  const appIdx = lower.indexOf('aplicativo');
+  const msgIdx = lower.indexOf('mensagem');
 
-  // Find header names safely, accommodating for variations.
-  const lowerHeaders = headers.map(h => (h || '').toLowerCase());
-  const tituloHeader = headers[lowerHeaders.indexOf('título')] || headers[lowerHeaders.indexOf('titulo')];
-  const appHeader = headers[lowerHeaders.indexOf('aplicativo')];
-  const msgHeader = headers[lowerHeaders.indexOf('mensagem')];
-
-  // If essential headers are missing, log an error and return empty.
-  if (!tituloHeader || !appHeader || !msgHeader) {
-    console.error('Could not find required headers (título/titulo, aplicativo, mensagem) in "Mensagens" sheet.');
-    return [];
-  }
-
-  return rows
+  return data
     .map((row) => ({
-      titulo: row[tituloHeader] || '',
-      aplicativo: normalizeApp(row[appHeader]),
-      mensagem: row[msgHeader] || '',
+      titulo: row[tituloIdx] || '',
+      aplicativo: normalizeApp(row[appIdx]),
+      mensagem: row[msgIdx] || '',
     }))
     .filter((m) => m.titulo || m.mensagem);
 }

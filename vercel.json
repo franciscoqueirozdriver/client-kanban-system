@@ -1,4 +1,6 @@
 {
-  "installCommand": "corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --no-frozen-lockfile",
-  "buildCommand": "pnpm build"
+  "version": 2,
+  "builds": [
+    { "src": "next.config.js", "use": "@vercel/next" }
+  ]
 }

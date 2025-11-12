@@ -1,48 +1,33 @@
 'use client';
 
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-
 export default function MessageModal({ open, messages = [], onSelect, onClose }) {
-  const handleClose = () => {
-    if (onClose) onClose();
-  };
+  if (!open) return null;
 
   return (
-    <Dialog open={open} onOpenChange={(value) => !value && handleClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader className="items-center text-center">
-          <DialogTitle className="text-lg font-semibold">Selecione uma mensagem</DialogTitle>
-        </DialogHeader>
-
-        <div className="px-6 py-5">
-          {messages.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {messages.map((m, idx) => (
-                <Button
-                  key={idx}
-                  type="button"
-                  className="justify-start"
-                  onClick={() => {
-                    onSelect?.(m);
-                    handleClose();
-                  }}
-                >
-                  {m.titulo}
-                </Button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Nenhuma mensagem disponível para este canal.</p>
-          )}
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+      <div className="bg-white rounded shadow-lg p-6 w-11/12 max-w-md mx-auto">
+        <h2 className="text-lg font-bold mb-4 text-center">Selecione uma mensagem</h2>
+        <div className="flex flex-col gap-2 mb-4">
+          {messages.map((m, idx) => (
+            <button
+              key={idx}
+              onClick={() => {
+                if (onSelect) onSelect(m);
+                if (onClose) onClose();
+              }}
+              className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
+            >
+              {m.titulo}
+            </button>
+          ))}
         </div>
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={handleClose}>
-            Cancelar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <button
+          onClick={onClose}
+          className="mt-2 px-3 py-2 bg-gray-400 text-white rounded w-full"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
   );
 }

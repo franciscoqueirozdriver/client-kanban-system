@@ -9,7 +9,6 @@ yarn-error.log*
 dist/
 out/
 *.log
-coverage/
 
 # Variáveis de ambiente
 .env
