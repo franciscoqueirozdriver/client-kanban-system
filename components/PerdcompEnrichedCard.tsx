@@ -99,7 +99,7 @@ export default function PerdcompEnrichedCard({
     if (!data?.perdcompCodigos || data.perdcompCodigos.length === 0) {
       return null;
     }
-    
+
     return analisarPortfolioPerdcomp(data.perdcompCodigos);
   }, [data?.perdcompCodigos]);
 
@@ -108,12 +108,53 @@ export default function PerdcompEnrichedCard({
     if (!data?.perdcompCodigos || data.perdcompCodigos.length === 0) {
       return [];
     }
-    
+
     return data.perdcompCodigos
       .slice(0, 5) // Mostrar apenas os 5 primeiros
       .map(codigo => enriquecerPerdcomp(codigo))
       .filter(analise => analise.valido);
   }, [data?.perdcompCodigos]);
+
+  const categoriaEntries = useMemo(() => {
+    if (!analiseEnriquecida) {
+      return [] as Array<[string, number]>;
+    }
+
+    return Object.entries(analiseEnriquecida.distribuicaoPorCategoria) as Array<[
+      string,
+      number,
+    ]>;
+  }, [analiseEnriquecida]);
+
+  const naturezasAgrupadasEntries = useMemo(() => {
+    if (!resumo?.porNaturezaAgrupada) {
+      return [] as Array<[string, number]>;
+    }
+
+    return Object.entries(resumo.porNaturezaAgrupada) as Array<[string, number]>;
+  }, [resumo?.porNaturezaAgrupada]);
+
+  const distribuicaoPorNaturezaEntries = useMemo(() => {
+    if (!analiseEnriquecida?.distribuicaoPorNatureza) {
+      return [] as Array<[string, number]>;
+    }
+
+    return Object.entries(analiseEnriquecida.distribuicaoPorNatureza) as Array<[
+      string,
+      number,
+    ]>;
+  }, [analiseEnriquecida?.distribuicaoPorNatureza]);
+
+  const distribuicaoPorCreditoEntries = useMemo(() => {
+    if (!analiseEnriquecida?.distribuicaoPorCredito) {
+      return [] as Array<[string, number]>;
+    }
+
+    return Object.entries(analiseEnriquecida.distribuicaoPorCredito) as Array<[
+      string,
+      number,
+    ]>;
+  }, [analiseEnriquecida?.distribuicaoPorCredito]);
 
   return (
     <article className="group relative mx-auto flex h-full w-full max-w-[420px] flex-col rounded-3xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg">
@@ -181,7 +222,7 @@ export default function PerdcompEnrichedCard({
                 
                 {/* Distribuição por categoria */}
                 <div className="space-y-1">
-                  {Object.entries(analiseEnriquecida.distribuicaoPorCategoria).map(([categoria, count]) => (
+                  {categoriaEntries.map(([categoria, count]) => (
                     <div key={categoria} className="flex items-center justify-between">
                       <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${getCategoryBadgeColor(categoria)}`}>
                         {categoria}
@@ -199,7 +240,7 @@ export default function PerdcompEnrichedCard({
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantos são:</p>
                   <ul className="mt-2 space-y-1 text-sm">
-                    {Object.entries(resumo?.porNaturezaAgrupada || {}).map(([cod, qtd]) => (
+                    {naturezasAgrupadasEntries.map(([cod, qtd]) => (
                       <li key={cod} className="flex items-center justify-between gap-4">
                         <span className="text-muted-foreground">
                           {cod === '1.3/1.7'
@@ -217,11 +258,11 @@ export default function PerdcompEnrichedCard({
                 </div>
 
                 {/* Por tipo de naturezas */}
-                {analiseEnriquecida?.distribuicaoPorNatureza && Object.keys(analiseEnriquecida.distribuicaoPorNatureza).length > 0 && (
+                {distribuicaoPorNaturezaEntries.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Por tipo de naturezas:</p>
                     <ul className="mt-2 space-y-1 text-sm">
-                      {Object.entries(analiseEnriquecida.distribuicaoPorNatureza).map(([natureza, qtd]) => (
+                      {distribuicaoPorNaturezaEntries.map(([natureza, qtd]) => (
                         <li key={natureza} className="flex items-center justify-between gap-4">
                           <span className="text-muted-foreground">{natureza}</span>
                           <span className="font-medium">{qtd}</span>
@@ -232,11 +273,11 @@ export default function PerdcompEnrichedCard({
                 )}
 
                 {/* Por tipo de Crédito */}
-                {analiseEnriquecida?.distribuicaoPorCredito && Object.keys(analiseEnriquecida.distribuicaoPorCredito).length > 0 && (
+                {distribuicaoPorCreditoEntries.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Por tipo de Crédito:</p>
                     <ul className="mt-2 space-y-1 text-sm">
-                      {Object.entries(analiseEnriquecida.distribuicaoPorCredito).map(([credito, qtd]) => (
+                      {distribuicaoPorCreditoEntries.map(([credito, qtd]) => (
                         <li key={credito} className="flex items-center justify-between gap-4">
                           <span className="text-muted-foreground">{credito}</span>
                           <span className="font-medium">{qtd}</span>
