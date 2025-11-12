@@ -1,4 +1,5 @@
 import { GoogleSpreadsheet } from 'google-spreadsheet';
+import { buildColumnResolver } from '../../lib/sheets/headerResolver';
 import { JWT } from 'google-auth-library';
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
@@ -44,22 +45,23 @@ export default async function handler(req, res) {
     
     if (req.method === 'GET') {
       await sheet.loadHeaderRow();
+      const COL = await buildColumnResolver('Teses');
       const rows = await sheet.getRows();
       
       const teses = rows.map(row => ({
         id: row.rowNumber,
-        Tese_ID: row.get('Tese_ID') || '',
-        Tipo: row.get('Tipo') || '',
-        Tema: row.get('Tema') || '',
-        'Tributo do Crédito': row.get('Tributo do Crédito') || '',
-        'Base Legal': row.get('Base Legal') || '',
-        'Contexto do Direito': row.get('Contexto do Direito') || '',
-        'Documentação Necessária': row.get('Documentação Necessária') || '',
-        'Informações a Serem Analisadas': row.get('Informações a Serem Analisadas') || '',
-        'Forma de Utilização': row.get('Forma de Utilização') || '',
-        'Público-Alvo': row.get('Público-Alvo') || '',
-        'Grau de Risco': row.get('Grau de Risco') || '',
-        Status: row.get('Status') || 'Ativa'
+        Tese_ID: row.get(COL('Tese_ID')) || '',
+        Tipo: row.get(COL('Tipo')) || '',
+        Tema: row.get(COL('Tema')) || '',
+        'Tributo do Crédito': row.get(COL('Tributo do Crédito')) || '',
+        'Base Legal': row.get(COL('Base Legal')) || '',
+        'Contexto do Direito': row.get(COL('Contexto do Direito')) || '',
+        'Documentação Necessária': row.get(COL('Documentação Necessária')) || '',
+        'Informações a Serem Analisadas': row.get(COL('Informações a Serem Analisadas')) || '',
+        'Forma de Utilização': row.get(COL('Forma de Utilização')) || '',
+        'Público-Alvo': row.get(COL('Público-Alvo')) || '',
+        'Grau de Risco': row.get(COL('Grau de Risco')) || '',
+        Status: row.get(COL('Status')) || 'Ativa'
       }));
       
       return res.status(200).json({ teses });
@@ -70,27 +72,28 @@ export default async function handler(req, res) {
       
       if (action === 'create') {
         await sheet.loadHeaderRow();
+        const COL = await buildColumnResolver('Teses');
         const rows = await sheet.getRows();
         
         const existingTeses = rows.map(row => ({
-          Tese_ID: row.get('Tese_ID') || ''
+          Tese_ID: row.get(COL('Tese_ID')) || ''
         }));
         
         const newTeseId = generateTeseId(existingTeses);
         
         const newRow = await sheet.addRow({
-          'Tese_ID': newTeseId,
-          'Tipo': teseData.tipo || '',
-          'Tema': teseData.tema || '',
-          'Tributo do Crédito': teseData.tributo || '',
-          'Base Legal': teseData.baseLegal || '',
-          'Contexto do Direito': teseData.contexto || '',
-          'Documentação Necessária': teseData.documentacao || '',
-          'Informações a Serem Analisadas': teseData.informacoes || '',
-          'Forma de Utilização': teseData.formaUtilizacao || '',
-          'Público-Alvo': teseData.publicoAlvo || '',
-          'Grau de Risco': teseData.grauRisco || 'Remoto',
-          'Status': 'Ativa'
+          [COL('Tese_ID')]: newTeseId,
+          [COL('Tipo')]: teseData.tipo || '',
+          [COL('Tema')]: teseData.tema || '',
+          [COL('Tributo do Crédito')]: teseData.tributo || '',
+          [COL('Base Legal')]: teseData.baseLegal || '',
+          [COL('Contexto do Direito')]: teseData.contexto || '',
+          [COL('Documentação Necessária')]: teseData.documentacao || '',
+          [COL('Informações a Serem Analisadas')]: teseData.informacoes || '',
+          [COL('Forma de Utilização')]: teseData.formaUtilizacao || '',
+          [COL('Público-Alvo')]: teseData.publicoAlvo || '',
+          [COL('Grau de Risco')]: teseData.grauRisco || 'Remoto',
+          [COL('Status')]: 'Ativa'
         });
         
         return res.status(201).json({ 
@@ -102,17 +105,18 @@ export default async function handler(req, res) {
       
       if (action === 'updateStatus') {
         await sheet.loadHeaderRow();
+        const COL = await buildColumnResolver('Teses');
         const rows = await sheet.getRows();
         
-        const targetRow = rows.find(row => row.get('Tese_ID') === teseId);
+        const targetRow = rows.find(row => row.get(COL('Tese_ID')) === teseId);
         if (!targetRow) {
           return res.status(404).json({ error: 'Tese não encontrada' });
         }
         
-        const currentStatus = targetRow.get('Status');
+        const currentStatus = targetRow.get(COL('Status'));
         const newStatus = currentStatus === 'Ativa' ? 'Inativa' : 'Ativa';
         
-        targetRow.set('Status', newStatus);
+        targetRow.set(COL('Status'), newStatus);
         await targetRow.save();
         
         return res.status(200).json({ 
@@ -127,24 +131,25 @@ export default async function handler(req, res) {
       const { teseId, teseData } = req.body;
       
       await sheet.loadHeaderRow();
+      const COL = await buildColumnResolver('Teses');
       const rows = await sheet.getRows();
       
-      const targetRow = rows.find(row => row.get('Tese_ID') === teseId);
+      const targetRow = rows.find(row => row.get(COL('Tese_ID')) === teseId);
       if (!targetRow) {
         return res.status(404).json({ error: 'Tese não encontrada' });
       }
       
       // Atualizar campos
-      if (teseData.tipo !== undefined) targetRow.set('Tipo', teseData.tipo);
-      if (teseData.tema !== undefined) targetRow.set('Tema', teseData.tema);
-      if (teseData.tributo !== undefined) targetRow.set('Tributo do Crédito', teseData.tributo);
-      if (teseData.baseLegal !== undefined) targetRow.set('Base Legal', teseData.baseLegal);
-      if (teseData.contexto !== undefined) targetRow.set('Contexto do Direito', teseData.contexto);
-      if (teseData.documentacao !== undefined) targetRow.set('Documentação Necessária', teseData.documentacao);
-      if (teseData.informacoes !== undefined) targetRow.set('Informações a Serem Analisadas', teseData.informacoes);
-      if (teseData.formaUtilizacao !== undefined) targetRow.set('Forma de Utilização', teseData.formaUtilizacao);
-      if (teseData.publicoAlvo !== undefined) targetRow.set('Público-Alvo', teseData.publicoAlvo);
-      if (teseData.grauRisco !== undefined) targetRow.set('Grau de Risco', teseData.grauRisco);
+      if (teseData.tipo !== undefined) targetRow.set(COL('Tipo'), teseData.tipo);
+      if (teseData.tema !== undefined) targetRow.set(COL('Tema'), teseData.tema);
+      if (teseData.tributo !== undefined) targetRow.set(COL('Tributo do Crédito'), teseData.tributo);
+      if (teseData.baseLegal !== undefined) targetRow.set(COL('Base Legal'), teseData.baseLegal);
+      if (teseData.contexto !== undefined) targetRow.set(COL('Contexto do Direito'), teseData.contexto);
+      if (teseData.documentacao !== undefined) targetRow.set(COL('Documentação Necessária'), teseData.documentacao);
+      if (teseData.informacoes !== undefined) targetRow.set(COL('Informações a Serem Analisadas'), teseData.informacoes);
+      if (teseData.formaUtilizacao !== undefined) targetRow.set(COL('Forma de Utilização'), teseData.formaUtilizacao);
+      if (teseData.publicoAlvo !== undefined) targetRow.set(COL('Público-Alvo'), teseData.publicoAlvo);
+      if (teseData.grauRisco !== undefined) targetRow.set(COL('Grau de Risco'), teseData.grauRisco);
       
       await targetRow.save();
       

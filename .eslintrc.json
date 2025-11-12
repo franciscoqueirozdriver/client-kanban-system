@@ -1,6 +1,22 @@
 {
-  "extends": "next",
+  "extends": [
+    "next",
+    "plugin:@typescript-eslint/recommended",
+    "prettier"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "plugins": [
+    "@typescript-eslint"
+  ],
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "node": true,
+    "jest": true
+  },
   "rules": {
-    "no-mixed-operators": ["error", { "groups": [["??", "&&", "||"]] }]
+    "no-mixed-operators": ["error", { "groups": [["??", "&&", "||"]] }],
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
   }
 }

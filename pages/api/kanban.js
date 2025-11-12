@@ -1,4 +1,5 @@
-import { getSheet, getSheetCached, findRowIndexById, updateRowByIndex } from '../../lib/googleSheets';
+import { getSheet, getSheetCached, findRowIndexById, updateRowByIndex, getSheetData } from '../../lib/googleSheets';
+import { buildColumnResolver } from '../../lib/sheets/headerResolver';
 import { normalizePhones } from '../../lib/report';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
@@ -24,33 +25,35 @@ function collectEmails(row, idx) {
   return Array.from(new Set(emails)).join(';');
 }
 
-function groupRows(rows) {
+async function groupRows(rows) {
   const [header, ...data] = rows;
+  const SHEET = 'Sheet1';
+  const COL = await buildColumnResolver(SHEET);
   const idx = {
-    clienteId: header.indexOf('Cliente_ID'),
-    org: header.indexOf('Organização - Nome'),
-    titulo: header.indexOf('Negócio - Título'),
-    contato: header.indexOf('Negócio - Pessoa de contato'),
-    cargo: header.indexOf('Pessoa - Cargo'),
-    emailWork: header.indexOf('Pessoa - Email - Work'),
-    emailHome: header.indexOf('Pessoa - Email - Home'),
-    emailOther: header.indexOf('Pessoa - Email - Other'),
-    phoneWork: header.indexOf('Pessoa - Phone - Work'),
-    phoneHome: header.indexOf('Pessoa - Phone - Home'),
-    phoneMobile: header.indexOf('Pessoa - Phone - Mobile'),
-    phoneOther: header.indexOf('Pessoa - Phone - Other'),
-    tel: header.indexOf('Pessoa - Telefone'),
-    cel: header.indexOf('Pessoa - Celular'),
-    normalizado: header.indexOf('Telefone Normalizado'),
-    segmento: header.indexOf('Organização - Segmento'),
-    tamanho: header.indexOf('Organização - Tamanho da empresa'),
-    uf: header.indexOf('uf'),
-    cidade: header.indexOf('cidade_estimada'),
-    status: header.indexOf('Status_Kanban'),
-    data: header.indexOf('Data_Ultima_Movimentacao'),
-    linkedin: header.indexOf('Pessoa - End. Linkedin'),
-    cor: header.indexOf('Cor_Card'),
-    produto: header.indexOf('Negócio - Nome do produto'),
+    clienteId: header.indexOf(COL('Cliente_ID')),
+    org: header.indexOf(COL('Organização - Nome')),
+    titulo: header.indexOf(COL('Negócio - Título')),
+    contato: header.indexOf(COL('Negócio - Pessoa de contato')),
+    cargo: header.indexOf(COL('Pessoa - Cargo')),
+    emailWork: header.indexOf(COL('Pessoa - Email - Work')),
+    emailHome: header.indexOf(COL('Pessoa - Email - Home')),
+    emailOther: header.indexOf(COL('Pessoa - Email - Other')),
+    phoneWork: header.indexOf(COL('Pessoa - Phone - Work')),
+    phoneHome: header.indexOf(COL('Pessoa - Phone - Home')),
+    phoneMobile: header.indexOf(COL('Pessoa - Phone - Mobile')),
+    phoneOther: header.indexOf(COL('Pessoa - Phone - Other')),
+    tel: header.indexOf(COL('Pessoa - Telefone')),
+    cel: header.indexOf(COL('Pessoa - Celular')),
+    normalizado: header.indexOf(COL('Telefone Normalizado')),
+    segmento: header.indexOf(COL('Organização - Segmento')),
+    tamanho: header.indexOf(COL('Organização - Tamanho da empresa')),
+    uf: header.indexOf(COL('uf')),
+    cidade: header.indexOf(COL('cidade_estimada')),
+    status: header.indexOf(COL('Status_Kanban')),
+    data: header.indexOf(COL('Data_Ultima_Movimentacao')),
+    linkedin: header.indexOf(COL('Pessoa - End. Linkedin')),
+    cor: header.indexOf(COL('Cor_Card')),
+    produto: header.indexOf(COL('Negócio - Nome do produto')),
   };
 
   const map = new Map();
@@ -130,9 +133,9 @@ function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const sheet = await getSheet();
-      const rows = sheet.data.values || [];
-      const { clients } = groupRows(rows);
+      const { headers, rows: dataRows } = await getSheetData('Sheet1');
+      const rawRows = [headers, ...dataRows.map(row => headers.map(header => row[header]))]; // Reconstroi o array de arrays para groupRows
+      const { clients } = await groupRows(rawRows);
 
       const limitParam = parseInt(req.query.limit, 10);
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
