@@ -39,6 +39,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
+      const start = Date.now();
       const clienteId = req.query.clienteId || '';
       const sheet = await getHistorySheetCached();
       const rows = sheet.data.values || [];
@@ -55,7 +56,7 @@ export default async function handler(req, res) {
         msg: header.indexOf('Mensagem_Usada'),
       };
 
-      const itens = data
+      const itensRaw = data
         .filter((r) => !clienteId || r[idx.cliente] === clienteId)
         .map((r) => ({
           clienteId: r[idx.cliente] || '',
@@ -69,6 +70,11 @@ export default async function handler(req, res) {
         }))
         .sort((a, b) => (a.dataHora < b.dataHora ? 1 : -1));
 
+      const limitParam = parseInt(req.query.limit, 10);
+      const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : itensRaw.length;
+      const itens = itensRaw.slice(0, limit);
+
+      console.log('INTERACOES_READ', { duration: Date.now() - start, count: itens.length });
       return res.status(200).json(itens);
     } catch (err) {
       console.error('Erro ao buscar histórico:', err);

@@ -11,11 +11,11 @@ Pasta base: /home/Alessandra/client-kanban-system
             import Link from 'next/link';
             import ClientCard from '../../components/ClientCard';
             import Filters from '../../components/Filters';
-            
+
             export default function ClientesPage() {
               const [clients, setClients] = useState([]);
               const [filtered, setFiltered] = useState([]);
-            
+
               useEffect(() => {
                 fetch('/api/clientes')
                   .then((res) => res.json())
@@ -24,7 +24,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                     setFiltered(data.clients);
                   });
               }, []);
-            
+
               const handleFilter = ({ query, segmento, porte, uf, cidade }) => {
                 let result = clients.filter((client) => {
                   // segmento filter
@@ -33,7 +33,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                       return false;
                     }
                   }
-            
+
                   // porte filter - supports array or string
                   if (porte) {
                     if (Array.isArray(porte)) {
@@ -45,17 +45,17 @@ Pasta base: /home/Alessandra/client-kanban-system
                       if ((client.size || '').trim().toLowerCase() !== porte.trim().toLowerCase()) return false;
                     }
                   }
-            
+
                   // uf filter
                   if (uf && uf.trim()) {
                     if ((client.uf || '').trim().toLowerCase() !== uf.trim().toLowerCase()) return false;
                   }
-            
+
                   // cidade filter
                   if (cidade && cidade.trim()) {
                     if ((client.city || '').trim().toLowerCase() !== cidade.trim().toLowerCase()) return false;
                   }
-            
+
                   // query filter
                   if (query) {
                     const q = query.toLowerCase();
@@ -70,10 +70,10 @@ Pasta base: /home/Alessandra/client-kanban-system
                   }
                   return true;
                 });
-            
+
                 setFiltered(result);
               };
-            
+
               return (
                 <div className="p-4 space-y-4">
                   <div className="flex justify-end">
@@ -90,7 +90,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 </div>
               );
             }
-            
+
         ──────────────────────────────
         📁 kanban
         📄 page.jsx
@@ -99,16 +99,16 @@ Pasta base: /home/Alessandra/client-kanban-system
             import { DragDropContext } from '@hello-pangea/dnd';
             import { useEffect, useState } from 'react';
             import KanbanColumn from '../../components/KanbanColumn';
-            
+
             export default function KanbanPage() {
               const [columns, setColumns] = useState([]);
-            
+
               useEffect(() => {
                 fetch('/api/kanban')
                   .then((res) => res.json())
                   .then(setColumns);
               }, []);
-            
+
               const onDragEnd = async (result) => {
                 if (!result.destination) return;
                 const { source, destination, draggableId } = result;
@@ -124,14 +124,14 @@ Pasta base: /home/Alessandra/client-kanban-system
                   moved.client.color = newColor;
                 }
                 setColumns(newColumns);
-            
+
                 await fetch('/api/kanban', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ id: draggableId, status: destCol.id, color: newColor }),
                 });
               };
-            
+
               return (
                 <div className="p-4 overflow-x-auto">
                   <DragDropContext onDragEnd={onDragEnd}>
@@ -149,11 +149,11 @@ Pasta base: /home/Alessandra/client-kanban-system
     └── Conteúdo:
         import './globals.css';
         import Sidebar from '../components/Sidebar';
-        
+
         export const metadata = {
           title: 'Client Kanban System',
         };
-        
+
         export default function RootLayout({ children }) {
           return (
             <html lang="en">
@@ -171,13 +171,13 @@ Pasta base: /home/Alessandra/client-kanban-system
         import { useEffect, useState } from 'react';
         import SummaryCard from '../components/SummaryCard';
         import Charts from '../components/Charts';
-        
+
         export default function Dashboard() {
           const [allClients, setAllClients] = useState([]);
           const [clients, setClients] = useState([]);
           const [options, setOptions] = useState({ segmento: [], uf: [] });
           const [filters, setFilters] = useState({ segmento: '', uf: '' });
-        
+
           useEffect(() => {
             fetch('/api/clientes')
               .then((res) => res.json())
@@ -187,14 +187,14 @@ Pasta base: /home/Alessandra/client-kanban-system
                 setOptions({ segmento: data.filters.segmento, uf: data.filters.uf });
               });
           }, []);
-        
+
           useEffect(() => {
             let filtered = allClients;
             if (filters.segmento) filtered = filtered.filter((c) => c.segment === filters.segmento);
             if (filters.uf) filtered = filtered.filter((c) => c.uf === filters.uf);
             setClients(filtered);
           }, [filters, allClients]);
-        
+
           const phaseLabels = [
             'Lead Selecionado',
             'Tentativa de Contato',
@@ -203,12 +203,12 @@ Pasta base: /home/Alessandra/client-kanban-system
             'Reunião Agendada',
             'Perdido',
           ];
-        
+
           const phaseCounts = clients.reduce((acc, c) => {
             acc[c.status] = (acc[c.status] || 0) + 1;
             return acc;
           }, {});
-        
+
           const companies = clients.length;
           const contactsSet = new Set();
           clients.forEach((c) => {
@@ -217,7 +217,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             });
           });
           const contacts = contactsSet.size;
-        
+
           const funnelPhases = [
             'Lead Selecionado',
             'Tentativa de Contato',
@@ -229,11 +229,11 @@ Pasta base: /home/Alessandra/client-kanban-system
           const losses = phaseCounts['Perdido'] || 0;
           const meetingRate = funnelTotal ? ((meetings / funnelTotal) * 100).toFixed(1) : '0';
           const lossRate = funnelTotal ? ((losses / funnelTotal) * 100).toFixed(1) : '0';
-        
+
           const handleChange = (key, value) => {
             setFilters((prev) => ({ ...prev, [key]: value }));
           };
-        
+
           return (
             <div className="space-y-6">
               <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -286,67 +286,67 @@ Pasta base: /home/Alessandra/client-kanban-system
             import Filters from '../../components/Filters';
             import ReportTable from '../../components/ReportTable';
             import ExportButton from '../../components/ExportButton';
-            
+
             export default function ReportsPage() {
               const [rows, setRows] = useState([]);
               const [filters, setFilters] = useState({});
               const [maxLeads, setMaxLeads] = useState(30);
-            
+
               const fetchData = (filt, limit = maxLeads) => {
                 const params = new URLSearchParams();
                 Object.entries(filt).forEach(([k, v]) => {
                   if (v) params.append(k, v);
                 });
                 if (limit) params.append('maxLeads', limit);
-            
+
                 fetch(`/api/reports?${params.toString()}`)
                   .then((res) => res.json())
                   .then((data) => {
                     setRows(data.rows);
                   });
               };
-            
+
               const handleFilter = (f) => {
                 // ✅ Se o filtro de porte vier como array (do <select multiple>), converte para string
                 const adjusted = { ...f };
                 if (Array.isArray(adjusted.porte)) {
                   adjusted.porte = adjusted.porte.join(',');
                 }
-            
+
                 setFilters(adjusted);
                 fetchData(adjusted);
               };
-            
+
               const handleMaxLeadsChange = (value) => {
                 const num = parseInt(value, 10);
                 const val = Number.isNaN(num) ? 30 : num;
                 setMaxLeads(val);
                 fetchData(filters, val);
               };
-            
+
               useEffect(() => {
                 fetchData({}, maxLeads);
               }, []);
-            
+
               const criteria = Object.entries(filters)
                 .filter(([, v]) => v)
                 .map(([k, v]) => `${k}: ${v}`)
                 .join(' | ');
-            
+
               const criteriaStr = [criteria, `maxLeads: ${maxLeads || 30}`]
                 .filter(Boolean)
                 .join(' | ');
-            
+
               const dateStr = new Date().toLocaleDateString('pt-BR');
-            
+
               return (
                 <div className="space-y-4">
                   <h1 className="text-2xl font-bold">Lista de Prospecção – {dateStr}</h1>
                   {criteriaStr && <p className="text-sm text-gray-600">{criteriaStr}</p>}
-            
+
                   {/* ✅ Filters envia porte como array, convertido em string aqui */}
                   <Filters onFilter={handleFilter} />
-            
+
                   <div className="flex items-center gap-2">
                     <label htmlFor="maxLeads" className="text-sm">Max Leads per Print</label>
                     <input
@@ -364,23 +364,23 @@ Pasta base: /home/Alessandra/client-kanban-system
                       <option value="100" />
                     </datalist>
                   </div>
-            
+
                   <ExportButton data={rows} />
                   <ReportTable rows={rows} />
                 </div>
               );
             }
-            
+
         ──────────────────────────────
             📁 print
             📄 page.jsx
             └── Conteúdo:
                 'use client';
                 import { useEffect, useState } from 'react';
-                
+
                 export default function PrintPage() {
                   const [rows, setRows] = useState([]);
-                
+
                   useEffect(() => {
                     try {
                       const savedData = localStorage.getItem('printData');
@@ -388,7 +388,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                     } catch {
                       setRows([]);
                     }
-                
+
                     // ✅ Fecha a aba e redireciona para /reports depois da impressão
                     window.addEventListener('afterprint', () => {
                       if (window.opener) {
@@ -396,17 +396,17 @@ Pasta base: /home/Alessandra/client-kanban-system
                       }
                       window.close();
                     });
-                
+
                     setTimeout(() => window.print(), 500);
                   }, []);
-                
+
                   const dateStr = new Date().toLocaleDateString('pt-BR');
-                
+
                   return (
                 <div className="print-container">
                       <h1>Lista de Prospecção</h1>
                       <p className="subtitle">Gerado em {dateStr}</p>
-                
+
                       <table className="report-table">
                         <thead>
                           <tr>
@@ -435,44 +435,44 @@ Pasta base: /home/Alessandra/client-kanban-system
                           ))}
                         </tbody>
                       </table>
-                
+
                       <style jsx global>{`
                         @page {
                           size: A4 landscape;
                           margin: 10mm;
                         }
-                
+
                         body {
                           font-family: Arial, sans-serif;
                           font-size: 11px;
                           color: #000;
                           background: #fff;
                         }
-                
+
                         .print-container {
                           width: 100%;
                           padding: 0;
                         }
-                
-                
-                
+
+
+
                         h1 {
                           text-align: center;
                           font-size: 18px;
                           margin: 0;
                         }
-                
+
                         .subtitle {
                           text-align: center;
                           font-size: 12px;
                           margin: 4px 0 12px 0;
                         }
-                
+
                         .report-table {
                           width: 100%;
                           border-collapse: collapse;
                         }
-                
+
                         .report-table th,
                         .report-table td {
                           border: 1px solid #000;
@@ -480,17 +480,17 @@ Pasta base: /home/Alessandra/client-kanban-system
                           text-align: left;
                           word-break: break-word;
                         }
-                
+
                         .report-table th {
                           background: #f0f0f0;
                           font-weight: bold;
                           font-size: 12px;
                         }
-                
+
                         .report-table td {
                           font-size: 11px;
                         }
-                
+
                         @media print {
                           body {
                             -webkit-print-color-adjust: exact;
@@ -500,7 +500,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                     </div>
                   );
                 }
-                
+
             ──────────────────────────────
     📁 components
     📄 Charts.jsx
@@ -516,9 +516,9 @@ Pasta base: /home/Alessandra/client-kanban-system
           Tooltip,
           Legend,
         } from 'chart.js';
-        
+
         ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
-        
+
         export default function Charts({ clients }) {
           const phaseLabels = [
             'Lead Selecionado',
@@ -528,17 +528,17 @@ Pasta base: /home/Alessandra/client-kanban-system
             'Reunião Agendada',
             'Perdido',
           ];
-        
+
           const phaseCounts = {};
           const segmentCounts = {};
           const ufCounts = {};
-        
+
           clients.forEach((c) => {
             phaseCounts[c.status] = (phaseCounts[c.status] || 0) + 1;
             if (c.segment) segmentCounts[c.segment] = (segmentCounts[c.segment] || 0) + 1;
             if (c.uf) ufCounts[c.uf] = (ufCounts[c.uf] || 0) + c.contacts.length;
           });
-        
+
           const barData = {
             labels: phaseLabels,
             datasets: [
@@ -549,7 +549,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               },
             ],
           };
-        
+
           const segmentData = {
             labels: Object.keys(segmentCounts),
             datasets: [
@@ -559,7 +559,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               },
             ],
           };
-        
+
           const ufData = {
             labels: Object.keys(ufCounts),
             datasets: [
@@ -569,9 +569,9 @@ Pasta base: /home/Alessandra/client-kanban-system
               },
             ],
           };
-        
+
           const options = { plugins: { legend: { position: 'bottom' } } };
-        
+
           return (
             <div className="grid md:grid-cols-3 gap-4">
               <div className="bg-white p-4 rounded shadow">
@@ -592,19 +592,19 @@ Pasta base: /home/Alessandra/client-kanban-system
         'use client';
         import { useState } from 'react';
         import MessageModal from './MessageModal';
-        
+
         function getWhatsAppLink(phone) {
           const digits = String(phone || '').replace(/\D/g, '');
           return digits ? `https://wa.me/${digits}` : '';
         }
-        
+
         function getGreeting() {
           const h = new Date().getHours();
           if (h < 12) return 'bom dia';
           if (h < 18) return 'boa tarde';
           return 'boa noite';
         }
-        
+
         function replacePlaceholders(template, { client, contact, phone }) {
           if (!template) return '';
           let msg = template;
@@ -624,7 +624,7 @@ Pasta base: /home/Alessandra/client-kanban-system
           });
           return msg;
         }
-        
+
         async function fetchMessages(app) {
           try {
             const res = await fetch(`/api/mensagens?app=${app}`);
@@ -638,7 +638,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             return [];
           }
         }
-        
+
         export default function ClientCard({ client }) {
           console.log('client contacts', client.contacts);
           const [color, setColor] = useState(client.color || '');
@@ -646,7 +646,7 @@ Pasta base: /home/Alessandra/client-kanban-system
           const [modalOpen, setModalOpen] = useState(false);
           const [modalMessages, setModalMessages] = useState([]);
           const [onSelectMessage, setOnSelectMessage] = useState(null);
-        
+
           const handleDoubleClick = async () => {
             const newColor = 'green';
             const newStatus = 'Lead Selecionado';
@@ -662,13 +662,13 @@ Pasta base: /home/Alessandra/client-kanban-system
               }),
             });
           };
-        
+
           const openModal = (messages, action) => {
             setModalMessages(messages);
             setOnSelectMessage(() => action);
             setModalOpen(true);
           };
-        
+
           const handlePhoneClick = async (e, phone, contact) => {
             e.preventDefault();
             const digits = String(phone || '').replace(/\D/g, '');
@@ -690,7 +690,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               window.open(url, '_blank');
             }
           };
-        
+
           const handleEmailClick = async (e, email, contact) => {
             e.preventDefault();
             const phone = contact.celular || contact.telefone || '';
@@ -705,7 +705,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               window.location.href = `mailto:${email}`;
             }
           };
-        
+
           return (
             <div
               onDoubleClick={handleDoubleClick}
@@ -744,7 +744,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                         onClick={(e) => handleEmailClick(e, c.email, c)}
                       >
                         {c.email}
-        
+
                       </button>
                     </p>
                     {c.normalizedPhones && c.normalizedPhones.length > 0 && (
@@ -788,14 +788,14 @@ Pasta base: /home/Alessandra/client-kanban-system
                   setModalOpen(false);
                 }}
                 onClose={() => setModalOpen(false)}
-        
+
                 }}
                 onClose={() => setModalOpen(false)}
               />
             </div>
           );
         }
-        
+
     ──────────────────────────────
     📄 ExportButton.jsx
     └── Conteúdo:
@@ -803,25 +803,25 @@ Pasta base: /home/Alessandra/client-kanban-system
         import { useState } from 'react';
         import PdfModal from './PdfModal';
         import * as XLSX from 'xlsx';
-        
+
         export default function ExportButton({ data, filters }) {
           const [open, setOpen] = useState(false);
-        
+
           const exportExcel = () => {
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Lista');
             XLSX.writeFile(wb, 'lista_prospeccao.xlsx');
           };
-        
+
           const generatePdf = (max, onlyNew) => {
             // ✅ Salva dados no localStorage para evitar URL gigante
             localStorage.setItem('printData', JSON.stringify(data));
             localStorage.setItem('printFilters', JSON.stringify({ ...filters, max, onlyNew }));
-        
+
             // ✅ Abre nova aba com tela de impressão sem passar JSON pela URL
             window.open(`/reports/print`, '_blank');
-        
+
             // 🔥 Se for somente leads inéditos, marca na planilha
             if (onlyNew) {
               fetch('/api/reports', {
@@ -831,7 +831,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               });
             }
           };
-        
+
           return (
             <div className="flex gap-2">
               <button
@@ -855,37 +855,37 @@ Pasta base: /home/Alessandra/client-kanban-system
             </div>
           );
         }
-        
+
     ──────────────────────────────
     📄 Filters.jsx
     └── Conteúdo:
         'use client';
         import { useEffect, useState } from 'react';
-        
+
         export default function Filters({ onFilter }) {
           const [query, setQuery] = useState('');
           const [filters, setFilters] = useState({ segmento: '', porte: [], uf: '', cidade: '' });
           const [options, setOptions] = useState({ segmento: [], porte: [], uf: [], cidade: [] });
-        
+
           useEffect(() => {
             fetch('/api/clientes')
               .then((res) => res.json())
               .then((data) => setOptions(data.filters));
           }, []);
-        
+
           useEffect(() => {
             onFilter && onFilter({ query, ...filters });
           }, [query, filters]);
-        
+
           const handleChange = (key, value) => {
             setFilters((prev) => ({ ...prev, [key]: value }));
           };
-        
+
           const handleMultiSelect = (e) => {
             const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
             setFilters((prev) => ({ ...prev, porte: selected }));
           };
-        
+
           return (
             <div className="flex flex-col gap-2">
               <input
@@ -895,7 +895,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 placeholder="Buscar..."
                 className="border p-2 rounded"
               />
-        
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {/* Segmento */}
                 <select
@@ -910,7 +910,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                     </option>
                   ))}
                 </select>
-        
+
                 {/* ✅ Porte com múltipla escolha */}
                 <select
                   multiple
@@ -924,7 +924,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                     </option>
                   ))}
                 </select>
-        
+
                 {/* UF */}
                 <select
                   value={filters.uf}
@@ -938,7 +938,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                     </option>
                   ))}
                 </select>
-        
+
                 {/* Cidade */}
                 <select
                   value={filters.cidade}
@@ -956,16 +956,16 @@ Pasta base: /home/Alessandra/client-kanban-system
             </div>
           );
         }
-        
+
     ──────────────────────────────
     📄 KanbanCard.jsx
     └── Conteúdo:
         'use client';
         import { Draggable } from '@hello-pangea/dnd';
-        
+
         export default function KanbanCard({ card, index }) {
           const { client } = card;
-        
+
           const colorStyle = {
             backgroundColor:
               client.color === 'green'
@@ -974,7 +974,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                   ? '#E57373'
                   : 'white',
           };
-        
+
           return (
             <Draggable draggableId={card.id} index={index}>
               {(provided) => (
@@ -1032,7 +1032,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         'use client';
         import { Droppable } from '@hello-pangea/dnd';
         import KanbanCard from './KanbanCard';
-        
+
         export default function KanbanColumn({ column }) {
           return (
             <div className="w-64">
@@ -1058,10 +1058,10 @@ Pasta base: /home/Alessandra/client-kanban-system
     📄 MessageModal.jsx
     └── Conteúdo:
         'use client';
-        
+
         export default function MessageModal({ open, messages = [], onSelect, onClose }) {
           if (!open) return null;
-        
+
           return (
             <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
               <div className="bg-white rounded shadow-lg p-6 w-11/12 max-w-md mx-auto">
@@ -1095,14 +1095,14 @@ Pasta base: /home/Alessandra/client-kanban-system
     └── Conteúdo:
         'use client';
         import { useState } from 'react';
-        
+
         export default function PdfModal({ open, onClose, data = [], onGenerate }) {
           if (!open) return null;
-        
+
           const [customValue, setCustomValue] = useState('');
           const [onlyNew, setOnlyNew] = useState(true); // ✅ Checkbox começa marcado
           const options = [10, 30, 50, 100];
-        
+
           const handleCustomGenerate = () => {
             const value = parseInt(customValue, 10);
             if (!isNaN(value) && value > 0) {
@@ -1110,7 +1110,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               onClose();
             }
           };
-        
+
           return (
             <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
               <div className="bg-white rounded shadow-lg p-6 w-96">
@@ -1147,7 +1147,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                       OK
                     </button>
                   </div>
-        
+
                   {/* ✅ Checkbox para leads inéditos */}
                   <label className="flex items-center gap-2 mt-3">
                     <input
@@ -1168,7 +1168,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             </div>
           );
         }
-        
+
     ──────────────────────────────
     📄 ReportTable.jsx
     └── Conteúdo:
@@ -1209,12 +1209,12 @@ Pasta base: /home/Alessandra/client-kanban-system
             </div>
           );
         }
-        
+
     ──────────────────────────────
     📄 reportUtils.js
     └── Conteúdo:
         // components/reportUtils.js
-        
+
         export function normalizePhones(row, idx) {
           const val = (i) => (i >= 0 ? String(row[i] || '').trim() : '');
           const existing = val(idx.normalizado);
@@ -1226,14 +1226,14 @@ Pasta base: /home/Alessandra/client-kanban-system
             val(idx.tel),
             val(idx.cel),
           ];
-        
+
           if (existing) {
             return existing
               .split(';')
               .map((p) => p.trim())
               .filter(Boolean);
           }
-        
+
           const numbers = rawList
             .map((p) => p.replace(/[\s().-]/g, ''))
             .map((p) => p.replace(/^0+/, ''))
@@ -1249,10 +1249,10 @@ Pasta base: /home/Alessandra/client-kanban-system
               return null;
             })
             .filter(Boolean);
-        
+
           return Array.from(new Set(numbers));
         }
-        
+
         export function buildReport(rows) {
           const [header, ...data] = rows;
           const idx = {
@@ -1274,26 +1274,26 @@ Pasta base: /home/Alessandra/client-kanban-system
             cidade: header.indexOf('cidade_estimada'),
             impresso: header.indexOf('Impresso_Lista'),
           };
-        
+
           const normalizePhone = (v) => String(v || '').trim();
-        
+
           if (idx.tel === -1 || idx.cel === -1) {
             console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
           }
-        
+
           const filters = {
             segmento: new Set(),
             porte: new Set(),
             uf: new Set(),
             cidade: new Set(),
           };
-        
+
           const map = new Map();
           data.forEach((row, i) => {
             const company = row[idx.org];
             if (!company) return;
             if (row[idx.impresso]) return;
-        
+
             if (!map.has(company)) {
               map.set(company, {
                 company,
@@ -1307,14 +1307,14 @@ Pasta base: /home/Alessandra/client-kanban-system
             }
             const item = map.get(company);
             item.rows.push(i + 2);
-        
+
             const telefone = normalizePhone(row[idx.tel]);
             const celular = normalizePhone(row[idx.cel]);
             const normalizedPhones = normalizePhones(row, idx);
             if (normalizedPhones.length === 0) {
               console.warn('Contato sem telefone', { row: i + 2, company });
             }
-        
+
             item.contacts.push({
               nome: (row[idx.contato] || '').trim(),
               cargo: (row[idx.cargo] || '').trim(),
@@ -1324,28 +1324,28 @@ Pasta base: /home/Alessandra/client-kanban-system
               email: (row[idx.email] || '').trim(),
               linkedin: (row[idx.linkedin] || '').trim(),
             });
-        
+
             if (row[idx.segmento]) filters.segmento.add(row[idx.segmento]);
             if (row[idx.tamanho]) filters.porte.add(row[idx.tamanho]);
             if (row[idx.uf]) filters.uf.add(row[idx.uf]);
             if (row[idx.cidade]) filters.cidade.add(row[idx.cidade]);
           });
-        
+
           return { map, filters };
         }
-        
+
         export function mapToRows(map, query = {}, max = Infinity) {
           const result = [];
           const toMark = new Set();
-        
+
           map.forEach((item) => {
             if (query.segmento && item.segment !== query.segmento) return;
             if (query.porte && item.size !== query.porte) return;
             if (query.uf && item.uf !== query.uf) return;
             if (query.cidade && item.cidade !== query.cidade) return;
-        
+
             if (result.length >= max) return;
-        
+
             if (item.contacts.length === 0) {
               result.push({
                 company: item.company,
@@ -1378,16 +1378,16 @@ Pasta base: /home/Alessandra/client-kanban-system
             }
             item.rows.forEach((r) => toMark.add(r));
           });
-        
+
           return { rows: result, toMark };
         }
-        
+
         export async function markPrintedRows(updateRowFn, rows) {
           await Promise.all(
             Array.from(rows).map((rowNum) => updateRowFn(rowNum, { impresso_lista: 'Em Lista' }))
           );
         }
-        
+
     ──────────────────────────────
     📄 Sidebar.jsx
     └── Conteúdo:
@@ -1396,7 +1396,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         import { useState } from 'react';
         import { usePathname } from 'next/navigation';
         import { FaChartBar, FaUsers, FaColumns, FaCog, FaHome } from 'react-icons/fa';
-        
+
         export default function Sidebar() {
           const [open, setOpen] = useState(false);
           const pathname = usePathname();
@@ -1407,7 +1407,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             { href: '/reports', label: 'Reports', icon: <FaChartBar /> },
             { href: '#', label: 'Settings', icon: <FaCog /> },
           ];
-        
+
           return (
             <>
               <button
@@ -1440,7 +1440,7 @@ Pasta base: /home/Alessandra/client-kanban-system
     📄 SummaryCard.jsx
     └── Conteúdo:
         'use client';
-        
+
         export default function SummaryCard({ title, value }) {
           return (
             <div className="bg-white p-4 rounded shadow text-center">
@@ -1455,66 +1455,66 @@ Pasta base: /home/Alessandra/client-kanban-system
     import fs from 'fs';
     import path from 'path';
     import clipboardy from 'clipboardy';
-    
+
     // Caminho do arquivo .env.local
     const envPath = path.resolve('.env.local');
-    
+
     // Ler o arquivo .env.local
     const content = fs.readFileSync(envPath, 'utf8');
-    
+
     // Encontrar a linha com GOOGLE_PRIVATE_KEY
     const match = content.match(/^GOOGLE_PRIVATE_KEY=(["']?)([\s\S]*?)\1$/m);
-    
+
     if (!match) {
       console.error('❌ GOOGLE_PRIVATE_KEY não encontrada no .env.local');
       process.exit(1);
     }
-    
+
     let key = match[2];
-    
+
     // Se tiver aspas, remove
     key = key.replace(/^"|"$/g, '');
-    
+
     // Ajustar quebras de linha para \n
     const fixedKey = key.replace(/\n/g, '\\n');
-    
+
     // Copiar para área de transferência
     clipboardy.writeSync(fixedKey);
-    
+
     console.log('✅ Chave copiada para a área de transferência no formato correto.');
     console.log('Cole no painel de variáveis com:');
     console.log(`"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"`);
-    
+
 ──────────────────────────────
 📄 estrutura_nodejs.sh
 └── Conteúdo:
     #!/bin/bash
-    
+
     # Diretório atual (onde o script está sendo executado)
     BASE_DIR="$(pwd)"
     OUTPUT_FILE="$BASE_DIR/estrutura_nodejs.txt"
-    
+
     # Limpa saída anterior
     > "$OUTPUT_FILE"
-    
+
     # Extensões e nomes de arquivos relevantes
     EXTENSOES_RELEVANTES="\.js$|\.ts$|\.jsx$|\.tsx$|\.json$|\.env$|\.sh$|\.config\..*|\.gitignore$|Dockerfile$|Makefile$|package\.json$|tsconfig\.json$|next\.config\.js$"
-    
+
     # Pastas a ignorar
     IGNORAR_PASTAS="node_modules|\.git|\.next|dist|build"
-    
+
     # Função recursiva
     function percorrer_pasta() {
         local dir="$1"
         local indent="$2"
-    
+
         # Ignorar pastas específicas
         if [[ "$dir" =~ $IGNORAR_PASTAS ]]; then
             return
         fi
-    
+
         echo "${indent}📁 $(basename "$dir")" >> "$OUTPUT_FILE"
-    
+
         for item in "$dir"/*; do
             if [ -d "$item" ]; then
                 percorrer_pasta "$item" "$indent    "
@@ -1528,27 +1528,27 @@ Pasta base: /home/Alessandra/client-kanban-system
             fi
         done
     }
-    
+
     # Execução
     echo "📂 Estrutura do projeto Node.js – $(date)" >> "$OUTPUT_FILE"
     echo "Pasta base: $BASE_DIR" >> "$OUTPUT_FILE"
     echo "──────────────────────────────" >> "$OUTPUT_FILE"
     percorrer_pasta "$BASE_DIR" ""
-    
+
     echo "✅ Arquivo gerado em: $OUTPUT_FILE"
 ──────────────────────────────
     📁 lib
     📄 googleSheets.js
     └── Conteúdo:
         import { google } from 'googleapis';
-        
+
         // ✅ Cache simples em memória
         const readCache = new Map();
-        
+
         function sleep(ms) {
           return new Promise((resolve) => setTimeout(resolve, ms));
         }
-        
+
         async function withRetry(fn, delays = [2000, 4000]) {
           try {
             return await fn();
@@ -1560,13 +1560,13 @@ Pasta base: /home/Alessandra/client-kanban-system
             throw err;
           }
         }
-        
+
         async function withCache(key, fn) {
           const cached = readCache.get(key);
           if (cached && Date.now() - cached.time < 10000) {
             return cached.data;
           }
-        
+
           const promise = withRetry(fn).then((res) => {
             readCache.set(key, { time: Date.now(), data: res });
             return res;
@@ -1574,14 +1574,14 @@ Pasta base: /home/Alessandra/client-kanban-system
             readCache.delete(key);
             throw err;
           });
-        
+
             readCache.set(key, { time: Date.now(), data: promise });
           return promise;
         }
-        
+
         const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
         const SHEET_NAME = 'Sheet1';
-        
+
         // ✅ Mapeamento de colunas para updateRow
         const COLUMN_MAP = {
           cliente: 'Negócio - Organização',
@@ -1602,7 +1602,7 @@ Pasta base: /home/Alessandra/client-kanban-system
           impresso_lista: 'Impresso_Lista', // ✅ Adicionada para marcar leads impressos
           telefone_normalizado: 'Telefone Normalizado',
         };
-        
+
         function getAuth() {
           return new google.auth.JWT({
             email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -1610,13 +1610,13 @@ Pasta base: /home/Alessandra/client-kanban-system
             scopes: SCOPES,
           });
         }
-        
+
         async function authorize() {
           const auth = getAuth();
           await auth.authorize();
           return auth;
         }
-        
+
         function columnToLetter(index) {
           let letter = '';
           let temp = index;
@@ -1626,7 +1626,7 @@ Pasta base: /home/Alessandra/client-kanban-system
           }
           return letter;
         }
-        
+
         async function fetchHeaderInfo(spreadsheetId = process.env.SPREADSHEET_ID) {
           const auth = await authorize();
           const sheets = google.sheets({ version: 'v4', auth });
@@ -1641,16 +1641,16 @@ Pasta base: /home/Alessandra/client-kanban-system
           });
           return { headers, indexMap };
         }
-        
+
         export async function getHeaderInfo() {
           return fetchHeaderInfo(process.env.SPREADSHEET_ID);
         }
-        
+
         export async function getHeaderInfoCached(spreadsheetId = process.env.SPREADSHEET_ID) {
           const key = `header:${spreadsheetId}`;
           return withCache(key, () => fetchHeaderInfo(spreadsheetId));
         }
-        
+
         async function fetchSheet(spreadsheetId = process.env.SPREADSHEET_ID) {
           const auth = await authorize();
           const sheets = google.sheets({ version: 'v4', auth });
@@ -1659,16 +1659,16 @@ Pasta base: /home/Alessandra/client-kanban-system
             range: SHEET_NAME,
           });
         }
-        
+
         export async function getSheet() {
           return fetchSheet(process.env.SPREADSHEET_ID);
         }
-        
+
         export async function getSheetCached(spreadsheetId = process.env.SPREADSHEET_ID) {
           const key = `sheet:${spreadsheetId}`;
           return withCache(key, () => fetchSheet(spreadsheetId));
         }
-        
+
         export async function appendRow(data) {
           const { headers, indexMap } = await getHeaderInfoCached();
           const auth = await authorize();
@@ -1687,7 +1687,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             requestBody: { values: [row] },
           });
         }
-        
+
         export async function updateRow(rowNumber, data) {
           const { indexMap } = await getHeaderInfoCached();
           const auth = await authorize();
@@ -1706,7 +1706,7 @@ Pasta base: /home/Alessandra/client-kanban-system
           });
           return Promise.all(requests.filter(Boolean));
         }
-        
+
         export function aggregateRows(rows) {
           const [header, ...data] = rows;
           const idx = {
@@ -1717,7 +1717,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             segmento: header.indexOf('Organização - Segmento'),
             uf: header.indexOf('uf'),
           };
-        
+
           const map = new Map();
           data.forEach((row) => {
             const company = row[idx.org];
@@ -1735,7 +1735,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             const key = `${row[idx.contato] || ''}|${row[idx.email] || ''}`;
             if (!item.contacts.has(key)) item.contacts.set(key, {});
           });
-        
+
           return Array.from(map.values()).map((c) => ({
             company: c.company,
             contacts: Array.from(c.contacts.keys()),
@@ -1744,12 +1744,12 @@ Pasta base: /home/Alessandra/client-kanban-system
             uf: c.uf,
           }));
         }
-        
+
     ──────────────────────────────
     📄 report.js
     └── Conteúdo:
         import { updateRow } from './googleSheets';
-        
+
         export function normalizePhones(row, idx) {
           const val = (i) => (i >= 0 ? String(row[i] || '').trim() : '');
           const existing = val(idx.normalizado);
@@ -1761,7 +1761,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             val(idx.tel),
             val(idx.cel),
           ];
-        
+
           // ✅ Se já existe na coluna "Telefone Normalizado", usa direto
           if (existing) {
             return existing
@@ -1769,47 +1769,47 @@ Pasta base: /home/Alessandra/client-kanban-system
               .map((p) => p.trim())
               .filter(Boolean);
           }
-        
+
           // ✅ Junta todos os telefones e separa por delimitadores
           let allNumbers = rawList
             .join(';')
             .split(/[,;/]/)
             .map((p) => p.trim())
             .filter(Boolean);
-        
+
           const normalized = new Set();
-        
+
           for (let num of allNumbers) {
             let original = num;
-        
+
             // 🔹 Remove qualquer texto que não seja número ou +
             num = num.replace(/[^\d+]/g, '');
-        
+
             // 🔹 Remove códigos de operadora (031, 014)
             num = num.replace(/^(0\d{2})(\d{8,9})$/, '$2');
-        
+
             // 🔹 Ramais e números curtos (<8 dígitos)
             const digitsOnly = num.replace(/\D/g, '');
             if (digitsOnly.length < 8) {
               console.warn('Telefone curto/ramal descartado:', original);
               continue;
             }
-        
+
             // 🔹 Números 0800 e 4003 - mantém formato puro
             if (/^0800\d{6,7}$/.test(digitsOnly) || /^4003\d{4}$/.test(digitsOnly)) {
               normalized.add(digitsOnly);
               continue;
             }
-        
+
             // 🔹 Números internacionais válidos (+XX...)
             if (/^\+\d{10,15}$/.test(num)) {
               normalized.add(num);
               continue;
             }
-        
+
             // 🔹 Remove + duplicado e garante padrão
             if (num.startsWith('+')) num = num.slice(1);
-        
+
             // 🔹 Adiciona +55 se não tiver DDI e for número brasileiro
             if (!num.startsWith('55')) {
               if (digitsOnly.length === 10 || digitsOnly.length === 11) {
@@ -1819,7 +1819,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 continue;
               }
             }
-        
+
             // 🔹 Aceita apenas 12 ou 13 dígitos (E.164 para Brasil)
             if (num.length === 12 || num.length === 13) {
               normalized.add('+' + num);
@@ -1827,15 +1827,15 @@ Pasta base: /home/Alessandra/client-kanban-system
               console.warn('Número descartado por tamanho inválido:', original);
             }
           }
-        
+
           return Array.from(normalized);
         }
-        
+
         export async function saveNormalizedPhones(updateRowFn, rowNum, numbers) {
           const value = numbers.join(';');
           await updateRowFn(rowNum, { telefone_normalizado: value });
         }
-        
+
         export async function buildReport(rows) {
           const [header, ...data] = rows;
           const idx = {
@@ -1857,23 +1857,23 @@ Pasta base: /home/Alessandra/client-kanban-system
             cidade: header.indexOf('cidade_estimada'),
             impresso: header.indexOf('Impresso_Lista'),
           };
-        
+
           const normalizePhone = (v) => String(v || '').trim();
-        
+
           const filters = {
             segmento: new Set(),
             porte: new Set(),
             uf: new Set(),
             cidade: new Set(),
           };
-        
+
           const map = new Map();
-        
+
           for (let i = 0; i < data.length; i++) {
             const row = data[i];
             const company = row[idx.org];
             if (!company) continue;
-        
+
             if (!map.has(company)) {
               map.set(company, {
                 company,
@@ -1885,18 +1885,18 @@ Pasta base: /home/Alessandra/client-kanban-system
                 rows: [],
               });
             }
-        
+
             const item = map.get(company);
             item.rows.push(i + 2);
-        
+
             const telefone = normalizePhone(row[idx.tel]);
             const celular = normalizePhone(row[idx.cel]);
             const normalizedPhones = normalizePhones(row, idx);
-        
+
             if (normalizedPhones.length === 0) {
               console.warn('Contato sem telefone', { row: i + 2, company });
             }
-        
+
             if (normalizedPhones.length > 0 && !row[idx.normalizado]) {
               try {
                 await saveNormalizedPhones(updateRow, i + 2, normalizedPhones);
@@ -1904,7 +1904,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 console.error('Erro ao salvar telefone normalizado', { row: i + 2, err });
               }
             }
-        
+
             item.contacts.push({
               nome: (row[idx.contato] || '').trim(),
               cargo: (row[idx.cargo] || '').trim(),
@@ -1915,36 +1915,36 @@ Pasta base: /home/Alessandra/client-kanban-system
               linkedin: (row[idx.linkedin] || '').trim(),
               impresso: (row[idx.impresso] || '').trim(),
             });
-        
+
             if (row[idx.segmento]) filters.segmento.add(row[idx.segmento]);
             if (row[idx.tamanho]) filters.porte.add(row[idx.tamanho]);
             if (row[idx.uf]) filters.uf.add(row[idx.uf]);
             if (row[idx.cidade]) filters.cidade.add(row[idx.cidade]);
           }
-        
+
           return { map, filters };
         }
-        
+
         export function mapToRows(map, query = {}, max = Infinity, onlyNew = true) {
           const result = [];
           const toMark = new Set();
           const seen = new Set();
-        
+
           map.forEach((item) => {
             if (query.segmento && item.segment !== query.segmento) return;
-        
+
             if (query.porte) {
               const selected = Array.isArray(query.porte)
                 ? query.porte
                 : query.porte.split(',');
               if (!selected.includes(item.size)) return;
             }
-        
+
             if (query.uf && item.uf !== query.uf) return;
             if (query.cidade && item.cidade !== query.cidade) return;
-        
+
             if (result.length >= max) return;
-        
+
             const contatos = item.contacts.length === 0
               ? [{
                   nome: '',
@@ -1956,15 +1956,15 @@ Pasta base: /home/Alessandra/client-kanban-system
                   impresso: '',
                 }]
               : item.contacts;
-        
+
             contatos.forEach((c) => {
               if (result.length >= max) return;
               if (onlyNew && c.impresso === 'Em Lista') return;
-        
+
               const key = `${item.company}|${c.nome}|${c.telefone}|${c.celular}|${c.email}|${c.linkedin}|${(c.normalizedPhones || []).join(',')}`;
               if (seen.has(key)) return;
               seen.add(key);
-        
+
               result.push({
                 company: item.company,
                 segment: item.segment,
@@ -1977,14 +1977,14 @@ Pasta base: /home/Alessandra/client-kanban-system
                 linkedin: c.linkedin,
                 normalizedPhones: c.normalizedPhones || [],
               });
-        
+
               item.rows.forEach((r) => toMark.add(r));
             });
           });
-        
+
           return { rows: result, toMark };
         }
-        
+
         export async function markPrintedRows(updateRowFn, rows) {
           await Promise.all(
             Array.from(rows).map((rowNum) =>
@@ -1992,7 +1992,7 @@ Pasta base: /home/Alessandra/client-kanban-system
             )
           );
         }
-        
+
     ──────────────────────────────
 📄 next.config.js
 └── Conteúdo:
@@ -2000,7 +2000,7 @@ Pasta base: /home/Alessandra/client-kanban-system
     const nextConfig = {
       reactStrictMode: true,
     };
-    
+
     module.exports = nextConfig;
 ──────────────────────────────
 📄 package (cópia).json
@@ -10402,7 +10402,7 @@ Pasta base: /home/Alessandra/client-kanban-system
         └── Conteúdo:
             import { getSheetCached, appendRow, updateRow } from '../../lib/googleSheets';
             import { normalizePhones } from '../../lib/report';
-            
+
             function groupRows(rows) {
               const [header, ...data] = rows;
               const idx = {
@@ -10427,20 +10427,20 @@ Pasta base: /home/Alessandra/client-kanban-system
                 linkedin: header.indexOf('Pessoa - End. Linkedin'),
                 cor: header.indexOf('Cor_Card'),
               };
-            
+
               const normalizePhone = (v) => String(v || '').trim();
-            
+
               if (idx.tel === -1 || idx.cel === -1) {
                 console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
               }
-            
+
               const filters = {
                 segmento: new Set(),
                 porte: new Set(),
                 uf: new Set(),
                 cidade: new Set(),
               };
-            
+
               const clients = data.map((row, i) => {
                 const company = row[idx.org] || '';
                 const segment = row[idx.segmento] || '';
@@ -10450,19 +10450,19 @@ Pasta base: /home/Alessandra/client-kanban-system
                 const status = row[idx.status] || '';
                 const dataMov = row[idx.data] || '';
                 const color = row[idx.cor] || '';
-            
+
                 filters.segmento.add(segment);
                 filters.porte.add(size);
                 filters.uf.add(uf);
                 filters.cidade.add(city);
-            
+
                 const phone = normalizePhone(row[idx.tel]);
                 const mobile = normalizePhone(row[idx.cel]);
                 const normalizedPhones = normalizePhones(row, idx);
                 if (normalizedPhones.length === 0) {
                   console.warn('Contato sem telefone', { row: i + 2, company });
                 }
-            
+
                 const contact = {
                   name: (row[idx.contato] || '').trim(),
                   role: (row[idx.cargo] || '').trim(),
@@ -10472,7 +10472,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                   normalizedPhones,
                   linkedin: (row[idx.linkedin] || '').trim(),
                 };
-            
+
                 return {
                   company,
                   opportunities: [row[idx.titulo] || ''],
@@ -10486,7 +10486,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                   color,
                 };
               });
-            
+
               return {
                 clients,
                 filters: {
@@ -10497,7 +10497,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 },
               };
             }
-            
+
             export default async function handler(req, res) {
               if (req.method === 'GET') {
                 const sheet = await getSheetCached();
@@ -10505,7 +10505,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 const { clients, filters } = groupRows(rows);
                 return res.status(200).json({ clients, filters });
               }
-            
+
               if (req.method === 'POST') {
                 const { row, values } = req.body;
                 if (row) {
@@ -10515,16 +10515,16 @@ Pasta base: /home/Alessandra/client-kanban-system
                 }
                 return res.status(200).json({ ok: true });
               }
-            
+
               return res.status(405).end();
             }
-            
+
         ──────────────────────────────
         📄 kanban.js
         └── Conteúdo:
             import { getSheetCached, updateRow } from '../../lib/googleSheets';
             import { normalizePhones } from '../../lib/report';
-            
+
             function groupRows(rows) {
               const [header, ...data] = rows;
               const idx = {
@@ -10549,19 +10549,19 @@ Pasta base: /home/Alessandra/client-kanban-system
                 linkedin: header.indexOf('Pessoa - End. Linkedin'),
                 cor: header.indexOf('Cor_Card'),
               };
-            
+
               const normalizePhone = (v) => String(v || '').trim();
-            
+
               if (idx.tel === -1 || idx.cel === -1) {
                 console.warn('Colunas de telefone não encontradas', { tel: idx.tel, cel: idx.cel });
               }
-            
+
               const map = new Map();
-            
+
               data.forEach((row, i) => {
                 const company = row[idx.org];
                 if (!company) return;
-            
+
                 if (!map.has(company)) {
                   map.set(company, {
                     id: company,
@@ -10578,11 +10578,11 @@ Pasta base: /home/Alessandra/client-kanban-system
                     rows: [],
                   });
                 }
-            
+
                 const client = map.get(company);
                 client.opportunities.push(row[idx.titulo]);
                 client.rows.push(i + 2);
-            
+
                 const contactName = row[idx.contato];
                 if (contactName && !client.contactsMap.has(contactName)) {
                   const phone = normalizePhone(row[idx.tel]);
@@ -10602,7 +10602,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                   });
                 }
               });
-            
+
               return {
                 header,
                 clients: Array.from(map.values()).map((c) => ({
@@ -10621,13 +10621,13 @@ Pasta base: /home/Alessandra/client-kanban-system
                 })),
               };
             }
-            
+
             export default async function handler(req, res) {
               if (req.method === 'GET') {
                 const sheet = await getSheetCached();
                 const rows = sheet.data.values || [];
                 const { clients } = groupRows(rows);
-            
+
                 const columns = [
                   'Lead Selecionado',
                   'Tentativa de Contato',
@@ -10645,7 +10645,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 });
                 return res.status(200).json(board);
               }
-            
+
               if (req.method === 'POST') {
                 const { id, destination, status, color } = req.body;
                 const newStatus = status || (destination && destination.droppableId);
@@ -10655,7 +10655,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                     : newStatus === 'Perdido'
                     ? 'red'
                     : undefined;
-            
+
                 let existingColor = '';
                 const sheet = await getSheetCached();
                 const rows = sheet.data.values || [];
@@ -10663,13 +10663,13 @@ Pasta base: /home/Alessandra/client-kanban-system
                 const colorIdx = header.indexOf('Cor_Card');
                 let companyIdx = header.indexOf('Negócio - Organização');
                 if (companyIdx === -1) companyIdx = header.indexOf('Organização - Nome');
-            
+
                 const promises = [];
                 data.forEach((row, i) => {
                   if (row[companyIdx] === id) {
                     const rowNum = i + 2;
                     if (existingColor === '') existingColor = row[colorIdx] || '';
-            
+
                     const values = {};
                     if (newStatus !== undefined) values.status_kanban = newStatus;
                     if (newColor !== undefined) values.cor_card = newColor;
@@ -10677,25 +10677,25 @@ Pasta base: /home/Alessandra/client-kanban-system
                     promises.push(updateRow(rowNum, values));
                   }
                 });
-            
+
                 await Promise.all(promises);
                 return res
                   .status(200)
                   .json({ status: newStatus, color: newColor ?? existingColor });
               }
-            
+
               return res.status(405).end();
             }
-            
+
         ──────────────────────────────
         📄 mensagens.js
         └── Conteúdo:
             import { google } from 'googleapis';
-            
+
             // Simple in-memory cache
             const cache = { time: 0, data: null };
             const TTL = 10000; // 10 seconds
-            
+
             async function fetchMensagens() {
               const auth = new google.auth.JWT({
                 email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -10715,7 +10715,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               const tituloIdx = lower.indexOf('título') !== -1 ? lower.indexOf('título') : lower.indexOf('titulo');
               const appIdx = lower.indexOf('aplicativo');
               const msgIdx = lower.indexOf('mensagem');
-            
+
               return data
                 .map((row) => ({
                   titulo: row[tituloIdx] || '',
@@ -10724,7 +10724,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 }))
                 .filter((m) => m.titulo || m.mensagem);
             }
-            
+
             export async function getMensagens() {
               if (cache.data && Date.now() - cache.time < TTL) {
                 return cache.data;
@@ -10734,7 +10734,7 @@ Pasta base: /home/Alessandra/client-kanban-system
               cache.data = data;
               return data;
             }
-            
+
             export default async function handler(req, res) {
               if (req.method !== 'GET') return res.status(405).end();
               try {
@@ -10756,26 +10756,26 @@ Pasta base: /home/Alessandra/client-kanban-system
             import { buildReport, mapToRows } from '../../lib/report';
             import { jsPDF } from 'jspdf';
             import autoTable from 'jspdf-autotable';
-            
+
             export default async function handler(req, res) {
               try {
                 if (req.method !== 'GET') return res.status(405).end();
-            
+
                  const sheet = await getSheet();
                 const rows = sheet.data.values || [];
                 const { map } = buildReport(rows);
-            
+
                 const { max = Infinity, ...query } = req.query || {};
                 const limit = Number(max) || Infinity;
-            
+
                 // ✅ Normalizar valores que venham como array em query params
                 const normalizedQuery = {};
                 Object.entries(query).forEach(([k, v]) => {
                   normalizedQuery[k] = Array.isArray(v) ? v.join(',') : v;
                 });
-            
+
                 const { rows: result } = mapToRows(map, normalizedQuery, limit);
-            
+
                 // ✅ Geração do PDF
                 const doc = new jsPDF({ orientation: 'landscape' });
                 autoTable(doc, {
@@ -10792,7 +10792,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                   ]),
                   margin: { top: 20, bottom: 20, left: 15, right: 15 },
                 });
-            
+
                 const pdfData = doc.output('arraybuffer');
                 res.setHeader('Content-Type', 'application/pdf');
                 res.setHeader('Content-Disposition', 'attachment; filename="lista.pdf"');
@@ -10802,25 +10802,25 @@ Pasta base: /home/Alessandra/client-kanban-system
                 res.status(500).json({ error: 'Erro ao gerar PDF' });
               }
             }
-            
+
         ──────────────────────────────
         📄 reports.js
         └── Conteúdo:
             import { getSheet, updateRow } from '../../lib/googleSheets';
             import { buildReport, mapToRows, markPrintedRows } from '../../lib/report';
-            
+
             export default async function handler(req, res) {
               if (req.method === 'GET') {
                 try {
                   const maxLeads = parseInt(req.query.maxLeads || '100', 10);
                   const onlyNew = req.query.onlyNew === '1'; // ✅ Flag para apenas leads inéditos
-            
+
                   const sheet = await getSheet();
                   const rows = sheet.data.values || [];
-            
+
                   const { map, filters } = buildReport(rows);
                   const { rows: reportRows, toMark } = mapToRows(map, req.query, maxLeads, onlyNew);
-            
+
                   return res.status(200).json({
                     filters: {
                       segmento: Array.from(filters.segmento),
@@ -10837,37 +10837,37 @@ Pasta base: /home/Alessandra/client-kanban-system
                   return res.status(500).json({ error: 'Erro ao gerar relatório' });
                 }
               }
-            
+
               if (req.method === 'POST') {
                 try {
                   const { rowsToMark } = req.body;
                   if (!rowsToMark || rowsToMark.length === 0) {
                     return res.status(400).json({ error: 'Nenhuma linha para marcar' });
                   }
-            
+
                   await markPrintedRows(updateRow, rowsToMark); // ✅ Marca como "Em Lista"
-            
+
                   return res.status(200).json({ success: true });
                 } catch (err) {
                   console.error('Erro ao marcar linhas:', err);
                   return res.status(500).json({ error: 'Erro ao marcar linhas' });
                 }
               }
-            
+
               return res.status(405).json({ error: 'Método não permitido' });
             }
-            
+
         ──────────────────────────────
         📄 test-gsheet.js
         └── Conteúdo:
             import { getSheetCached } from '../../lib/googleSheets';
-            
+
             export default async function handler(req, res) {
               try {
                 const response = await getSheetCached();
                 const rows = response.data.values || [];
                 const [header, ...data] = rows;
-            
+
                 res.status(200).json({
                   header,
                   total: data.length,
@@ -10878,7 +10878,7 @@ Pasta base: /home/Alessandra/client-kanban-system
                 res.status(500).json({ error: 'Erro ao acessar o Google Sheets' });
               }
             }
-            
+
         ──────────────────────────────
 📄 postcss.config.js
 └── Conteúdo:

@@ -1,0 +1,1 @@
+export { updateRowByIndex } from './googleSheets';

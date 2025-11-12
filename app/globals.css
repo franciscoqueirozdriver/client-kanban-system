@@ -2,6 +2,130 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-100 text-gray-900;
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 232 23% 15%;
+    --muted: 255 44% 97%;
+    --muted-foreground: 248 14% 45%;
+    --card: 0 0% 100%;
+    --card-foreground: 232 23% 15%;
+    --border: 259 34% 88%;
+    --input: 259 34% 88%;
+    --ring: 189 83% 56%;
+    --primary: 254 100% 66%; /* #6B4EFF */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 255 100% 80%; /* #9B8CFF */
+    --secondary-foreground: 249 18% 24%;
+    --accent: 189 83% 56%; /* #22D3EE */
+    --accent-foreground: 210 60% 13%;
+    --success: 150 64% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 39 92% 55%;
+    --warning-foreground: 222 47% 11%;
+    --danger: 358 82% 61%;
+    --danger-foreground: 0 0% 100%;
+    color-scheme: light;
+  }
+
+  .dark {
+    --background: 240 33% 6%;
+    --foreground: 240 20% 96%;
+    --muted: 255 28% 16%;
+    --muted-foreground: 259 16% 70%;
+    --card: 240 29% 9%;
+    --card-foreground: 240 20% 96%;
+    --border: 252 16% 22%;
+    --input: 252 16% 22%;
+    --ring: 189 83% 56%;
+    --primary: 255 87% 74%;
+    --primary-foreground: 240 29% 9%;
+    --secondary: 258 84% 68%;
+    --secondary-foreground: 240 20% 96%;
+    --accent: 189 83% 56%;
+    --accent-foreground: 240 20% 96%;
+    --success: 150 64% 45%;
+    --success-foreground: 240 20% 96%;
+    --warning: 39 92% 55%;
+    --warning-foreground: 240 29% 9%;
+    --danger: 358 82% 61%;
+    --danger-foreground: 240 20% 96%;
+    color-scheme: dark;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased min-h-screen;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+
+  a {
+    @apply text-primary underline-offset-4 transition-colors;
+  }
+
+  a:hover {
+    @apply text-primary/80;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
+    color: hsl(var(--foreground));
+  }
+}
+
+#kanban-viewport {
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+/* === Ajuste visual dos <select> === */
+
+/* Aplica cor de texto e fundo consistentes */
+select,
+select option {
+  color: var(--foreground, #1a1a1a);
+  background-color: var(--card, #ffffff);
+}
+
+/* Placeholder (primeira opção desabilitada) */
+select option[disabled] {
+  color: var(--muted-foreground, #7a7a7a);
+}
+
+/* Quando o option está selecionado e em foco (corrige azul sobre azul no Windows/Chrome) */
+select option:checked,
+select option:hover,
+select:focus option:checked {
+  background-color: #6e56cf; /* cor violeta leve combinando com seu tema */
+  color: #fff; /* texto branco pra contraste */
+}
+
+/* Dark mode (caso tenha tema escuro) */
+[data-theme='dark'] select,
+[data-theme='dark'] select option {
+  color: #fff;
+  background-color: #18181b;
+}
+[data-theme='dark'] select option:checked,
+[data-theme='dark'] select option:hover {
+  background-color: #7c3aed;
+  color: #fff;
 }
