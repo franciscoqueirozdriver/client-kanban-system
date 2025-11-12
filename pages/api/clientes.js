@@ -36,7 +36,7 @@ async function groupRows(rows) {
     return { clients: [], filters: { segmento: [], porte: [], uf: [], cidade: [] } };
   }
 
-  const SHEET = 'Sheet1';
+  const SHEET = 'sheet1';
   const COL = await buildColumnResolver(SHEET);
   const idx = {
     clienteId: header.indexOf(COL('cliente_id')),
@@ -147,7 +147,7 @@ async function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const { headers, rows: dataRows } = await getSheetData('Sheet1');
+      const { headers, rows: dataRows } = await getSheetData('sheet1');
       // const rows = sheet.data.values || []; // getSheetData already returns rows as an array of objects/arrays
       const rawRows = [headers, ...dataRows.map(row => headers.map(header => row[header]))]; // Reconstroi o array de arrays para groupRows
       const { clients, filters } = await groupRows(rawRows);
