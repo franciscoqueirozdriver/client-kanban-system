@@ -181,13 +181,41 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
       });
     }
   };
-
   const accentMap = {
-    green: 'hsl(var(--success))',
-    red: 'hsl(var(--danger))',
-    gray: 'hsl(var(--muted-foreground))',
-    purple: 'hsl(var(--secondary))',
-  };
+	    green: 'hsl(var(--success))',
+	    red: 'hsl(var(--danger))',
+	    gray: 'hsl(var(--muted-foreground))',
+	    purple: 'hsl(var(--secondary))',
+	  };
+	
+	  const handleRegisterCompany = async () => {
+	    if (!window.confirm('Deseja realmente cadastrar essa empresa na planilha?')) {
+	      return;
+	    }
+	    try {
+	      const res = await fetch('/api/companies', {
+	        method: 'POST',
+	        headers: { 'Content-Type': 'application/json' },
+	        body: JSON.stringify({ client }),
+	      });
+	      const data = await res.json();
+	      if (res.ok) {
+	        alert('Empresa cadastrada com sucesso!');
+	        setClient((prev) => ({ ...prev, sheetRow: data.row }));
+	      } else {
+	        alert(data.error || 'Erro ao cadastrar empresa');
+	      }
+	    } catch (err) {
+	      alert('Erro ao cadastrar empresa');
+	    }
+	  };
+	
+	  const backgroundColor =
+	    client.color === 'green'
+	      ? '#a3ffac'
+	      : client.color === 'red'
+	      ? '#ffca99'
+	      : 'white';
 
   const accentColor = accentMap[client.color] || 'hsl(var(--primary))';
 
@@ -230,24 +258,28 @@ export default function KanbanCard({ card, index, onOpenSpotter }) {
             '--card-accent': accentColor,
           }}
           className={cn(
-            'relative mb-3 overflow-hidden rounded-2xl border border-border/70 bg-card p-4 text-sm shadow transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
-            loading && 'pointer-events-none opacity-60',
-            snapshot.isDragging && 'ring-2 ring-primary/60 shadow-soft',
-          )}
-          onDoubleClick={handleDoubleClick}
-          title="Dê duplo clique para enriquecer os dados desta empresa"
-          tabIndex={0}
-          aria-roledescription="Cartão do kanban"
-        >
-          <span
-            aria-hidden="true"
-            className="absolute inset-y-4 left-0 w-1 rounded-full"
-            style={{ background: 'var(--card-accent)' }}
-          />
-          <h4 className="text-base font-semibold text-foreground">
-            {client.company}
-          </h4>
-
+	            'relative mb-3 overflow-hidden rounded-2xl border border-border/70 bg-card p-4 text-sm shadow transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
+	            loading && 'pointer-events-none opacity-60',
+	            snapshot.isDragging && 'ring-2 ring-primary/60 shadow-soft',
+	          )}
+	          onDoubleClick={handleDoubleClick}
+	          title="Dê duplo clique para enriquecer os dados desta empresa"
+	          tabIndex={0}
+	          aria-roledescription="Cartão do kanban"
+	        >
+	          <span
+	            aria-hidden="true"
+	            className="absolute inset-y-4 left-0 w-1 rounded-full"
+	            style={{ background: 'var(--card-accent)' }}
+	          />
+	          <h4 className="text-base font-semibold text-foreground">
+	            {client.company}
+	          </h4>
+	          {client.sheetRow && (
+	            <p className="text-[10px] text-gray-600 mb-1">
+	              Linha Planilha: {client.sheetRow}
+	            </p>
+	          )}
           {(client.city || client.uf) && (
             <p className="mt-1 text-xs text-muted-foreground">
               {[client.city, client.uf].filter(Boolean).join(' - ')}
