@@ -28,10 +28,10 @@ export default function MultiSelect({
   maxBadges = 3
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
-  const selected = useMemo(() => new Set(value), [value]);
+  const selected = useMemo<Set<string>>(() => new Set(value), [value]);
 
   function toggle(val: string) {
-    const next = new Set(selected);
+    const next = new Set<string>(selected);
     next.has(val) ? next.delete(val) : next.add(val);
     onChange(Array.from(next));
   }
