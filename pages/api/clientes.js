@@ -24,7 +24,20 @@ function collectEmails(row, idx) {
 
 function groupRows(rows) {
   const [header, ...data] = rows;
-  const idx = {
+  const requiredColumns = ['cliente_id', 'segmento', 'organizacao_nome', 'negocio_titulo', 'negocio_pessoa_de_contato', 'pessoa_cargo', 'pessoa_email_work', 'pessoa_email_home', 'pessoa_email_other', 'pessoa_phone_work', 'pessoa_phone_home', 'pessoa_phone_mobile', 'pessoa_phone_other', 'pessoa_telefone', 'pessoa_celular', 'telefone_normalizado', 'organizacao_tamanho_da_empresa', 'uf', 'cidade_estimada', 'status_kanban', 'data_ultima_movimentacao', 'pessoa_end_linkedin', 'cor_card'];
+	
+	  const headersNorm = header.map(h => normalizeHeader(h)).filter(Boolean);
+	  const missing = requiredColumns.filter(r => !headersNorm.includes(r));
+	
+	  if (missing.length) {
+	    console.warn('[api/clientes] Missing required columns:', missing);
+	    // Retorna 200 com array vazio para não quebrar o front
+	    return { clients: [], filters: { segmento: [], porte: [], uf: [], cidade: [] } };
+	  }
+	
+	  const SHEET = 'sheet1';
+	  const COL = await buildColumnResolver(SHEET);
+	  const idx = {
     clienteId: header.indexOf('Cliente_ID'),
     org: header.indexOf('Organização - Nome'),
     titulo: header.indexOf('Negócio - Título'),
@@ -132,11 +145,25 @@ function groupRows(rows) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    const sheet = await getSheetCached();
-    const rows = sheet.data.values || [];
-    const { clients, filters } = groupRows(rows);
-    return res.status(200).json({ clients, filters });
-  }
+    try {
+	      const { headers, rows: dataRows } = await getSheetData('sheet1');
+	      // const rows = sheet.data.values || []; // getSheetData already returns rows as an array of objects/arrays
+	      const rawRows = [headers, ...dataRows.map(row => headers.map(header => row[header]))]; // Reconstroi o array de arrays para groupRows
+	      const { clients, filters } = await groupRows(rawRows);
+	
+	      const limitParam = parseInt(req.query.limit, 10);
+	      const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
+	
+	      if (req.query.countOnly === '1') {
+	        return res.status(200).json({ total: clients.length });
+	      }
+	
+	      return res.status(200).json({ clients: clients.slice(0, limit), filters });
+	    } catch (err) {
+	      console.error('Erro ao listar clientes:', err);
+	      return res.status(500).json({ error: 'Erro ao listar clientes' });
+	    }
+	  }
 
   if (req.method === 'POST') {
     const { row, values } = req.body;
