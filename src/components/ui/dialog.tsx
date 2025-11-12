@@ -44,9 +44,9 @@ function useDialogContext(component: string) {
   return context;
 }
 
-export interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
+export type DialogContentProps = React.ComponentPropsWithoutRef<"div"> & {
   children: React.ReactNode;
-}
+};
 
 export function DialogContent({ className, children, ...props }: DialogContentProps) {
   const { open, onOpenChange } = useDialogContext("DialogContent");

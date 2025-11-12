@@ -21,6 +21,12 @@ const filterDefaults: ActiveFilters = {
 
 type ReportRow = Record<string, unknown>;
 
+type FilterValues = string[] | number[] | boolean[];
+type FiltersMap = Record<string, FilterValues | undefined>;
+
+const isFilterValues = (values: FiltersMap[string]): values is FilterValues =>
+  Array.isArray(values) && values.length > 0;
+
 type FiltersResponse = {
   filters?: Record<string, string[]>;
 };
@@ -162,9 +168,13 @@ export default function ReportsClient({
   }, [rows]);
 
   const filtersSummary = useMemo(() => {
-    const activeFilters = Object.entries(filters)
-      .filter(([, values]) => Array.isArray(values) && values.length > 0)
-      .map(([key, values]) => `${key}: ${(values || []).join(', ')}`);
+    const entries = Object.entries((filters ?? {}) as FiltersMap);
+    const activeFilters = entries
+      .filter((entry): entry is [string, FilterValues] => {
+        const [, values] = entry;
+        return isFilterValues(values);
+      })
+      .map(([key, values]) => `${key}: ${values.map(String).join(', ')}`);
 
     const trimmed = query.trim();
     if (trimmed) {

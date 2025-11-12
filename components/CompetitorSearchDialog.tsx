@@ -148,13 +148,14 @@ export default function CompetitorSearchDialog({
     setSelected(prev => {
       let mutated = false;
       const next: Record<string, Suggestion> = {};
-      Object.entries(prev).forEach(([key, value]) => {
+      for (const key of Object.keys(prev)) {
+        const value = prev[key];
         if (allowed.has(key)) {
           next[key] = value;
         } else {
           mutated = true;
         }
-      });
+      }
       return mutated ? next : prev;
     });
   }, [displayItems, isOpen]);
@@ -165,14 +166,15 @@ export default function CompetitorSearchDialog({
     setSelected(prev => {
       let mutated = false;
       const next: Record<string, Suggestion> = {};
-      Object.entries(prev).forEach(([key, value]) => {
+      for (const key of Object.keys(prev)) {
+        const value = prev[key];
         const norm = normalizeCnpj(value.cnpj);
         if (norm && blockedSet.has(norm)) {
           mutated = true;
         } else {
           next[key] = value;
         }
-      });
+      }
       return mutated ? next : prev;
     });
   }, [blockedSet, isOpen]);
@@ -200,10 +202,13 @@ export default function CompetitorSearchDialog({
   };
 
   const handleConfirm = useCallback(() => {
-    const chosen = Object.values(selected).map(item => ({
-      nome: item.nome,
-      cnpj: digits(item.cnpj),
-    }));
+    const chosen = Object.keys(selected).map(key => {
+      const item = selected[key];
+      return {
+        nome: item.nome,
+        cnpj: digits(item.cnpj),
+      };
+    });
 
     if (chosen.length === 0) {
       return;
