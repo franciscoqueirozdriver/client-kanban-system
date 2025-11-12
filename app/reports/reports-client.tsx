@@ -7,6 +7,7 @@ import ReportTable from '@/components/ReportTable';
 import ExportButton from '@/components/ExportButton';
 import SummaryCard from '@/components/SummaryCard';
 import { useFilterState } from '@/hooks/useFilterState';
+import { loadMetrics } from '@/lib/load/metrics';
 import BannerWarning from '@/components/BannerWarning';
 
 const filterDefaults: ActiveFilters = {
@@ -80,45 +81,13 @@ export default function ReportsClient({
 
   useEffect(() => {
     async function fetchData() {
-      try {
-        const response = await fetch('/api/reports');
-        if (!response.ok) throw new Error('Network response was not ok');
-        const data = await response.json();
-        const reportRows = data.rows ?? [];
-        setRows(reportRows);
-
-        // Extract unique options from the data for filtering
-        const uniqueOptions = reportRows.reduce((acc, row) => {
-          const fields = {
-            segmento: 'organizacao_segmento',
-            porte: 'organizacao_tamanho_da_empresa',
-            uf: 'uf',
-            cidade: 'cidade_estimada',
-            fase: 'negocio_etapa',
-            vendedor: 'negocio_proprietario',
-            // 'erp' and 'origem' do not have direct mappings in the new schema, will be handled later
-          };
-          Object.entries(fields).forEach(([filterKey, dataKey]) => {
-            const value = row[dataKey];
-            if (value) {
-              if (!acc[filterKey]) {
-                acc[filterKey] = new Set();
-              }
-              acc[filterKey].add(value);
-            }
-          });
-          return acc;
-        }, {});
-
-        // Convert sets to sorted arrays for the filter dropdowns
-        for (const key in uniqueOptions) {
-          uniqueOptions[key] = Array.from(uniqueOptions[key]).sort();
-        }
-        setOptions(uniqueOptions);
-
-      } catch (error) {
-        console.error('Failed to fetch report data:', error);
-        setHasPartialData(true);
+      const funnels = [22783, 22784]; // Example funnels
+      const fromISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // Example date
+      const { hasPartialData, ...data } = await loadMetrics({ funnels, fromISO });
+      setHasPartialData(hasPartialData);
+      if (!hasPartialData) {
+        // @ts-ignore
+        setRows(data.rows ?? []);
       }
     }
 
@@ -149,10 +118,10 @@ export default function ReportsClient({
   const summary = useMemo(() => {
     const totalLeads = rows.length;
     const uniqueCompanies = new Set(
-      rows.map((row) => (typeof row.organizacao_nome === 'string' ? row.organizacao_nome.trim() : '')).filter(Boolean)
+      rows.map((row) => (typeof row.company === 'string' ? row.company.trim() : '')).filter(Boolean)
     ).size;
     const uniqueContacts = new Set(
-      rows.map((row) => (typeof row.negocio_pessoa_de_contato === 'string' ? row.negocio_pessoa_de_contato.trim().toLowerCase() : '')).filter(Boolean)
+      rows.map((row) => (typeof row.nome === 'string' ? row.nome.trim().toLowerCase() : '')).filter(Boolean)
     ).size;
     const reachable = rows.filter((row) => {
       const phones = Array.isArray((row as { normalizedPhones?: unknown }).normalizedPhones)

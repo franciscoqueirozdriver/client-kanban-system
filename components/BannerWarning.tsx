@@ -1,11 +1,22 @@
+'use client';
 import React from 'react';
 
-const BannerWarning = ({ title }: { title: string }) => {
+export interface BannerWarningProps {
+  title: string;
+  message?: string; // <-- novo, opcional
+  children?: React.ReactNode;
+}
+
+export default function BannerWarning({
+  title,
+  message,
+  children,
+}: BannerWarningProps) {
   return (
-    <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4" role="alert">
-      <p className="font-bold">{title}</p>
+    <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-yellow-900">
+      <div className="font-medium">{title}</div>
+      {message && <div className="text-sm mt-1">{message}</div>}
+      {children}
     </div>
   );
-};
-
-export default BannerWarning;
+}
