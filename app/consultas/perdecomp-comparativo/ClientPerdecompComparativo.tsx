@@ -16,9 +16,9 @@ import { fmtCNPJ } from '@/utils/cnpj-matriz';
 
 // --- Helper Types ---
 interface Company {
-  Cliente_ID: string;
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
+  cliente_id: string;
+  nome_da_empresa: string;
+  cnpj_empresa: string;
   [key: string]: any;
 }
 
@@ -117,12 +117,12 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const remainingSlots = MAX_COMPETITORS - competitors.filter(c => !!c).length;
   const blockedCnpjs = useMemo(() => {
     const values: string[] = [];
-    if (client?.company?.CNPJ_Empresa) {
-      values.push(client.company.CNPJ_Empresa);
+    if (client?.company?.cnpj_empresa) {
+      values.push(client.company.cnpj_empresa);
     }
     competitors.forEach(comp => {
-      if (comp?.company?.CNPJ_Empresa) {
-        values.push(comp.company.CNPJ_Empresa);
+      if (comp?.company?.cnpj_empresa) {
+        values.push(comp.company.cnpj_empresa);
       }
     });
     return values;
@@ -237,16 +237,16 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     const { company, forceRefresh } = selection;
     let normalizedCnpj: string;
     try {
-      normalizedCnpj = ensureValidCnpj(company.CNPJ_Empresa);
+      normalizedCnpj = ensureValidCnpj(company.cnpj_empresa);
     } catch (error: any) {
-      updateResult(company.CNPJ_Empresa, { status: 'error', error: { message: error?.message || 'CNPJ inválido. Verifique e tente novamente.' } });
+      updateResult(company.cnpj_empresa, { status: 'error', error: { message: error?.message || 'CNPJ inválido. Verifique e tente novamente.' } });
       return;
     }
 
     let finalCNPJ = normalizedCnpj;
     try {
       finalCNPJ = await decideCNPJFinalBeforeQuery({
-        clienteId: company.Cliente_ID,
+        clienteId: company.cliente_id,
         cnpjAtual: normalizedCnpj,
         ask: openMatrizFilialConfirmModal,
       });
@@ -255,17 +255,17 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       finalCNPJ = normalizedCnpj;
     }
 
-    const companyWithFinalCnpj: Company = { ...company, CNPJ_Empresa: finalCNPJ };
+    const companyWithFinalCnpj: Company = { ...company, cnpj_empresa: finalCNPJ };
 
-    if (finalCNPJ !== company.CNPJ_Empresa) {
+    if (finalCNPJ !== company.cnpj_empresa) {
       setClient(prev => {
-        if (!prev || prev.company.Cliente_ID !== company.Cliente_ID) return prev;
-        return { ...prev, company: { ...prev.company, CNPJ_Empresa: finalCNPJ } };
+        if (!prev || prev.company.cliente_id !== company.cliente_id) return prev;
+        return { ...prev, company: { ...prev.company, cnpj_empresa: finalCNPJ } };
       });
       setCompetitors(prev =>
         prev.map(sel =>
-          sel && sel.company.Cliente_ID === company.Cliente_ID
-            ? { ...sel, company: { ...sel.company, CNPJ_Empresa: finalCNPJ } }
+          sel && sel.company.cliente_id === company.cliente_id
+            ? { ...sel, company: { ...sel.company, cnpj_empresa: finalCNPJ } }
             : sel,
         ),
       );
@@ -273,8 +273,8 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
 
     setResults(prev =>
       prev.map(r =>
-        r.company.Cliente_ID === company.Cliente_ID
-          ? { ...r, company: { ...r.company, CNPJ_Empresa: finalCNPJ } }
+        r.company.cliente_id === company.cliente_id
+          ? { ...r, company: { ...r.company, cnpj_empresa: finalCNPJ } }
           : r,
       ),
     );
@@ -285,7 +285,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       const persistRes = await fetch('/api/sheets/cnpj', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clienteId: company.Cliente_ID, cnpj: finalCNPJ }),
+        body: JSON.stringify({ clienteId: company.cliente_id, cnpj: finalCNPJ }),
       });
       if (!persistRes.ok) {
         const body = await persistRes.json().catch(() => null);
@@ -456,11 +456,11 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       const digits = (value: string) => (value || '').replace(/\D+/g, '');
       const blocked = new Set<string>();
       const blockedNames = new Set<string>();
-      if (client?.company?.CNPJ_Empresa) {
-        const norm = digits(client.company.CNPJ_Empresa);
+      if (client?.company?.cnpj_empresa) {
+        const norm = digits(client.company.cnpj_empresa);
         if (norm) blocked.add(norm);
       }
-      if (client?.company?.Nome_da_Empresa) {
+      if (client?.company?.nome_da_empresa) {
         const key = String(client.company.Nome_da_Empresa).trim().toLowerCase();
         if (key) blockedNames.add(key);
       }
@@ -572,11 +572,11 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         existingKeys.add(cnpj);
         return;
       }
-      const key = String(existing.company.Nome_da_Empresa || '').trim().toLowerCase();
+      const key = String(existing.company.nome_da_empresa || 	rimmed().toLowerCase();;
       if (key) existingKeys.add(key);
     });
-    if (client?.company?.CNPJ_Empresa) {
-      const cnpj = normalizeCnpj(client.company.CNPJ_Empresa);
+    if (client?.company?.cnpj_empresa) {
+      const cnpj = normalizeCnpj(client.company.cnpj_empresa);
       if (cnpj) existingKeys.add(cnpj);
     }
 
