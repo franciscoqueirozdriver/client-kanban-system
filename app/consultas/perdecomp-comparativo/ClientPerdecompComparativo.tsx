@@ -572,7 +572,8 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         existingKeys.add(cnpj);
         return;
       }
-      const key = String(existing.company.nome_da_empresa || 	rimmed().toLowerCase();;
+  const key = String(existing.company.nome_da_empresa || '').trim().toLowerCase();
+
       if (key) existingKeys.add(key);
     });
     if (client?.company?.cnpj_empresa) {
