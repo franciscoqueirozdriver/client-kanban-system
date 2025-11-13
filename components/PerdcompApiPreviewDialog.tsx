@@ -1,10 +1,5 @@
 import { useEffect, useRef } from 'react';
-
-interface Company {
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
-  [key: string]: any;
-}
+import { Company } from '../types/company';
 
 type ApiDebug = {
   requestedAt?: string;
@@ -58,8 +53,8 @@ export default function PerdcompApiPreviewDialog({ isOpen, onClose, company, deb
       <div className="absolute right-0 top-0 h-full w-full max-w-4xl bg-white dark:bg-gray-900 shadow-xl p-4 overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-semibold">Retorno da API – {company?.Nome_da_Empresa}</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">{company?.CNPJ_Empresa}</p>
+            <h2 className="text-lg font-semibold">Retorno da API – {company?.nome_da_empresa}</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{company?.cnpj_empresa}</p>
           </div>
           <button ref={closeRef} onClick={onClose} className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100">Fechar</button>
         </div>

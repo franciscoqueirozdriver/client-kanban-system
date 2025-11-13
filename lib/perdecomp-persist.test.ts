@@ -95,10 +95,10 @@ describe('perdecomp-persist', () => {
 
     it('reuses snapshot id found by CNPJ', async () => {
       getSheetData.mockResolvedValueOnce({
-        headers: ['Cliente_ID', 'CNPJ'],
+        headers: ['cliente_id', 'cnpj'],
         rows: [
-          { Cliente_ID: 'CLT-3683', CNPJ: '12345678000190', _rowNumber: 2 },
-          { Cliente_ID: 'CLT-1000', CNPJ: '00990099009900', _rowNumber: 3 },
+          { cliente_id: 'CLT-3683', cnpj: '12345678000190', _rowNumber: 2 },
+          { cliente_id: 'CLT-1000', cnpj: '00990099009900', _rowNumber: 3 },
         ],
       });
 
@@ -109,10 +109,10 @@ describe('perdecomp-persist', () => {
 
     it('generates the next sequential id when none provided or found', async () => {
       const snapshotData = {
-        headers: ['Cliente_ID', 'CNPJ'],
+        headers: ['cliente_id', 'cnpj'],
         rows: [
-          { Cliente_ID: 'CLT-3683', CNPJ: '00990099009900', _rowNumber: 2 },
-          { Cliente_ID: 'CLT-0100', CNPJ: '11111111000111', _rowNumber: 3 },
+          { cliente_id: 'CLT-3683', cnpj: '00990099009900', _rowNumber: 2 },
+          { cliente_id: 'CLT-0100', cnpj: '11111111000111', _rowNumber: 3 },
         ],
       };
       getSheetData.mockResolvedValueOnce(snapshotData).mockResolvedValueOnce(snapshotData);
@@ -125,66 +125,66 @@ describe('perdecomp-persist', () => {
 
   it('persists snapshot with resolved clienteId and deduplicates facts', async () => {
     const snapshotHeaders = [
-      'Cliente_ID',
-      'Empresa_ID',
-      'Nome da Empresa',
-      'CNPJ',
-      'Qtd_Total',
-      'Qtd_DCOMP',
-      'Qtd_REST',
-      'Qtd_RESSARC',
-      'Risco_Nivel',
-      'Risco_Tags_JSON',
-      'Por_Natureza_JSON',
-      'Por_Credito_JSON',
-      'Datas_JSON',
-      'Primeira_Data_ISO',
-      'Ultima_Data_ISO',
-      'Resumo_Ultima_Consulta_JSON_P1',
-      'Resumo_Ultima_Consulta_JSON_P2',
-      'Card_Schema_Version',
-      'Rendered_At_ISO',
-      'Fonte',
-      'Data_Consulta',
-      'URL_Comprovante_HTML',
-      'Payload_Bytes',
-      'Snapshot_Hash',
-      'Facts_Count',
-      'Last_Updated_ISO',
-      'Consulta_ID',
-      'Erro_Ultima_Consulta',
+      'cliente_id',
+      'empresa_id',
+      'nome_da_empresa',
+      'cnpj',
+      'qtd_total',
+      'qtd_dcomp',
+      'qtd_rest',
+      'qtd_ressarc',
+      'risco_nivel',
+      'risco_tags_json',
+      'por_natureza_json',
+      'por_credito_json',
+      'datas_json',
+      'primeira_data_iso',
+      'ultima_data_iso',
+      'resumo_ultima_consulta_json_p1',
+      'resumo_ultima_consulta_json_p2',
+      'card_schema_version',
+      'rendered_at_iso',
+      'fonte',
+      'data_consulta',
+      'url_comprovante_html',
+      'payload_bytes',
+      'snapshot_hash',
+      'facts_count',
+      'last_updated_iso',
+      'consulta_id',
+      'erro_ultima_consulta',
     ];
     const factsHeaders = [
-      'Cliente_ID',
-      'Empresa_ID',
-      'Nome da Empresa',
-      'CNPJ',
-      'Perdcomp_Numero',
-      'Perdcomp_Formatado',
-      'B1',
-      'B2',
-      'Data_DDMMAA',
-      'Data_ISO',
-      'Tipo_Codigo',
-      'Tipo_Nome',
-      'Natureza',
-      'Familia',
-      'Credito_Codigo',
-      'Credito_Descricao',
-      'Risco_Nivel',
-      'Protocolo',
-      'Situacao',
-      'Situacao_Detalhamento',
-      'Motivo_Normalizado',
-      'Solicitante',
-      'Fonte',
-      'Data_Consulta',
-      'URL_Comprovante_HTML',
-      'Row_Hash',
-      'Inserted_At',
-      'Consulta_ID',
-      'Version',
-      'Deleted_Flag',
+      'cliente_id',
+      'empresa_id',
+      'nome_da_empresa',
+      'cnpj',
+      'perdcomp_numero',
+      'perdcomp_formatado',
+      'b1',
+      'b2',
+      'data_ddmmaa',
+      'data_iso',
+      'tipo_codigo',
+      'tipo_nome',
+      'natureza',
+      'familia',
+      'credito_codigo',
+      'credito_descricao',
+      'risco_nivel',
+      'protocolo',
+      'situacao',
+      'situacao_detalhamento',
+      'motivo_normalizado',
+      'solicitante',
+      'fonte',
+      'data_consulta',
+      'url_comprovante_html',
+      'row_hash',
+      'inserted_at',
+      'consulta_id',
+      'version',
+      'deleted_flag',
     ];
 
     const meta = {
@@ -199,17 +199,17 @@ describe('perdecomp-persist', () => {
     const duplicatePerdcompNumero = '111112222201020311011234';
     const duplicatePerdcompISO = normalizeISO('2003-02-01');
     const duplicateFact = {
-      Cliente_ID: 'COMP-1',
-      Empresa_ID: '',
-      CNPJ: '12345678000190',
-      Perdcomp_Numero: duplicatePerdcompNumero,
-      Natureza: '',
-      Credito_Codigo: '',
-      Data_ISO: '',
-      Valor: '0',
-      Tipo_Codigo: '',
-      Tipo_Nome: '',
-      Situacao: 'Em análise',
+      cliente_id: 'COMP-1',
+      empresa_id: '',
+      cnpj: '12345678000190',
+      perdcomp_numero: duplicatePerdcompNumero,
+      natureza: '',
+      credito_codigo: '',
+      data_iso: '',
+      valor: '0',
+      tipo_codigo: '',
+      tipo_nome: '',
+      situacao: 'Em análise',
     };
     const duplicateHash = crypto
       .createHash('sha256')
@@ -220,7 +220,7 @@ describe('perdecomp-persist', () => {
           '1.1',
           '01',
           duplicatePerdcompISO,
-          duplicateFact.Valor,
+          duplicateFact.valor,
         ].join('|'),
       )
       .digest('hex');
@@ -228,8 +228,8 @@ describe('perdecomp-persist', () => {
     const snapshotData = {
       headers: snapshotHeaders,
       rows: [
-        { Cliente_ID: 'CLT-3683', CNPJ: '00990099009900', _rowNumber: 2 },
-        { Cliente_ID: 'CLT-0100', CNPJ: '11111111000111', _rowNumber: 3 },
+        { cliente_id: 'CLT-3683', cnpj: '00990099009900', _rowNumber: 2 },
+        { cliente_id: 'CLT-0100', cnpj: '11111111000111', _rowNumber: 3 },
       ],
     };
 
@@ -247,9 +247,9 @@ describe('perdecomp-persist', () => {
           headers: factsHeaders,
           rows: [
             {
-              Cliente_ID: 'CLT-3684',
-              Perdcomp_Numero: duplicateFact.Perdcomp_Numero,
-              Row_Hash: duplicateHash,
+              cliente_id: 'CLT-3684',
+              perdcomp_numero: duplicateFact.perdcomp_numero,
+              row_hash: duplicateHash,
               _rowNumber: 2,
             },
           ],
@@ -288,16 +288,16 @@ describe('perdecomp-persist', () => {
     const facts = [
       { ...duplicateFact },
       {
-        Cliente_ID: 'COMP-1',
-        Empresa_ID: '',
-        CNPJ: '12345678000190',
-        Perdcomp_Numero: newPerdcompNumero,
-        Natureza: '',
-        Credito_Codigo: '',
-        Data_ISO: '',
-        Valor: '',
-        Tipo_Codigo: '',
-        Tipo_Nome: '',
+        cliente_id: 'COMP-1',
+        empresa_id: '',
+        cnpj: '12345678000190',
+        perdcomp_numero: newPerdcompNumero,
+        natureza: '',
+        credito_codigo: '',
+        data_iso: '',
+        valor: '',
+        tipo_codigo: '',
+        tipo_nome: '',
       },
     ];
 
@@ -337,30 +337,30 @@ describe('perdecomp-persist', () => {
 
     const snapshotValues = snapshotAppendCall.requestBody.values[0];
     const appendedFacts = factsAppendCall.requestBody.values;
-    expect(snapshotValues[snapshotHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
-    expect(snapshotValues[snapshotHeaders.indexOf('CNPJ')]).toBe('12345678000190');
-    expect(snapshotValues[snapshotHeaders.indexOf('Facts_Count')]).toBe('2');
-    expect(snapshotValues[snapshotHeaders.indexOf('Risco_Nivel')]).toBe('DESCONHECIDO');
+    expect(snapshotValues[snapshotHeaders.indexOf('cliente_id')]).toBe('CLT-3684');
+    expect(snapshotValues[snapshotHeaders.indexOf('cnpj')]).toBe('12345678000190');
+    expect(snapshotValues[snapshotHeaders.indexOf('facts_count')]).toBe('2');
+    expect(snapshotValues[snapshotHeaders.indexOf('risco_nivel')]).toBe('DESCONHECIDO');
     expect(
-      JSON.parse(snapshotValues[snapshotHeaders.indexOf('Risco_Tags_JSON')]),
+      JSON.parse(snapshotValues[snapshotHeaders.indexOf('risco_tags_json')]),
     ).toEqual([{ label: 'DESCONHECIDO', count: 2 }]);
     expect(appendedFacts).toHaveLength(1);
     const factRow = appendedFacts[0];
-    expect(factRow[factsHeaders.indexOf('Cliente_ID')]).toBe('CLT-3684');
-    expect(factRow[factsHeaders.indexOf('Nome da Empresa')]).toBe('Empresa Teste');
-    expect(factRow[factsHeaders.indexOf('Perdcomp_Numero')]).toBe(newPerdcompNumero);
-    expect(factRow[factsHeaders.indexOf('B1')]).toBe('');
-    expect(factRow[factsHeaders.indexOf('B2')]).toBe('');
-    expect(factRow[factsHeaders.indexOf('Data_ISO')]).toBe(newPerdcompISO);
-    expect(factRow[factsHeaders.indexOf('Data_DDMMAA')]).toBe('250925');
-    expect(factRow[factsHeaders.indexOf('Tipo_Codigo')]).toBe('1');
-    expect(factRow[factsHeaders.indexOf('Tipo_Nome')]).toBe('Declaração de Compensação');
-    expect(factRow[factsHeaders.indexOf('Natureza')]).toBe('1.3');
-    expect(factRow[factsHeaders.indexOf('Familia')]).toBe('DCOMP');
-    expect(factRow[factsHeaders.indexOf('Credito_Codigo')]).toBe('18');
-    expect(factRow[factsHeaders.indexOf('Credito_Descricao')]).toBe('Outros Créditos');
-    expect(factRow[factsHeaders.indexOf('Protocolo')]).toBe('9471');
-    expect(factRow[factsHeaders.indexOf('Row_Hash')]).toBe(
+    expect(factRow[factsHeaders.indexOf('cliente_id')]).toBe('CLT-3684');
+    expect(factRow[factsHeaders.indexOf('nome_da_empresa')]).toBe('Empresa Teste');
+    expect(factRow[factsHeaders.indexOf('perdcomp_numero')]).toBe(newPerdcompNumero);
+    expect(factRow[factsHeaders.indexOf('b1')]).toBe('');
+    expect(factRow[factsHeaders.indexOf('b2')]).toBe('');
+    expect(factRow[factsHeaders.indexOf('data_iso')]).toBe(newPerdcompISO);
+    expect(factRow[factsHeaders.indexOf('data_ddmmaa')]).toBe('250925');
+    expect(factRow[factsHeaders.indexOf('tipo_codigo')]).toBe('1');
+    expect(factRow[factsHeaders.indexOf('tipo_nome')]).toBe('Declaração de Compensação');
+    expect(factRow[factsHeaders.indexOf('natureza')]).toBe('1.3');
+    expect(factRow[factsHeaders.indexOf('familia')]).toBe('DCOMP');
+    expect(factRow[factsHeaders.indexOf('credito_codigo')]).toBe('18');
+    expect(factRow[factsHeaders.indexOf('credito_descricao')]).toBe('Outros Créditos');
+    expect(factRow[factsHeaders.indexOf('protocolo')]).toBe('9471');
+    expect(factRow[factsHeaders.indexOf('row_hash')]).toBe(
       crypto
         .createHash('sha256')
         .update([newPerdcompNumero, '1', '1.3', '18', newPerdcompISO, ''].join('|'))
@@ -368,7 +368,7 @@ describe('perdecomp-persist', () => {
     );
 
     const porCredito = JSON.parse(
-      snapshotValues[snapshotHeaders.indexOf('Por_Credito_JSON')],
+      snapshotValues[snapshotHeaders.indexOf('por_credito_json')],
     );
     expect(porCredito).toEqual([
       { label: 'Ressarcimento de IPI', count: 1 },
@@ -406,14 +406,14 @@ describe('perdecomp-persist', () => {
   });
 
   it('marks snapshot error when persistence fails', async () => {
-    const snapshotHeaders = ['Cliente_ID', 'Erro_Ultima_Consulta', 'Last_Updated_ISO'];
+    const snapshotHeaders = ['cliente_id', 'erro_ultima_consulta', 'last_updated_iso'];
 
     appendMock.mockRejectedValueOnce(new Error('boom'));
     getSheetData
       .mockResolvedValueOnce({ headers: snapshotHeaders, rows: [] })
       .mockResolvedValueOnce({
         headers: snapshotHeaders,
-        rows: [{ Cliente_ID: 'CLT-9000', _rowNumber: 2, Erro_Ultima_Consulta: '', Last_Updated_ISO: '' }],
+        rows: [{ cliente_id: 'CLT-9000', _rowNumber: 2, erro_ultima_consulta: '', last_updated_iso: '' }],
       });
 
     await savePerdecompResults({
@@ -455,7 +455,7 @@ describe('perdecomp-persist', () => {
         facts: [],
         meta: { consultaId: 'consulta-789' },
       }),
-    ).rejects.toThrow('Invalid Cliente_ID for persistence');
+    ).rejects.toThrow('Invalid cliente_id for persistence');
 
     expect(warnSpy).toHaveBeenCalledWith('PERSIST_ABORT_INVALID_CLIENTE_ID', {
       provided: 'COMP-9999',
@@ -469,18 +469,18 @@ describe('perdecomp-persist', () => {
     getSheetData.mockImplementation((sheetName: string) => {
       if (sheetName === 'perdecomp_snapshot') {
         return Promise.resolve({
-          headers: ['Cliente_ID', 'Resumo_Ultima_Consulta_JSON_P1', 'Resumo_Ultima_Consulta_JSON_P2'],
+          headers: ['cliente_id', 'resumo_ultima_consulta_json_p1', 'resumo_ultima_consulta_json_p2'],
           rows: [
             {
-              Cliente_ID: 'CLT-3683',
-              Resumo_Ultima_Consulta_JSON_P1: '{"nome":"Empresa"',
-              Resumo_Ultima_Consulta_JSON_P2: ',"valor":1}',
+              cliente_id: 'CLT-3683',
+              resumo_ultima_consulta_json_p1: '{"nome":"Empresa"',
+              resumo_ultima_consulta_json_p2: ',"valor":1}',
             },
           ],
         });
       }
       if (sheetName === 'perdecomp_facts') {
-        return Promise.resolve({ headers: ['Cliente_ID'], rows: [] });
+        return Promise.resolve({ headers: ['cliente_id'], rows: [] });
       }
       throw new Error(`Unexpected sheet request: ${sheetName}`);
     });

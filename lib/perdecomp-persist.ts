@@ -13,41 +13,42 @@ import {
   NATUREZA_FAMILIA,
   CREDITOS_DESCRICAO,
 } from '@/lib/perdcomp';
+import { normalizePerdecompLegacyKeys } from '@/lib/sheets/perdecompMapping';
 
 export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
 export const SHEET_FACTS = 'perdecomp_facts';
 
 const FACTS_COLUMNS = [
   'cliente_id',
-  'Empresa_ID',
-  'Nome da Empresa',
-  'CNPJ',
-  'Perdcomp_Numero',
-  'Perdcomp_Formatado',
-  'B1',
-  'B2',
-  'Data_DDMMAA',
-  'Data_ISO',
-  'Tipo_Codigo',
-  'Tipo_Nome',
-  'Natureza',
-  'Familia',
-  'Credito_Codigo',
-  'Credito_Descricao',
-  'Risco_Nivel',
-  'Protocolo',
-  'Situacao',
-  'Situacao_Detalhamento',
-  'Motivo_Normalizado',
-  'Solicitante',
-  'Fonte',
-  'Data_Consulta',
-  'URL_Comprovante_HTML',
-  'Row_Hash',
-  'Inserted_At',
-  'Consulta_ID',
-  'Version',
-  'Deleted_Flag',
+  'empresa_id',
+  'nome_da_empresa',
+  'cnpj',
+  'perdcomp_numero',
+  'perdcomp_formatado',
+  'b1',
+  'b2',
+  'data_ddmmaa',
+  'data_iso',
+  'tipo_codigo',
+  'tipo_nome',
+  'natureza',
+  'familia',
+  'credito_codigo',
+  'credito_descricao',
+  'risco_nivel',
+  'protocolo',
+  'situacao',
+  'situacao_detalhamento',
+  'motivo_normalizado',
+  'solicitante',
+  'fonte',
+  'data_consulta',
+  'url_comprovante_html',
+  'row_hash',
+  'inserted_at',
+  'consulta_id',
+  'version',
+  'deleted_flag',
 ] as const;
 
 type FactsColumn = (typeof FACTS_COLUMNS)[number];
@@ -103,7 +104,7 @@ let nextClienteSequence: number | null = null;
 let resolveOverride: ((opts: ResolveOpts) => Promise<string>) | null = null;
 let cachedFactsHeaders: string[] | null = null;
 
-const FACT_METADATA_FIELDS = new Set(['Row_Hash', 'Consulta_ID', 'Inserted_At']);
+const FACT_METADATA_FIELDS = new Set(['row_hash', 'consulta_id', 'inserted_at']);
 
 function toStringValue(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -294,7 +295,7 @@ function pickCardString(card: any, ...paths: string[]): string | undefined {
 export function deriveRiskFromFacts(facts: SheetRow[]): DerivedRisk {
   const counts = new Map<string, number>();
   for (const fact of facts ?? []) {
-    const nivel = coalesceString(fact?.Risco_Nivel, fact?.risco) || 'DESCONHECIDO';
+    const nivel = coalesceString(fact?.risco_nivel) || 'DESCONHECIDO';
     counts.set(nivel, (counts.get(nivel) ?? 0) + 1);
   }
 
@@ -314,7 +315,7 @@ export function derivePorCreditoFromFacts(
   const aggregates = new Map<string, { label: string; count: number }>();
   for (const fact of facts ?? []) {
     const label =
-      coalesceString(fact?.Credito_Descricao, fact?.Credito_Codigo) || 'DESCONHECIDO';
+      coalesceString(fact?.credito_descricao, fact?.credito_codigo) || 'DESCONHECIDO';
     const existing = aggregates.get(label) ?? { label, count: 0 };
     existing.count += 1;
     aggregates.set(label, existing);
@@ -327,7 +328,7 @@ async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<str
   if (!normalized) return null;
   const { rows } = await getSheetData(SHEET_SNAPSHOT);
   for (const row of rows) {
-    const rowCnpj = onlyDigits(toStringValue(row.CNPJ));
+    const rowCnpj = onlyDigits(toStringValue(row.cnpj));
     if (rowCnpj !== normalized) continue;
     const candidate = toStringValue(row.cliente_id);
     if (CLT_ID_RE.test(candidate)) {
@@ -383,12 +384,7 @@ export async function resolveClienteId({ providedClienteId, cnpj }: ResolveOpts)
 }
 
 function mapFact(raw: any, ctx: PersistContext & { card?: any }): FactsRow {
-  const perdcomp = coalesceString(
-    raw.Perdcomp_Numero,
-    raw.perdcompNumero,
-    raw.perdcomp,
-    raw.numero
-  );
+  const perdcomp = coalesceString(raw.perdcomp_numero);
   const parsed = perdcomp ? parsePerdcompCodigo(perdcomp) : null;
   const parsedValid = Boolean(parsed?.valido);
   const parsedTipoCod =
@@ -403,71 +399,35 @@ function mapFact(raw: any, ctx: PersistContext & { card?: any }): FactsRow {
     : '';
   const parsedDataISO = parsedValid ? normalizeISO(parsed?.dataISO ?? '') : '';
 
-  const protocolo = coalesceString(raw.Protocolo, raw.protocolo, parsedProtocolo);
+  const protocolo = coalesceString(raw.protocolo, parsedProtocolo);
   const idLinha = perdcomp || protocolo;
 
   const dataISO = normalizeISO(
-    raw.Data_ISO ??
-      raw.dataISO ??
-      raw.data ??
-      raw.dataConsulta ??
-      parsedDataISO ??
+    raw.data_iso ??
       ctx.meta.dataConsultaISO ??
       ''
   );
   const dataISOFinal = dataISO || parsedDataISO || '';
 
-  const tipoCod = coalesceString(raw.Tipo_Codigo, raw.tipoCodigo, parsedTipoCod);
-  const tipoNome = coalesceString(
-    raw.Tipo_Nome,
-    raw.tipoNome,
-    raw.tipo,
-    parsedTipoNome
-  );
-  const natureza = coalesceString(raw.Natureza, raw.natureza, parsedNatureza);
+  const tipoCod = coalesceString(raw.tipo_codigo, parsedTipoCod);
+  const tipoNome = coalesceString(raw.tipo_nome, parsedTipoNome);
+  const natureza = coalesceString(raw.natureza, parsedNatureza);
   const familia = coalesceString(
-    raw.Familia,
     raw.familia,
     parsedFamilia,
     parsedTipoCod === '1' || tipoCod === '1' ? 'DCOMP' : '',
     parsedTipoCod === '2' || tipoCod === '2' ? 'REST' : '',
     parsedTipoCod === '8' || tipoCod === '8' ? 'CANC' : '',
   );
-  const creditoCod = coalesceString(
-    raw.Credito_Codigo,
-    raw.creditoCodigo,
-    parsedCreditoCod
-  );
-  const creditoDesc = coalesceString(
-    raw.Credito_Descricao,
-    raw.creditoDescricao,
-    raw.Credito,
-    raw.credito,
-    parsedCreditoDesc
-  );
-  const riscoNivel = coalesceString(
-    raw.Risco_Nivel,
-    raw.risco,
-    ctx.card?.risk?.nivel,
-    ctx.card?.risk?.level,
-  );
-  const situacao = toStringValue(raw.Situacao ?? raw.situacao ?? '');
-  const situacaoDetalhamento = toStringValue(
-    raw.Situacao_Detalhamento ?? raw.situacaoDetalhamento ?? ''
-  );
-  const solicitante = toStringValue(raw.Solicitante ?? raw.solicitante ?? '');
-  const motivoNormalizado = toStringValue(raw.Motivo_Normalizado ?? '');
-  const valor = toStringValue(raw.Valor ?? raw.valor ?? '');
-  const nomeEmpresa =
-    ctx.nomeEmpresa ||
-    toStringValue(
-      coalesceString(
-        raw['Nome da Empresa'],
-        raw.Nome_da_Empresa,
-        raw.nomeEmpresa,
-        raw.empresa,
-      ),
-    );
+  const creditoCod = coalesceString(raw.credito_codigo, parsedCreditoCod);
+  const creditoDesc = coalesceString(raw.credito_descricao, parsedCreditoDesc);
+  const riscoNivel = coalesceString(raw.risco_nivel);
+  const situacao = toStringValue(raw.situacao ?? '');
+  const situacaoDetalhamento = toStringValue(raw.situacao_detalhamento ?? '');
+  const solicitante = toStringValue(raw.solicitante ?? '');
+  const motivoNormalizado = toStringValue(raw.motivo_normalizado ?? '');
+  const valor = toStringValue(raw.valor ?? '');
+  const nomeEmpresa = ctx.nomeEmpresa || toStringValue(raw.nome_da_empresa);
 
   const rowHash = idLinha
     ? sha256([idLinha, tipoCod, natureza, creditoCod, dataISOFinal, valor].join('|'))
@@ -483,41 +443,41 @@ function mapFact(raw: any, ctx: PersistContext & { card?: any }): FactsRow {
         )
       );
 
-  const b1 = toStringValue(raw.B1 ?? '');
-  const b2 = toStringValue(raw.B2 ?? '');
+  const b1 = toStringValue(raw.b1 ?? '');
+  const b2 = toStringValue(raw.b2 ?? '');
 
   const row: FactsRow = {
     cliente_id: ctx.clienteId,
-    Empresa_ID: toStringValue(ctx.empresaId ?? ''),
-    'Nome da Empresa': nomeEmpresa,
-    CNPJ: onlyDigits(ctx.cnpj),
+    empresa_id: toStringValue(ctx.empresaId ?? ''),
+    nome_da_empresa: nomeEmpresa,
+    cnpj: onlyDigits(ctx.cnpj),
 
-    Perdcomp_Numero: perdcomp,
-    Perdcomp_Formatado: perdcomp ? formatPerdcompNumero(perdcomp) : '',
-    B1: b1,
-    B2: b2,
-    Data_DDMMAA: toDDMMAA(dataISOFinal),
-    Data_ISO: dataISOFinal,
-    Tipo_Codigo: tipoCod,
-    Tipo_Nome: tipoNome,
-    Natureza: natureza,
-    Familia: familia,
-    Credito_Codigo: creditoCod,
-    Credito_Descricao: creditoDesc,
-    Risco_Nivel: riscoNivel,
-    Protocolo: protocolo,
-    Situacao: situacao,
-    Situacao_Detalhamento: situacaoDetalhamento,
-    Motivo_Normalizado: motivoNormalizado,
-    Solicitante: solicitante,
-    Fonte: toStringValue(ctx.meta.fonte ?? ''),
-    Data_Consulta: toStringValue(ctx.meta.dataConsultaISO ?? ctx.nowISO),
-    URL_Comprovante_HTML: toStringValue(ctx.meta.urlComprovante ?? ''),
-    Row_Hash: rowHash,
-    Inserted_At: ctx.nowISO,
-    Consulta_ID: toStringValue(ctx.meta.consultaId),
-    Version: toStringValue(ctx.meta.cardSchemaVersion ?? 'v1'),
-    Deleted_Flag: '0',
+    perdcomp_numero: perdcomp,
+    perdcomp_formatado: perdcomp ? formatPerdcompNumero(perdcomp) : '',
+    b1: b1,
+    b2: b2,
+    data_ddmmaa: toDDMMAA(dataISOFinal),
+    data_iso: dataISOFinal,
+    tipo_codigo: tipoCod,
+    tipo_nome: tipoNome,
+    natureza: natureza,
+    familia: familia,
+    credito_codigo: creditoCod,
+    credito_descricao: creditoDesc,
+    risco_nivel: riscoNivel,
+    protocolo: protocolo,
+    situacao: situacao,
+    situacao_detalhamento: situacaoDetalhamento,
+    motivo_normalizado: motivoNormalizado,
+    solicitante: solicitante,
+    fonte: toStringValue(ctx.meta.fonte ?? ''),
+    data_consulta: toStringValue(ctx.meta.dataConsultaISO ?? ctx.nowISO),
+    url_comprovante_html: toStringValue(ctx.meta.urlComprovante ?? ''),
+    row_hash: rowHash,
+    inserted_at: ctx.nowISO,
+    consulta_id: toStringValue(ctx.meta.consultaId),
+    version: toStringValue(ctx.meta.cardSchemaVersion ?? 'v1'),
+    deleted_flag: '0',
   };
 
   return row;
@@ -540,14 +500,8 @@ function mapSnapshotRow(
   const porNatureza =
     card?.agregados?.porNatureza ?? card?.porNatureza ?? resumo?.porNaturezaAgrupada ?? [];
 
-  const cardRiskNivel = coalesceString(
-    card?.risk?.nivel,
-    card?.risk?.level,
-    card?.risco?.nivel,
-  );
-  const cardRiskTags = Array.isArray(card?.risk?.tags ?? card?.riskTags)
-    ? (card?.risk?.tags ?? card?.riskTags ?? [])
-    : [];
+  const cardRiskNivel = coalesceString(card?.risk?.nivel);
+  const cardRiskTags = Array.isArray(card?.risk?.tags) ? (card?.risk?.tags ?? []) : [];
   const derivedRisk = deriveRiskFromFacts(facts);
   const risk = {
     nivel: cardRiskNivel || derivedRisk.nivel,
@@ -564,7 +518,7 @@ function mapSnapshotRow(
 
   const datas = uniqSortedISO([
     ...((card?.datas as string[]) ?? []),
-    ...facts.map((fact) => fact.Data_ISO).filter(Boolean),
+    ...facts.map((fact) => fact.data_iso).filter(Boolean),
   ]);
   const primeiraData = datas[0] ?? '';
   const ultimaData = datas[datas.length - 1] ?? '';
@@ -575,42 +529,42 @@ function mapSnapshotRow(
 
   return {
     cliente_id: ctx.clienteId,
-    Empresa_ID: toStringValue(ctx.empresaId ?? ''),
-    'Nome da Empresa': ctx.nomeEmpresa ?? '',
-    CNPJ: onlyDigits(ctx.cnpj),
+    empresa_id: toStringValue(ctx.empresaId ?? ''),
+    nome_da_empresa: ctx.nomeEmpresa ?? '',
+    cnpj: onlyDigits(ctx.cnpj),
 
-    Qtd_Total: String(resumo?.total ?? facts.length ?? 0),
-    Qtd_DCOMP: String(porFamilia?.DCOMP ?? 0),
-    Qtd_REST: String(porFamilia?.REST ?? 0),
-    Qtd_RESSARC: String(porFamilia?.RESSARC ?? 0),
+    qtd_total: String(resumo?.total ?? facts.length ?? 0),
+    qtd_dcomp: String(porFamilia?.DCOMP ?? 0),
+    qtd_rest: String(porFamilia?.REST ?? 0),
+    qtd_ressarc: String(porFamilia?.RESSARC ?? 0),
 
-    Risco_Nivel: risk.nivel ?? '',
-    Risco_Tags_JSON: safeJSONStringify(risk.tags ?? []),
+    risco_nivel: risk.nivel ?? '',
+    risco_tags_json: safeJSONStringify(risk.tags ?? []),
 
-    Por_Natureza_JSON: safeJSONStringify(porNatureza),
-    Por_Credito_JSON: safeJSONStringify(porCredito),
+    por_natureza_json: safeJSONStringify(porNatureza),
+    por_credito_json: safeJSONStringify(porCredito),
 
-    Datas_JSON: safeJSONStringify(datas),
-    Primeira_Data_ISO: primeiraData,
-    Ultima_Data_ISO: ultimaData,
+    datas_json: safeJSONStringify(datas),
+    primeira_data_iso: primeiraData,
+    ultima_data_iso: ultimaData,
 
-    Resumo_Ultima_Consulta_JSON_P1: shardP1,
-    Resumo_Ultima_Consulta_JSON_P2: shardP2,
-    Payload_Bytes: String(bytes),
-    Snapshot_Hash: snapshotHash,
+    resumo_ultima_consulta_json_p1: shardP1,
+    resumo_ultima_consulta_json_p2: shardP2,
+    payload_bytes: String(bytes),
+    snapshot_hash: snapshotHash,
 
-    Card_Schema_Version: meta.cardSchemaVersion ?? CARD_SCHEMA_VERSION_FALLBACK,
-    Rendered_At_ISO: meta.renderedAtISO ?? nowISO,
-    Fonte: meta.fonte ?? '',
-    Data_Consulta: meta.dataConsultaISO ?? nowISO,
-    URL_Comprovante_HTML: meta.urlComprovante ?? '',
+    card_schema_version: meta.cardSchemaVersion ?? CARD_SCHEMA_VERSION_FALLBACK,
+    rendered_at_iso: meta.renderedAtISO ?? nowISO,
+    fonte: meta.fonte ?? '',
+    data_consulta: meta.dataConsultaISO ?? nowISO,
+    url_comprovante_html: meta.urlComprovante ?? '',
 
-    Facts_Count: '0',
+    facts_count: String(ctx.facts.length ?? 0),
 
-    Last_Updated_ISO: nowISO,
-    Consulta_ID: meta.consultaId,
+    last_updated_iso: nowISO,
+    consulta_id: meta.consultaId,
 
-    Erro_Ultima_Consulta: '',
+    erro_ultima_consulta: '',
   };
 }
 
@@ -620,7 +574,7 @@ async function upsertSnapshot(row: SheetRow) {
   if (!headers.length) {
     throw new Error(`Sheet ${SHEET_SNAPSHOT} is missing headers`);
   }
-  const existing = rows.find((r) => toStringValue(r.Cliente_ID) === row.Cliente_ID);
+  const existing = rows.find((r) => toStringValue(r.cliente_id) === row.cliente_id);
 
   if (existing) {
     const merged: Record<string, string> = {};
@@ -680,9 +634,9 @@ async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<Filt
   try {
     const { rows: existingRows } = await getSheetData(SHEET_FACTS);
     for (const row of existingRows) {
-      if (toStringValue(row.Cliente_ID) !== clienteId) continue;
-      const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
-      const hash = toStringValue(row.Row_Hash ?? '');
+      if (toStringValue(row.cliente_id) !== clienteId) continue;
+      const numero = toStringValue(row.perdcomp_numero ?? row.protocolo ?? '');
+      const hash = toStringValue(row.row_hash ?? '');
       const key = `${clienteId}|${numero}|${hash}`;
       existingKeys.add(key);
     }
@@ -695,8 +649,8 @@ async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<Filt
   let skip = 0;
 
   for (const row of rows) {
-    const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
-    const hash = toStringValue(row.Row_Hash ?? '');
+    const numero = toStringValue(row.perdcomp_numero ?? row.protocolo ?? '');
+    const hash = toStringValue(row.row_hash ?? '');
     const key = `${clienteId}|${numero}|${hash}`;
     if (existingKeys.has(key)) {
       skip += 1;
@@ -715,7 +669,7 @@ async function readFactsByClienteId(clienteId: string): Promise<SheetRow[]> {
   try {
     const { rows } = await getSheetData(SHEET_FACTS);
     for (const row of rows) {
-      if (toStringValue(row.Cliente_ID) !== clienteId) continue;
+      if (toStringValue(row.cliente_id) !== clienteId) continue;
       all.push(normalizeSheetRow(row));
     }
   } catch (error) {
@@ -788,7 +742,7 @@ async function updateSnapshotFields(
   }
   const { headers, rows } = await getSheetData(SHEET_SNAPSHOT);
   if (!headers.length) return false;
-  const existing = rows.find((row) => toStringValue(row.Cliente_ID) === clienteId);
+  const existing = rows.find((row) => toStringValue(row.cliente_id) === clienteId);
   if (!existing) return false;
 
   const data: Array<{ range: string; values: string[][] }> = [];
@@ -821,8 +775,8 @@ async function updateSnapshotFields(
 async function markSnapshotError(clienteId: string, message: string, nowISO: string) {
   try {
     const updated = await updateSnapshotFields(clienteId, {
-      Erro_Ultima_Consulta: message,
-      Last_Updated_ISO: nowISO,
+      erro_ultima_consulta: message,
+      last_updated_iso: nowISO,
     });
     if (!updated) {
       console.warn('PERSIST_FAIL_MARK_ERROR_ROW_MISSING', { clienteId, message });
@@ -840,9 +794,9 @@ async function markSnapshotPostFacts(
   const { factsCount, error, nowISO } = params;
   try {
     const updated = await updateSnapshotFields(clienteId, {
-      Facts_Count: String(factsCount ?? 0),
-      Erro_Ultima_Consulta: error ?? '',
-      Last_Updated_ISO: nowISO,
+      facts_count: String(factsCount ?? 0),
+      erro_ultima_consulta: error ?? '',
+      last_updated_iso: nowISO,
     });
     if (!updated) {
       console.warn('PERSIST_FAIL_MARK_POST_FACTS', { clienteId, error });
@@ -863,7 +817,7 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
 
   const cnpjFinal =
     args.cnpj ??
-    pickCardString(card, 'header.cnpj', 'CNPJ', 'cnpj', 'CNPJ_Empresa') ??
+    pickCardString(card, 'header.cnpj', 'cnpj') ??
     '';
 
   const resolverFn = resolveOverride ?? resolveClienteId;
@@ -879,20 +833,17 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
       resolved: clienteIdFinal,
       cnpj: args.cnpj,
     });
-    throw new Error('Invalid Cliente_ID for persistence');
+    throw new Error('Invalid cliente_id for persistence');
   }
 
   const empresaId =
-    args.empresaId ?? pickCardString(card, 'header.empresaId', 'empresaId', 'Empresa_ID') ?? '';
+    args.empresaId ?? pickCardString(card, 'header.empresaId', 'empresa_id') ?? '';
   const nomeEmpresa =
     pickCardString(
       card,
       'nomeEmpresa',
       'header.nomeEmpresa',
-      'Nome_da_Empresa',
-      'Nome da Empresa',
-      'empresa',
-      'empresa.nome'
+      'nome_da_empresa'
     ) ?? '';
 
   const ctx: PersistContext = {
@@ -909,14 +860,14 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
   try {
     const sanitizedCard = { ...card, clienteId: clienteIdFinal };
     const mappedFacts = (args.facts ?? []).map((raw) =>
-      mapFact(raw, { ...ctx, card: sanitizedCard }),
+      mapFact(normalizePerdecompLegacyKeys(raw), { ...ctx, card: sanitizedCard }),
     );
 
     const snapshotRow = mapSnapshotRow({ ...ctx, card: sanitizedCard, facts: mappedFacts });
     await upsertSnapshot(snapshotRow);
     console.info('SNAPSHOT_OK', {
       clienteId: clienteIdFinal,
-      snapshotHash: snapshotRow.Snapshot_Hash,
+      snapshotHash: snapshotRow.snapshot_hash,
       factsCount: mappedFacts.length,
     });
 
@@ -970,16 +921,16 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
 export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | null> {
   if (!clienteId) return null;
   const { rows } = await getSheetData(SHEET_SNAPSHOT);
-  const row = rows.find((item) => toStringValue(item.Cliente_ID) === clienteId);
+  const row = rows.find((item) => toStringValue(item.cliente_id) === clienteId);
   if (!row) return null;
-  const p1 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P1 ?? '');
-  const p2 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P2 ?? '');
+  const p1 = toStringValue(row.resumo_ultima_consulta_json_p1 ?? '');
+  const p2 = toStringValue(row.resumo_ultima_consulta_json_p2 ?? '');
   const payload = p1 + p2;
   if (!payload) return null;
   try {
     const card = JSON.parse(payload || '{}');
 
-    const needsRisk = !card?.risk || !coalesceString(card?.risk?.nivel, card?.risk?.level);
+    const needsRisk = !card?.risk || !coalesceString(card?.risk?.nivel);
     const needsCredito =
       !card?.agregados ||
       !Array.isArray(card.agregados?.porCredito) ||
@@ -991,7 +942,7 @@ export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | n
         const derived = deriveRiskFromFacts(facts);
         card.risk = {
           ...(card?.risk ?? {}),
-          nivel: coalesceString(card?.risk?.nivel, card?.risk?.level, derived.nivel),
+          nivel: coalesceString(card?.risk?.nivel, derived.nivel),
           tags: Array.isArray(card?.risk?.tags) && card.risk.tags.length
             ? card.risk.tags
             : derived.tags,

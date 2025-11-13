@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { updateRowByIndex } from '@/lib/sheets';
-import { _findRowNumberByClienteId, getSheetData } from '@/lib/sheets-helpers';
+import { _findRowNumberBycliente_id, getSheetData } from '@/lib/sheets-helpers';
 import { onlyDigits } from '@/utils/cnpj-matriz';
 
 export const runtime = 'nodejs';
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     const results: Array<Record<string, any>> = [];
 
     const updateSheet = async (sheetName: string) => {
-      const rowIndex = await _findRowNumberByClienteId(sheetName, clienteId);
+      const rowIndex = await _findRowNumberBycliente_id(sheetName, clienteId);
       if (rowIndex === -1) {
         return { sheetName, updated: 0, reason: 'Cliente_ID não encontrado' };
       }

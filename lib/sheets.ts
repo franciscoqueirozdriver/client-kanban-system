@@ -1,1 +1,1 @@
-export { updateRowByIndex } from './googleSheets';
+export { updateRowByIndex, readSheet, appendRow, updateRows } from './googleSheets';

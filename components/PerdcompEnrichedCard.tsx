@@ -4,13 +4,7 @@ import { useMemo } from 'react';
 import { FaSpinner, FaExclamationTriangle, FaInfoCircle, FaLightbulb } from 'react-icons/fa';
 import { enriquecerPerdcomp, analisarPortfolioPerdcomp } from '@/lib/perdcomp';
 import { formatCnpj } from '@/utils/cnpj';
-
-interface Company {
-  Cliente_ID: string;
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
-  [key: string]: any;
-}
+import { Company } from '../types/company';
 
 interface CardData {
   lastConsultation: string | null;
@@ -159,10 +153,10 @@ export default function PerdcompEnrichedCard({
   return (
     <article className="group relative mx-auto flex h-full w-full max-w-[420px] flex-col rounded-3xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg">
       <header className="mb-2">
-        <h3 className="text-lg font-semibold text-foreground" title={company.Nome_da_Empresa}>
-          {company.Nome_da_Empresa}
+        <h3 className="text-lg font-semibold text-foreground" title={company.nome_da_empresa}>
+          {company.nome_da_empresa}
         </h3>
-        <p className="text-xs text-muted-foreground">{formatCnpj(company.CNPJ_Empresa)}</p>
+        <p className="text-xs text-muted-foreground">{formatCnpj(company.cnpj_empresa)}</p>
         {ultimaConsulta && (
           <p className="mt-1 text-xs text-muted-foreground">
             Última consulta: {new Date(ultimaConsulta).toLocaleDateString()}

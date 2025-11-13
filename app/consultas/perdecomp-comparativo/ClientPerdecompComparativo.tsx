@@ -13,15 +13,9 @@ import { decideCNPJFinalBeforeQuery } from '@/helpers/decideCNPJ';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ensureValidCnpj, formatCnpj, normalizeCnpj, onlyDigits, isCnpj, isEmptyCNPJLike } from '@/utils/cnpj';
 import { fmtCNPJ } from '@/utils/cnpj-matriz';
+import { Company, SavedCompany } from '@/types/company';
 
 // --- Helper Types ---
-interface Company {
-  cliente_id: string;
-  nome_da_empresa: string;
-  cnpj_empresa: string;
-  [key: string]: any;
-}
-
 interface CardData {
   quantity: number;
   lastConsultation: string | null;
@@ -572,7 +566,11 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         existingKeys.add(cnpj);
         return;
       }
-      const key = String(existing.company.nome_da_empresa || 	rimmed().toLowerCase();;
+
+  const key = String(existing.company.nome_da_empresa || '')
+    .trim()
+    .toLowerCase();
+
       if (key) existingKeys.add(key);
     });
     if (client?.company?.cnpj_empresa) {
@@ -601,9 +599,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         const s = filtered[idx++];
         next[i] = {
           company: {
-            Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
-            Nome_da_Empresa: s.nome,
-            CNPJ_Empresa: s.cnpj,
+            cliente_id: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
+            nome_da_empresa: s.nome,
+            cnpj_empresa: s.cnpj,
           },
           lastConsultation: null,
           forceRefresh: false,
@@ -614,9 +612,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       const s = filtered[idx++];
       next.push({
         company: {
-          Cliente_ID: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
-          Nome_da_Empresa: s.nome,
-          CNPJ_Empresa: s.cnpj,
+          cliente_id: `COMP-${(s.cnpj || s.nome).replace(/\W+/g, '').slice(0, 20)}`,
+          nome_da_empresa: s.nome,
+          cnpj_empresa: s.cnpj,
         },
         lastConsultation: null,
         forceRefresh: false,
@@ -732,7 +730,15 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     }
   };
 
-  const handleSaveNewCompany = (newCompany: Company) => {
+  const handleSaveNewCompany = (saved: SavedCompany) => {
+    const newCompany: Company = {
+      cliente_id: saved.Cliente_ID,
+      nome_da_empresa: saved.Nome_da_Empresa,
+      cnpj_empresa: saved.CNPJ_Empresa,
+      // se quiser, pode espalhar o resto pra manter dados legados:
+      // ...saved,
+    };
+
     if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
       handleSelectCompany('competitor', newCompany, modalTarget.index);
     } else {
@@ -938,7 +944,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           >
             {results.map(({ company, data, status, error, debug }) => (
               <PerdcompEnrichedCard
-                key={company.CNPJ_Empresa}
+                key={company.cnpj_empresa}
                 company={company}
                 data={data}
                 status={status}
