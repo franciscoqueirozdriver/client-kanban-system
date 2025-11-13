@@ -115,7 +115,7 @@ function KanbanPage() {
     async function fetchColumns() {
       const response = await fetch('/api/kanban');
       const data = await response.json();
-      setColumns(data);
+      setColumns(data || []);
     }
     async function fetchFilterOptions() {
       const response = await fetch('/api/clientes');
@@ -265,12 +265,12 @@ function KanbanPage() {
       });
       const response = await fetch('/api/kanban');
       const data = await response.json();
-      setColumns(data);
+      setColumns(data || []);
     } catch (error) {
       console.error(error);
       const response = await fetch('/api/kanban');
       const data = await response.json();
-      setColumns(data);
+      setColumns(data || []);
     } finally {
       setIsUpdating(false);
     }

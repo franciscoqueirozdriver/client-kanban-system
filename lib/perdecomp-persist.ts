@@ -18,7 +18,7 @@ export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
 export const SHEET_FACTS = 'perdecomp_facts';
 
 const FACTS_COLUMNS = [
-  'Cliente_ID',
+  'cliente_id',
   'Empresa_ID',
   'Nome da Empresa',
   'CNPJ',
@@ -329,7 +329,7 @@ async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<str
   for (const row of rows) {
     const rowCnpj = onlyDigits(toStringValue(row.CNPJ));
     if (rowCnpj !== normalized) continue;
-    const candidate = toStringValue(row.Cliente_ID);
+    const candidate = toStringValue(row.cliente_id);
     if (CLT_ID_RE.test(candidate)) {
       return candidate;
     }
@@ -351,7 +351,7 @@ export async function nextClienteId(): Promise<string> {
     const { rows } = await getSheetData(SHEET_SNAPSHOT);
     let max = 0;
     for (const row of rows) {
-      const id = toStringValue(row.Cliente_ID);
+      const id = toStringValue(row.cliente_id);
       const match = id.match(/^CLT-(\d{4,})$/);
       if (!match) continue;
       const value = Number(match[1]);
@@ -487,7 +487,7 @@ function mapFact(raw: any, ctx: PersistContext & { card?: any }): FactsRow {
   const b2 = toStringValue(raw.B2 ?? '');
 
   const row: FactsRow = {
-    Cliente_ID: ctx.clienteId,
+    cliente_id: ctx.clienteId,
     Empresa_ID: toStringValue(ctx.empresaId ?? ''),
     'Nome da Empresa': nomeEmpresa,
     CNPJ: onlyDigits(ctx.cnpj),
@@ -574,7 +574,7 @@ function mapSnapshotRow(
   const snapshotHash = sha256(shardP1 + shardP2);
 
   return {
-    Cliente_ID: ctx.clienteId,
+    cliente_id: ctx.clienteId,
     Empresa_ID: toStringValue(ctx.empresaId ?? ''),
     'Nome da Empresa': ctx.nomeEmpresa ?? '',
     CNPJ: onlyDigits(ctx.cnpj),

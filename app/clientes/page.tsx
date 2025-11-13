@@ -113,7 +113,7 @@ function ClientesPageComponent() {
     async function loadClients() {
       const response = await fetch('/api/clientes');
       const json: ClientsResponse = await response.json();
-      setClients(json.clients);
+      setClients(json.clients || []);
       setOptions(json.filters || {});
     }
     loadClients();
@@ -285,7 +285,7 @@ function ClientesPageComponent() {
     fetch('/api/clientes')
       .then((res) => res.json())
       .then((json: ClientsResponse) => {
-        setClients(json.clients);
+        setClients(json.clients || []);
         setOptions(json.filters || {});
       });
   }

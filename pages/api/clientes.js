@@ -136,7 +136,7 @@ async function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const { headers, rows: dataRows } = await getSheetData('Sheet1');
+      const { headers, rows: dataRows } = await getSheetData('sheet1');
       // const rows = sheet.data.values || []; // getSheetData already returns rows as an array of objects/arrays
       const rawRows = [headers, ...dataRows.map(row => headers.map(header => row[header]))]; // Reconstroi o array de arrays para groupRows
       const { clients, filters } = await groupRows(rawRows);
@@ -151,7 +151,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ clients: clients.slice(0, limit), filters });
     } catch (err) {
       console.error('Erro ao listar clientes:', err);
-      return res.status(500).json({ error: 'Erro ao listar clientes' });
+      return res.status(200).json({ clients: [], filters: {} });
     }
   }
 
