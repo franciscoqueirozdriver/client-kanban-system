@@ -1,50 +1,51 @@
 /** @jest-environment node */
 import handler from './clientes';
-import { getSheetCached } from '../../lib/googleSheets';
+import { getSheetData } from '../../lib/googleSheets';
 
 jest.mock('../../lib/googleSheets', () => ({
-  getSheetCached: jest.fn()
+  getSheetData: jest.fn()
 }));
 
 describe('GET /api/clientes', () => {
   const header = [
-    'Cliente_ID',
-    'Organização - Nome',
-    'Negócio - Título',
-    'Negócio - Pessoa de contato',
-    'Pessoa - Cargo',
-    'Pessoa - Email - Work',
-    'Pessoa - Email - Home',
-    'Pessoa - Email - Other',
-    'Pessoa - Phone - Work',
-    'Pessoa - Phone - Home',
-    'Pessoa - Phone - Mobile',
-    'Pessoa - Phone - Other',
-    'Pessoa - Telefone',
-    'Pessoa - Celular',
-    'Telefone Normalizado',
-    'Organização - Segmento',
-    'Organização - Tamanho da empresa',
+    'cliente_id',
+    'organizacao_nome',
+    'negocio_titulo',
+    'negocio_pessoa_de_contato',
+    'pessoa_cargo',
+    'pessoa_email_work',
+    'pessoa_email_home',
+    'pessoa_email_other',
+    'pessoa_phone_work',
+    'pessoa_phone_home',
+    'pessoa_phone_mobile',
+    'pessoa_phone_other',
+    'pessoa_telefone',
+    'pessoa_celular',
+    'telefone_normalizado',
+    'organizacao_segmento',
+    'organizacao_tamanho_da_empresa',
     'uf',
     'cidade_estimada',
-    'Status_Kanban',
-    'Data_Ultima_Movimentacao',
-    'Pessoa - End. Linkedin',
-    'Cor_Card'
+    'status_kanban',
+    'data_ultima_movimentacao',
+    'pessoa_end_linkedin',
+    'cor_card'
   ];
 
   function makeRows(count) {
     return Array.from({ length: count }, (_, i) => {
-      const row = Array(header.length).fill('');
-      row[0] = `id${i}`;
-      row[1] = `Company ${i}`;
+      const row = {};
+      header.forEach(h => row[h] = '');
+      row.cliente_id = `id${i}`;
+      row.organizacao_nome = `Company ${i}`;
       return row;
     });
   }
 
   it('returns all clients when limit not provided', async () => {
-    const rows = [header, ...makeRows(1205)];
-    getSheetCached.mockResolvedValue({ data: { values: rows } });
+    const rows = makeRows(1205);
+    getSheetData.mockResolvedValue({ headers: header, rows });
 
     const req = { method: 'GET', query: {} };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -56,8 +57,8 @@ describe('GET /api/clientes', () => {
   });
 
   it('respects explicit limit', async () => {
-    const rows = [header, ...makeRows(50)];
-    getSheetCached.mockResolvedValue({ data: { values: rows } });
+    const rows = makeRows(50);
+    getSheetData.mockResolvedValue({ headers: header, rows });
 
     const req = { method: 'GET', query: { limit: '10' } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -68,8 +69,8 @@ describe('GET /api/clientes', () => {
   });
 
   it('returns count when countOnly=1', async () => {
-    const rows = [header, ...makeRows(30)];
-    getSheetCached.mockResolvedValue({ data: { values: rows } });
+    const rows = makeRows(30);
+    getSheetData.mockResolvedValue({ headers: header, rows });
 
     const req = { method: 'GET', query: { countOnly: '1' } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
