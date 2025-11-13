@@ -28,9 +28,7 @@ export interface FullCompanyPayload {
   Contato: ContactData;
   Comercial: CommercialData;
 }
-interface SavedCompany {
-  Cliente_ID: string; Nome_da_Empresa: string; CNPJ_Empresa: string;
-}
+import { SavedCompany } from '../types/company';
 export interface NewCompanyModalProps {
   isOpen: boolean;
   initialData?: Partial<CompanyForm>;

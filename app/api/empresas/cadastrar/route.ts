@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
-  getNextClienteId,
+  getNextcliente_id,
   findByCnpj,
   findByName,
   appendToSheets,
@@ -55,10 +55,10 @@ export async function POST(req: Request) {
     if (Cliente_ID) {
       // In update mode, we assume the user has confirmed and we just save the data.
       // A more robust check could re-verify the CNPJ isn't being changed to a conflicting one, but we'll keep it simple.
-      await updateInSheets(Cliente_ID, payload);
+      await updateInSheets(payload, Cliente_ID);
       const savedCompany = {
-          Cliente_ID,
-          Nome_da_Empresa: Empresa.Nome_da_Empresa,
+          cliente_id: Cliente_ID,
+          nome_da_empresa: Empresa.Nome_da_Empresa,
           CNPJ_Empresa: normalizedCnpj,
       };
       return NextResponse.json({ ok: true, company: savedCompany }, { status: 200 });
@@ -90,17 +90,17 @@ export async function POST(req: Request) {
     }
 
     // 3. Generate New ID
-    const newClienteId = await getNextClienteId();
-    const finalPayload = { ...payload, Cliente_ID: newClienteId };
+    const newClienteId = await getNextcliente_id();
+    const finalPayload = { ...payload, cliente_id: newClienteId };
 
     // 4. Write to Sheets
     await appendToSheets(finalPayload);
 
     // 5. Return Success
     const savedCompany = {
-        Cliente_ID: newClienteId,
-        Nome_da_Empresa: Empresa.Nome_da_Empresa,
-        CNPJ_Empresa: normalizedCnpj,
+        cliente_id: newClienteId,
+        nome_da_empresa: Empresa.Nome_da_Empresa,
+        cnpj_empresa: normalizedCnpj,
     };
     return NextResponse.json({ ok: true, company: savedCompany }, { status: 201 });
 

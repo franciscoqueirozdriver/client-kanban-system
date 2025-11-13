@@ -38,6 +38,20 @@ describe('normalizePayloadToSnakeCase', () => {
     expect(normalizePayloadToSnakeCase(payload)).toEqual(expected);
   });
 
+  it('should handle top-level PascalCase keys', () => {
+    const payload = {
+      Cliente_ID: 'CLT-1234',
+      NomeDaEmpresa: 'Empresa Teste',
+    };
+
+    const expected = {
+      cliente_id: 'CLT-1234',
+      nome_da_empresa: 'Empresa Teste',
+    };
+
+    expect(normalizePayloadToSnakeCase(payload)).toEqual(expected);
+  });
+
   it('should handle payloads with missing nested objects', () => {
     const payload = {
       cliente_id: 'CLT-1234',
