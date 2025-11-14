@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { randomUUID } from 'crypto';
 import { padCNPJ14 } from '@/utils/cnpj';
 import { agregaPerdcomp } from '@/utils/perdcomp';
+import { savePerdecompResults } from '@/lib/perdecomp-persist';
 
 type RetryableFn<T> = () => Promise<T>;
 
@@ -144,9 +145,31 @@ export default async function handler(
       } : null,
     };
 
-    // Placeholder for the next phase
-    console.log('Card to be persisted:', card);
-    console.log('Facts to be persisted:', perdcompArray);
+    const meta = {
+        consultaId,
+        fonte: 'infosimples',
+        dataConsultaISO: card.header.requested_at,
+        urlComprovante: card.site_receipt ?? undefined,
+        cardSchemaVersion: 'v1',
+        renderedAtISO: new Date().toISOString(),
+        clienteId: Cliente_ID ?? null,
+        nomeEmpresa: nomeEmpresa ?? null,
+    };
+
+    try {
+        await savePerdecompResults({
+            cnpj: cnpj,
+            card,
+            facts: perdcompArray,
+            meta,
+        });
+    } catch (err) {
+        console.error('[PERDCOMP] Failed to persist results', {
+            err,
+            cnpj: cnpj,
+            consultaId,
+        });
+    }
 
     return res.status(200).json(card);
 
