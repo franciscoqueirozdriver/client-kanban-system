@@ -225,17 +225,17 @@ export async function POST(request: Request) {
     // 1. If not forcing, check the snapshot first
     if (!force) {
       console.info('SNAPSHOT_MODE', { empresa: nomeEmpresa, clienteId, source: 'perdecomp_snapshot' });
-      
+
       try {
         const snapshotCard = await loadSnapshotCard({ clienteId });
-        
+
         if (snapshotCard) {
-          console.info('SNAPSHOT_ROWS', { 
-            empresa: nomeEmpresa, 
+          console.info('SNAPSHOT_ROWS', {
+            empresa: nomeEmpresa,
             clienteId,
-            count: Array.isArray(snapshotCard?.perdcomp) ? snapshotCard.perdcomp.length : 0 
+            count: Array.isArray(snapshotCard?.perdcomp) ? snapshotCard.perdcomp.length : 0
           });
-          
+
           // Extract data from the rich snapshot card
           const resumo = snapshotCard?.resumo ?? snapshotCard?.perdcompResumo ?? {};
           const mappedCount = snapshotCard?.mappedCount ?? (Array.isArray(snapshotCard?.perdcomp) ? snapshotCard.perdcomp.length : 0);
@@ -244,7 +244,7 @@ export async function POST(request: Request) {
           const lastConsultation = snapshotCard?.header?.requested_at ?? snapshotCard?.requestedAt ?? null;
           const primeiro = snapshotCard?.primeiro ?? (Array.isArray(snapshotCard?.perdcomp) && snapshotCard.perdcomp[0]) ?? null;
           const perdcompCodigos = snapshotCard?.perdcompCodigos ?? [];
-          
+
           const resp: any = {
             ok: true,
             fonte: 'perdecomp_snapshot',
@@ -263,7 +263,7 @@ export async function POST(request: Request) {
             // Include the full card data for rich rendering
             ...snapshotCard,
           };
-          
+
           if (debugMode) {
             resp.debug = {
               requestedAt,
@@ -275,17 +275,17 @@ export async function POST(request: Request) {
               total_perdcomp: totalPerdcomp,
             };
           }
-          
+
           return NextResponse.json(resp);
         }
       } catch (error) {
-        console.warn('SNAPSHOT_READ_FAIL', { 
-          clienteId, 
-          error: error instanceof Error ? error.message : String(error) 
+        console.warn('SNAPSHOT_READ_FAIL', {
+          clienteId,
+          error: error instanceof Error ? error.message : String(error)
         });
         // Fall through to API call if snapshot read fails
       }
-      
+
       // Fallback: check old PERDECOMP sheet for backward compatibility
       const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
       if (fallback) {
