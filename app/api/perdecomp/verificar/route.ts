@@ -1,46 +1,77 @@
-import { NextResponse } from 'next/server';
-import { getSheetData } from '@/lib/googleSheets';
+import { NextRequest, NextResponse } from 'next/server';
+import { readSheet } from '@/lib/googleSheets';
 import { SHEETS } from '@/lib/sheets-mapping';
-import { padCNPJ14 } from '@/utils/cnpj';
+import type { PerdcompFactsRow } from '@/types/perdecomp';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const cnpj = searchParams.get('cnpj')?.trim();
+function parseDate(value?: string | null): number {
+  if (!value) return 0;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return 0;
+  return d.getTime();
+}
 
-  if (!cnpj) {
-    return NextResponse.json({ message: 'Query parameter "cnpj" is required' }, { status: 400 });
-  }
-
-  const cleanCnpj = padCNPJ14(cnpj);
-
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
-    const { rows } = await getSheetData(SHEETS.PERDECOMP);
+    const { searchParams } = new URL(req.url);
+    const cnpj = searchParams.get('cnpj');
+    const perdcompId = searchParams.get('perdcomp_id');
 
-    const dataForCnpj = rows.filter(row => {
-      const rowCnpj = padCNPJ14(String(row.cnpj || ''));
-      return rowCnpj === cleanCnpj;
-    });
-
-    if (dataForCnpj.length === 0) {
-      return NextResponse.json({ lastConsultation: null });
+    if (!cnpj && !perdcompId) {
+      return NextResponse.json(
+        { error: 'cnpj or perdcomp_id is required' },
+        { status: 400 },
+      );
     }
 
-    // Find the most recent consultation date
-    const mostRecentConsultation = dataForCnpj.reduce((latest, row) => {
-      const currentDateStr = String(row.data_consulta || '');
-      if (!currentDateStr) return latest;
-      const currentDate = new Date(currentDateStr);
-      if (!latest || currentDate > new Date(latest)) {
-        return currentDateStr;
-      }
-      return latest;
-    }, '' as string | null);
+    const facts = await readSheet<PerdcompFactsRow>(SHEETS.PERDCOMP_FACTS);
 
-    return NextResponse.json({ lastConsultation: mostRecentConsultation });
+    let filtered = facts;
 
-  } catch (error) {
-    console.error('[API /perdecomp/verificar]', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ message: 'Failed to verify consultation', error: errorMessage }, { status: 500 });
+    if (cnpj) {
+      filtered = filtered.filter(
+        (row) => row.cnpj && row.cnpj.replace(/\D/g, '') === cnpj.replace(/\D/g, ''),
+      );
+    }
+
+    if (perdcompId) {
+      filtered = filtered.filter(
+        (row) =>
+          String(row.perdcomp_id ?? '').trim() === String(perdcompId).trim(),
+      );
+    }
+
+    if (filtered.length === 0) {
+      return NextResponse.json(
+        { found: false, record: null },
+        { status: 200 },
+      );
+    }
+
+    // 🚨 PONTO CRÍTICO:
+    // Sempre usar data_consulta como referência de "mais recente"
+    const latest = filtered.reduce<PerdcompFactsRow | null>((acc, row) => {
+      if (!acc) return row;
+
+      const accTime = parseDate(acc.data_consulta);
+      const rowTime = parseDate(row.data_consulta);
+
+      return rowTime > accTime ? row : acc;
+    }, null);
+
+    return NextResponse.json(
+      {
+        found: true,
+        record: latest,
+      },
+      { status: 200 },
+    );
+  } catch (err: any) {
+    return NextResponse.json(
+      {
+        error: 'Failed to verify PERDCOMP record',
+        message: err?.message ?? 'Unknown error',
+      },
+      { status: 500 },
+    );
   }
 }
