@@ -5,6 +5,7 @@
 import {
   SHEET1_COLUMNS,
   LEADS_EXACT_SPOTTER_COLUMNS,
+  LAYOUT_IMPORTACAO_EMPRESAS_COLUMNS,
   PERDECOMP_COLUMNS,
   PERDCOMP_FACTS_COLUMNS,
   PERDECOMP_SNAPSHOT_COLUMNS,
@@ -43,6 +44,11 @@ export type Sheet1Row = CreateRowType<typeof SHEET1_COLUMNS>;
  * Type definition for a row in the 'leads_exact_spotter' tab.
  */
 export type LeadsExactSpotterRow = CreateRowType<typeof LEADS_EXACT_SPOTTER_COLUMNS>;
+
+/**
+ * Type definition for a row in the 'layout_importacao_empresas' tab.
+ */
+export type LayoutImportacaoEmpresasRow = CreateRowType<typeof LAYOUT_IMPORTACAO_EMPRESAS_COLUMNS>;
 
 /**
  * Type definition for a row in the 'perdecomp' tab.

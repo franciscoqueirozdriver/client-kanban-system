@@ -1,14 +1,6 @@
 import { NextResponse } from 'next/server';
-import { appendSheetData, getSheetData } from '../../../../lib/googleSheets';
-
-const SHEET_NAME = 'layout_importacao_empresas';
-
-const HEADERS = [
-  'Cliente_ID', 'Nome da Empresa', 'Site Empresa', 'País Empresa', 'Estado Empresa',
-  'Cidade Empresa', 'Logradouro Empresa', 'Numero Empresa', 'Bairro Empresa',
-  'Complemento Empresa', 'CEP Empresa', 'CNPJ Empresa', 'DDI Empresa',
-  'Telefones Empresa', 'Observação Empresa'
-];
+import { appendRow } from '../../../../lib/googleSheets';
+import { SHEETS, LAYOUT_IMPORTACAO_EMPRESAS_COLUMNS } from '../../../../lib/sheets-mapping';
 
 function generateClienteId() {
   const now = new Date();
@@ -22,18 +14,15 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     // Basic validation
-    if (!body['Nome da Empresa'] || !body['CNPJ Empresa']) {
+    if (!body['nome_da_empresa'] || !body['cnpj_empresa']) {
       return NextResponse.json({ ok: false, message: 'Nome da Empresa e CNPJ são obrigatórios.' }, { status: 400 });
     }
 
     // Generate a new Cliente_ID
     const newId = generateClienteId();
-    const newRowObject = { ...body, Cliente_ID: newId };
+    const newRowObject = { ...body, cliente_id: newId };
 
-    // Ensure the row has all headers in the correct order
-    const rowToAppend = HEADERS.map(header => newRowObject[header] ?? '');
-
-    await appendSheetData(SHEET_NAME, [rowToAppend]);
+    await appendRow(SHEETS.LAYOUT_IMPORTACAO_EMPRESAS, newRowObject);
 
     return NextResponse.json({ ok: true, message: 'Cliente cadastrado com sucesso!', newClient: newRowObject });
   } catch (error) {

@@ -1,8 +1,6 @@
-import { getSheetsClient, getSheetData } from '../../lib/googleSheets';
-
-const SHEET_NAME = 'Sheet1';
-const KEY = 'Cliente_ID';
-const COLOR_COLUMN = 'Cor_Card';
+/* globals process */
+import { getSheetsClient, readSheet } from '../../lib/googleSheets';
+import { SHEETS, SHEET1_COLUMNS } from '../../lib/sheets-mapping';
 
 const clean = (v) => (v ?? '').toString().trim();
 
@@ -21,24 +19,25 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { headers, rows } = await getSheetData(SHEET_NAME);
-    const colorIdx = headers.indexOf(COLOR_COLUMN);
+    const rows = await readSheet(SHEETS.SHEET1);
+    const headers = Object.keys(SHEET1_COLUMNS);
+    const colorIdx = headers.indexOf(SHEET1_COLUMNS.cor_card);
     if (colorIdx === -1) {
-      return res.status(400).json({ error: 'Coluna Cor_Card não encontrada' });
+      return res.status(400).json({ error: 'Coluna cor_card não encontrada' });
     }
 
     const updates = [];
     const antesDepois = [];
 
     for (const row of rows) {
-      const id = clean(row[KEY]);
-      const cor = clean(row[COLOR_COLUMN]);
+      const id = clean(row[SHEET1_COLUMNS.cliente_id]);
+      const cor = clean(row[SHEET1_COLUMNS.cor_card]);
       if (!id || !cor) continue;
       if (cor.toLowerCase() === 'grenn') {
         const linha = row._rowNumber;
         const col = colLetter(colorIdx);
         updates.push({
-          range: `${SHEET_NAME}!${col}${linha}:${col}${linha}`,
+          range: `${SHEETS.SHEET1}!${col}${linha}:${col}${linha}`,
           values: [['green']],
         });
         antesDepois.push({ linha, antes: cor, depois: 'green' });

@@ -1,5 +1,7 @@
-import { findRowIndexById, updateRowByIndex, getSheetData } from '../../lib/googleSheets';
-import { SHEETS } from '../../lib/sheets-mapping';
+import { NextApiRequest, NextApiResponse } from 'next';
+import { readSheet, updateRows } from '@/lib/googleSheets';
+import { SHEETS } from '@/lib/sheets-mapping';
+import { Sheet1Row } from '@/types/sheets';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
 function protectPhoneValue(value) {
@@ -107,14 +109,25 @@ async function groupRows(rows) {
   };
 }
 
-export default async function handler(req, res) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
-      const { rows: dataRows } = await getSheetData(SHEETS.SHEET1);
+      const dataRows = await readSheet<Sheet1Row>(SHEETS.SHEET1);
       const { clients } = await groupRows(dataRows);
 
-      const limitParam = parseInt(req.query.limit, 10);
+      const limitParam = parseInt(req.query.limit as string ?? '', 10);
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
+
+      type KanbanCard = {
+        id: string;
+        client: any;
+      };
+
+      type KanbanColumn = {
+        id: string;
+        title: string;
+        cards: KanbanCard[];
+      };
 
       const columns = [
         'Lead Selecionado',
@@ -125,7 +138,7 @@ export default async function handler(req, res) {
         'Enviado Spotter',
         'Perdido',
       ];
-      const board = columns.map((col) => ({ id: col, title: col, cards: [] }));
+      const board: KanbanColumn[] = columns.map((col) => ({ id: col, title: col, cards: [] }));
 
       clients.slice(0, limit).forEach((client) => {
         const col = board.find((c) => c.id === client.status);
@@ -152,22 +165,22 @@ export default async function handler(req, res) {
           ? 'red'
           : undefined;
 
-      const sheetName = SHEETS.SHEET1;
-      const rowIndex = await findRowIndexById(sheetName, 1, 'cliente_id', id);
-      if (rowIndex < 0) {
+      const rows = await readSheet<Sheet1Row>(SHEETS.SHEET1);
+      const rowToUpdate = rows.find(r => r.cliente_id === id);
+
+      if (!rowToUpdate) {
         return res.status(404).json({ error: 'ID não encontrado' });
       }
 
-      const updates = {};
       if (newStatus !== undefined) {
-        updates.status_kanban = newStatus;
+        rowToUpdate.status_kanban = newStatus;
       }
       if (newColor !== undefined) {
-        updates.cor_card = newColor;
+        rowToUpdate.cor_card = newColor;
       }
-      updates.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
+      rowToUpdate.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
 
-      await updateRowByIndex({ sheetName, rowIndex, updates });
+      await updateRows(SHEETS.SHEET1, [rowToUpdate]);
 
       return res.status(200).json({ status: newStatus, color: newColor });
     } catch (err) {

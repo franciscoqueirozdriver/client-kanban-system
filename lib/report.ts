@@ -1,9 +1,9 @@
-import { updateRow } from './googleSheets';
+import { Sheet1Row } from '@/types/sheets';
 
 /**
  * Normaliza todos os números e protege contra erros do Google Sheets.
  */
-export function normalizePhones(row) {
+export function normalizePhones(row: Sheet1Row): string[] {
   const existing = row.telefone_normalizado || '';
   const rawList = [
     row.pessoa_phone_work,
@@ -29,7 +29,7 @@ export function normalizePhones(row) {
     .map((p) => p.trim())
     .filter(Boolean);
 
-  const normalized = new Set();
+  const normalized = new Set<string>();
 
   for (let num of allNumbers) {
     let original = num;
@@ -77,22 +77,22 @@ export function normalizePhones(row) {
 /**
  * Salva os telefones normalizados protegendo como texto puro.
  */
-export async function saveNormalizedPhones(updateRowFn, rowNum, numbers) {
+export async function saveNormalizedPhones(updateRowFn: (rowNum: number, values: any) => Promise<void>, rowNum: number, numbers: string[]) {
   const safeNumbers = numbers.map((n) => (n.startsWith("'") ? n : `'${n}`));
   const value = safeNumbers.join(';');
   await updateRowFn(rowNum, { telefone_normalizado: value });
 }
 
-export async function buildReport(rows, { savePhones = true } = {}) {
+export async function buildReport(rows: Sheet1Row[], { savePhones = true, updateRowFn }: { savePhones?: boolean, updateRowFn: (rowNum: number, values: any) => Promise<void> }) {
   const filters = {
-    segmento: new Set(),
-    porte: new Set(),
-    uf: new Set(),
-    cidade: new Set(),
+    segmento: new Set<string>(),
+    porte: new Set<string>(),
+    uf: new Set<string>(),
+    cidade: new Set<string>(),
   };
 
-  const map = new Map();
-  const phoneUpdates = [];
+  const map = new Map<string, any>();
+  const phoneUpdates: Promise<void>[] = [];
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -120,10 +120,11 @@ export async function buildReport(rows, { savePhones = true } = {}) {
     if (
       savePhones &&
       normalizedPhones.length > 0 &&
-      !row.telefone_normalizado
+      !row.telefone_normalizado &&
+      updateRowFn
     ) {
       phoneUpdates.push(
-        saveNormalizedPhones(updateRow, row._rowNumber, normalizedPhones).catch((err) => {
+        saveNormalizedPhones(updateRowFn, row._rowNumber, normalizedPhones).catch((err) => {
           console.error('Erro ao salvar telefone normalizado', {
             row: row._rowNumber,
             err,
@@ -154,17 +155,17 @@ export async function buildReport(rows, { savePhones = true } = {}) {
   }
 
   console.log('buildReport:', {
-    linhasProcessadas: data.length,
+    linhasProcessadas: rows.length,
     clientes: map.size,
   });
 
   return { map, filters };
 }
 
-export function mapToRows(map, query = {}, max = Infinity, onlyNew = true) {
-  const result = [];
-  const toMark = new Set();
-  const seen = new Set();
+export function mapToRows(map: Map<string, any>, query: any = {}, max = Infinity, onlyNew = true) {
+  const result: any[] = [];
+  const toMark = new Set<number>();
+  const seen = new Set<string>();
 
   map.forEach((item) => {
     if (query.segmento && item.segment !== query.segmento) return;
@@ -190,7 +191,7 @@ export function mapToRows(map, query = {}, max = Infinity, onlyNew = true) {
         }]
       : item.contacts;
 
-    contatos.forEach((c) => {
+    contatos.forEach((c: any) => {
            if (result.length >= max) return;
       if (onlyNew && c.impresso === 'Em Lista') return;
 
@@ -212,7 +213,7 @@ export function mapToRows(map, query = {}, max = Infinity, onlyNew = true) {
         normalizedPhones: c.normalizedPhones || [],
       });
 
-      item.rows.forEach((r) => toMark.add(r));
+      item.rows.forEach((r: number) => toMark.add(r));
     });
   });
 
@@ -224,7 +225,7 @@ export function mapToRows(map, query = {}, max = Infinity, onlyNew = true) {
   return { rows: result, toMark };
 }
 
-export async function markPrintedRows(updateRowFn, rows) {
+export async function markPrintedRows(updateRowFn: (rowNum: number, values: any) => Promise<void>, rows: number[]) {
   await Promise.all(
     Array.from(rows).map((rowNum) =>
       updateRowFn(rowNum, { impresso_lista: 'Em Lista' })
