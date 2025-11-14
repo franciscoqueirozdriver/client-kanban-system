@@ -5,7 +5,8 @@ import {
   getSheetData,
   getSheetsClient,
   withRetry,
-} from './googleSheets.js';
+} from './googleSheets';
+import { SHEETS } from './sheets-mapping';
 import { formatPerdcompNumero } from '@/utils/perdcomp';
 import {
   parsePerdcomp as parsePerdcompCodigo,
@@ -15,8 +16,14 @@ import {
 } from '@/lib/perdcomp';
 import { normalizePerdecompLegacyKeys } from '@/lib/sheets/perdecompMapping';
 
-export const SHEET_SNAPSHOT = 'perdecomp_snapshot';
-export const SHEET_FACTS = 'perdecomp_facts';
+/**
+ * @deprecated Use SHEETS.PERDECOMP_SNAPSHOT instead.
+ */
+export const SHEET_SNAPSHOT = SHEETS.PERDECOMP_SNAPSHOT;
+/**
+ * @deprecated Use SHEETS.PERDCOMP_FACTS instead.
+ */
+export const SHEET_FACTS = SHEETS.PERDCOMP_FACTS;
 
 const FACTS_COLUMNS = [
   'cliente_id',

@@ -1,13 +1,14 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable no-console */
 
-import { chunk, getSheetData, getSheetsClient, withRetry } from '@/lib/googleSheets.js';
+import { chunk, getSheetData, getSheetsClient, withRetry } from '@/lib/googleSheets';
+import { SHEETS } from '@/lib/sheets-mapping';
 import {
   derivePorCreditoFromFacts,
   deriveRiskFromFacts,
-  SHEET_FACTS,
-  SHEET_SNAPSHOT,
 } from '@/lib/perdecomp-persist';
+
+const { PERDECOMP_SNAPSHOT: SHEET_SNAPSHOT, PERDCOMP_FACTS: SHEET_FACTS } = SHEETS;
 
 const RISCO_NIVEL_HEADER = 'Risco_Nivel';
 const RISCO_TAGS_HEADER = 'Risco_Tags_JSON';
@@ -65,7 +66,7 @@ async function run() {
   const snapshotData = await getSheetData(SHEET_SNAPSHOT);
   const factsData = await getSheetData(SHEET_FACTS);
 
-  const clienteIdx = snapshotData.headers.indexOf('Cliente_ID');
+  const clienteIdx = snapshotData.headers.indexOf('cliente_id');
   const riscoIdx = snapshotData.headers.indexOf(RISCO_NIVEL_HEADER);
   const riscoTagsIdx = snapshotData.headers.indexOf(RISCO_TAGS_HEADER);
   const porCreditoIdx = snapshotData.headers.indexOf(POR_CREDITO_HEADER);
@@ -77,7 +78,7 @@ async function run() {
   const factsByCliente = new Map<string, Record<string, string>[]>();
   for (const fact of factsData.rows ?? []) {
     const normalized = normalizeRow(fact);
-    const clienteId = normalized.Cliente_ID;
+    const clienteId = normalized.cliente_id;
     if (!clienteId) continue;
     const bucket = factsByCliente.get(clienteId) ?? [];
     bucket.push(normalized);
@@ -88,7 +89,7 @@ async function run() {
   const updates: Array<{ range: string; values: string[][] }> = [];
 
   for (const row of snapshotData.rows ?? []) {
-    const clienteId = toStringValue(row.Cliente_ID);
+    const clienteId = toStringValue(row.cliente_id);
     if (!clienteId) continue;
     const riskNivel = toStringValue(row[RISCO_NIVEL_HEADER]);
     const riskTagsRaw = toStringValue(row[RISCO_TAGS_HEADER]);

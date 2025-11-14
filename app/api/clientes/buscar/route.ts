@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets.js';
+import { getSheetData } from '@/lib/googleSheets';
+import { SHEETS } from '@/lib/sheets-mapping';
 import { padCNPJ14, onlyDigits } from '@/utils/cnpj';
-
-const SHEET_NAME = 'Leads Exact Spotter';
 const RESULT_LIMIT = 20;
 
 // Normalizer function as specified
@@ -10,9 +9,9 @@ const norm = (s: string) =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g,' ').trim();
 
 interface ScoredCompany {
-    Cliente_ID: string;
-    Nome_da_Empresa: string;
-    CNPJ_Empresa: string;
+    cliente_id: string;
+    nome_da_empresa: string;
+    cnpj_empresa: string;
     score: number;
     nomeLength: number;
 }
@@ -27,11 +26,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { rows } = await getSheetData(SHEET_NAME);
+    const { rows } = await getSheetData(SHEETS.LEADS_EXACT_SPOTTER);
 
     const scoredResults = rows.map(row => {
-      const nomeRaw = row['Nome da Empresa'] || row['Nome do Lead'] || '';
-      const cnpjRaw = row['CPF/CNPJ'] || '';
+      const nomeRaw = String(row.nome_da_empresa || row.nome_do_lead || '');
+      const cnpjRaw = String(row.cpf_cnpj || '');
 
       const nome = norm(nomeRaw);
       const cnpj = onlyDigits(cnpjRaw);
@@ -59,9 +58,9 @@ export async function GET(request: Request) {
       }
 
       return {
-        Cliente_ID: row['Cliente_ID'],
-        Nome_da_Empresa: nomeRaw,
-        CNPJ_Empresa: padCNPJ14(cnpjRaw),
+        cliente_id: row.cliente_id,
+        nome_da_empresa: nomeRaw,
+        cnpj_empresa: padCNPJ14(cnpjRaw),
         score,
         nomeLength: nomeRaw.length,
       };
@@ -70,7 +69,7 @@ export async function GET(request: Request) {
     // Deduplicate results, keeping the one with the highest score
     const deduplicated: ScoredCompany[] = Array.from(
       (scoredResults as ScoredCompany[]).reduce((map, item) => {
-        const key = item.CNPJ_Empresa || item.Nome_da_Empresa; // Use CNPJ or Name as key
+        const key = item.cnpj_empresa || item.nome_da_empresa; // Use CNPJ or Name as key
         if (!map.has(key) || item.score > map.get(key)!.score) {
           map.set(key, item);
         }
@@ -86,14 +85,14 @@ export async function GET(request: Request) {
       if (a.nomeLength !== b.nomeLength) {
         return a.nomeLength - b.nomeLength;
       }
-      return a.Nome_da_Empresa.localeCompare(b.Nome_da_Empresa);
+      return a.nome_da_empresa.localeCompare(b.nome_da_empresa);
     });
 
     // Limit and map to final structure
     const finalResults = deduplicated.slice(0, RESULT_LIMIT).map(item => ({
-      Cliente_ID: item.Cliente_ID,
-      Nome_da_Empresa: item.Nome_da_Empresa,
-      CNPJ_Empresa: item.CNPJ_Empresa,
+      cliente_id: item.cliente_id,
+      nome_da_empresa: item.nome_da_empresa,
+      cnpj_empresa: item.cnpj_empresa,
     }));
 
     return NextResponse.json(finalResults);

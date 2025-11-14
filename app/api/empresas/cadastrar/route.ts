@@ -4,8 +4,8 @@ import {
   findByCnpj,
   findByName,
   appendToSheets,
-  updateInSheets, // Import the new update function
-} from '../../../../lib/googleSheets';
+  updateInSheets,
+} from '@/lib/googleSheets';
 
 // --- Helper Functions ---
 
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     }
 
     const existingByName = await findByName(Empresa.Nome_da_Empresa);
-    if (existingByName && !normalizeCnpj(existingByName['CNPJ Empresa'])) {
+    if (existingByName && !normalizeCnpj(String(existingByName['CNPJ Empresa'] || ''))) {
        return NextResponse.json(
         {
             message: 'Encontramos uma empresa com este nome mas sem CNPJ. Deseja enriquecer o cadastro existente?',

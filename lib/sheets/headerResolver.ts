@@ -1,4 +1,5 @@
 import { getSheetData } from "@/lib/googleSheets";
+import { SheetName } from "../sheets-mapping";
 
 export function normalizeHeader(s: string): string {
   return s
@@ -88,7 +89,7 @@ export type ColumnResolver = (logical: string) => string;
  * @returns Função de resolução de coluna
  */
 export async function buildColumnResolver(
-  sheetName: string
+  sheetName: SheetName
 ): Promise<ColumnResolver> {
   const { headers } = await getSheetData(sheetName, 'A1:ZZ1');
   const realHeaders = headers || [];

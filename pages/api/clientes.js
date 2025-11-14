@@ -1,6 +1,5 @@
-import { getSheetCached, appendRow, updateRow, getSheetData } from '../../lib/googleSheets';
-import { buildColumnResolver } from '../../lib/sheets/headerResolver';
-import { normalizePhones } from '../../lib/report';
+import { appendRow, updateRow, getSheetData } from '../../lib/googleSheets';
+import { SHEETS } from '../../lib/sheets-mapping';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
 function protectPhoneValue(value) {
@@ -12,47 +11,27 @@ function protectPhoneValue(value) {
   return str;
 }
 
-// ✅ Junta os 3 tipos de e-mail e remove duplicados
-function collectEmails(row, idx) {
+function collectEmails(row) {
   const emails = [
-    row[idx.emailWork] || '',
-    row[idx.emailHome] || '',
-    row[idx.emailOther] || '',
+    row.pessoa_email_work || '',
+    row.pessoa_email_home || '',
+    row.pessoa_email_other || '',
   ].map(e => e.trim()).filter(Boolean);
 
   return Array.from(new Set(emails)).join(';');
 }
 
-async function groupRows(rows) {
-  const [header, ...data] = rows;
-  const SHEET = 'Sheet1';
-  const COL = await buildColumnResolver(SHEET);
-  const idx = {
-    clienteId: header.indexOf(COL('Cliente_ID')),
-    org: header.indexOf(COL('Organização - Nome')),
-    titulo: header.indexOf(COL('Negócio - Título')),
-    contato: header.indexOf(COL('Negócio - Pessoa de contato')),
-    cargo: header.indexOf(COL('Pessoa - Cargo')),
-    emailWork: header.indexOf(COL('Pessoa - Email - Work')),
-    emailHome: header.indexOf(COL('Pessoa - Email - Home')),
-    emailOther: header.indexOf(COL('Pessoa - Email - Other')),
-    phoneWork: header.indexOf(COL('Pessoa - Phone - Work')),
-    phoneHome: header.indexOf(COL('Pessoa - Phone - Home')),
-    phoneMobile: header.indexOf(COL('Pessoa - Phone - Mobile')),
-    phoneOther: header.indexOf(COL('Pessoa - Phone - Other')),
-    tel: header.indexOf(COL('Pessoa - Telefone')),
-    cel: header.indexOf(COL('Pessoa - Celular')),
-    normalizado: header.indexOf(COL('Telefone Normalizado')),
-    segmento: header.indexOf(COL('Organização - Segmento')),
-    tamanho: header.indexOf(COL('Organização - Tamanho da empresa')),
-    uf: header.indexOf(COL('uf')),
-    cidade: header.indexOf(COL('cidade_estimada')),
-    status: header.indexOf(COL('Status_Kanban')),
-    data: header.indexOf(COL('Data_Ultima_Movimentacao')),
-    linkedin: header.indexOf(COL('Pessoa - End. Linkedin')),
-    cor: header.indexOf(COL('Cor_Card')),
-  };
+function normalizePhones(row) {
+    const phones = new Set();
+    if (row.telefone_normalizado) {
+        row.telefone_normalizado.split(';').forEach(p => phones.add(p.trim()));
+    }
+    // Adicionar outros campos de telefone se necessário
+    return Array.from(phones).filter(Boolean);
+}
 
+
+async function groupRows(rows) {
   const filters = {
     segmento: new Set(),
     porte: new Set(),
@@ -62,16 +41,18 @@ async function groupRows(rows) {
 
   const clientesMap = new Map();
 
-  data.forEach((row) => {
-    const clienteId = row[idx.clienteId] || '';
-    const company = row[idx.org] || '';
-    const segment = row[idx.segmento] || '';
-    const size = row[idx.tamanho] || '';
-    const uf = row[idx.uf] || '';
-    const city = row[idx.cidade] || '';
-    const status = row[idx.status] || '';
-    const dataMov = row[idx.data] || '';
-    const color = row[idx.cor] || '';
+  rows.forEach((row) => {
+    const clienteId = row.cliente_id || '';
+    if (!clienteId) return;
+
+    const company = row.organizacao_nome || row.negocio_organizacao || '';
+    const segment = row.organizacao_segmento || '';
+    const size = row.organizacao_tamanho_da_empresa || '';
+    const uf = row.uf || '';
+    const city = row.cidade_estimada || '';
+    const status = row.status_kanban || '';
+    const dataMov = row.data_ultima_movimentacao || '';
+    const color = row.cor_card || '';
 
     filters.segmento.add(segment);
     filters.porte.add(size);
@@ -79,16 +60,16 @@ async function groupRows(rows) {
     filters.cidade.add(city);
 
     const contact = {
-      name: (row[idx.contato] || '').trim(),
-      role: (row[idx.cargo] || '').trim(),
-      email: collectEmails(row, idx),
-      phone: protectPhoneValue(row[idx.tel]),
-      mobile: protectPhoneValue(row[idx.cel]),
-      normalizedPhones: normalizePhones(row, idx).map(protectPhoneValue),
-      linkedin: (row[idx.linkedin] || '').trim(),
+      name: (row.negocio_pessoa_de_contato || '').trim(),
+      role: (row.pessoa_cargo || '').trim(),
+      email: collectEmails(row),
+      phone: protectPhoneValue(row.pessoa_telefone),
+      mobile: protectPhoneValue(row.pessoa_celular),
+      normalizedPhones: normalizePhones(row).map(protectPhoneValue),
+      linkedin: (row.pessoa_end_linkedin || '').trim(),
     };
 
-    const opportunity = row[idx.titulo] || '';
+    const opportunity = row.negocio_titulo || '';
 
     if (clientesMap.has(clienteId)) {
       const existing = clientesMap.get(clienteId);
@@ -136,10 +117,8 @@ async function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const { headers, rows: dataRows } = await getSheetData('sheet1');
-      // const rows = sheet.data.values || []; // getSheetData already returns rows as an array of objects/arrays
-      const rawRows = [headers, ...dataRows.map(row => headers.map(header => row[header]))]; // Reconstroi o array de arrays para groupRows
-      const { clients, filters } = await groupRows(rawRows);
+      const { rows: dataRows } = await getSheetData(SHEETS.SHEET1);
+      const { clients, filters } = await groupRows(dataRows);
 
       const limitParam = parseInt(req.query.limit, 10);
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;

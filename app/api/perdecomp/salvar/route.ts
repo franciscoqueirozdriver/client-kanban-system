@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { appendSheetData } from '../../../../lib/googleSheets.js';
-
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
+import { appendSheetData } from '@/lib/googleSheets';
+import { SHEETS } from '@/lib/sheets-mapping';
 
 const PERDECOMP_HEADERS = [
   'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
@@ -35,7 +34,7 @@ export async function POST(request: Request) {
     });
 
     // The appendSheetData function expects an array of arrays.
-    await appendSheetData(PERDECOMP_SHEET_NAME, rowsToAppend);
+    await appendSheetData(SHEETS.PERDECOMP, rowsToAppend);
 
     return NextResponse.json({ ok: true, inseridos: rowsToAppend.length });
   } catch (error) {

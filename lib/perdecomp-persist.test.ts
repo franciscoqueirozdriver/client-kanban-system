@@ -17,14 +17,14 @@ const normalizeISO = (value?: string) => {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString();
 };
 
-jest.mock('./googleSheets.js', () => ({
+jest.mock('./googleSheets', () => ({
   getSheetData: jest.fn(),
   getSheetsClient: jest.fn(),
   withRetry: jest.fn((fn: any) => fn()),
   chunk: jest.fn((rows: any[]) => [rows]),
 }));
 
-const { getSheetData, getSheetsClient, withRetry, chunk } = jest.requireMock('./googleSheets.js');
+const { getSheetData, getSheetsClient, withRetry, chunk } = jest.requireMock('./googleSheets');
 
 describe('perdecomp-persist', () => {
   const appendMock = jest.fn();
@@ -236,10 +236,10 @@ describe('perdecomp-persist', () => {
     const snapshotRows = [...snapshotData.rows];
 
     getSheetData.mockImplementation((sheetName: string, range?: string) => {
-      if (sheetName === 'perdecomp_snapshot') {
+      if (sheetName === persistModule.SHEET_SNAPSHOT) {
         return Promise.resolve({ headers: snapshotHeaders, rows: snapshotRows });
       }
-      if (sheetName === 'perdecomp_facts') {
+      if (sheetName === persistModule.SHEET_FACTS) {
         if (range === 'A1:ZZ1') {
           return Promise.resolve({ headers: factsHeaders, rows: [] });
         }
@@ -259,7 +259,7 @@ describe('perdecomp-persist', () => {
     });
 
     appendMock.mockImplementation((request) => {
-      if (request.range === 'perdecomp_snapshot') {
+      if (request.range === persistModule.SHEET_SNAPSHOT) {
         const values = request.requestBody.values[0];
         const newRow: any = { _rowNumber: snapshotRows.length + 2 };
         snapshotHeaders.forEach((header, index) => {
@@ -324,12 +324,12 @@ describe('perdecomp-persist', () => {
 
     expect(appendMock).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ range: 'perdecomp_facts' }),
+      expect.objectContaining({ range: persistModule.SHEET_FACTS }),
     );
 
     expect(appendMock).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ range: 'perdecomp_snapshot' }),
+      expect.objectContaining({ range: persistModule.SHEET_SNAPSHOT }),
     );
 
     const snapshotAppendCall = appendMock.mock.calls[0][0];
@@ -467,7 +467,7 @@ describe('perdecomp-persist', () => {
 
   it('loads snapshot card by concatenating shards', async () => {
     getSheetData.mockImplementation((sheetName: string) => {
-      if (sheetName === 'perdecomp_snapshot') {
+      if (sheetName === persistModule.SHEET_SNAPSHOT) {
         return Promise.resolve({
           headers: ['cliente_id', 'resumo_ultima_consulta_json_p1', 'resumo_ultima_consulta_json_p2'],
           rows: [
@@ -479,7 +479,7 @@ describe('perdecomp-persist', () => {
           ],
         });
       }
-      if (sheetName === 'perdecomp_facts') {
+      if (sheetName === persistModule.SHEET_FACTS) {
         return Promise.resolve({ headers: ['cliente_id'], rows: [] });
       }
       throw new Error(`Unexpected sheet request: ${sheetName}`);
