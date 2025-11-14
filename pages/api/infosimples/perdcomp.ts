@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { randomUUID } from 'crypto';
 import { padCNPJ14 } from '@/utils/cnpj';
 import { agregaPerdcomp } from '@/utils/perdcomp';
-import { savePerdecompResults } from '@/lib/perdecomp-persist';
+import { savePerdecompResults, loadSnapshotCard } from '@/lib/perdecomp-persist';
 
 type RetryableFn<T> = () => Promise<T>;
 
@@ -73,9 +73,19 @@ export default async function handler(
   }
 
   try {
-    const { cnpj: rawCnpj, data_inicio, data_fim, force, debug, Cliente_ID, nomeEmpresa } = req.body ?? {};
+    const { cnpj: rawCnpj, data_inicio, data_fim, force, debug: debugMode, Cliente_ID, nomeEmpresa } = req.body ?? {};
     const cnpj = padCNPJ14(rawCnpj);
     const consultaId = randomUUID();
+
+    if (!force) {
+        const snapshotCard = await loadSnapshotCard({ clienteId: Cliente_ID });
+        if (snapshotCard) {
+            return res.status(200).json({
+                ok: true,
+                fallback: snapshotCard,
+            });
+        }
+    }
 
     const apiToken = process.env.INFOSIMPLES_TOKEN;
     if (!apiToken) {
@@ -118,6 +128,21 @@ export default async function handler(
 
       return body;
     });
+
+    if (apiResponse.code === 612) {
+        return res.status(200).json({
+            ok: true,
+            fallback: {
+              quantidade: 0,
+              dcomp: 0,
+              rest: 0,
+              ressarc: 0,
+              canc: 0,
+              requested_at: new Date().toISOString(),
+              site_receipt: null,
+            },
+          });
+    }
 
     const perdcompRaw = apiResponse?.data?.[0]?.perdcomp ?? [];
     const perdcompArray = Array.isArray(perdcompRaw) ? perdcompRaw : [];
@@ -171,7 +196,37 @@ export default async function handler(
         });
     }
 
-    return res.status(200).json(card);
+    const linhas = [
+        {
+          URL_Comprovante_HTML: card.site_receipt,
+          Data_Consulta: card.header.requested_at,
+        },
+      ];
+
+      const responseBody: any = {
+        ok: true,
+        header: {
+          requested_at: card.header.requested_at,
+          cnpj: cnpj,
+        },
+        mappedCount: card.perdcompCodigos?.length ?? 0,
+        total_perdcomp: resumo.total,
+        site_receipt: card.site_receipt,
+        perdcompResumo: resumo,
+        perdcompCodigos: card.perdcompCodigos,
+        linhas,
+      };
+
+      if (debugMode) {
+        responseBody.debug = {
+          apiResponse,
+          resumo,
+          card,
+          meta,
+        };
+      }
+
+      return res.status(200).json(responseBody);
 
   } catch (err: any) {
     const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 600 ? err.status : 502;
