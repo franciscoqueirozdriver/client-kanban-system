@@ -13,7 +13,7 @@ export const SHEETS = {
   LEADS_EXACT_SPOTTER: 'leads_exact_spotter',
   PERDECOMP: 'perdecomp',
   PERDCOMP_ITENS: 'perdcomp_itens',
-  PERDCOMP_FACTS: 'perdcomp_facts',
+  PERDCOMP_FACTS: 'perdecomp_facts',
   PERDECOMP_SNAPSHOT: 'perdecomp_snapshot',
   PADROES: 'padroes',
   HISTORICO_INTERACOES: 'historico_interacoes',

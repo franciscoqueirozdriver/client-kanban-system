@@ -537,7 +537,7 @@ function mapSnapshotRow(
   return {
     cliente_id: ctx.clienteId,
     empresa_id: toStringValue(ctx.empresaId ?? ''),
-    nome_da_empresa: ctx.nomeEmpresa ?? '',
+    nome_da_empresa: ctx.nomeEmpresa || (facts && facts[0]?.nome_da_empresa) || '',
     cnpj: onlyDigits(ctx.cnpj),
 
     qtd_total: String(resumo?.total ?? facts.length ?? 0),
