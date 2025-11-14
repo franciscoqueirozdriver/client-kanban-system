@@ -614,3 +614,68 @@ export async function updateInSheets(rawPayload: any, cliente_id: string): Promi
         );
     }
 }
+
+
+// --- Legacy Functions for Backward Compatibility ---
+
+/** @deprecated */
+async function _getRawSheet(sheetName: SheetName = SHEETS.SHEET1) {
+    const sheets = await getSheetsClient();
+    return withRetry(() =>
+        sheets.spreadsheets.values.get({
+            spreadsheetId: process.env.SPREADSHEET_ID,
+            range: sheetName,
+        })
+    );
+}
+
+/** @deprecated Use `readSheet` instead. */
+export async function getSheet(sheetName: SheetName = SHEETS.SHEET1) {
+    return _getRawSheet(sheetName);
+}
+
+/** @deprecated Use `readSheet` instead. */
+export async function getSheetCached(sheetName: SheetName = SHEETS.SHEET1) {
+    const key = `sheet_raw:${sheetName}`;
+    const cached = readCache.get(key);
+    if (cached && (Date.now() - cached.time < 10000)) {
+        return cached.data;
+    }
+    const data = await _getRawSheet(sheetName);
+    readCache.set(key, { time: Date.now(), data: data as any });
+    return data;
+}
+
+/** @deprecated Use `readSheet(SHEETS.HISTORICO_INTERACOES)` instead. */
+export async function getHistorySheetCached() {
+    return getSheetCached(SHEETS.HISTORICO_INTERACOES);
+}
+
+/** @deprecated Use `updateRowByIndex` instead. */
+export async function updateRow(rowNumber: number, data: Record<string, any>) {
+    const sheets = await getSheetsClient();
+    const { headers } = await getSheetData(SHEETS.SHEET1);
+    const headerMap: Record<string, number> = {};
+    headers.forEach((h, i) => (headerMap[h] = i));
+
+    const updates: any[] = [];
+    for (const key in data) {
+        const colIndex = headerMap[key];
+        if (colIndex !== undefined) {
+            const colLetter = columnNumberToLetter(colIndex + 1);
+            const range = `Sheet1!${colLetter}${rowNumber}`;
+            updates.push({ range, values: [[data[key]]] });
+        }
+    }
+    if (updates.length) {
+        await withRetry(() =>
+            sheets.spreadsheets.values.batchUpdate({
+                spreadsheetId: process.env.SPREADSHEET_ID,
+                requestBody: {
+                    valueInputOption: 'USER_ENTERED',
+                    data: updates as any,
+                },
+            })
+        );
+    }
+}
