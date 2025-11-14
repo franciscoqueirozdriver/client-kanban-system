@@ -1,5 +1,7 @@
-import { appendRow, updateRow, getSheetData } from '../../lib/googleSheets';
-import { SHEETS } from '../../lib/sheets-mapping';
+import { NextApiRequest, NextApiResponse } from 'next';
+import { appendRow, readSheet, updateRows } from '@/lib/googleSheets';
+import { SHEETS } from '@/lib/sheets-mapping';
+import { Sheet1Row } from '@/types/sheets';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
 function protectPhoneValue(value) {
@@ -114,13 +116,13 @@ async function groupRows(rows) {
   };
 }
 
-export default async function handler(req, res) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
-      const { rows: dataRows } = await getSheetData(SHEETS.SHEET1);
+      const dataRows = await readSheet<Sheet1Row>(SHEETS.SHEET1);
       const { clients, filters } = await groupRows(dataRows);
 
-      const limitParam = parseInt(req.query.limit, 10);
+      const limitParam = parseInt(req.query.limit as string ?? '', 10);
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : clients.length;
 
       if (req.query.countOnly === '1') {
@@ -148,9 +150,14 @@ export default async function handler(req, res) {
       if (values?.cel) values.cel = protectPhoneValue(values.cel);
 
       if (row) {
-        await updateRow(row, values);
+        const rows = await readSheet<Sheet1Row>(SHEETS.SHEET1);
+        const rowToUpdate = rows.find(r => r._rowNumber === row);
+        if (rowToUpdate) {
+          const updatedRow = { ...rowToUpdate, ...values };
+          await updateRows(SHEETS.SHEET1, [updatedRow]);
+        }
       } else {
-        await appendRow(values);
+        await appendRow(SHEETS.SHEET1, values);
       }
       return res.status(200).json({ ok: true });
     } catch (err) {

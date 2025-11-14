@@ -1,9 +1,11 @@
 /** @jest-environment node */
 import handler from './clientes';
-import { getSheetData } from '../../lib/googleSheets';
+import { readSheet, updateRows, appendRow } from '../../lib/googleSheets';
 
 jest.mock('../../lib/googleSheets', () => ({
-  getSheetData: jest.fn()
+  readSheet: jest.fn(),
+  updateRows: jest.fn(),
+  appendRow: jest.fn(),
 }));
 
 describe('GET /api/clientes', () => {
@@ -45,7 +47,7 @@ describe('GET /api/clientes', () => {
 
   it('returns all clients when limit not provided', async () => {
     const rows = makeRows(1205);
-    getSheetData.mockResolvedValue({ headers: header, rows });
+    readSheet.mockResolvedValue(rows);
 
     const req = { method: 'GET', query: {} };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -58,7 +60,7 @@ describe('GET /api/clientes', () => {
 
   it('respects explicit limit', async () => {
     const rows = makeRows(50);
-    getSheetData.mockResolvedValue({ headers: header, rows });
+    readSheet.mockResolvedValue(rows);
 
     const req = { method: 'GET', query: { limit: '10' } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -70,7 +72,7 @@ describe('GET /api/clientes', () => {
 
   it('returns count when countOnly=1', async () => {
     const rows = makeRows(30);
-    getSheetData.mockResolvedValue({ headers: header, rows });
+    readSheet.mockResolvedValue(rows);
 
     const req = { method: 'GET', query: { countOnly: '1' } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { _findRowNumberBycliente_id, getSheetData, updateRowByIndex } from '@/lib/googleSheets';
+import { _findRowNumberBycliente_id, readSheet, updateRowByIndex } from '@/lib/googleSheets';
 import { SHEETS as AppSHEETS, SheetName } from '@/lib/sheets-mapping';
+import { BaseRow } from '@/types/sheets';
 import { onlyDigits } from '@/utils/cnpj-matriz';
 
 export const runtime = 'nodejs';
@@ -34,20 +35,21 @@ export async function POST(req: Request) {
     const updateSheet = async (sheetName: SheetName) => {
       const rowIndex = await _findRowNumberBycliente_id(sheetName, clienteId);
       if (rowIndex === -1) {
-        return { sheetName, updated: 0, reason: 'Cliente_ID não encontrado' };
+        return { sheetName, updated: 0, reason: 'cliente_id não encontrado' };
       }
 
-      const { headers } = await getSheetData(sheetName);
+      const rows = await readSheet<BaseRow>(sheetName);
+      const headers = Object.keys(rows[0] || {});
       const updates: Record<string, any> = {};
 
-      if (headers.includes('CNPJ_Empresa')) updates.CNPJ_Empresa = cnpjNum;
-      if (headers.includes('CNPJ_Normalizado')) updates.CNPJ_Normalizado = cnpjNum;
-      if (headers.includes('CNPJ_Matriz')) {
-        updates.CNPJ_Matriz = `${cnpjNum.slice(0, 8)}0001${cnpjNum.slice(-2)}`;
+      if (headers.includes('cnpj_empresa')) updates.cnpj_empresa = cnpjNum;
+      if (headers.includes('cnpj_normalizado')) updates.cnpj_normalizado = cnpjNum;
+      if (headers.includes('cnpj_matriz')) {
+        updates.cnpj_matriz = `${cnpjNum.slice(0, 8)}0001${cnpjNum.slice(-2)}`;
       }
-      if (headers.includes('CNPJ_Raiz')) updates.CNPJ_Raiz = cnpjNum.slice(0, 8);
-      if (headers.includes('Is_Matriz')) {
-        updates.Is_Matriz = cnpjNum.slice(8, 12) === '0001' ? 'TRUE' : 'FALSE';
+      if (headers.includes('cnpj_raiz')) updates.cnpj_raiz = cnpjNum.slice(0, 8);
+      if (headers.includes('is_matriz')) {
+        updates.is_matriz = cnpjNum.slice(8, 12) === '0001' ? 'TRUE' : 'FALSE';
       }
 
       if (Object.keys(updates).length === 0) {

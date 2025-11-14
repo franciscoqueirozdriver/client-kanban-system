@@ -248,8 +248,30 @@ export async function appendRow<T extends object>(
  * @returns A promise that resolves when the operation is complete.
  */
 export async function updateRows<T extends BaseRow>(sheetName: SheetName, rows: T[]): Promise<void> {
-  console.warn(`[updateRows] Function not implemented for Module 0. Called for ${sheetName} with ${rows.length} rows.`);
-  return Promise.resolve();
+  if (!rows.length) return;
+
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+  if (!spreadsheetId) throw new Error('SPREADSHEET_ID is not set');
+
+  const sheets = await getSheetsClient();
+  const { headers } = await getSheetData<T>(sheetName, 'A1:ZZ1');
+  if (!headers.length) throw new Error(`Sheet ${sheetName} not found or is empty.`);
+
+  const data: sheets_v4.Schema$ValueRange[] = rows.map(row => {
+    const values = headers.map(header => (row as any)[header] ?? '');
+    const range = `${sheetName}!A${row._rowNumber}:${columnNumberToLetter(headers.length)}${row._rowNumber}`;
+    return { range, values: [values] };
+  });
+
+  const batches = chunk(data, 100); // Process in batches of 100 to avoid API limits
+  for (const batch of batches) {
+    await withRetry(() =>
+      sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: { valueInputOption: 'USER_ENTERED', data: batch },
+      })
+    );
+  }
 }
 
 

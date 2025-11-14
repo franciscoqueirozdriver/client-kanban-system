@@ -1,10 +1,9 @@
-import { getSheetsClient, getSheetData, withRetry, chunk } from '../../lib/googleSheets';
+import { NextApiRequest, NextApiResponse } from 'next';
+import { getSheetsClient, readSheet, getSheetData, withRetry, chunk } from '@/lib/googleSheets';
+import { SHEETS, LEADS_EXACT_SPOTTER_COLUMNS } from '@/lib/sheets-mapping';
+import { Sheet1Row, LeadsExactSpotterRow, LayoutImportacaoEmpresasRow } from '@/types/sheets';
 
-const SHEET_LAYOUT = 'layout_importacao_empresas';
-const SHEET_SHEET1 = 'Sheet1';
-const SHEET_PADROES = 'Padroes';
-const SHEET_DEST = 'Leads Exact Spotter';
-const KEY = 'Cliente_ID'; // chave única padronizada
+const KEY = 'cliente_id'; // chave única padronizada
 
 // Utils
 const clean = (v) => (v ?? '').toString().trim();
@@ -54,9 +53,9 @@ function normalizeUF(uf) {
 }
 function splitPhones(str) {
   if (!str) return [];
-  return [...new Set(
+  return Array.from(new Set(
     str.split(';').map(s => clean(s)).filter(Boolean)
-  )];
+  ));
 }
 function joinPhones(arr) {
   return (arr && arr.length) ? arr.join(';') : '';
@@ -74,30 +73,29 @@ function colLetter(n) {
   return s;
 }
 
-export default async function handler(req, res) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
     // 1) Ler abas com helpers do lib
-    const [{ rows: layout }, { rows: sheet1 }, { rows: padroes }, destRaw] = await Promise.all([
-      getSheetData(SHEET_LAYOUT),
-      getSheetData(SHEET_SHEET1),
-      getSheetData(SHEET_PADROES),
-      getSheetData(SHEET_DEST),
+    const [layout, sheet1, padroes, destRows] = await Promise.all([
+      readSheet<LayoutImportacaoEmpresasRow>(SHEETS.LAYOUT_IMPORTACAO_EMPRESAS),
+      readSheet<Sheet1Row>(SHEETS.SHEET1),
+      readSheet(SHEETS.PADROES), // Assuming no specific type for Padroes
+      readSheet<LeadsExactSpotterRow>(SHEETS.LEADS_EXACT_SPOTTER),
     ]);
-
-    const { headers: destHeadersRaw, rows: destRows } = destRaw;
+    const destHeadersRaw = Object.keys(LEADS_EXACT_SPOTTER_COLUMNS);
 
     // 2) Listas válidas de Produtos e Mercados
     const produtosValidos = padroes.map(r => clean(r['Produtos'])).filter(Boolean);
     const mercadosValidos = padroes.map(r => clean(r['Mercados'])).filter(Boolean);
 
     // 3) Índices por Cliente_ID
-    const idOf = (r) => clean(r[KEY]);
-    const mapSheet1 = new Map(sheet1.map(r => [idOf(r), r]).filter(([k]) => !!k));
-    const mapDest = new Map(destRows.map(r => [idOf(r), r]).filter(([k]) => !!k));
+    const idOf = (r: { [key: string]: any }) => clean(r[KEY]);
+    const mapSheet1 = new Map(sheet1.map((r): [string, Sheet1Row] => [idOf(r), r]).filter(([k]) => !!k));
+    const mapDest = new Map(destRows.map((r): [string, LeadsExactSpotterRow] => [idOf(r), r]).filter(([k]) => !!k));
 
     // 4) Header do destino (migrar Client_ID -> Cliente_ID se necessário)
     const neededCols = new Set([
@@ -118,7 +116,7 @@ export default async function handler(req, res) {
       header = header.map(h => (h === 'Client_ID' ? KEY : h));
     }
     if (!header.includes(KEY)) header.unshift(KEY);
-    for (const c of neededCols) {
+    for (const c of Array.from(neededCols)) {
       if (!header.includes(c)) header.push(c);
     }
 
@@ -131,7 +129,7 @@ export default async function handler(req, res) {
       await withRetry(() =>
         sheets.spreadsheets.values.update({
           spreadsheetId: process.env.SPREADSHEET_ID,
-          range: `${SHEET_DEST}!1:1`,
+          range: `${SHEETS.LEADS_EXACT_SPOTTER}!1:1`,
           valueInputOption: 'RAW',
           requestBody: { values: [header] },
         })
@@ -140,10 +138,10 @@ export default async function handler(req, res) {
     const endCol = colLetter(header.length - 1);
 
     // 5) Preparar upserts
-    const updates = [];
-    const appends = [];
+    const updates: { range: string, values: any[][] }[] = [];
+    const appends: any[][] = [];
     let created = 0, updated = 0, ignoradasSemId = 0, ignoradasSemBase = 0;
-    const errosObrigatorios = [];
+    const errosObrigatorios: { [key: string]: any }[] = [];
 
     for (const row of layout) {
       const id = idOf(row);
@@ -165,7 +163,7 @@ export default async function handler(req, res) {
       const nomeLead = produto ? `${nomeEmpresa} - ${produto}` : `${nomeEmpresa}`;
 
       // Mercado (Sheet1 -> Organização - Segmento)
-      const segmento = clean(base['Organização - Segmento']);
+      const segmento = clean(base['organizacao_segmento']);
       const mercado = segmento && mercadosValidos.includes(segmento) ? segmento : 'N/A';
 
       // Site (remover barras finais)
@@ -187,7 +185,7 @@ export default async function handler(req, res) {
       // Telefones (prioridade: Card -> layout -> Sheet1)
       const telsCard = splitPhones(pick(row, 'Telefones Card')); // pode não existir
       const telsLayout = splitPhones(pick(row, 'Telefones Empresa'));
-      const telSheet1 = splitPhones(base['Telefone Normalizado']);
+      const telSheet1 = splitPhones(base['telefone_normalizado']);
       const telefones = telsCard.length ? telsCard : (telsLayout.length ? telsLayout : telSheet1);
       const telefonesStr = joinPhones(telefones);
 
@@ -261,7 +259,7 @@ export default async function handler(req, res) {
       if (exists && exists._rowNumber) {
         const rowIndex = exists._rowNumber;
         updates.push({
-          range: `${SHEET_DEST}!A${rowIndex}:${endCol}${rowIndex}`,
+          range: `${SHEETS.LEADS_EXACT_SPOTTER}!A${rowIndex}:${endCol}${rowIndex}`,
           values: [rowValues],
         });
         updated++;
@@ -290,7 +288,7 @@ export default async function handler(req, res) {
         await withRetry(() =>
           sheets.spreadsheets.values.append({
             spreadsheetId: process.env.SPREADSHEET_ID,
-            range: `${SHEET_DEST}!A1`,
+            range: `${SHEETS.LEADS_EXACT_SPOTTER}!A1`,
             valueInputOption: 'RAW',
             insertDataOption: 'INSERT_ROWS',
             requestBody: { values: batch },

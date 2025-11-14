@@ -1,6 +1,8 @@
+/* globals process */
 import { getSheetsClient, withRetry } from '../../lib/googleSheets';
+import { SHEETS } from '../../lib/sheets-mapping';
 
-const SHEETS = ['Sheet1', 'layout_importacao_empresas', 'Leads Exact Spotter'];
+const SHEETS_TO_MIGRATE = [SHEETS.SHEET1, SHEETS.LAYOUT_IMPORTACAO_EMPRESAS, SHEETS.LEADS_EXACT_SPOTTER];
 
 const clean = (v) => (v ?? '').toString().trim();
 const colLetter = (n) => { let s=''; while(n>=0){ s=String.fromCharCode((n%26)+65)+s; n=Math.floor(n/26)-1; } return s; };
@@ -24,7 +26,7 @@ export default async function handler(req, res) {
       debugDump: {}
     };
 
-    for (const title of SHEETS) {
+    for (const title of SHEETS_TO_MIGRATE) {
       const sheetId = sheetIdByTitle.get(title);
       if (!sheetId) { out.warnings.push(`Aba não encontrada: ${title}`); continue; }
 
