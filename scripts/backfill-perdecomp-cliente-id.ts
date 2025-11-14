@@ -1,8 +1,9 @@
-import { getSheetData, getSheetsClient, withRetry } from '../lib/googleSheets.js';
+import { getSheetData, getSheetsClient, withRetry } from '../lib/googleSheets';
+import { SHEETS } from '../lib/sheets-mapping';
 import { CLT_ID_RE, resolveClienteId } from '../lib/perdecomp-persist';
 
-const SNAPSHOT_SHEET = 'perdecomp_snapshot';
-const FACTS_SHEET = 'perdecomp_facts';
+const SNAPSHOT_SHEET = SHEETS.PERDECOMP_SNAPSHOT;
+const FACTS_SHEET = SHEETS.PERDCOMP_FACTS;
 
 function columnNumberToLetter(columnNumber: number): string {
   let temp: number;
@@ -24,20 +25,20 @@ async function main() {
 
   const sheets = await getSheetsClient();
   const { headers: snapshotHeaders, rows: snapshotRows } = await getSheetData(SNAPSHOT_SHEET);
-  const clienteIdx = snapshotHeaders.indexOf('Cliente_ID');
+  const clienteIdx = snapshotHeaders.indexOf('cliente_id');
   if (clienteIdx === -1) {
-    throw new Error('Cliente_ID column not found in perdecomp_snapshot');
+    throw new Error('cliente_id column not found in perdecomp_snapshot');
   }
-  const lastUpdatedIdx = snapshotHeaders.indexOf('Last_Updated_ISO');
+  const lastUpdatedIdx = snapshotHeaders.indexOf('last_updated_iso');
 
   const replacements = new Map<string, string>();
   const nowISO = new Date().toISOString();
 
   for (const row of snapshotRows) {
-    const currentId = String(row.Cliente_ID || '').trim();
+    const currentId = String(row.cliente_id || '').trim();
     if (!currentId.startsWith('COMP-')) continue;
 
-    const cnpj = (row.CNPJ as string) || null;
+    const cnpj = (row.cnpj as string) || null;
     const resolved = await resolveClienteId({ providedClienteId: null, cnpj });
     if (!CLT_ID_RE.test(resolved)) {
       console.warn('BACKFILL_SKIP_INVALID_RESOLUTION', { currentId, cnpj, resolved });
@@ -81,7 +82,7 @@ async function main() {
   }
 
   const { headers: factHeaders, rows: factRows } = await getSheetData(FACTS_SHEET);
-  const factClienteIdx = factHeaders.indexOf('Cliente_ID');
+  const factClienteIdx = factHeaders.indexOf('cliente_id');
   if (factClienteIdx === -1) {
     console.warn('BACKFILL_FACTS_NO_CLIENTE_COLUMN');
     return;
@@ -90,7 +91,7 @@ async function main() {
   const factUpdates: Array<{ range: string; values: string[][] }> = [];
   const factLetter = columnNumberToLetter(factClienteIdx + 1);
   for (const row of factRows) {
-    const currentId = String(row.Cliente_ID || '').trim();
+    const currentId = String(row.cliente_id || '').trim();
     const replacement = replacements.get(currentId);
     if (!replacement) continue;
     factUpdates.push({

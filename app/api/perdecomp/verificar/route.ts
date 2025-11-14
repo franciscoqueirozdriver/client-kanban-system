@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets.js';
+import { getSheetData } from '@/lib/googleSheets';
+import { SHEETS } from '@/lib/sheets-mapping';
 import { padCNPJ14 } from '@/utils/cnpj';
-
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -15,10 +14,10 @@ export async function GET(request: Request) {
   const cleanCnpj = padCNPJ14(cnpj);
 
   try {
-    const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    const { rows } = await getSheetData(SHEETS.PERDECOMP);
 
     const dataForCnpj = rows.filter(row => {
-      const rowCnpj = padCNPJ14(row.CNPJ);
+      const rowCnpj = padCNPJ14(String(row.cnpj || ''));
       return rowCnpj === cleanCnpj;
     });
 
@@ -28,9 +27,11 @@ export async function GET(request: Request) {
 
     // Find the most recent consultation date
     const mostRecentConsultation = dataForCnpj.reduce((latest, row) => {
-      const currentDate = new Date(row.Data_Consulta);
+      const currentDateStr = String(row.data_consulta || '');
+      if (!currentDateStr) return latest;
+      const currentDate = new Date(currentDateStr);
       if (!latest || currentDate > new Date(latest)) {
-        return row.Data_Consulta;
+        return currentDateStr;
       }
       return latest;
     }, '' as string | null);

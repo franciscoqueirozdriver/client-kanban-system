@@ -1,4 +1,4 @@
-import { getSheetCached, updateRow } from '../lib/googleSheets.js';
+import { getSheetCached, updateRow } from '../lib/googleSheets';
 
 function gerarIdSequencial(numero) {
   return `CLT-${String(numero).padStart(4, '0')}`;

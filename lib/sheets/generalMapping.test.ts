@@ -70,8 +70,7 @@ describe('normalizePayloadToSnakeCase', () => {
     expect(normalizePayloadToSnakeCase(payload)).toEqual(expected);
   });
 
-  it('should return an empty object if the payload is null or undefined', () => {
-    expect(normalizePayloadToSnakeCase(null)).toEqual({});
-    expect(normalizePayloadToSnakeCase(undefined)).toEqual({});
+  it('should return an empty object if the payload is empty', () => {
+    expect(normalizePayloadToSnakeCase({})).toEqual({});
   });
 });

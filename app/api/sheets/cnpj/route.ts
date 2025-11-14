@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
-import { updateRowByIndex } from '@/lib/sheets';
-import { _findRowNumberBycliente_id, getSheetData } from '@/lib/sheets-helpers';
+import { _findRowNumberBycliente_id, getSheetData, updateRowByIndex } from '@/lib/googleSheets';
+import { SHEETS as AppSHEETS, SheetName } from '@/lib/sheets-mapping';
 import { onlyDigits } from '@/utils/cnpj-matriz';
 
 export const runtime = 'nodejs';
 
-const SHEETS = [
-  'Leads Exact Spotter',
-  'layout_importacao_empresas',
-  'Sheet1',
+const SHEETS_TO_UPDATE: SheetName[] = [
+  AppSHEETS.LEADS_EXACT_SPOTTER,
+  AppSHEETS.LAYOUT_IMPORTACAO_EMPRESAS,
+  AppSHEETS.SHEET1,
 ];
 
 export async function POST(req: Request) {
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
 
     const results: Array<Record<string, any>> = [];
 
-    const updateSheet = async (sheetName: string) => {
+    const updateSheet = async (sheetName: SheetName) => {
       const rowIndex = await _findRowNumberBycliente_id(sheetName, clienteId);
       if (rowIndex === -1) {
         return { sheetName, updated: 0, reason: 'Cliente_ID não encontrado' };
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
       return { sheetName, updated: Object.keys(updates).length };
     };
 
-    for (const sheet of SHEETS) {
+    for (const sheet of SHEETS_TO_UPDATE) {
       try {
         results.push(await updateSheet(sheet));
       } catch (error: any) {

@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable no-console */
 
-import { chunk, getSheetData, getSheetsClient, withRetry } from '@/lib/googleSheets.js';
+import { chunk, getSheetData, getSheetsClient, withRetry } from '@/lib/googleSheets';
+import { SHEETS } from '@/lib/sheets-mapping';
 
-const SNAPSHOT_SHEET = 'perdecomp_snapshot';
-const FACTS_SHEET = 'perdecomp_facts';
+const SNAPSHOT_SHEET = SHEETS.PERDECOMP_SNAPSHOT;
+const FACTS_SHEET = SHEETS.PERDCOMP_FACTS;
 const CLT_ID_RE = /^CLT-\d{4,}$/;
 
 function onlyDigits(value?: string | null): string {
@@ -45,22 +46,22 @@ async function run() {
   const snapshotData = await getSheetData(SNAPSHOT_SHEET);
   const factsData = await getSheetData(FACTS_SHEET);
 
-  const clienteIdxSnapshot = snapshotData.headers.indexOf('Cliente_ID');
-  const cnpjIdxSnapshot = snapshotData.headers.indexOf('CNPJ');
+  const clienteIdxSnapshot = snapshotData.headers.indexOf('cliente_id');
+  const cnpjIdxSnapshot = snapshotData.headers.indexOf('cnpj');
   if (clienteIdxSnapshot === -1 || cnpjIdxSnapshot === -1) {
-    throw new Error('Snapshot sheet is missing Cliente_ID or CNPJ headers');
+    throw new Error('Snapshot sheet is missing cliente_id or cnpj headers');
   }
 
-  const clienteIdxFacts = factsData.headers.indexOf('Cliente_ID');
+  const clienteIdxFacts = factsData.headers.indexOf('cliente_id');
   if (clienteIdxFacts === -1) {
-    throw new Error('Facts sheet is missing Cliente_ID header');
+    throw new Error('Facts sheet is missing cliente_id header');
   }
 
   const clienteLetterSnapshot = columnNumberToLetter(clienteIdxSnapshot + 1);
   const clienteLetterFacts = columnNumberToLetter(clienteIdxFacts + 1);
 
   const compRows = snapshotData.rows.filter((row) =>
-    typeof row.Cliente_ID === 'string' && row.Cliente_ID.startsWith('COMP-'),
+    typeof row.cliente_id === 'string' && row.cliente_id.startsWith('COMP-'),
   );
   if (!compRows.length) {
     console.info('BACKFILL_DONE', { fixedSnap: 0, fixedFacts: 0 });
@@ -71,7 +72,7 @@ async function run() {
   const cnpjToClt = new Map<string, string>();
   let maxClt = 0;
   for (const row of snapshotData.rows) {
-    const id = toStringValue(row.Cliente_ID);
+    const id = toStringValue(row.cliente_id);
     const match = id.match(/^CLT-(\d{4,})$/);
     if (match) {
       const value = Number(match[1]);
@@ -80,7 +81,7 @@ async function run() {
       }
     }
     if (CLT_ID_RE.test(id)) {
-      const cnpjDigits = onlyDigits(toStringValue(row.CNPJ));
+      const cnpjDigits = onlyDigits(toStringValue(row.cnpj));
       if (cnpjDigits) {
         cnpjToClt.set(cnpjDigits, id);
       }
@@ -96,8 +97,8 @@ async function run() {
   const updates: Array<{ range: string; values: string[][] }> = [];
 
   for (const row of compRows) {
-    const oldId = toStringValue(row.Cliente_ID);
-    const cnpjDigits = onlyDigits(toStringValue(row.CNPJ));
+    const oldId = toStringValue(row.cliente_id);
+    const cnpjDigits = onlyDigits(toStringValue(row.cnpj));
 
     let newId = (cnpjDigits && cnpjToClt.get(cnpjDigits)) || '';
     if (!newId) {
@@ -115,7 +116,7 @@ async function run() {
     fixedSnap += 1;
 
     const matchingFacts = factsData.rows.filter(
-      (fact) => toStringValue(fact.Cliente_ID) === oldId,
+      (fact) => toStringValue(fact.cliente_id) === oldId,
     );
     matchingFacts.forEach((fact) => {
       updates.push({

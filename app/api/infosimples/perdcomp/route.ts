@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
-import { getSheetData, getSheetsClient } from '../../../../lib/googleSheets.js';
+import { getSheetData, getSheetsClient } from '@/lib/googleSheets';
+import { SHEETS } from '@/lib/sheets-mapping';
 import { savePerdecompResults, loadSnapshotCard } from '@/lib/perdecomp-persist';
 import { padCNPJ14, isValidCNPJ } from '@/utils/cnpj';
 import {
@@ -11,7 +12,6 @@ import {
 
 export const runtime = 'nodejs';
 
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 const CARD_SCHEMA_VERSION = 'perdecomp-card-v1';
 
 const REQUIRED_HEADERS = [
@@ -130,13 +130,13 @@ async function getLastPerdcompFromSheet({
   const sheets = await getSheetsClient();
   const head = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.SPREADSHEET_ID,
-    range: 'PERDECOMP!1:1',
+    range: `${SHEETS.PERDECOMP}!1:1`,
   });
   const headers = head.data.values?.[0] || [];
   const col = (name: string) => headers.indexOf(name);
   const resp = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.SPREADSHEET_ID,
-    range: 'PERDECOMP!A2:Z',
+    range: `${SHEETS.PERDECOMP}!A2:Z`,
   });
   const rows = resp.data.values || [];
   const idxCliente = col('Cliente_ID');
@@ -425,7 +425,7 @@ export async function POST(request: Request) {
 
     const sheets = await getSheetsClient();
     // Call getSheetData ONCE and get both headers and rows
-    const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    const { headers, rows } = await getSheetData(SHEETS.PERDECOMP);
     const finalHeaders = [...headers];
     let headerUpdated = false;
     for (const h of REQUIRED_HEADERS) {
@@ -437,7 +437,7 @@ export async function POST(request: Request) {
     if (headerUpdated) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.SPREADSHEET_ID!,
-        range: `${PERDECOMP_SHEET_NAME}!1:1`,
+        range: `${SHEETS.PERDECOMP}!1:1`,
         valueInputOption: 'RAW',
         requestBody: { values: [finalHeaders] },
       });
@@ -446,7 +446,7 @@ export async function POST(request: Request) {
     // Use the 'rows' we already fetched instead of calling getSheetData again
     let rowNumber = -1;
     for (const r of rows) {
-      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
+      if (r.cliente_id === clienteId || String(r.cnpj || '').replace(/\D/g, '') === cnpj) {
         rowNumber = r._rowNumber;
         break;
       }
@@ -460,7 +460,7 @@ export async function POST(request: Request) {
         if (colIndex === -1) continue;
         const colLetter = columnNumberToLetter(colIndex + 1);
         data.push({
-          range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
+          range: `${SHEETS.PERDECOMP}!${colLetter}${rowNumber}`,
           values: [[value]],
         });
       }
@@ -482,7 +482,7 @@ export async function POST(request: Request) {
       const values = finalHeaders.map(h => row[h]);
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.SPREADSHEET_ID!,
-        range: PERDECOMP_SHEET_NAME,
+        range: SHEETS.PERDECOMP,
         valueInputOption: 'RAW',
         requestBody: { values: [values] },
       });
