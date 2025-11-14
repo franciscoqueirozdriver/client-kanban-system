@@ -1,4 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { randomUUID } from 'crypto';
+import { padCNPJ14 } from '@/utils/cnpj';
+import { agregaPerdcomp } from '@/utils/perdcomp';
 
 type RetryableFn<T> = () => Promise<T>;
 
@@ -20,16 +23,11 @@ interface InfosimplesPerdcompResponse {
     signature?: string;
   };
   data_count?: number;
-  data?: unknown;
+  data?: any;
   site_receipts?: string[];
   [key: string]: unknown;
 }
 
-/**
- * Retry helper:
- * - Só tenta de novo em erro de rede ou HTTP 5xx.
- * - NÃO faz retry em erro de negócio da Infosimples (code 600–799).
- */
 async function withRetry<T>(
   fn: RetryableFn<T>,
   options: { retries?: number; delayMs?: number } = {},
@@ -37,22 +35,15 @@ async function withRetry<T>(
   const { retries = 3, delayMs = 500 } = options;
   let attempt = 0;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       return await fn();
     } catch (err: any) {
       attempt += 1;
-
-      const isNetworkError =
-        err?.name === 'FetchError' ||
-        err?.code === 'ECONNRESET' ||
-        err?.code === 'ETIMEDOUT';
-
+      const isNetworkError = ['FetchError', 'ECONNRESET', 'ETIMEDOUT'].includes(err?.code);
       const status = typeof err?.status === 'number' ? err.status : undefined;
       const is5xx = typeof status === 'number' && status >= 500 && status < 600;
 
-      // Só retry em erro de rede ou 5xx
       if (attempt > retries || (!isNetworkError && !is5xx)) {
         throw err;
       }
@@ -65,8 +56,6 @@ async function withRetry<T>(
 }
 
 function isProviderError(body: InfosimplesPerdcompResponse): boolean {
-  // Exatamente a lógica do exemplo:
-  // code 200 = sucesso; 600–799 = erro de negócio
   if (typeof body.code !== 'number') return true;
   if (body.code === 200) return false;
   if (body.code >= 600 && body.code <= 799) return true;
@@ -83,52 +72,35 @@ export default async function handler(
   }
 
   try {
-    const { cnpj, cpf, perdcomp, timeout } = req.body ?? {};
-
-    if (!cnpj && !cpf && !perdcomp) {
-      return res.status(400).json({
-        error: 'You must provide at least one of: cnpj, cpf or perdcomp',
-      });
-    }
+    const { cnpj: rawCnpj, data_inicio, data_fim, force, debug, Cliente_ID, nomeEmpresa } = req.body ?? {};
+    const cnpj = padCNPJ14(rawCnpj);
+    const consultaId = randomUUID();
 
     const apiToken = process.env.INFOSIMPLES_TOKEN;
     if (!apiToken) {
-      return res
-        .status(500)
-        .json({ error: 'Infosimples API token is not configured' });
+      return res.status(500).json({ error: 'Infosimples API token is not configured' });
     }
 
-    // Monta o corpo no mesmo formato do exemplo (form-urlencoded)
     const form = new URLSearchParams();
-
-    if (cpf) form.set('cpf', String(cpf));
-    if (cnpj) form.set('cnpj', String(cnpj));
-    if (perdcomp) form.set('perdcomp', String(perdcomp));
-
+    if (cnpj) form.set('cnpj', cnpj);
     form.set('token', apiToken);
-    // timeout em segundos: a doc usa 300 no exemplo
-    form.set('timeout', String(timeout ?? 300));
+    form.set('timeout', '300');
 
-    const url =
-      'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp';
+    const url = 'https://api.infosimples.com/api/v2/consultas/receita-federal/perdcomp';
 
-    const result = await withRetry<InfosimplesPerdcompResponse>(async () => {
+    const apiResponse = await withRetry<InfosimplesPerdcompResponse>(async () => {
       const resp = await fetch(url, {
         method: 'POST',
         headers: {
-          // request original usa form, não JSON
           'Content-Type': 'application/x-www-form-urlencoded',
           Accept: 'application/json',
         },
         body: form.toString(),
       });
 
-      // Se a própria Infosimples responder com HTTP != 200, é erro de transporte
       if (!resp.ok) {
         const text = await resp.text().catch(() => '');
-        const error = new Error(
-          `Infosimples PERDCOMP HTTP error: ${resp.status} ${resp.statusText}`,
-        ) as any;
+        const error = new Error(`Infosimples PERDCOMP HTTP error: ${resp.status} ${resp.statusText}`) as any;
         error.status = resp.status;
         error.body = text;
         throw error;
@@ -136,11 +108,8 @@ export default async function handler(
 
       const body = (await resp.json()) as InfosimplesPerdcompResponse;
 
-      // code 200 = ok, 600–799 = erro de negócio
       if (isProviderError(body)) {
-        const error = new Error(
-          `Infosimples PERDCOMP provider error: code ${body.code} (${body.code_message})`,
-        ) as any;
+        const error = new Error(`Infosimples PERDCOMP provider error: code ${body.code} (${body.code_message})`) as any;
         error.status = 200;
         error.providerBody = body;
         throw error;
@@ -149,22 +118,46 @@ export default async function handler(
       return body;
     });
 
-    // Sucesso: só devolve o JSON da Infosimples
-    return res.status(200).json(result);
-  } catch (err: any) {
-    const status =
-      typeof err?.status === 'number' && err.status >= 400 && err.status < 600
-        ? err.status
-        : 502;
+    const perdcompRaw = apiResponse?.data?.[0]?.perdcomp ?? [];
+    const perdcompArray = Array.isArray(perdcompRaw) ? perdcompRaw : [];
 
+    const resumo = agregaPerdcomp(perdcompArray);
+    const first = perdcompArray[0] ?? null;
+
+    const card = {
+      header: {
+        cnpj,
+        requested_at: apiResponse.header?.requested_at || new Date().toISOString(),
+      },
+      resumo,
+      perdcompResumo: resumo,
+      perdcompCodigos: perdcompArray.map(item => item.perdcomp).filter(Boolean),
+      site_receipt: apiResponse.site_receipts?.[0] ?? null,
+      primeiro: first ? {
+        perdcomp: first.perdcomp,
+        solicitante: first.solicitante,
+        tipo_documento: first.tipo_documento,
+        tipo_credito: first.tipo_credito,
+        data_transmissao: first.data_transmissao,
+        situacao: first.situacao,
+        situacao_detalhamento: first.situacao_detalhamento,
+      } : null,
+    };
+
+    // Placeholder for the next phase
+    console.log('Card to be persisted:', card);
+    console.log('Facts to be persisted:', perdcompArray);
+
+    return res.status(200).json(card);
+
+  } catch (err: any) {
+    const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 600 ? err.status : 502;
     if (err?.providerBody) {
-      // Erro de negócio da Infosimples (code 600–799)
       return res.status(400).json({
         error: 'Infosimples PERDCOMP business error',
         infosimples: err.providerBody,
       });
     }
-
     return res.status(status).json({
       error: 'Failed to call Infosimples PERDCOMP API',
       message: err?.message ?? 'Unknown error',
