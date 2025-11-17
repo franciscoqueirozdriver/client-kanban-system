@@ -12,6 +12,12 @@ import SpotterModal from '@/components/spotter/SpotterModal';
 import { useFilterState } from '@/hooks/useFilterState';
 import { decideCNPJFinal } from '@/helpers/decideCNPJ';
 
+interface ClientContact {
+  name?: string;
+  nome?: string;
+  email?: string;
+}
+
 interface ClientRecord {
   id: string;
   company: string;
@@ -19,7 +25,7 @@ interface ClientRecord {
   size?: string;
   uf?: string;
   city?: string;
-  contacts?: any[];
+  contacts?: ClientContact[];
   opportunities?: string[];
   color?: string;
   [key: string]: unknown;
@@ -163,7 +169,7 @@ function ClientesPageComponent() {
 
       const baseName = (client.company || '').toLowerCase();
       const contactMatch = Array.isArray(client.contacts)
-        ? client.contacts.some((contact: any) =>
+        ? client.contacts.some((contact: ClientContact) =>
             [contact?.name, contact?.nome, contact?.email]
               .filter(Boolean)
               .some((value: string) => value.toLowerCase().includes(normalizedQuery))

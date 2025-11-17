@@ -17,9 +17,7 @@ function displayEmail(email: string | null | undefined) {
 
 type ClientContact = {
   name?: string;
-  nome?: string;
   role?: string;
-  cargo?: string;
   email?: string;
   telefone?: string;
 };
@@ -27,8 +25,6 @@ type ClientContact = {
 type ClientRecord = {
   id: string;
   company?: string;
-  nome?: string;
-  Nome_da_Empresa?: string;
   segment?: string;
   uf?: string;
   city?: string;
@@ -36,8 +32,6 @@ type ClientRecord = {
   contacts?: ClientContact[];
   color?: string;
   cnpj?: string;
-  CNPJ?: string;
-  CNPJ_Empresa?: string;
   [key: string]: unknown;
 };
 
@@ -95,8 +89,8 @@ export default function ClientCard({ client, onOpenSpotter }: ClientCardProps) {
   };
 
   const handlePerdecompClick = () => {
-    const cnpj = client.cnpj || client.CNPJ || client.CNPJ_Empresa;
-    const company = client.company || client.nome || client.Nome_da_Empresa;
+    const cnpj = client.cnpj;
+    const company = client.company;
     
     if (cnpj) {
       router.push(`/consultas/perdecomp-comparativo?q=${encodeURIComponent(cnpj)}`);
@@ -124,7 +118,7 @@ export default function ClientCard({ client, onOpenSpotter }: ClientCardProps) {
         />
         
         <h4 className="text-base font-semibold text-foreground">
-          {client.company || client.nome || client.Nome_da_Empresa || 'Cliente sem nome'}
+          {client.company || 'Cliente sem nome'}
         </h4>
 
         {(client.city || client.uf) && (
@@ -146,10 +140,10 @@ export default function ClientCard({ client, onOpenSpotter }: ClientCardProps) {
             {client.contacts.map((contact, index) => (
               <div key={`${client.id}-contact-${index}`} className="mt-3 border-t border-dashed border-border/70 pt-3 text-xs">
                 <p className="font-semibold text-foreground">
-                  {contact.name || contact.nome || 'Contato sem nome'}
+                  {contact.name || 'Contato sem nome'}
                 </p>
-                {(contact.role || contact.cargo) && (
-                  <p className="text-[11px] text-muted-foreground">{contact.role || contact.cargo}</p>
+                {contact.role && (
+                  <p className="text-[11px] text-muted-foreground">{contact.role}</p>
                 )}
 
                 {contact.email && (

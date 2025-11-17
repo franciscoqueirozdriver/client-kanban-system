@@ -10,7 +10,8 @@ import {
   PERDCOMP_FACTS_COLUMNS,
   PERDECOMP_SNAPSHOT_COLUMNS,
   USUARIOS_COLUMNS,
-  PERMISSOES_COLUMNS
+  PERMISSOES_COLUMNS,
+  TESES_COLUMNS
 } from '@/lib/sheets-mapping';
 
 // --- Base Row Type ---
@@ -74,3 +75,8 @@ export type UsuariosRow = CreateRowType<typeof USUARIOS_COLUMNS>;
  * Type definition for a row in the 'permissoes' tab.
  */
 export type PermissoesRow = CreateRowType<typeof PERMISSOES_COLUMNS>;
+
+/**
+ * Type definition for a row in the 'teses' tab.
+ */
+export type TesesRow = CreateRowType<typeof TESES_COLUMNS>;

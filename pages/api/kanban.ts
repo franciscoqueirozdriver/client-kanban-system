@@ -4,7 +4,7 @@ import { SHEETS } from '@/lib/sheets-mapping';
 import { Sheet1Row } from '@/types/sheets';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
-function protectPhoneValue(value) {
+function protectPhoneValue(value: any) {
   if (!value) return '';
   const str = String(value).trim();
   if (/^\+?\d{8,}$/.test(str)) {
@@ -13,7 +13,7 @@ function protectPhoneValue(value) {
   return str;
 }
 
-function collectEmails(row) {
+function collectEmails(row: Sheet1Row) {
   const emails = [
     row.pessoa_email_work || '',
     row.pessoa_email_home || '',
@@ -25,7 +25,7 @@ function collectEmails(row) {
   return Array.from(new Set(emails)).join(';');
 }
 
-function normalizePhones(row) {
+function normalizePhones(row: Sheet1Row) {
     const phones = new Set();
     if (row.telefone_normalizado) {
         row.telefone_normalizado.split(';').forEach(p => phones.add(p.trim()));
@@ -34,7 +34,7 @@ function normalizePhones(row) {
 }
 
 
-async function groupRows(rows) {
+async function groupRows(rows: Sheet1Row[]) {
   const map = new Map();
 
   rows.forEach((row, i) => {
@@ -94,7 +94,7 @@ async function groupRows(rows) {
     clients: Array.from(map.values()).map((c) => ({
       id: c.id,
       company: c.company,
-      opportunities: Array.from(new Set(c.opportunities)),
+      opportunities: Array.from(new Set(c.opportunities)) as string[],
       contacts: Array.from(c.contactsMap.values()),
       segment: c.segment,
       size: c.size,
@@ -109,6 +109,22 @@ async function groupRows(rows) {
   };
 }
 
+interface Client {
+  id: string;
+  company: string;
+  opportunities: string[];
+  contacts: any[];
+  segment: string;
+  size: string;
+  uf: string;
+  city: string;
+  status: string;
+  dataMov: string;
+  color: string;
+  produto: string;
+  rows: number[];
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
@@ -120,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       type KanbanCard = {
         id: string;
-        client: any;
+        client: Client;
       };
 
       type KanbanColumn = {
@@ -143,7 +159,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       clients.slice(0, limit).forEach((client) => {
         const col = board.find((c) => c.id === client.status);
         if (col) {
-          col.cards.push({ id: client.id, client });
+          col.cards.push({ id: client.id, client: client as Client });
         }
       });
 
@@ -172,21 +188,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ error: 'ID não encontrado' });
       }
 
+      const updatedRow = { ...rowToUpdate };
+
       if (newStatus !== undefined) {
-        rowToUpdate.status_kanban = newStatus;
+        updatedRow.status_kanban = newStatus;
       }
       if (newColor !== undefined) {
-        rowToUpdate.cor_card = newColor;
+        updatedRow.cor_card = newColor;
       }
-      rowToUpdate.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
+      updatedRow.data_ultima_movimentacao = new Date().toISOString().split('T')[0];
 
-      await updateRows(SHEETS.SHEET1, [rowToUpdate]);
+      await updateRows(SHEETS.SHEET1, [updatedRow]);
 
       return res.status(200).json({ status: newStatus, color: newColor });
     } catch (err) {
       console.error('Erro ao atualizar kanban:', err);
-      const statusCode = err?.response?.status || err?.code || 500;
-      return res.status(statusCode).json({ error: err.message || 'Erro ao atualizar kanban' });
+      const statusCode = (err as any)?.response?.status || (err as any)?.code || 500;
+      return res.status(statusCode).json({ error: (err as Error).message || 'Erro ao atualizar kanban' });
     }
   }
 
