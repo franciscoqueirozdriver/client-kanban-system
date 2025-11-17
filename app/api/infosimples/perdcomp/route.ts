@@ -125,6 +125,11 @@ async function withRetry<T>(
     try {
       return await fn();
     } catch (err: unknown) {
+      console.error('PERDCOMP_API_PROVIDER_ERROR', {
+        status: (err as any)?.status,
+        providerCode: (err as any)?.providerCode,
+        providerMessage: (err as any)?.providerMessage,
+      });
       lastErr = err;
       const status = getStatusFromUnknownError(err);
       const shouldRetry = status >= 500 || status === 0;
@@ -248,6 +253,7 @@ export async function POST(request: Request) {
     const rawCnpj = body?.cnpj ?? url.searchParams.get('cnpj') ?? '';
     const cnpj = padCNPJ14(rawCnpj);
     if (!isValidCNPJ(cnpj)) {
+      console.error('PERDCOMP_API_INVALID_CNPJ', { rawCnpj: rawCnpj, normalized: cnpj });
       return NextResponse.json(
         { error: true, httpStatus: 400, httpStatusText: 'Bad Request', message: 'CNPJ inválido' },
         { status: 400 },
@@ -289,6 +295,12 @@ export async function POST(request: Request) {
       url.searchParams.get('empresaId');
 
     if (!clienteId || !nomeEmpresa) {
+      console.error('PERDCOMP_API_MISSING_FIELDS', {
+        clienteId,
+        nomeEmpresa,
+        bodyKeys: Object.keys(body || {}),
+        query: Object.fromEntries(url.searchParams),
+      });
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
@@ -476,6 +488,11 @@ export async function POST(request: Request) {
     try {
       apiResponse = await withRetry(doCall, 3, [1500, 3000, 5000]);
     } catch (err: unknown) {
+      console.error('PERDCOMP_API_PROVIDER_ERROR', {
+        status: (err as any)?.status,
+        providerCode: (err as any)?.providerCode,
+        providerMessage: (err as any)?.providerMessage,
+      });
       const e = err as ProviderError;
       const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
       return NextResponse.json(
