@@ -4,7 +4,7 @@ import { SHEETS } from '@/lib/sheets-mapping';
 import { Sheet1Row } from '@/types/sheets';
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
-function protectPhoneValue(value) {
+function protectPhoneValue(value: any) {
   if (!value) return '';
   const str = String(value).trim();
   if (/^\+?\d{8,}$/.test(str)) {
@@ -13,7 +13,7 @@ function protectPhoneValue(value) {
   return str;
 }
 
-function collectEmails(row) {
+function collectEmails(row: Sheet1Row) {
   const emails = [
     row.pessoa_email_work || '',
     row.pessoa_email_home || '',
@@ -23,7 +23,7 @@ function collectEmails(row) {
   return Array.from(new Set(emails)).join(';');
 }
 
-function normalizePhones(row) {
+function normalizePhones(row: Sheet1Row) {
     const phones = new Set();
     if (row.telefone_normalizado) {
         row.telefone_normalizado.split(';').forEach(p => phones.add(p.trim()));
@@ -33,7 +33,7 @@ function normalizePhones(row) {
 }
 
 
-async function groupRows(rows) {
+async function groupRows(rows: Sheet1Row[]) {
   const filters = {
     segmento: new Set(),
     porte: new Set(),
@@ -81,7 +81,7 @@ async function groupRows(rows) {
       }
 
       const existsContact = existing.contacts.find(
-        (c) => c.name === contact.name && c.email === contact.email
+        (c: any) => c.name === contact.name && c.email === contact.email
       );
       if (!existsContact && (contact.name || contact.email)) {
         existing.contacts.push(contact);

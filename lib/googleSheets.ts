@@ -1,5 +1,4 @@
 import { google, sheets_v4 } from 'googleapis';
-import https from 'https';
 
 import {
   SHEETS,
@@ -206,7 +205,7 @@ export async function appendRow<T extends object>(
 ): Promise<void> {
   // Handle legacy overload: appendRow(data) for Sheet1
   if (typeof sheetNameOrData !== 'string') {
-    const columnOrder = Object.keys(require('@/lib/sheets-mapping').SHEET1_COLUMNS);
+    const columnOrder = Object.keys(SHEET1_COLUMNS);
     const row = columnOrder.map((header) => (sheetNameOrData as any)[header] || '');
     await appendSheetData(SHEETS.SHEET1, [row]);
     return;
@@ -306,11 +305,10 @@ export async function updateRowByIndex({ sheetName, rowIndex, updates }: UpdateR
   if (!spreadsheetId) throw new Error('SPREADSHEET_ID is not set');
 
   const sheets = await getSheetsClient();
-  const { headers, rows } = await getSheetData(sheetName);
+  const { headers } = await getSheetData(sheetName);
   const headerMap: Record<string, number> = {};
   headers.forEach((h, i) => (headerMap[h] = i));
 
-  const currentRow = rows.find((r) => r._rowNumber === rowIndex) || {};
   const data: sheets_v4.Schema$ValueRange[] = [];
 
   Object.entries(updates || {}).forEach(([col, value]) => {
@@ -332,7 +330,7 @@ export async function updateRowByIndex({ sheetName, rowIndex, updates }: UpdateR
 }
 
 export async function _findRowNumberBycliente_id(sheetName: SheetName, cliente_id: string): Promise<number> {
-    const rows = await readSheet(sheetName);
+    const rows = await readSheet<Sheet1Row>(sheetName);
     const row = rows.find(r => r.cliente_id === cliente_id);
     return row ? row._rowNumber : -1;
 }
@@ -396,7 +394,7 @@ function isValidEmail(email = '') {
 // --- Row Builders for Each Sheet Layout ---
 function buildLeadsExactSpotterRow(payload: any) {
     const { empresa = {}, contato = {}, comercial = {} } = payload;
-    const columnOrder = Object.keys(require('@/lib/sheets-mapping').LEADS_EXACT_SPOTTER_COLUMNS);
+    const columnOrder = Object.keys(LEADS_EXACT_SPOTTER_COLUMNS);
 
     const row = columnOrder.map(col => {
         switch(col) {
@@ -438,7 +436,7 @@ function buildLeadsExactSpotterRow(payload: any) {
 
 function buildLayoutImportacaoRow(payload: any) {
     const { empresa = {} } = payload;
-    const columnOrder = Object.keys(require('@/lib/sheets-mapping').LAYOUT_IMPORTACAO_EMPRESAS_COLUMNS);
+    const columnOrder = Object.keys(LAYOUT_IMPORTACAO_EMPRESAS_COLUMNS);
 
     return columnOrder.map(col => {
         switch(col) {
@@ -465,9 +463,9 @@ function buildLayoutImportacaoRow(payload: any) {
 function buildSheet1Row(payload: any) {
     const { empresa = {}, contato = {}, comercial = {} } = payload;
     const contactPhones = distributeContactPhones(contato.telefones_contato);
-    const columnOrder = Object.keys(require('@/lib/sheets-mapping').SHEET1_COLUMNS);
+    const columnOrder = Object.keys(SHEET1_COLUMNS);
 
-    const rowData: Record<string, any> = {
+    const rowData: Partial<Sheet1Row> = {
         'cliente_id': payload.cliente_id,
         'negocio_titulo': empresa.nome_da_empresa,
         'negocio_organizacao': empresa.nome_da_empresa,
@@ -494,16 +492,16 @@ function buildSheet1Row(payload: any) {
         'negocio_data_atualizada': new Date().toISOString(),
     };
 
-    return columnOrder.map(col => rowData[col] || '');
+    return columnOrder.map(col => rowData[col as keyof Sheet1Row] || '');
 }
 
 
 export async function getNextcliente_id(): Promise<string> {
   readCache.delete(`sheetData:${SHEETS.LEADS_EXACT_SPOTTER}`);
-  const { rows } = await getSheetData(SHEETS.LEADS_EXACT_SPOTTER);
+  const { rows } = await getSheetData<Sheet1Row>(SHEETS.LEADS_EXACT_SPOTTER);
   let maxId = 0;
   for (const row of rows) {
-    const cliente_id = (row as any)['cliente_id'];
+    const cliente_id = row.cliente_id;
     if (cliente_id && typeof cliente_id === 'string') {
       if (cliente_id.startsWith('CLI-') || cliente_id.startsWith('CLT-')) {
         const num = parseInt(cliente_id.substring(4), 10);
@@ -522,9 +520,9 @@ export async function findByCnpj(cnpj: string): Promise<BaseRow | null> {
 
   for (const sheetName of SHEETS_TO_SEARCH) {
     readCache.delete(`sheetData:${sheetName}`);
-    const { rows } = await getSheetData(sheetName);
+    const { rows } = await getSheetData<Sheet1Row>(sheetName);
     for (const row of rows) {
-      const rowCnpj = (row as any)['cnpj_empresa'] || (row as any)['cpf_cnpj'];
+      const rowCnpj = String(row.cnpj_empresa || row.cpf_cnpj || '');
       if (normalizeCnpj(rowCnpj) === normalizedCnpjToFind) {
         return { ...row, _sheetName: sheetName };
       }
@@ -539,11 +537,11 @@ export async function findByName(name: string): Promise<BaseRow | null> {
 
   for (const sheetName of SHEETS_TO_SEARCH) {
     readCache.delete(`sheetData:${sheetName}`);
-    const { rows } = await getSheetData(sheetName);
+    const { rows } = await getSheetData<Sheet1Row>(sheetName);
     for (const row of rows) {
-      const rowName = (row as any).nome_da_empresa || (row as any).nome_do_lead;
+      const rowName = String(row.nome_da_empresa || row.nome_do_lead || '');
       if (normalizeText(rowName) === normalizedNameToFind) {
-        const rowCnpj = normalizeCnpj((row as any).cnpj_empresa || (row as any).cpf_cnpj);
+        const rowCnpj = normalizeCnpj(String(row.cnpj_empresa || row.cpf_cnpj || ''));
         if (!rowCnpj) {
           // Return the full row data for pre-filling the form
           return row;
@@ -613,7 +611,6 @@ export async function updateInSheets(rawPayload: any, cliente_id: string): Promi
         [SHEETS.LEADS_EXACT_SPOTTER]: buildLeadsExactSpotterRow,
         [SHEETS.LAYOUT_IMPORTACAO_EMPRESAS]: buildLayoutImportacaoRow,
         [SHEETS.SHEET1]: buildSheet1Row,
-        // Add other sheets here as needed, or handle dynamically
     } as any;
 
 
@@ -671,33 +668,4 @@ export async function getSheetCached(sheetName: SheetName = SHEETS.SHEET1) {
 /** @deprecated Use `readSheet(SHEETS.HISTORICO_INTERACOES)` instead. */
 export async function getHistorySheetCached() {
     return getSheetCached(SHEETS.HISTORICO_INTERACOES);
-}
-
-/** @deprecated Use `updateRowByIndex` instead. */
-export async function updateRow(rowNumber: number, data: Record<string, any>) {
-    const sheets = await getSheetsClient();
-    const { headers } = await getSheetData(SHEETS.SHEET1);
-    const headerMap: Record<string, number> = {};
-    headers.forEach((h, i) => (headerMap[h] = i));
-
-    const updates: any[] = [];
-    for (const key in data) {
-        const colIndex = headerMap[key];
-        if (colIndex !== undefined) {
-            const colLetter = columnNumberToLetter(colIndex + 1);
-            const range = `Sheet1!${colLetter}${rowNumber}`;
-            updates.push({ range, values: [[data[key]]] });
-        }
-    }
-    if (updates.length) {
-        await withRetry(() =>
-            sheets.spreadsheets.values.batchUpdate({
-                spreadsheetId: process.env.SPREADSHEET_ID,
-                requestBody: {
-                    valueInputOption: 'USER_ENTERED',
-                    data: updates as any,
-                },
-            })
-        );
-    }
 }

@@ -1,15 +1,14 @@
 /** @jest-environment node */
 import crypto from 'crypto';
 
-import * as persistModule from './perdecomp-persist';
-
-const {
+import {
   __resetClienteIdSequenceForTests,
   __setResolveClienteIdOverrideForTests,
   loadSnapshotCard,
   resolveClienteId,
   savePerdecompResults,
-} = persistModule;
+} from './perdecomp-persist';
+import { SHEETS } from './sheets-mapping';
 
 const normalizeISO = (value?: string) => {
   if (!value) return '';
@@ -236,10 +235,10 @@ describe('perdecomp-persist', () => {
     const snapshotRows = [...snapshotData.rows];
 
     getSheetData.mockImplementation((sheetName: string, range?: string) => {
-      if (sheetName === persistModule.SHEET_SNAPSHOT) {
+      if (sheetName === SHEETS.PERDECOMP_SNAPSHOT) {
         return Promise.resolve({ headers: snapshotHeaders, rows: snapshotRows });
       }
-      if (sheetName === persistModule.SHEET_FACTS) {
+      if (sheetName === SHEETS.PERDCOMP_FACTS) {
         if (range === 'A1:ZZ1') {
           return Promise.resolve({ headers: factsHeaders, rows: [] });
         }
@@ -259,7 +258,7 @@ describe('perdecomp-persist', () => {
     });
 
     appendMock.mockImplementation((request) => {
-      if (request.range === persistModule.SHEET_SNAPSHOT) {
+      if (request.range === SHEETS.PERDECOMP_SNAPSHOT) {
         const values = request.requestBody.values[0];
         const newRow: any = { _rowNumber: snapshotRows.length + 2 };
         snapshotHeaders.forEach((header, index) => {
@@ -324,12 +323,12 @@ describe('perdecomp-persist', () => {
 
     expect(appendMock).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ range: persistModule.SHEET_FACTS }),
+      expect.objectContaining({ range: SHEETS.PERDCOMP_FACTS }),
     );
 
     expect(appendMock).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ range: persistModule.SHEET_SNAPSHOT }),
+      expect.objectContaining({ range: SHEETS.PERDECOMP_SNAPSHOT }),
     );
 
     const snapshotAppendCall = appendMock.mock.calls[0][0];
@@ -467,7 +466,7 @@ describe('perdecomp-persist', () => {
 
   it('loads snapshot card by concatenating shards', async () => {
     getSheetData.mockImplementation((sheetName: string) => {
-      if (sheetName === persistModule.SHEET_SNAPSHOT) {
+      if (sheetName === SHEETS.PERDECOMP_SNAPSHOT) {
         return Promise.resolve({
           headers: ['cliente_id', 'resumo_ultima_consulta_json_p1', 'resumo_ultima_consulta_json_p2'],
           rows: [
@@ -479,7 +478,7 @@ describe('perdecomp-persist', () => {
           ],
         });
       }
-      if (sheetName === persistModule.SHEET_FACTS) {
+      if (sheetName === SHEETS.PERDCOMP_FACTS) {
         return Promise.resolve({ headers: ['cliente_id'], rows: [] });
       }
       throw new Error(`Unexpected sheet request: ${sheetName}`);

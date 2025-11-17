@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   const cleanCnpj = padCNPJ14(cnpj);
 
   try {
-    const { rows } = await getSheetData(SHEETS.PERDECOMP);
+    const { rows } = await getSheetData(SHEETS.PERDECOMP_SNAPSHOT);
 
     const dataForCnpj = rows.filter(row => {
       const rowCnpj = padCNPJ14(String(row.cnpj || ''));

@@ -6,7 +6,7 @@ import {
   getSheetsClient,
   withRetry,
 } from './googleSheets';
-import { SHEETS } from './sheets-mapping';
+import { PERDCOMP_FACTS_COLUMNS, SHEETS } from './sheets-mapping';
 import { formatPerdcompNumero } from '@/utils/perdcomp';
 import {
   parsePerdcomp as parsePerdcompCodigo,
@@ -14,51 +14,8 @@ import {
   NATUREZA_FAMILIA,
   CREDITOS_DESCRICAO,
 } from '@/lib/perdcomp';
-import { normalizePerdecompLegacyKeys } from '@/lib/sheets/perdecompMapping';
 
-/**
- * @deprecated Use SHEETS.PERDECOMP_SNAPSHOT instead.
- */
-export const SHEET_SNAPSHOT = SHEETS.PERDECOMP_SNAPSHOT;
-/**
- * @deprecated Use SHEETS.PERDCOMP_FACTS instead.
- */
-export const SHEET_FACTS = SHEETS.PERDCOMP_FACTS;
-
-const FACTS_COLUMNS = [
-  'cliente_id',
-  'empresa_id',
-  'nome_da_empresa',
-  'cnpj',
-  'perdcomp_numero',
-  'perdcomp_formatado',
-  'b1',
-  'b2',
-  'data_ddmmaa',
-  'data_iso',
-  'tipo_codigo',
-  'tipo_nome',
-  'natureza',
-  'familia',
-  'credito_codigo',
-  'credito_descricao',
-  'risco_nivel',
-  'protocolo',
-  'situacao',
-  'situacao_detalhamento',
-  'motivo_normalizado',
-  'solicitante',
-  'fonte',
-  'data_consulta',
-  'url_comprovante_html',
-  'row_hash',
-  'inserted_at',
-  'consulta_id',
-  'version',
-  'deleted_flag',
-] as const;
-
-type FactsColumn = (typeof FACTS_COLUMNS)[number];
+type FactsColumn = keyof typeof PERDCOMP_FACTS_COLUMNS;
 const PAYLOAD_SHARD_LIMIT_BYTES = 90000;
 const CARD_SCHEMA_VERSION_FALLBACK = 'v1';
 export const CLT_ID_RE = /^CLT-\d{4,}$/;
@@ -270,9 +227,9 @@ function columnNumberToLetter(columnNumber: number): string {
 
 async function getFactsHeaders(): Promise<string[]> {
   if (cachedFactsHeaders) return cachedFactsHeaders;
-  const { headers } = await getSheetData(SHEET_FACTS, 'A1:ZZ1');
+  const { headers } = await getSheetData(SHEETS.PERDCOMP_FACTS, 'A1:ZZ1');
   if (!headers.length) {
-    throw new Error(`Sheet ${SHEET_FACTS} is missing headers`);
+    throw new Error(`Sheet ${SHEETS.PERDCOMP_FACTS} is missing headers`);
   }
   cachedFactsHeaders = headers;
   return headers;
@@ -333,7 +290,7 @@ export function derivePorCreditoFromFacts(
 async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<string | null> {
   const normalized = onlyDigits(cnpj);
   if (!normalized) return null;
-  const { rows } = await getSheetData(SHEET_SNAPSHOT);
+  const { rows } = await getSheetData(SHEETS.PERDECOMP_SNAPSHOT);
   for (const row of rows) {
     const rowCnpj = onlyDigits(toStringValue(row.cnpj));
     if (rowCnpj !== normalized) continue;
@@ -356,7 +313,7 @@ function syncNextSequenceFromId(id: string) {
 
 export async function nextClienteId(): Promise<string> {
   if (nextClienteSequence === null) {
-    const { rows } = await getSheetData(SHEET_SNAPSHOT);
+    const { rows } = await getSheetData(SHEETS.PERDECOMP_SNAPSHOT);
     let max = 0;
     for (const row of rows) {
       const id = toStringValue(row.cliente_id);
@@ -576,10 +533,10 @@ function mapSnapshotRow(
 }
 
 async function upsertSnapshot(row: SheetRow) {
-  const { headers, rows } = await getSheetData(SHEET_SNAPSHOT);
+  const { headers, rows } = await getSheetData(SHEETS.PERDECOMP_SNAPSHOT);
   const sheets = await getSheetsClient();
   if (!headers.length) {
-    throw new Error(`Sheet ${SHEET_SNAPSHOT} is missing headers`);
+    throw new Error(`Sheet ${SHEETS.PERDECOMP_SNAPSHOT} is missing headers`);
   }
   const existing = rows.find((r) => toStringValue(r.cliente_id) === row.cliente_id);
 
@@ -601,7 +558,7 @@ async function upsertSnapshot(row: SheetRow) {
         if (!header) return null;
         const colLetter = columnNumberToLetter(index + 1);
         return {
-          range: `${SHEET_SNAPSHOT}!${colLetter}${existing._rowNumber}`,
+          range: `${SHEETS.PERDECOMP_SNAPSHOT}!${colLetter}${existing._rowNumber}`,
           values: [[merged[header] ?? '']],
         };
       })
@@ -625,7 +582,7 @@ async function upsertSnapshot(row: SheetRow) {
   await withRetry(() =>
     sheets.spreadsheets.values.append({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: SHEET_SNAPSHOT,
+      range: SHEETS.PERDECOMP_SNAPSHOT,
       valueInputOption: 'RAW',
       requestBody: {
         values: [values],
@@ -639,7 +596,7 @@ async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<Filt
   const existingKeys = new Set<string>();
 
   try {
-    const { rows: existingRows } = await getSheetData(SHEET_FACTS);
+    const { rows: existingRows } = await getSheetData(SHEETS.PERDCOMP_FACTS);
     for (const row of existingRows) {
       if (toStringValue(row.cliente_id) !== clienteId) continue;
       const numero = toStringValue(row.perdcomp_numero ?? row.protocolo ?? '');
@@ -649,7 +606,7 @@ async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<Filt
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn('FACTS_READ_FAIL', { sheetName: SHEET_FACTS, message });
+    console.warn('FACTS_READ_FAIL', { sheetName: SHEETS.PERDCOMP_FACTS, message });
   }
 
   const insert: FactsRow[] = [];
@@ -674,14 +631,14 @@ async function readFactsByClienteId(clienteId: string): Promise<SheetRow[]> {
   if (!clienteId) return [];
   const all: SheetRow[] = [];
   try {
-    const { rows } = await getSheetData(SHEET_FACTS);
+    const { rows } = await getSheetData(SHEETS.PERDCOMP_FACTS);
     for (const row of rows) {
       if (toStringValue(row.cliente_id) !== clienteId) continue;
       all.push(normalizeSheetRow(row));
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn('FACTS_READ_FAIL', { sheetName: SHEET_FACTS, message });
+    console.warn('FACTS_READ_FAIL', { sheetName: SHEETS.PERDCOMP_FACTS, message });
   }
   return all;
 }
@@ -694,10 +651,10 @@ async function appendFactsBatched(
   if (!rows.length) return { inserted: 0, errors: [] };
   const headers = await getFactsHeaders();
   const orderedHeaders =
-    headers.length === FACTS_COLUMNS.length &&
-    FACTS_COLUMNS.every((column, index) => headers[index] === column)
+    headers.length === Object.keys(PERDCOMP_FACTS_COLUMNS).length &&
+    Object.keys(PERDCOMP_FACTS_COLUMNS).every((column, index) => headers[index] === column)
       ? headers
-      : [...FACTS_COLUMNS];
+      : Object.keys(PERDCOMP_FACTS_COLUMNS);
   const spreadsheetId = process.env.SPREADSHEET_ID;
   if (!spreadsheetId) {
     throw new Error('SPREADSHEET_ID is not set');
@@ -716,7 +673,7 @@ async function appendFactsBatched(
         () =>
           sheets.spreadsheets.values.append({
             spreadsheetId,
-            range: SHEET_FACTS,
+            range: SHEETS.PERDCOMP_FACTS,
             valueInputOption: 'RAW',
             insertDataOption: 'INSERT_ROWS',
             requestBody: { values: batch },
@@ -728,7 +685,7 @@ async function appendFactsBatched(
       const err = error instanceof Error ? error : new Error(String(error));
       errors.push(err);
       console.warn('FACTS_BATCH_APPEND_FAIL', {
-        sheetName: SHEET_FACTS,
+        sheetName: SHEETS.PERDCOMP_FACTS,
         batchSize: batch.length,
         message: err.message,
       });
@@ -747,7 +704,7 @@ async function updateSnapshotFields(
   if (!spreadsheetId) {
     throw new Error('SPREADSHEET_ID is not set');
   }
-  const { headers, rows } = await getSheetData(SHEET_SNAPSHOT);
+  const { headers, rows } = await getSheetData(SHEETS.PERDECOMP_SNAPSHOT);
   if (!headers.length) return false;
   const existing = rows.find((row) => toStringValue(row.cliente_id) === clienteId);
   if (!existing) return false;
@@ -760,7 +717,7 @@ async function updateSnapshotFields(
     if (index === -1) return;
     const colLetter = columnNumberToLetter(index + 1);
     data.push({
-      range: `${SHEET_SNAPSHOT}!${colLetter}${existing._rowNumber}`,
+      range: `${SHEETS.PERDECOMP_SNAPSHOT}!${colLetter}${existing._rowNumber}`,
       values: [[toStringValue(value)]],
     });
   });
@@ -867,7 +824,7 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
   try {
     const sanitizedCard = { ...card, clienteId: clienteIdFinal };
     const mappedFacts = (args.facts ?? []).map((raw) =>
-      mapFact(normalizePerdecompLegacyKeys(raw), { ...ctx, card: sanitizedCard }),
+      mapFact(raw, { ...ctx, card: sanitizedCard }),
     );
 
     const snapshotRow = mapSnapshotRow({ ...ctx, card: sanitizedCard, facts: mappedFacts });
@@ -927,7 +884,7 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
 
 export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | null> {
   if (!clienteId) return null;
-  const { rows } = await getSheetData(SHEET_SNAPSHOT);
+  const { rows } = await getSheetData(SHEETS.PERDECOMP_SNAPSHOT);
   const row = rows.find((item) => toStringValue(item.cliente_id) === clienteId);
   if (!row) return null;
   const p1 = toStringValue(row.resumo_ultima_consulta_json_p1 ?? '');
