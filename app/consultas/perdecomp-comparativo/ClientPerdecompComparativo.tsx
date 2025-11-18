@@ -302,8 +302,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           data_fim: endDate,
           force: forceRefresh,
           debug: showDebug,
-          Cliente_ID: company.Cliente_ID,
-          nomeEmpresa: company.Nome_da_Empresa,
+          clienteId: company.Cliente_ID ?? company.clienteId ?? company.id,
+          nomeEmpresa: company.Nome_da_Empresa ?? company.nomeEmpresa ?? company.nome,
+          empresaId: company.Empresa_ID ?? company.empresaId ?? null,
         }),
       });
       const data = await res.json();
