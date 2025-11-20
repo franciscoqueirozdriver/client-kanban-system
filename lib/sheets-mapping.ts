@@ -191,13 +191,41 @@ export const LEADS_EXACT_SPOTTER_COLUMNS = {
  */
 export const PERDECOMP_COLUMNS = {
   cliente_id: 'cliente_id',
+  nome_da_empresa: 'nome_da_empresa',
+  perdcomp_id: 'perdcomp_id',
   cnpj: 'cnpj',
-  razao_social: 'razao_social',
-  documento: 'documento',
-  valor: 'valor',
-  data_transmissao: 'data_transmissao',
-  status_receita: 'status_receita',
-  saldo_estimado: 'saldo_estimado',
+  tipo_pedido: 'tipo_pedido',
+  situacao: 'situacao',
+  periodo_inicio: 'periodo_inicio',
+  periodo_fim: 'periodo_fim',
+  quantidade_perdcomp: 'quantidade_perdcomp',
+  numero_processo: 'numero_processo',
+  data_protocolo: 'data_protocolo',
+  ultima_atualizacao: 'ultima_atualizacao',
+  quantidade_receitas: 'quantidade_receitas',
+  quantidade_origens: 'quantidade_origens',
+  quantidade_dar_fs: 'quantidade_dar_fs',
+  url_comprovante_html: 'url_comprovante_html',
+  url_comprovante_pdf: 'url_comprovante_pdf',
+  data_consulta: 'data_consulta',
+  tipo_empresa: 'tipo_empresa',
+  concorrentes: 'concorrentes',
+  json_bruto: 'json_bruto',
+  empresa_id: 'empresa_id',
+  code: 'code',
+  code_message: 'code_message',
+  mapped_count: 'mapped_count',
+  perdcomp_principal_id: 'perdcomp_principal_id',
+  perdcomp_solicitante: 'perdcomp_solicitante',
+  perdcomp_tipo_documento: 'perdcomp_tipo_documento',
+  perdcomp_tipo_credito: 'perdcomp_tipo_credito',
+  perdcomp_data_transmissao: 'perdcomp_data_transmissao',
+  perdcomp_situacao: 'perdcomp_situacao',
+  perdcomp_situacao_detalhamento: 'perdcomp_situacao_detalhamento',
+  qtd_perdcomp_dcomp: 'qtd_perdcomp_dcomp',
+  qtd_perdcomp_rest: 'qtd_perdcomp_rest',
+  qtd_perdcomp_cancel: 'qtd_perdcomp_cancel',
+  qtd_perdcomp_ressarc: 'qtd_perdcomp_ressarc',
 } as const;
 
 /**
@@ -242,12 +270,26 @@ export const PERDCOMP_FACTS_COLUMNS = {
 export const PERDECOMP_SNAPSHOT_COLUMNS = {
   snapshot_id: 'snapshot_id',
   cliente_id: 'cliente_id',
+  empresa_id: 'empresa_id',
+  nome_da_empresa: 'nome_da_empresa',
   cnpj: 'cnpj',
   data_snapshot: 'data_snapshot',
   total_creditos: 'total_creditos',
-  'total_ débitos': 'total_ débitos',
+  total_debitos: 'total_debitos',
   saldo_consolidado: 'saldo_consolidado',
   fonte_dados: 'fonte_dados',
+  por_credito_json: 'por_credito_json',
+  datas_json: 'datas_json',
+  primeira_data_iso: 'primeira_data_iso',
+  ultima_data_iso: 'ultima_data_iso',
+  resumo_ultima_consulta_json_p1: 'resumo_ultima_consulta_json_p1',
+  resumo_ultima_consulta_json_p2: 'resumo_ultima_consulta_json_p2',
+  facts_count: 'facts_count',
+  snapshot_hash: 'snapshot_hash',
+  payload_bytes: 'payload_bytes',
+  last_updated_iso: 'last_updated_iso',
+  consulta_id: 'consulta_id',
+  erro_ultima_consulta: 'erro_ultima_consulta',
 } as const;
 
 /**
@@ -289,4 +331,37 @@ export const TESES_COLUMNS = {
   publico_alvo: 'publico_alvo',
   grau_de_risco: 'grau_de_risco',
   status: 'status',
+} as const;
+
+/**
+ * Columns for the 'cnae' tab.
+ */
+export const CNAE_COLUMNS = {
+  cnae_id: 'cnae_id',
+  cnae: 'cnae',
+  desc_cnae: 'desc_cnae',
+} as const;
+
+/**
+ * Columns for the 'auditoria_acao' tab.
+ */
+export const AUDITORIA_ACAO_COLUMNS = {
+  evento_id: 'evento_id',
+  usuario_email: 'usuario_email',
+  acao: 'acao',
+  sucesso: 'sucesso',
+  data_hora: 'data_hora',
+  payload_resumo: 'payload_resumo',
+} as const;
+
+/**
+ * Columns for the 'auditoria_acesso' tab.
+ */
+export const AUDITORIA_ACESSO_COLUMNS = {
+  evento_id: 'evento_id',
+  usuario_email: 'usuario_email',
+  rota: 'rota',
+  sucesso: 'sucesso',
+  data_hora: 'data_hora',
+  payload_resumo: 'payload_resumo',
 } as const;
