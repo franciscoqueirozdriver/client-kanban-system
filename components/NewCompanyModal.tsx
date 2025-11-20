@@ -233,13 +233,13 @@ export default function NewCompanyModal({ isOpen, initialData, warning, enrichDe
 
   return (
     <>
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" role="dialog" aria-labelledby="modal-title">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" role="dialog" aria-labelledby="modal-title" aria-describedby="modal-description">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
         <header className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <h2 id="modal-title" className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {isUpdateMode ? 'Atualizar Empresa' : 'Cadastrar Nova Empresa'}
             </h2>
-            <p className="text-sm text-gray-500">Preencha os dados abaixo. Campos com * são obrigatórios.</p>
+            <p id="modal-description" className="text-sm text-gray-500">Preencha os dados abaixo. Campos com * são obrigatórios.</p>
         </header>
 
         <form onSubmit={handleSubmit} className="flex-grow contents">

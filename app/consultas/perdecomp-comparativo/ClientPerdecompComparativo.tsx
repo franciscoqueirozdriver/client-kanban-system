@@ -816,12 +816,16 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   };
 
   const handleSaveNewCompany = (saved: SavedCompany) => {
+    // Normalize immediately from the saved payload
     const newCompany: Company = {
+      ...saved,
       cliente_id: saved.Cliente_ID,
       nome_da_empresa: saved.Nome_da_Empresa,
-      cnpj_empresa: saved.CNPJ_Empresa,
-      // se quiser, pode espalhar o resto pra manter dados legados:
-      // ...saved,
+      cnpj_empresa: normalizeCnpj(saved.CNPJ_Empresa),
+      CNPJ_Empresa: normalizeCnpj(saved.CNPJ_Empresa),
+      // Ensure legacy keys are also present if needed by downstream logic
+      clienteId: saved.Cliente_ID,
+      nomeEmpresa: saved.Nome_da_Empresa,
     };
 
     if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
@@ -1057,6 +1061,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       <Dialog open={openCancel} onOpenChange={setOpenCancel}>
         <DialogContent aria-describedby="cancel-desc" className="max-w-md">
           <DialogHeader>
+            <DialogTitle className="sr-only">Cancelamentos</DialogTitle>
             <DialogTitle>Cancelamentos</DialogTitle>
             <p id="cancel-desc" className="text-sm text-muted-foreground">
               Itens cancelados no período considerado.
