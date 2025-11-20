@@ -77,6 +77,7 @@ type Prefill = {
   Mercado?: string;
   Produto?: string;
   Area?: string;
+  cliente_id?: string;
 };
 
 type CompetitorFetchState = {
@@ -817,16 +818,22 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
 
   const handleSaveNewCompany = (saved: SavedCompany) => {
     // Normalize immediately from the saved payload
-    const newCompany: Company = {
-      ...saved,
-      cliente_id: saved.Cliente_ID,
-      nome_da_empresa: saved.Nome_da_Empresa,
-      cnpj_empresa: normalizeCnpj(saved.CNPJ_Empresa),
-      CNPJ_Empresa: normalizeCnpj(saved.CNPJ_Empresa),
-      // Ensure legacy keys are also present if needed by downstream logic
-      clienteId: saved.Cliente_ID,
-      nomeEmpresa: saved.Nome_da_Empresa,
-    };
+      const newCompany: Company = {
+        ...saved,
+        cliente_id: saved.Cliente_ID,
+        nome_da_empresa: saved.Nome_da_Empresa,
+        cnpj_empresa: normalizeCnpj(saved.CNPJ_Empresa),
+        CNPJ_Empresa: normalizeCnpj(saved.CNPJ_Empresa),
+        // Ensure legacy keys are also present if needed by downstream logic
+        clienteId: saved.Cliente_ID,
+        nomeEmpresa: saved.Nome_da_Empresa,
+      };
+
+      // Se o modal foi aberto a partir de um enriquecimento, o cliente_id pode vir do prefill
+      if (companyPrefill?.cliente_id) {
+        newCompany.cliente_id = companyPrefill.cliente_id;
+        newCompany.clienteId = companyPrefill.cliente_id;
+      }
 
     if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
       handleSelectCompany('competitor', newCompany, modalTarget.index);
@@ -1095,7 +1102,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           const merged = enrichPreview?.base ? mergeEmptyFields(enrichPreview.base, flat) : flat;
           // The CNPJ decision is now made inside the dialog, so we just use the result (flat).
           // However, we still need to merge other fields.
-          const finalData = { ...merged, CNPJ_Empresa: flat.CNPJ_Empresa };
+          const finalData = { ...merged, CNPJ_Empresa: flat.CNPJ_Empresa, cliente_id: flat.cliente_id };
           handleUseSuggestion(finalData);
           setModalWarning(!enrichPreview?.suggestion);
           setShowEnrichPreview(false);

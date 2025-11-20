@@ -29,13 +29,33 @@ interface Prefill {
   Mercado?: string;
   Produto?: string;
   Area?: string;
+  cliente_id?: string;
+}
+
+interface Company {
+  cliente_id?: string;
+  clienteId?: string;
+  Cliente_ID?: string;
+  id?: string;
+  nome_da_empresa?: string;
+  nomeEmpresa?: string;
+  Nome_da_Empresa?: string;
+  nome?: string;
+  cnpj_empresa?: string;
+  cnpjEmpresa?: string;
+  CNPJ_Empresa?: string;
+  cnpj?: string;
+  empresa_id?: string;
+  empresaId?: string;
+  Empresa_ID?: string;
 }
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   suggestionFlat: Prefill | null;
-  baseCompany?: Prefill | null; // <-- Added prop
+  baseCompany?: Company | null;
+   // <-- Added prop
   rawJson?: any;
   error?: string;
   onConfirm: (flat: Prefill) => void;
@@ -81,7 +101,15 @@ export default function EnrichmentPreviewDialog({
       ask,
     });
 
-    onConfirm({ ...suggestionFlat, CNPJ_Empresa: finalCNPJ });
+    const finalFlat = { ...suggestionFlat, CNPJ_Empresa: finalCNPJ };
+    // Prioriza o cliente_id da empresa base, se existir
+    if (baseCompany?.cliente_id) {
+      finalFlat.cliente_id = baseCompany.cliente_id;
+    } else if (suggestionFlat.cliente_id) {
+      // Se o enriquecimento já trouxe um cliente_id (o que é improvável, mas por segurança)
+      finalFlat.cliente_id = suggestionFlat.cliente_id;
+    }
+    onConfirm(finalFlat);
     setConfirmState({ isOpen: false });
   };
 
