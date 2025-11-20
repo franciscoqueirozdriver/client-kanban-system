@@ -301,7 +301,20 @@ export async function POST(request: Request) {
         bodyKeys: Object.keys(body || {}),
         query: Object.fromEntries(url.searchParams),
       });
-      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+
+      return NextResponse.json(
+        {
+          error: true,
+          httpStatus: 400,
+          httpStatusText: 'Bad Request',
+          message: 'Missing required fields',
+          details: {
+            clienteId: !clienteId ? 'required' : 'provided',
+            nomeEmpresa: !nomeEmpresa ? 'required' : 'provided',
+          },
+        },
+        { status: 400 },
+      );
     }
 
     const requestedAt = new Date().toISOString();
