@@ -23,7 +23,13 @@ export interface Company {
 }
 
 export interface SavedCompany {
-  Cliente_ID: string;
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
+  // Preferencialmente snake_case (novo padrão)
+  cliente_id?: string;
+  nome_da_empresa?: string;
+  cnpj_empresa?: string;
+
+  // Compatibilidade com respostas antigas / outras rotas
+  Cliente_ID?: string;
+  Nome_da_Empresa?: string;
+  CNPJ_Empresa?: string;
 }

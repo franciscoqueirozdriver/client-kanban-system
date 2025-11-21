@@ -818,23 +818,29 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   };
 
   const handleSaveNewCompany = (saved: SavedCompany) => {
-    // Normalize immediately from the saved payload
-      const newCompany: Company = {
-        ...saved,
-        cliente_id: saved.Cliente_ID,
-        nome_da_empresa: saved.Nome_da_Empresa,
-        cnpj_empresa: normalizeCnpj(saved.CNPJ_Empresa),
-        CNPJ_Empresa: normalizeCnpj(saved.CNPJ_Empresa),
-        // Ensure legacy keys are also present if needed by downstream logic
-        clienteId: saved.Cliente_ID,
-        nomeEmpresa: saved.Nome_da_Empresa,
-      };
+    const clienteId = saved.cliente_id ?? saved.Cliente_ID ?? '';
+    const nomeEmpresa = saved.nome_da_empresa ?? saved.Nome_da_Empresa ?? '';
+    const rawCnpj = saved.cnpj_empresa ?? saved.CNPJ_Empresa ?? '';
+    const normalizedCnpj = normalizeCnpj(rawCnpj);
 
-      // Se o modal foi aberto a partir de um enriquecimento, o cliente_id pode vir do prefill
-      if (companyPrefill?.cliente_id) {
-        newCompany.cliente_id = companyPrefill.cliente_id;
-        newCompany.clienteId = companyPrefill.cliente_id;
-      }
+    const newCompany: Company = {
+      ...saved,
+      // fonte da verdade em snake_case
+      cliente_id: clienteId || undefined,
+      nome_da_empresa: nomeEmpresa || undefined,
+      cnpj_empresa: normalizedCnpj || undefined,
+
+      // compat legada (camelCase + PascalCase)
+      clienteId: clienteId || undefined,
+      nomeEmpresa: nomeEmpresa || undefined,
+      Nome_da_Empresa: nomeEmpresa || undefined,
+      CNPJ_Empresa: normalizedCnpj || undefined,
+    };
+
+    if (companyPrefill?.cliente_id) {
+      newCompany.cliente_id = companyPrefill.cliente_id;
+      newCompany.clienteId = companyPrefill.cliente_id;
+    }
 
     if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
       handleSelectCompany('competitor', newCompany, modalTarget.index);
