@@ -131,6 +131,8 @@ async function groupRows(rows) {
 }
 
 export default async function handler(req, res) {
+  // Log request body for debugging purposes
+  console.log('/api/kanban', req.method, 'body:', req.body);
   if (req.method === 'GET') {
     try {
       const { headers, rows: dataRows } = await getSheetData('Sheet1');
