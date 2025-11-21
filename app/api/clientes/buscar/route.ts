@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSheetData } from '../../../../lib/googleSheets.js';
 import { padCNPJ14, onlyDigits } from '@/utils/cnpj';
 
-const SHEET_NAME = 'Leads Exact Spotter';
+const SHEET_NAME = 'layout_importacao_empresas';
 const RESULT_LIMIT = 20;
 
 // Normalizer function as specified
@@ -30,8 +30,24 @@ export async function GET(request: Request) {
     const { rows } = await getSheetData(SHEET_NAME);
 
     const scoredResults = rows.map(row => {
-      const nomeRaw = row['Nome da Empresa'] || row['Nome do Lead'] || '';
-      const cnpjRaw = row['CPF/CNPJ'] || '';
+      const nomeRaw =
+        row['nome_da_empresa'] ||
+        row['nome_do_lead'] ||
+        row['Nome da Empresa'] ||
+        row['Nome do Lead'] ||
+        '';
+
+      const cnpjRaw =
+        row['cnpj_empresa'] ||
+        row['cpf_cnpj'] ||
+        row['CPF/CNPJ'] ||
+        row['CNPJ Empresa'] ||
+        '';
+
+      const clienteId =
+        row['cliente_id'] ||
+        row['Cliente_ID'] ||
+        '';
 
       const nome = norm(nomeRaw);
       const cnpj = onlyDigits(cnpjRaw);
@@ -59,7 +75,7 @@ export async function GET(request: Request) {
       }
 
       return {
-        Cliente_ID: row['Cliente_ID'],
+        Cliente_ID: clienteId,
         Nome_da_Empresa: nomeRaw,
         CNPJ_Empresa: padCNPJ14(cnpjRaw),
         score,
