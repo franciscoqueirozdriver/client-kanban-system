@@ -11,7 +11,10 @@ import {
   PERDECOMP_SNAPSHOT_COLUMNS,
   USUARIOS_COLUMNS,
   PERMISSOES_COLUMNS,
-  TESES_COLUMNS
+  TESES_COLUMNS,
+  CNAE_COLUMNS,
+  AUDITORIA_ACAO_COLUMNS,
+  AUDITORIA_ACESSO_COLUMNS
 } from '@/lib/sheets-mapping';
 
 // --- Base Row Type ---
@@ -80,3 +83,18 @@ export type PermissoesRow = CreateRowType<typeof PERMISSOES_COLUMNS>;
  * Type definition for a row in the 'teses' tab.
  */
 export type TesesRow = CreateRowType<typeof TESES_COLUMNS>;
+
+/**
+ * Type definition for a row in the 'cnae' tab.
+ */
+export type CnaeRow = CreateRowType<typeof CNAE_COLUMNS>;
+
+/**
+ * Type definition for a row in the 'auditoria_acao' tab.
+ */
+export type AuditoriaAcaoRow = CreateRowType<typeof AUDITORIA_ACAO_COLUMNS>;
+
+/**
+ * Type definition for a row in the 'auditoria_acesso' tab.
+ */
+export type AuditoriaAcessoRow = CreateRowType<typeof AUDITORIA_ACESSO_COLUMNS>;

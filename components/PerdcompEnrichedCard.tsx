@@ -154,9 +154,9 @@ export default function PerdcompEnrichedCard({
     <article className="group relative mx-auto flex h-full w-full max-w-[420px] flex-col rounded-3xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg">
       <header className="mb-2">
         <h3 className="text-lg font-semibold text-foreground" title={company.nome_da_empresa}>
-          {company.nome_da_empresa}
+          {company.nome_da_empresa ?? company.Nome_da_Empresa ?? 'Empresa Desconhecida'}
         </h3>
-        <p className="text-xs text-muted-foreground">{formatCnpj(company.cnpj_empresa)}</p>
+        <p className="text-xs text-muted-foreground">{formatCnpj(company.cnpj_empresa ?? company.CNPJ_Empresa ?? '')}</p>
         {ultimaConsulta && (
           <p className="mt-1 text-xs text-muted-foreground">
             Última consulta: {new Date(ultimaConsulta).toLocaleDateString()}
