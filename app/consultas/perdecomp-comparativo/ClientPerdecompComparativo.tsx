@@ -65,6 +65,7 @@ type Prefill = {
   Complemento_Empresa?: string;
   CEP_Empresa?: string;
   CNPJ_Empresa?: string;
+  cnpj_empresa?: string;
   cnpj?: string;
   DDI_Empresa?: string;
   Telefones_Empresa?: string;
@@ -1102,7 +1103,15 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           const merged = enrichPreview?.base ? mergeEmptyFields(enrichPreview.base, flat) : flat;
           // The CNPJ decision is now made inside the dialog, so we just use the result (flat).
           // However, we still need to merge other fields.
-          const finalData = { ...merged, CNPJ_Empresa: flat.CNPJ_Empresa, cliente_id: flat.cliente_id };
+          // Fallback priority: flat > merged.cnpj (standard) > merged.cnpj_empresa (import/layout) > merged.CNPJ_Empresa (legacy)
+          const cnpjVal = flat.CNPJ_Empresa ?? merged.cnpj ?? merged.cnpj_empresa ?? merged.CNPJ_Empresa;
+          const finalData: Prefill = {
+            ...merged,
+            CNPJ_Empresa: cnpjVal,
+            cnpj: cnpjVal,
+            cnpj_empresa: cnpjVal,
+            cliente_id: flat.cliente_id ?? merged.cliente_id,
+          };
           handleUseSuggestion(finalData);
           setModalWarning(!enrichPreview?.suggestion);
           setShowEnrichPreview(false);
