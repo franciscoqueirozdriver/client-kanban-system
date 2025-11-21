@@ -41,7 +41,8 @@ type SaveArgs = {
 };
 
 type LoadArgs = {
-  clienteId: string;
+  clienteId?: string;
+  cnpj?: string;
 };
 
 type SheetRow = Record<string, string>;
@@ -908,11 +909,19 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
   }
 }
 
-export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | null> {
-  if (!clienteId) return null;
+export async function loadSnapshotCard({ clienteId, cnpj }: LoadArgs): Promise<any | null> {
+  if (!clienteId && !cnpj) return null;
   const { rows } = await getSheetData(SHEETS.PERDECOMP_SNAPSHOT);
-  const row = rows.find((item) => toStringValue(item.cliente_id) === clienteId);
+
+  const targetCnpj = onlyDigits(cnpj);
+  const row = rows.find((item) => {
+    if (clienteId && toStringValue(item.cliente_id) === clienteId) return true;
+    if (targetCnpj && onlyDigits(toStringValue(item.cnpj)) === targetCnpj) return true;
+    return false;
+  });
+
   if (!row) return null;
+  const resolvedClienteId = toStringValue(row.cliente_id);
   const p1 = toStringValue(row.resumo_ultima_consulta_json_p1 ?? '');
   const p2 = toStringValue(row.resumo_ultima_consulta_json_p2 ?? '');
   const payload = p1 + p2;
@@ -927,7 +936,7 @@ export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | n
       card.agregados.porCredito.length === 0;
 
     if (needsRisk || needsCredito) {
-      const facts = await readFactsByClienteId(clienteId);
+      const facts = await readFactsByClienteId(resolvedClienteId);
       if (needsRisk) {
         const derived = deriveRiskFromFacts(facts);
         card.risk = {

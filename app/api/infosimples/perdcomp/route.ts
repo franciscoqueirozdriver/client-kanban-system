@@ -332,7 +332,7 @@ export async function POST(request: Request) {
       console.info('SNAPSHOT_MODE', { empresa: nomeEmpresa, clienteId, source: 'perdecomp_snapshot' });
 
       try {
-        const snapshotCard = await loadSnapshotCard({ clienteId });
+        const snapshotCard = await loadSnapshotCard({ clienteId, cnpj });
 
         if (snapshotCard) {
           console.info('SNAPSHOT_ROWS', {
