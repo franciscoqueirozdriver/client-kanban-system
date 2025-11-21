@@ -804,7 +804,10 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     const normalized = {
       ...normalizedCompany,
       CNPJ_Empresa: cnpj, // compat para trechos que ainda usam PascalCase
-      cnpj_empresa: cnpj
+      cnpj_empresa: cnpj,
+      // Garante que o nome da empresa esteja presente no formato esperado pelo Autocomplete
+      nome_da_empresa: normalizedCompany.nome_da_empresa,
+      Nome_da_Empresa: normalizedCompany.nome_da_empresa,
     };
 
     const lastConsultation = isCnpj(cnpj) ? await checkLastConsultation(cnpj) : null;
