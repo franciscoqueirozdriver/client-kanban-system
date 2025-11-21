@@ -1,6 +1,11 @@
 export const onlyDigits = (v: string) => (v ?? '').replace(/\D/g, '');
 
-export const normalizeCnpj = (v: string) => onlyDigits(String(v ?? '')).slice(0, 14);
+export const normalizeCnpj = (v: string) => {
+  const d = onlyDigits(String(v ?? ''));
+  if (!d) return '';
+  if (d.length > 14) return d.slice(0, 14);
+  return d.padStart(14, '0');
+};
 
 const calcVerifier = (base: string) => {
   let sum = 0;
