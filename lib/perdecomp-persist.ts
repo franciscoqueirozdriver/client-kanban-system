@@ -371,6 +371,7 @@ export async function resolveClienteId({ providedClienteId, cnpj }: ResolveOpts)
     return providedClienteId;
   }
 
+  // Fallback: lookup by CNPJ in the snapshot sheet
   const found = await findClienteIdByCnpj(cnpj ?? null);
   if (found && CLT_ID_RE.test(found)) {
     syncNextSequenceFromId(found);
