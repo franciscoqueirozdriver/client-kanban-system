@@ -37,7 +37,7 @@ Gerencia todo o estado da aplicação:
     1.  Valida CNPJ (`ensureValidCnpj`).
     2.  Verifica se é Matriz/Filial (`decideCNPJFinalBeforeQuery`).
     3.  Chama `/api/sheets/cnpj` para registrar o uso do CNPJ.
-    4.  Chama `/api/infosimples/perdcomp` para buscar os dados.
+    4.  Chama `/api/perdecomp/snapshot` para ler os dados do snapshot (read-only).
     5.  Atualiza o estado `results` com os dados recebidos.
 
 ### Componentes Auxiliares
@@ -49,26 +49,24 @@ Gerencia todo o estado da aplicação:
 
 ## 4. Estrutura do Backend (API Routes)
 
-### 4.1. Core: `/api/infosimples/perdcomp`
-**Arquivo:** `app/api/infosimples/perdcomp/route.ts`
+### 4.1. Leitura de Dados: `/api/perdecomp/snapshot`
+**Arquivo:** `app/api/perdecomp/snapshot/route.ts`
 
-Responsável pela lógica principal de consulta e persistência.
+Novo endpoint seguro ("blindado") para leitura de dados. Não realiza chamadas externas à Infosimples.
 
 **Fluxo:**
-1.  **Recebe Request:** CNPJ, Datas, `Cliente_ID`, `Nome_da_Empresa`.
-2.  **Verifica Snapshot (Cache):**
-    *   Tenta carregar dados salvos em `perdecomp_snapshot` via `lib/perdecomp-persist.ts`.
-    *   Se existir e não for `force=true`, retorna o snapshot imediatamente.
+1.  **Recebe Request:** `clienteId`, `cnpj`, `nomeEmpresa`.
+2.  **Verifica Snapshot:** Tenta carregar dados salvos em `perdecomp_snapshot` via `lib/perdecomp-persist.ts`.
 3.  **Fallback Legado:** Se não houver snapshot, tenta ler da aba `PERDECOMP` antiga.
-4.  **Consulta Infosimples:**
-    *   Se não houver cache, chama a API da Infosimples (`/api/v2/consultas/receita-federal/perdcomp`).
-    *   Trata erros (ex: 612 - Sem dados) como resultados válidos vazios.
-5.  **Persistência:**
-    *   Normaliza os dados recebidos (Facts).
-    *   Salva o resultado em `perdecomp_snapshot` (JSON fragmentado) e `perdecomp_facts` (linhas individuais) usando `savePerdecompResults`.
-6.  **Retorno:** Devolve JSON estruturado para o frontend.
+4.  **Retorno:** Devolve JSON estruturado para o frontend ou um estado vazio seguro (não lança erro 502).
 
-### 4.2. Persistência de CNPJ: `/api/sheets/cnpj`
+### 4.2. Core Legado (Descontinuado): `/api/infosimples/perdcomp`
+**Arquivo:** `app/api/infosimples/perdcomp/route.ts`
+
+**STATUS: DESCONTINUADO (Retorna 410 Gone)**.
+Antigo endpoint responsável pela lógica principal de consulta. Foi desativado para impedir chamadas diretas à API externa que causavam instabilidade.
+
+### 4.3. Persistência de CNPJ: `/api/sheets/cnpj`
 **Arquivo:** `app/api/sheets/cnpj/route.ts`
 
 Atualiza o CNPJ de um cliente em múltiplas abas (`Leads Exact Spotter`, `layout_importacao_empresas`, `Sheet1`) para garantir consistência.
