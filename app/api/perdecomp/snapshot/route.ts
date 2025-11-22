@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { loadSnapshotCard, resolveClienteId } from '@/lib/perdecomp-persist';
-import { getSheetData, getSheetsClient } from '@/lib/googleSheets';
+import { loadSnapshotCard } from '@/lib/perdecomp-persist';
+import { getSheetsClient } from '@/lib/googleSheets';
 
 export const runtime = 'nodejs';
 
@@ -59,15 +59,15 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const { cnpj, nomeEmpresa } = body;
-    let { clienteId } = body;
+    // Accept both casings for compatibility
+    const clienteId = body.clienteId || body.Cliente_ID;
 
     if (!cnpj) {
        return NextResponse.json({ error: 'CNPJ is required' }, { status: 400 });
     }
 
-    // Ensure we have a valid clienteId to query the snapshot
     if (!clienteId) {
-        clienteId = await resolveClienteId({ cnpj, providedClienteId: null });
+       return NextResponse.json({ error: 'clienteId is required' }, { status: 400 });
     }
 
     // 1. Try to load from Snapshot
@@ -143,8 +143,6 @@ export async function POST(request: Request) {
     }
 
     // 3. No data found
-    // Instead of erroring, we return a clean "empty" state so the UI doesn't break
-    // This respects the "blindado" rule of not throwing 500s for expected empty states.
     return NextResponse.json({
         ok: true,
         fonte: 'empty',

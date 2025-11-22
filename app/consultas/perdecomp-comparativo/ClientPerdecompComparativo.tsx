@@ -310,26 +310,89 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        updateResult(finalCNPJ, { status: 'error', error: { message: data.message || 'Erro ao consultar snapshot.' } });
+        const errorObj = {
+          httpStatus: data?.httpStatus,
+          httpStatusText: data?.httpStatusText,
+          providerCode: data?.providerCode,
+          providerMessage: data?.providerMessage,
+          message: data?.message,
+        };
+        // Special handling for non-critical "no data" error when we have fallback data
+        const isNoDataError = errorObj.providerCode === 612;
+
+        if (data.fallback) {
+          const dcomp = data.fallback.dcomp ?? 0;
+          const rest = data.fallback.rest ?? 0;
+          const ressarc = data.fallback.ressarc ?? 0;
+          const canc = data.fallback.canc ?? 0;
+          const porFamilia = {
+            DCOMP: dcomp,
+            REST: rest,
+            RESSARC: ressarc,
+            CANC: canc,
+            DESCONHECIDO: 0,
+          };
+          const porNaturezaAgrupada = {
+            '1.3/1.7': dcomp,
+            '1.2/1.6': rest,
+            '1.1/1.5': ressarc,
+          };
+          const resumo = {
+            total: dcomp + rest + ressarc + canc,
+            totalSemCancelamento:
+              data.fallback.quantidade ?? dcomp + rest + ressarc,
+            canc,
+            porFamilia,
+            porNaturezaAgrupada,
+          };
+          const cardData: CardData = {
+            quantity: resumo.totalSemCancelamento,
+            lastConsultation: data.fallback.requested_at ?? null,
+            siteReceipt: data.fallback.site_receipt ?? null,
+            fromCache: true,
+            perdcompResumo: resumo,
+            perdcompCodigos: [], // Fallback não tem códigos individuais
+          };
+          // Do not show a scary error message for a simple "no data found"
+          updateResult(finalCNPJ, { status: 'loaded', data: cardData, error: isNoDataError ? null : errorObj });
+        } else {
+          updateResult(finalCNPJ, { status: 'error', error: errorObj });
+        }
         return;
       }
 
-      const mappedCount = data.mappedCount ?? 0;
-      const totalPerdcomp = data.total_perdcomp ?? 0;
-      const siteReceipt = data.site_receipt || null;
-      const lastConsultation = data.header?.requested_at || null;
+      const firstLinha = Array.isArray(data.linhas) ? data.linhas[0] : undefined;
+      const mappedCount =
+        data.mappedCount ??
+        data.debug?.mappedCount ??
+        (Array.isArray(data.linhas) ? data.linhas.length : 0);
+      const totalPerdcomp =
+        data.total_perdcomp ??
+        data.debug?.total_perdcomp ??
+        0;
+      const siteReceipt =
+        (data.site_receipt ??
+          data.debug?.siteReceipts?.[0] ??
+          firstLinha?.URL_Comprovante_HTML) || null;
+      const lastConsultation =
+        data.header?.requested_at ||
+        data.debug?.header?.requested_at ||
+        firstLinha?.Data_Consulta ||
+        null;
       const resumo = data.perdcompResumo;
+          const cardData: CardData = {
+            quantity: resumo?.totalSemCancelamento ?? Math.max(totalPerdcomp, mappedCount),
+            lastConsultation,
+            siteReceipt,
+            perdcompResumo: resumo,
+            perdcompCodigos: data.perdcompCodigos || [],
+          };
+      updateResult(finalCNPJ, { status: 'loaded', data: cardData, debug: showDebug ? data.debug ?? null : null });
 
-      const cardData: CardData = {
-        quantity: resumo?.totalSemCancelamento ?? Math.max(totalPerdcomp, mappedCount),
-        lastConsultation,
-        siteReceipt,
-        perdcompResumo: resumo,
-        perdcompCodigos: data.perdcompCodigos || [],
-      };
-
-      // If we have 0 quantity and no date, it effectively means "not found yet", but we treat as loaded empty state
-      updateResult(finalCNPJ, { status: 'loaded', data: cardData, debug: null });
+      if (showDebug && forceRefresh && (totalPerdcomp === 0 || !data.debug?.apiResponse)) {
+        setPreviewPayload({ company: companyWithFinalCnpj, debug: data.debug ?? null });
+        setPreviewOpen(true);
+      }
 
     } catch (e: any) {
       updateResult(finalCNPJ, { status: 'error', error: { message: e.message } });
