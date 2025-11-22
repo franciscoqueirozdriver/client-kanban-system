@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { loadSnapshotCard } from '@/lib/perdecomp-persist';
+import { loadSnapshotCard, findClienteIdByCnpj } from '@/lib/perdecomp-persist';
 import { getSheetsClient } from '@/lib/googleSheets';
 import { onlyDigits } from '@/utils/cnpj';
 
@@ -77,7 +77,20 @@ export async function POST(request: Request) {
 
     // 1. Try to load from Snapshot
     try {
-      const snapshotCard = await loadSnapshotCard({ clienteId });
+      let snapshotCard = await loadSnapshotCard({ clienteId });
+
+      // If not found by ID, try to resolve ID by CNPJ (handling mismatched IDs in frontend vs sheet)
+      if (!snapshotCard) {
+        const resolvedId = await findClienteIdByCnpj(cnpj);
+        if (resolvedId && resolvedId !== clienteId) {
+           console.warn('[perdecomp/snapshot] clienteId fallback by CNPJ triggered', {
+             originalClienteId: clienteId,
+             resolvedClienteId: resolvedId,
+             cnpj
+           });
+           snapshotCard = await loadSnapshotCard({ clienteId: resolvedId });
+        }
+      }
 
       if (snapshotCard) {
         // Extract data from the rich snapshot card
