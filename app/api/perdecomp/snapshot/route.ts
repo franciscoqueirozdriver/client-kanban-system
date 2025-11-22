@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { loadSnapshotCard } from '@/lib/perdecomp-persist';
 import { getSheetsClient } from '@/lib/googleSheets';
+import { onlyDigits } from '@/utils/cnpj';
 
 export const runtime = 'nodejs';
 
@@ -58,17 +59,21 @@ async function getLastPerdcompFromSheet({
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { cnpj, nomeEmpresa } = body;
+    const { nomeEmpresa } = body;
     // Accept both casings for compatibility
     const clienteId = body.clienteId || body.Cliente_ID;
+    const rawCnpj = body.cnpj;
 
-    if (!cnpj) {
+    if (!rawCnpj) {
        return NextResponse.json({ error: 'CNPJ is required' }, { status: 400 });
     }
 
     if (!clienteId) {
        return NextResponse.json({ error: 'clienteId is required' }, { status: 400 });
     }
+
+    // Force 14-digit padding to ensure lookups match sheet data
+    const cnpj = onlyDigits(rawCnpj).padStart(14, '0');
 
     // 1. Try to load from Snapshot
     try {
