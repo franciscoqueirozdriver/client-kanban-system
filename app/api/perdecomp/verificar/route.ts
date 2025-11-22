@@ -7,16 +7,69 @@ const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 
 export const runtime = 'nodejs';
 
+function getClienteIdFromRow(row: any): string {
+  return String(row.cliente_id ?? row.Cliente_ID ?? row['Cliente ID'] ?? '').trim();
+}
+
+function getCnpjFromRow(row: any): string {
+  const raw = row.cnpj ?? row.CNPJ ?? row['CNPJ Empresa'] ?? row.cnpj_normalizado ?? '';
+  // We want strict 14-digit comparison if possible, but sheet might have 12
+  return onlyDigits(String(raw));
+}
+
+function getDataConsultaFromRow(row: any): string | null {
+  return (
+    (row.Data_Consulta as string | undefined) ??
+    (row.data_consulta as string | undefined) ??
+    (row['Data Consulta'] as string | undefined) ??
+    null
+  );
+}
+
+function findLatestDate(rows: any[], clienteId: string | null, cleanCnpj: string | null): string | null {
+  const candidates = rows.filter(row => {
+    const rowClienteId = getClienteIdFromRow(row);
+    const rowCnpjRaw = getCnpjFromRow(row);
+
+    if (clienteId && rowClienteId === clienteId) {
+      return true;
+    }
+
+    if (cleanCnpj) {
+      // Strict match (padded)
+      const rowCnpjPadded = rowCnpjRaw.padStart(14, '0');
+      if (rowCnpjPadded === cleanCnpj) return true;
+
+      // Partial match (Sheet has 12 digits - root+branch)
+      // Input: 10490181000135, Sheet: 104901810001
+      if (rowCnpjRaw.length === 12 && cleanCnpj.startsWith(rowCnpjRaw)) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  return candidates.reduce<string | null>((latest, row) => {
+    const dt = getDataConsultaFromRow(row);
+    if (!dt) return latest;
+    // Simple string comparison for ISO/YYYY-MM-DD, but Date parsing is safer
+    const current = new Date(dt);
+    if (isNaN(current.getTime())) return latest;
+
+    if (!latest) return dt;
+    return current > new Date(latest) ? dt : latest;
+  }, null);
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const rawCnpj = searchParams.get('cnpj')?.trim();
-  const clienteId = searchParams.get('clienteId')?.trim();
+  const clienteId = searchParams.get('clienteId')?.trim() || null;
 
   if (!rawCnpj && !clienteId) {
     return NextResponse.json({ message: 'Query parameter "cnpj" or "clienteId" is required' }, { status: 400 });
   }
 
-  // Normalize CNPJ to 14 digits with leading zeros to match sheet format
   const cleanCnpj = rawCnpj ? onlyDigits(rawCnpj).padStart(14, '0') : null;
 
   try {
@@ -24,65 +77,16 @@ export async function GET(request: Request) {
     const snapshotData = await getSheetData(SHEET_SNAPSHOT);
     const snapshotRows = (snapshotData.rows || []) as any[];
 
-    let snapshotMatch: any = null;
-
-    if (clienteId) {
-      snapshotMatch = snapshotRows.find(row => {
-        const id = row.cliente_id || row.Cliente_ID || row['Cliente ID'];
-        return id === clienteId;
-      });
-    }
-
-    if (!snapshotMatch && cleanCnpj) {
-      snapshotMatch = snapshotRows.find(row => {
-        // Check if strict match
-        const sheetVal = onlyDigits(row.CNPJ);
-        const rowCnpj = sheetVal.padStart(14, '0');
-        if (rowCnpj === cleanCnpj) return true;
-
-        // Fallback: if sheet has 12 digits (Root+Branch), check if input starts with it
-        // e.g. Input: 10490181000135, Sheet: 104901810001
-        if (sheetVal.length === 12 && cleanCnpj.startsWith(sheetVal)) {
-          return true;
-        }
-        return false;
-      });
-    }
-
-    if (snapshotMatch && snapshotMatch.Data_Consulta) {
-      return NextResponse.json({ lastConsultation: snapshotMatch.Data_Consulta });
+    const latestSnapshot = findLatestDate(snapshotRows, clienteId, cleanCnpj);
+    if (latestSnapshot) {
+      return NextResponse.json({ lastConsultation: latestSnapshot });
     }
 
     // 2. Check the legacy PERDECOMP sheet (Fallback)
-    const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    const { rows: legacyRows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    const latestLegacy = findLatestDate(legacyRows, clienteId, cleanCnpj);
 
-    let dataForClient = [];
-
-    if (clienteId) {
-      dataForClient = rows.filter(row => row.Cliente_ID === clienteId);
-    }
-
-    if (dataForClient.length === 0 && cleanCnpj) {
-      dataForClient = rows.filter(row => {
-        const rowCnpj = onlyDigits(row.CNPJ).padStart(14, '0');
-        return rowCnpj === cleanCnpj;
-      });
-    }
-
-    if (dataForClient.length === 0) {
-      return NextResponse.json({ lastConsultation: null });
-    }
-
-    // Find the most recent consultation date in legacy rows
-    const mostRecentConsultation = dataForClient.reduce((latest: string | null, row: any) => {
-      const currentDate = new Date(row.Data_Consulta);
-      if (!latest || currentDate > new Date(latest)) {
-        return row.Data_Consulta;
-      }
-      return latest;
-    }, null as string | null);
-
-    return NextResponse.json({ lastConsultation: mostRecentConsultation });
+    return NextResponse.json({ lastConsultation: latestLegacy });
 
   } catch (error) {
     console.error('[API /perdecomp/verificar]', error);
