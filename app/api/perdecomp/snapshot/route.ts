@@ -82,12 +82,16 @@ export async function POST(request: Request) {
       // If not found by ID, try to resolve ID by CNPJ (handling mismatched IDs in frontend vs sheet)
       if (!snapshotCard) {
         const resolvedId = await findClienteIdByCnpj(cnpj);
-        if (resolvedId && resolvedId !== clienteId) {
-           console.warn('[perdecomp/snapshot] clienteId fallback by CNPJ triggered', {
-             originalClienteId: clienteId,
-             resolvedClienteId: resolvedId,
-             cnpj
-           });
+        if (resolvedId) {
+           // Use the resolved ID for the lookup, regardless of whether it matches the provided one
+           // The provided clienteId is used for the fallback warning, but the resolved one is used for the lookup
+           if (resolvedId !== clienteId) {
+             console.warn('[perdecomp/snapshot] clienteId fallback by CNPJ triggered', {
+               originalClienteId: clienteId,
+               resolvedClienteId: resolvedId,
+               cnpj
+             });
+           }
            snapshotCard = await loadSnapshotCard({ clienteId: resolvedId });
         }
       }
