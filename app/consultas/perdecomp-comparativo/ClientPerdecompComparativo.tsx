@@ -622,10 +622,12 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     setCompDialogOpen(false);
   }
 
-  const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
+  const checkLastConsultation = async (cnpj: string, clienteId?: string): Promise<string | null> => {
     try {
       const c = ensureValidCnpj(cnpj);
-      const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
+      const params = new URLSearchParams({ cnpj: c });
+      if (clienteId) params.append('clienteId', clienteId);
+      const res = await fetch(`/api/perdecomp/verificar?${params.toString()}`);
       if (res.ok) {
         const { lastConsultation } = await res.json();
         return lastConsultation;
@@ -719,7 +721,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
     const cnpj = normalizeCnpj(company.CNPJ_Empresa);
     const normalized = { ...company, CNPJ_Empresa: cnpj };
-    const lastConsultation = isCnpj(cnpj) ? await checkLastConsultation(cnpj) : null;
+    const lastConsultation = isCnpj(cnpj) ? await checkLastConsultation(cnpj, company.Cliente_ID) : null;
     const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
     if (type === 'client') {
       setClient(selection);
