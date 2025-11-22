@@ -970,7 +970,10 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
 export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | null> {
   if (!clienteId) return null;
   const { rows } = await getSheetData(SHEET_SNAPSHOT);
-  const row = rows.find((item) => toStringValue(item.cliente_id) === clienteId);
+  const row = rows.find((item) => {
+    const id = item.cliente_id || item.Cliente_ID || item['Cliente ID'] || '';
+    return toStringValue(id) === clienteId;
+  });
   if (!row) return null;
   const p1 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P1 ?? '');
   const p2 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P2 ?? '');

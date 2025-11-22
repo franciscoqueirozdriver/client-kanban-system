@@ -27,13 +27,25 @@ export async function GET(request: Request) {
     let snapshotMatch: any = null;
 
     if (clienteId) {
-      snapshotMatch = snapshotRows.find(row => row.cliente_id === clienteId);
+      snapshotMatch = snapshotRows.find(row => {
+        const id = row.cliente_id || row.Cliente_ID || row['Cliente ID'];
+        return id === clienteId;
+      });
     }
 
     if (!snapshotMatch && cleanCnpj) {
       snapshotMatch = snapshotRows.find(row => {
-        const rowCnpj = onlyDigits(row.CNPJ).padStart(14, '0');
-        return rowCnpj === cleanCnpj;
+        // Check if strict match
+        const sheetVal = onlyDigits(row.CNPJ);
+        const rowCnpj = sheetVal.padStart(14, '0');
+        if (rowCnpj === cleanCnpj) return true;
+
+        // Fallback: if sheet has 12 digits (Root+Branch), check if input starts with it
+        // e.g. Input: 10490181000135, Sheet: 104901810001
+        if (sheetVal.length === 12 && cleanCnpj.startsWith(sheetVal)) {
+          return true;
+        }
+        return false;
       });
     }
 
