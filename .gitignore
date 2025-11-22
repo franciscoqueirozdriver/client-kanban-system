@@ -10,6 +10,7 @@ dist/
 out/
 *.log
 coverage/
+*.tsbuildinfo
 
 # Variáveis de ambiente
 .env
