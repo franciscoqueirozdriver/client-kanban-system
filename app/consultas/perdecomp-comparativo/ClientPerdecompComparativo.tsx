@@ -11,15 +11,71 @@ import ConfirmDialog from '../../../components/ConfirmDialog';
 import PerdcompEnrichedCard from '../../../components/PerdcompEnrichedCard';
 import { decideCNPJFinalBeforeQuery } from '@/helpers/decideCNPJ';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ensureValidCnpj, formatCnpj, normalizeCnpj, onlyDigits, isCnpj, isEmptyCNPJLike } from '@/utils/cnpj';
+import { ensureValidCnpj, normalizeCnpj, onlyDigits, isCnpj, isEmptyCNPJLike } from '@/utils/cnpj';
 import { fmtCNPJ } from '@/utils/cnpj-matriz';
 
 // --- Helper Types ---
-interface Company {
+
+// Strict Normalized Company Interface
+export interface NormalizedCompany {
   Cliente_ID: string;
   Nome_da_Empresa: string;
   CNPJ_Empresa: string;
-  [key: string]: any;
+  empresa_id?: string;
+  [key: string]: unknown;
+}
+
+// Replaces the old Company interface locally or we can alias it
+type Company = NormalizedCompany;
+
+// --- Normalization Logic ---
+function normalizeCompany(raw: unknown): NormalizedCompany {
+  if (!raw || typeof raw !== 'object') {
+     return { Cliente_ID: '', Nome_da_Empresa: '', CNPJ_Empresa: '' };
+  }
+  // Use Record<string, unknown> to avoid 'any', but we need to inspect properties freely
+  const r = raw as Record<string, unknown>;
+
+  // Helper to safely extract string
+  const str = (val: unknown) => (typeof val === 'string' || typeof val === 'number') ? String(val) : undefined;
+
+  // ID
+  const cliente_id =
+    str(r.Cliente_ID) ??
+    str(r.cliente_id) ??
+    str(r.clienteId) ??
+    str(r.id) ??
+    '';
+
+  // Nome
+  const nome =
+     str(r.Nome_da_Empresa) ??
+     str(r.nome_da_empresa) ??
+     str(r.nomeEmpresa) ??
+     str(r.nome) ??
+     '';
+
+  // CNPJ
+  const rawCnpj =
+     str(r.CNPJ_Empresa) ??
+     str(r.cnpj_empresa) ??
+     str(r.cnpjEmpresa) ??
+     str(r.CNPJ) ??
+     str(r.cnpj) ??
+     '';
+
+  // Normalize CNPJ: keep digits only, pad to 14 chars
+  const cnpj = onlyDigits(rawCnpj).padStart(14, '0');
+
+  const empresa_id = str(r.empresa_id) ?? str(r.empresaId) ?? str(r.Empresa_ID);
+
+  return {
+    ...r, // Preserve other keys
+    Cliente_ID: cliente_id,
+    Nome_da_Empresa: nome,
+    CNPJ_Empresa: cnpj,
+    empresa_id: empresa_id,
+  };
 }
 
 interface CardData {
@@ -40,22 +96,22 @@ interface CardData {
 type ApiDebug = {
   requestedAt?: string;
   fonte?: 'api' | 'planilha';
-  apiRequest?: any;
-  apiResponse?: any;
+  apiRequest?: unknown;
+  apiResponse?: unknown;
   mappedCount?: number;
   siteReceipts?: string[];
-  header?: any;
+  header?: unknown;
   total_perdcomp?: number;
 } | null;
 
 interface ComparisonResult {
   company: Company; data: CardData | null;
-  status: 'idle' | 'loading' | 'loaded' | 'error'; error?: any;
+  status: 'idle' | 'loading' | 'loaded' | 'error'; error?: unknown;
   debug?: ApiDebug;
 }
 
 interface CompanySelection {
-  company: Company; lastConsultation: string | null; forceRefresh: boolean;
+  company: NormalizedCompany; lastConsultation: string | null; forceRefresh: boolean;
 }
 
 // Tipagem do flattened vindo do preview de enriquecimento
@@ -91,24 +147,6 @@ type CompetitorFetchState = {
   items: Array<{ nome: string; cnpj: string }>;
 };
 
-function buildApiErrorLabel(e: any) {
-  const parts: string[] = [];
-  if (e?.httpStatus) {
-    parts.push(
-      `API error: ${e.httpStatus}${e.httpStatusText ? ' ' + e.httpStatusText : ''}`,
-    );
-  } else {
-    parts.push('API error:');
-  }
-  if (e?.providerCode) {
-    parts.push(
-      `– ${e.providerCode}${e?.providerMessage ? ' ' + e.providerMessage : ''}`,
-    );
-  } else if (e?.message) {
-    parts.push(`– ${e.message}`);
-  }
-  return parts.join(' ');
-}
 // --- Main Page Component ---
 export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ?: string }) {
   const [client, setClient] = useState<CompanySelection | null>(null);
@@ -143,7 +181,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   const [modalTarget, setModalTarget] = useState<{ type: 'client' | 'competitor'; index?: number } | null>(null);
   const [isEnriching, setIsEnriching] = useState(false);
   const [enrichTarget, setEnrichTarget] = useState<string | null>(null);
-  const [enrichPreview, setEnrichPreview] = useState<any>(null);
+  const [enrichPreview, setEnrichPreview] = useState<any>(null); // Use any for dynamic preview data
   const [showEnrichPreview, setShowEnrichPreview] = useState(false);
   const [cnpjConfirmState, setCnpjConfirmState] = useState<{
     isOpen: boolean;
@@ -235,18 +273,23 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
 
   const runConsultation = async (selection: CompanySelection) => {
     const { company, forceRefresh } = selection;
+
+    // Ensure we are working with normalized data from the start of the process
+    const normalizedCompany = normalizeCompany(company);
+
     let normalizedCnpj: string;
     try {
-      normalizedCnpj = ensureValidCnpj(company.CNPJ_Empresa);
+      normalizedCnpj = ensureValidCnpj(normalizedCompany.CNPJ_Empresa);
     } catch (error: any) {
-      updateResult(company.CNPJ_Empresa, { status: 'error', error: { message: error?.message || 'CNPJ inválido. Verifique e tente novamente.' } });
+      const msg = error instanceof Error ? error.message : 'CNPJ inválido. Verifique e tente novamente.';
+      updateResult(normalizedCompany.CNPJ_Empresa, { status: 'error', error: { message: msg } });
       return;
     }
 
     let finalCNPJ = normalizedCnpj;
     try {
       finalCNPJ = await decideCNPJFinalBeforeQuery({
-        clienteId: company.Cliente_ID,
+        clienteId: normalizedCompany.Cliente_ID,
         cnpjAtual: normalizedCnpj,
         ask: openMatrizFilialConfirmModal,
       });
@@ -255,16 +298,17 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       finalCNPJ = normalizedCnpj;
     }
 
-    const companyWithFinalCnpj: Company = { ...company, CNPJ_Empresa: finalCNPJ };
+    // Since we are updating the CNPJ, we should ensure the object remains normalized
+    const companyWithFinalCnpj: Company = { ...normalizedCompany, CNPJ_Empresa: finalCNPJ };
 
-    if (finalCNPJ !== company.CNPJ_Empresa) {
+    if (finalCNPJ !== normalizedCompany.CNPJ_Empresa) {
       setClient(prev => {
-        if (!prev || prev.company.Cliente_ID !== company.Cliente_ID) return prev;
+        if (!prev || prev.company.Cliente_ID !== normalizedCompany.Cliente_ID) return prev;
         return { ...prev, company: { ...prev.company, CNPJ_Empresa: finalCNPJ } };
       });
       setCompetitors(prev =>
         prev.map(sel =>
-          sel && sel.company.Cliente_ID === company.Cliente_ID
+          sel && sel.company.Cliente_ID === normalizedCompany.Cliente_ID
             ? { ...sel, company: { ...sel.company, CNPJ_Empresa: finalCNPJ } }
             : sel,
         ),
@@ -273,7 +317,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
 
     setResults(prev =>
       prev.map(r =>
-        r.company.Cliente_ID === company.Cliente_ID
+        r.company.Cliente_ID === normalizedCompany.Cliente_ID
           ? { ...r, company: { ...r.company, CNPJ_Empresa: finalCNPJ } }
           : r,
       ),
@@ -285,7 +329,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       const persistRes = await fetch('/api/sheets/cnpj', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clienteId: company.Cliente_ID, cnpj: finalCNPJ }),
+        body: JSON.stringify({ clienteId: normalizedCompany.Cliente_ID, cnpj: finalCNPJ }),
       });
       if (!persistRes.ok) {
         const body = await persistRes.json().catch(() => null);
@@ -304,8 +348,8 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cnpj: finalCNPJ,
-          clienteId: company.Cliente_ID,
-          nomeEmpresa: company.Nome_da_Empresa,
+          clienteId: normalizedCompany.Cliente_ID,
+          nomeEmpresa: normalizedCompany.Nome_da_Empresa,
         }),
       });
       const data = await res.json();
@@ -719,9 +763,10 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   }
 
   const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
-    const cnpj = normalizeCnpj(company.CNPJ_Empresa);
-    const normalized = { ...company, CNPJ_Empresa: cnpj };
-    const lastConsultation = isCnpj(cnpj) ? await checkLastConsultation(cnpj, company.Cliente_ID) : null;
+    // Normalize data immediately upon selection
+    const normalized = normalizeCompany(company);
+    const cnpj = normalized.CNPJ_Empresa;
+    const lastConsultation = isCnpj(cnpj) ? await checkLastConsultation(cnpj, normalized.Cliente_ID) : null;
     const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
     if (type === 'client') {
       setClient(selection);
@@ -731,10 +776,12 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   };
 
   const handleSaveNewCompany = (newCompany: Company) => {
+    // Normalize data before saving/selecting
+    const normalized = normalizeCompany(newCompany);
     if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
-      handleSelectCompany('competitor', newCompany, modalTarget.index);
+      handleSelectCompany('competitor', normalized, modalTarget.index);
     } else {
-      handleSelectCompany('client', newCompany);
+      handleSelectCompany('client', normalized);
     }
     setCompanyModalOpen(false);
     setCompanyPrefill(null);
