@@ -1,9 +1,9 @@
 import { getSheetsClient, getSheetData, withRetry, chunk } from '../../lib/googleSheets';
 
 const SHEET_LAYOUT = 'layout_importacao_empresas';
-const SHEET_SHEET1 = 'Sheet1';
+const SHEET_SHEET1 = 'sheet1';
 const SHEET_PADROES = 'Padroes';
-const SHEET_DEST = 'Leads Exact Spotter';
+const SHEET_DEST = 'leads_exact_spotter';
 const KEY = 'Cliente_ID'; // chave única padronizada
 
 // Utils
