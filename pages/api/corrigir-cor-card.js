@@ -1,6 +1,6 @@
 import { getSheetsClient, getSheetData } from '../../lib/googleSheets';
 
-const SHEET_NAME = 'Sheet1';
+const SHEET_NAME = 'sheet1';
 const KEY = 'Cliente_ID';
 const COLOR_COLUMN = 'Cor_Card';
 

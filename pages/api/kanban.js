@@ -27,7 +27,7 @@ function collectEmails(row, idx) {
 
 async function groupRows(rows) {
   const [header, ...data] = rows;
-  const SHEET = 'Sheet1';
+  const SHEET = 'sheet1';
   const COL = await buildColumnResolver(SHEET);
   const idx = {
     clienteId: header.indexOf(COL('Cliente_ID')),
@@ -133,7 +133,7 @@ async function groupRows(rows) {
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const { headers, rows: dataRows } = await getSheetData('Sheet1');
+      const { headers, rows: dataRows } = await getSheetData('sheet1');
       const rawRows = [headers, ...dataRows.map(row => headers.map(header => row[header]))]; // Reconstroi o array de arrays para groupRows
       const { clients } = await groupRows(rawRows);
 
@@ -176,7 +176,7 @@ export default async function handler(req, res) {
           ? 'red'
           : undefined;
 
-      const sheetName = 'Sheet1';
+      const sheetName = 'sheet1';
       const rowIndex = await findRowIndexById(sheetName, 1, 'Cliente_ID', id);
       if (rowIndex < 0) {
         return res.status(404).json({ error: 'ID não encontrado' });
