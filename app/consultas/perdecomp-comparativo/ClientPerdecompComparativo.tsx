@@ -21,7 +21,6 @@ interface Company {
   CNPJ_Empresa: string;
   [key: string]: any;
 }
-
 interface CardData {
   quantity: number;
   lastConsultation: string | null;
@@ -71,6 +70,7 @@ type Prefill = {
   Complemento_Empresa?: string;
   CEP_Empresa?: string;
   CNPJ_Empresa?: string;
+  cnpj_empresa?: string;
   cnpj?: string;
   DDI_Empresa?: string;
   Telefones_Empresa?: string;
@@ -83,6 +83,7 @@ type Prefill = {
   Mercado?: string;
   Produto?: string;
   Area?: string;
+  cliente_id?: string;
 };
 
 type CompetitorFetchState = {
@@ -91,27 +92,43 @@ type CompetitorFetchState = {
   items: Array<{ nome: string; cnpj: string }>;
 };
 
-function buildApiErrorLabel(e: any) {
-  const parts: string[] = [];
-  if (e?.httpStatus) {
-    parts.push(
-      `API error: ${e.httpStatus}${e.httpStatusText ? ' ' + e.httpStatusText : ''}`,
-    );
-  } else {
-    parts.push('API error:');
-  }
-  if (e?.providerCode) {
-    parts.push(
-      `– ${e.providerCode}${e?.providerMessage ? ' ' + e.providerMessage : ''}`,
-    );
-  } else if (e?.message) {
-    parts.push(`– ${e.message}`);
-  }
-  return parts.join(' ');
+function normalizeCompanyData(company: Company): Company {
+  const cliente_id =
+    company.cliente_id ??
+    company.clienteId ??
+    company.Cliente_ID ??
+    (typeof company.id === 'string' ? company.id : undefined);
+
+  const nome_da_empresa =
+    company.nome_da_empresa ??
+    company.nomeEmpresa ??
+    company.Nome_da_Empresa ??
+    (typeof company.nome === 'string' ? company.nome : undefined);
+
+  const cnpj_empresa =
+    company.cnpj_empresa ??
+    company.cnpjEmpresa ??
+    company.CNPJ_Empresa ??
+    (typeof company.cnpj === 'string' ? company.cnpj : undefined);
+
+  const empresa_id =
+    company.empresa_id ??
+    company.empresaId ??
+    company.Empresa_ID;
+
+  return {
+    ...company,
+    Cliente_ID: cliente_id,
+    Nome_da_Empresa: nome_da_empresa,
+    CNPJ_Empresa: cnpj_empresa,
+    empresa_id,
+  };
 }
+
 // --- Main Page Component ---
 export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ?: string }) {
   const [client, setClient] = useState<CompanySelection | null>(null);
+  const [normalizedClient, setNormalizedClient] = useState<Company | null>(null);
   const [competitors, setCompetitors] = useState<Array<CompanySelection | null>>([]);
   const MAX_COMPETITORS = 3;
   const remainingSlots = MAX_COMPETITORS - competitors.filter(c => !!c).length;
@@ -235,18 +252,44 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
 
   const runConsultation = async (selection: CompanySelection) => {
     const { company, forceRefresh } = selection;
+
+    // 1. Normalizar os dados da empresa para garantir que os campos esperados existam
+    const normalizedCompany = normalizeCompanyData(company);
+
+    // 2. Validação estrita para evitar falhas silenciosas
+    const clienteId = normalizedCompany.Cliente_ID;
+    const nomeEmpresa = normalizedCompany.Nome_da_Empresa;
+    const empresaId = normalizedCompany.empresa_id;
+    const rawCnpj = normalizedCompany.CNPJ_Empresa ?? '';
+
     let normalizedCnpj: string;
     try {
-      normalizedCnpj = ensureValidCnpj(company.CNPJ_Empresa);
+      normalizedCnpj = ensureValidCnpj(rawCnpj);
     } catch (error: any) {
-      updateResult(company.CNPJ_Empresa, { status: 'error', error: { message: error?.message || 'CNPJ inválido. Verifique e tente novamente.' } });
+      updateResult(rawCnpj, { status: 'error', error: { message: error?.message || 'CNPJ inválido. Verifique e tente novamente.' } });
+      return;
+    }
+
+    if (!clienteId || !nomeEmpresa) {
+      console.error('[Validation Error] Missing required fields for Perdcomp API', {
+        clienteId,
+        nomeEmpresa,
+        company: normalizedCompany,
+      });
+
+      updateResult(normalizedCnpj, {
+        status: 'error',
+        error: {
+          message: `Dados da empresa incompletos. ${!clienteId ? 'Cliente ID ausente.' : ''} ${!nomeEmpresa ? 'Nome da empresa ausente.' : ''}`.trim(),
+        },
+      });
       return;
     }
 
     let finalCNPJ = normalizedCnpj;
     try {
       finalCNPJ = await decideCNPJFinalBeforeQuery({
-        clienteId: company.Cliente_ID,
+        clienteId: clienteId,
         cnpjAtual: normalizedCnpj,
         ask: openMatrizFilialConfirmModal,
       });
@@ -255,16 +298,19 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       finalCNPJ = normalizedCnpj;
     }
 
-    const companyWithFinalCnpj: Company = { ...company, CNPJ_Empresa: finalCNPJ };
+    // Update state if CNPJ changed (e.g. matrix/branch decision)
+    const companyWithFinalCnpj: Company = { ...normalizedCompany, CNPJ_Empresa: finalCNPJ };
 
-    if (finalCNPJ !== company.CNPJ_Empresa) {
+    if (finalCNPJ !== normalizedCompany.CNPJ_Empresa) {
       setClient(prev => {
-        if (!prev || prev.company.Cliente_ID !== company.Cliente_ID) return prev;
-        return { ...prev, company: { ...prev.company, CNPJ_Empresa: finalCNPJ } };
+        if (!prev || prev.company.Cliente_ID !== clienteId) return prev;
+        const updatedCompany = { ...prev.company, CNPJ_Empresa: finalCNPJ };
+        setNormalizedClient(normalizeCompanyData(updatedCompany));
+        return { ...prev, company: updatedCompany };
       });
       setCompetitors(prev =>
         prev.map(sel =>
-          sel && sel.company.Cliente_ID === company.Cliente_ID
+          sel && sel.company.Cliente_ID === clienteId
             ? { ...sel, company: { ...sel.company, CNPJ_Empresa: finalCNPJ } }
             : sel,
         ),
@@ -273,7 +319,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
 
     setResults(prev =>
       prev.map(r =>
-        r.company.Cliente_ID === company.Cliente_ID
+        r.company.Cliente_ID === clienteId
           ? { ...r, company: { ...r.company, CNPJ_Empresa: finalCNPJ } }
           : r,
       ),
@@ -285,7 +331,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
       const persistRes = await fetch('/api/sheets/cnpj', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clienteId: company.Cliente_ID, cnpj: finalCNPJ }),
+        body: JSON.stringify({ clienteId: clienteId, cnpj: finalCNPJ }),
       });
       if (!persistRes.ok) {
         const body = await persistRes.json().catch(() => null);
@@ -304,8 +350,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cnpj: finalCNPJ,
-          clienteId: company.Cliente_ID,
-          nomeEmpresa: company.Nome_da_Empresa,
+          clienteId: clienteId,
+          nomeEmpresa: nomeEmpresa,
+          empresaId: empresaId ?? null,
         }),
       });
       const data = await res.json();
@@ -408,7 +455,10 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     if (allSelections.length === 0) return;
 
     setGlobalLoading(true);
-    setResults(allSelections.map(s => ({ company: { ...s.company, CNPJ_Empresa: normalizeCnpj(s.company.CNPJ_Empresa) }, data: null, status: 'idle', debug: null })));
+    setResults(allSelections.map(s => {
+      const normalized = normalizeCompanyData(s.company);
+      return { company: { ...normalized, CNPJ_Empresa: normalizeCnpj(normalized.CNPJ_Empresa) }, data: null, status: 'idle', debug: null };
+    }));
 
     for (const sel of allSelections) {
       try {
@@ -529,7 +579,8 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   function openCompetitorDialog() {
     if (!client || remainingSlots <= 0) return;
     setCompDialogOpen(true);
-    fetchCompetitorsByName(client.company.Nome_da_Empresa, { setAsBase: true }).catch(() => {
+    const normalized = normalizeCompanyData(client.company);
+    fetchCompetitorsByName(normalized.Nome_da_Empresa, { setAsBase: true }).catch(() => {
       // erros já tratados em fetchCompetitorsByName
     });
   }
@@ -725,16 +776,18 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
     if (type === 'client') {
       setClient(selection);
+      setNormalizedClient(normalizeCompanyData(normalized));
     } else if (type === 'competitor' && index !== undefined) {
       setCompetitors(prev => prev.map((c, i) => i === index ? selection : c));
     }
   };
 
   const handleSaveNewCompany = (newCompany: Company) => {
+    const normalized = normalizeCompanyData(newCompany);
     if (modalTarget?.type === 'competitor' && modalTarget.index !== undefined) {
-      handleSelectCompany('competitor', newCompany, modalTarget.index);
+      handleSelectCompany('competitor', normalized, modalTarget.index);
     } else {
-      handleSelectCompany('client', newCompany);
+      handleSelectCompany('client', normalized);
     }
     setCompanyModalOpen(false);
     setCompanyPrefill(null);
@@ -785,7 +838,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
             <p className="text-sm font-semibold text-foreground">Cliente Principal</p>
             <Autocomplete
               selectedCompany={client?.company ?? null}
-              onSelect={(company) => handleSelectCompany('client', company)}
+              onSelect={(company) => handleSelectCompany('client', normalizeCompanyData(company))}
               onClear={() => setClient(null)}
               onNoResults={(query) => handleRegisterNewFromQuery(query, { type: 'client' })}
               onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'client' })}
@@ -850,7 +903,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                 <div className="flex-1">
                   <Autocomplete
                     selectedCompany={comp?.company ?? null}
-                    onSelect={(company) => handleSelectCompany('competitor', company, index)}
+                    onSelect={(company) => handleSelectCompany('competitor', normalizeCompanyData(company), index)}
                     onClear={() => handleRemoveCompetitor(index)}
                     onNoResults={(query) => handleRegisterNewFromQuery(query, { type: 'competitor', index })}
                     onEnrichSelected={(company) => handleEnrichFromMain('selected', company, undefined, { type: 'competitor', index })}
