@@ -958,9 +958,19 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
       factsError = toFactsErrorMessage(error);
     }
 
+    // Resilient persistence: if facts fail due to sheet limits, do NOT mark snapshot as error.
+    let snapshotError = factsError;
+    if (factsError && factsError.includes('limit of 10000000 cells')) {
+      console.warn('[PERDECOMP PERSIST] FACTS cell limit reached – suppressing facts append error from snapshot status', {
+        clienteId: clienteIdFinal,
+        originalError: factsError,
+      });
+      snapshotError = null;
+    }
+
     await markSnapshotPostFacts(clienteIdFinal, {
       factsCount: mappedFacts.length,
-      error: factsError,
+      error: snapshotError,
       nowISO,
     });
 

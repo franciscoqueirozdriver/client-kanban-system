@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { loadSnapshotCard, findClienteIdByCnpj } from '@/lib/perdecomp-persist';
 import { getSheetsClient } from '@/lib/googleSheets';
 import { onlyDigits } from '@/utils/cnpj';
-import { refreshPerdcompData } from '@/lib/perdecomp-service';
 import { agregaPerdcomp } from '@/utils/perdcomp';
+import { POST as sheetsCnpjHandler } from '@/app/api/sheets/cnpj/route';
 
 export const runtime = 'nodejs';
 
@@ -163,42 +163,60 @@ export async function POST(request: Request) {
 
     // --- FORCE REFRESH BRANCH ---
     if (forceRefresh && clienteId) {
-      console.info('[PERDCOMP SNAPSHOT] forceRefresh TRUE – calling Infosimples', {
-        cnpj,
+      console.info('[PERDECOMP SNAPSHOT] forceRefresh TRUE – delegando para /api/sheets/cnpj', {
         clienteId,
+        cnpj,
         startDate,
         endDate,
       });
 
+      const url = new URL('/api/sheets/cnpj', 'http://localhost');
+      const reqBody = {
+        clienteId,
+        cnpj,
+        force: true,
+        data_inicio: startDate,
+        data_fim: endDate,
+        nomeEmpresa,
+      };
+
+      const delegateRequest = new Request(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody),
+      });
+
       try {
-        const infosimplesResult = await refreshPerdcompData({
-          clienteId,
-          cnpj,
-          startDate,
-          endDate,
-          nomeEmpresa: nomeEmpresa || '',
-        });
+        const delegateResponse = await sheetsCnpjHandler(delegateRequest as any);
+        const status = (delegateResponse as any)?.status || 200;
+        let body: any = null;
+        try {
+          body = await (delegateResponse as any).json?.();
+        } catch {
+          // ignore
+        }
 
-        // refreshPerdcompData already persists the result (facts + snapshot)
-        // and returns the formatted response object.
-        // We just need to wrap it in NextResponse.
-        return NextResponse.json(infosimplesResult);
-
-      } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.error('[PERDCOMP SNAPSHOT] forceRefresh failed', { message: msg });
-        // Fallback to reading snapshot if refresh fails? Or return error?
-        // Usually return error or let it fall through to snapshot reading if desired.
-        // For now, let's return the error to signal UI.
-        return NextResponse.json(
-          { error: true, message: `Falha ao atualizar: ${msg}` },
-          { status: 502 } // Bad Gateway / Upstream Error
-        );
+        if (status >= 400) {
+          console.error('[PERDECOMP SNAPSHOT] sheets/cnpj handler returned error', {
+            status,
+            body,
+          });
+        } else {
+          console.info('[PERDECOMP SNAPSHOT] sheets/cnpj handler succeeded', {
+            status,
+          });
+        }
+      } catch (error) {
+        console.error('[PERDECOMP SNAPSHOT] Error calling sheetsCnpjHandler', error);
       }
     }
 
     // 1. Try to load from Snapshot
     if (clienteId) {
+      console.info('[PERDECOMP SNAPSHOT] Loading snapshot after potential refresh', {
+        clienteId,
+        cnpj,
+      });
       try {
         let snapshotCard = await loadSnapshotCard({ clienteId });
 
