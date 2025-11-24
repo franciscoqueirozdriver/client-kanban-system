@@ -3,6 +3,7 @@ import { loadSnapshotCard, findClienteIdByCnpj } from '@/lib/perdecomp-persist';
 import { getSheetsClient } from '@/lib/googleSheets';
 import { onlyDigits } from '@/utils/cnpj';
 import { refreshPerdcompData } from '@/lib/perdecomp-service';
+import { agregaPerdcomp } from '@/utils/perdcomp';
 
 export const runtime = 'nodejs';
 
@@ -122,8 +123,12 @@ export async function POST(request: Request) {
     const nomeEmpresa = body.nome_da_empresa || body.nomeEmpresa || body.Nome_da_Empresa;
     let clienteId = body.cliente_id || body.clienteId || body.Cliente_ID;
 
-    // Robust forceRefresh parsing
-    const rawForce = body.forceRefresh ?? body.force;
+    // Robust forceRefresh parsing: support boolean, string ('true'), or number (1)
+    const rawForce =
+      (rawBody as any).force ??
+      (rawBody as any).forceRefresh ??
+      body.forceRefresh;
+
     const forceRefresh =
       rawForce === true ||
       rawForce === 'true' ||
@@ -212,51 +217,77 @@ export async function POST(request: Request) {
         }
 
         if (snapshotCard) {
-          // Extract data safely with strict typing where possible
-          const resumo = snapshotCard?.resumo ?? snapshotCard?.perdcompResumo ?? {};
+          const anyCard = snapshotCard as any;
 
-          const perdcompArray = Array.isArray(snapshotCard?.perdcomp)
-            ? snapshotCard.perdcomp
+          // Extract perdcomp array safely
+          const perdcompArray: any[] = Array.isArray(anyCard.perdcomp)
+            ? anyCard.perdcomp
             : [];
 
-          const mappedCount =
-            snapshotCard?.mappedCount ?? perdcompArray.length;
-
-          const totalPerdcomp =
-            snapshotCard?.total_perdcomp ?? (resumo as any)?.total ?? mappedCount;
-
-          const siteReceipt =
-            snapshotCard?.site_receipt ??
-            snapshotCard?.header?.site_receipt ??
+          // Resumo: use saved one or recalculate from facts if missing/invalid
+          let resumo: PerdcompResumo | null =
+            anyCard.resumo ??
+            anyCard.perdcompResumo ??
             null;
 
-          const lastConsultation =
-            snapshotCard?.header?.requested_at ??
-            (snapshotCard as any)?.requestedAt ??
+          if (!resumo) {
+            const agregado = agregaPerdcomp(perdcompArray);
+            resumo = {
+              total: agregado.total,
+              totalSemCancelamento: agregado.totalSemCancelamento,
+              canc: agregado.canc,
+              porFamilia: agregado.porFamilia,
+              porNaturezaAgrupada: agregado.porNaturezaAgrupada,
+            };
+          }
+
+          const mappedCount: number =
+            typeof anyCard.mappedCount === 'number'
+              ? anyCard.mappedCount
+              : Array.isArray(perdcompArray)
+                ? perdcompArray.length
+                : 0;
+
+          const totalPerdcomp: number =
+            typeof anyCard.total_perdcomp === 'number'
+              ? anyCard.total_perdcomp
+              : resumo?.total ?? mappedCount;
+
+          const siteReceipt: string | null =
+            anyCard.site_receipt ??
+            anyCard.header?.site_receipt ??
             null;
 
-          const primeiro =
-            snapshotCard?.primeiro ??
-            (Array.isArray(perdcompArray) && perdcompArray[0]) ??
+          const lastConsultation: string | null =
+            anyCard.header?.requested_at ??
+            anyCard.requestedAt ??
             null;
 
-          // Reconstruct perdcompCodigos if missing, using the array of items
-          let perdcompCodigos: string[] = snapshotCard?.perdcompCodigos ?? [];
+          const primeiro: any =
+            anyCard.primeiro ??
+            (Array.isArray(perdcompArray) && perdcompArray.length > 0
+              ? perdcompArray[0]
+              : null);
 
-          if (
-            (!perdcompCodigos || perdcompCodigos.length === 0) &&
-            perdcompArray.length > 0
-          ) {
+          // Reconstruct perdcompCodigos if missing
+          let perdcompCodigos: string[] =
+            Array.isArray(anyCard.perdcompCodigos)
+              ? anyCard.perdcompCodigos
+              : [];
+
+          if ((!perdcompCodigos || perdcompCodigos.length === 0) && perdcompArray.length > 0) {
             perdcompCodigos = perdcompArray
-              .map((item: any) =>
-                item?.perdcomp ??
-                item?.Perdcomp_Numero ??
-                item?.numero ??
-                null,
-              )
+              .map((item: any) => {
+                return (
+                  item?.perdcomp ??
+                  item?.Perdcomp_Numero ??
+                  item?.numero ??
+                  null
+                );
+              })
               .filter(
-                (x: any): x is string =>
-                  typeof x === 'string' && x.trim().length > 0,
+                (value: any): value is string =>
+                  typeof value === 'string' && value.trim().length > 0,
               );
           }
 
@@ -265,7 +296,7 @@ export async function POST(request: Request) {
             fonte: 'perdecomp_snapshot',
             mappedCount,
             total_perdcomp: totalPerdcomp,
-            perdcompResumo: resumo as any,
+            perdcompResumo: resumo,
             perdcompCodigos,
             site_receipt: siteReceipt,
             primeiro,
@@ -275,6 +306,7 @@ export async function POST(request: Request) {
               nomeEmpresa,
               clienteId,
             },
+            // Preserve other snapshot fields
             ...snapshotCard,
           };
 
