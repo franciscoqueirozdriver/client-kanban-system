@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { loadSnapshotCard, findClienteIdByCnpj } from '@/lib/perdecomp-persist';
 import { getSheetsClient } from '@/lib/googleSheets';
 import { onlyDigits } from '@/utils/cnpj';
+import { refreshPerdcompData } from '@/lib/perdecomp-service';
 
 export const runtime = 'nodejs';
 
@@ -14,6 +15,10 @@ interface PerdecompSnapshotRequest {
   nomeEmpresa?: string;
   Nome_da_Empresa?: string;
   nome_da_empresa?: string;
+  forceRefresh?: boolean | string | number; // Robust types
+  force?: boolean | string | number;
+  startDate?: string;
+  endDate?: string;
 }
 
 interface PerdcompResumo {
@@ -32,7 +37,7 @@ interface PerdcompResumo {
 
 interface PerdecompSnapshotResponse {
   ok: boolean;
-  fonte: 'perdecomp_snapshot' | 'planilha_fallback' | 'empty';
+  fonte: 'perdecomp_snapshot' | 'planilha_fallback' | 'empty' | 'api:infosimples';
   mappedCount: number;
   total_perdcomp: number;
   perdcompResumo: PerdcompResumo | null;
@@ -117,12 +122,24 @@ export async function POST(request: Request) {
     const nomeEmpresa = body.nome_da_empresa || body.nomeEmpresa || body.Nome_da_Empresa;
     let clienteId = body.cliente_id || body.clienteId || body.Cliente_ID;
 
+    // Robust forceRefresh parsing
+    const rawForce = body.forceRefresh ?? body.force;
+    const forceRefresh =
+      rawForce === true ||
+      rawForce === 'true' ||
+      rawForce === 1 ||
+      rawForce === '1';
+
+    const { startDate, endDate } = body;
+
     // Strict check for CNPJ presence
     if (!rawCnpj) {
        return NextResponse.json({ error: 'CNPJ is required' }, { status: 400 });
     }
 
     const cnpj = onlyDigits(rawCnpj).padStart(14, '0');
+
+    console.info("[PERDECOMP] parsed request", { cnpj, clienteId, forceRefresh, startDate, endDate });
 
     // --- FALLBACK LOGIC FOR MISSING CLIENTE_ID ---
     if (!clienteId) {
@@ -136,6 +153,42 @@ export async function POST(request: Request) {
         }
       } catch (e) {
         console.error('[perdecomp/snapshot] Error resolving clienteId from CNPJ', e);
+      }
+    }
+
+    // --- FORCE REFRESH BRANCH ---
+    if (forceRefresh && clienteId) {
+      console.info('[PERDCOMP SNAPSHOT] forceRefresh TRUE – calling Infosimples', {
+        cnpj,
+        clienteId,
+        startDate,
+        endDate,
+      });
+
+      try {
+        const infosimplesResult = await refreshPerdcompData({
+          clienteId,
+          cnpj,
+          startDate,
+          endDate,
+          nomeEmpresa: nomeEmpresa || '',
+        });
+
+        // refreshPerdcompData already persists the result (facts + snapshot)
+        // and returns the formatted response object.
+        // We just need to wrap it in NextResponse.
+        return NextResponse.json(infosimplesResult);
+
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error('[PERDCOMP SNAPSHOT] forceRefresh failed', { message: msg });
+        // Fallback to reading snapshot if refresh fails? Or return error?
+        // Usually return error or let it fall through to snapshot reading if desired.
+        // For now, let's return the error to signal UI.
+        return NextResponse.json(
+          { error: true, message: `Falha ao atualizar: ${msg}` },
+          { status: 502 } // Bad Gateway / Upstream Error
+        );
       }
     }
 
@@ -159,9 +212,8 @@ export async function POST(request: Request) {
         }
 
         if (snapshotCard) {
-          // Extract data safely
-          const resumo =
-            snapshotCard?.resumo ?? snapshotCard?.perdcompResumo ?? {};
+          // Extract data safely with strict typing where possible
+          const resumo = snapshotCard?.resumo ?? snapshotCard?.perdcompResumo ?? {};
 
           const perdcompArray = Array.isArray(snapshotCard?.perdcomp)
             ? snapshotCard.perdcomp
@@ -188,12 +240,13 @@ export async function POST(request: Request) {
             (Array.isArray(perdcompArray) && perdcompArray[0]) ??
             null;
 
-          let perdcompCodigos: string[] =
-            snapshotCard?.perdcompCodigos ?? [];
+          // Reconstruct perdcompCodigos if missing, using the array of items
+          let perdcompCodigos: string[] = snapshotCard?.perdcompCodigos ?? [];
 
-          // Fallback: se o snapshot não tiver a lista de códigos explícita,
-          // reconstruímos a partir do array de perdcomp salvo no snapshot.
-          if ((!perdcompCodigos || perdcompCodigos.length === 0) && perdcompArray.length > 0) {
+          if (
+            (!perdcompCodigos || perdcompCodigos.length === 0) &&
+            perdcompArray.length > 0
+          ) {
             perdcompCodigos = perdcompArray
               .map((item: any) =>
                 item?.perdcomp ??
@@ -239,6 +292,7 @@ export async function POST(request: Request) {
     // 2. Fallback to old Sheet logic
     const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
     if (fallback) {
+      console.warn("[PERDECOMP] Using spreadsheet fallback");
       const { quantidade, dcomp, rest, ressarc, canc, site_receipt, requested_at } = fallback;
 
       const resumo: PerdcompResumo = {
