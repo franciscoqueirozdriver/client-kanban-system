@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 
-interface Company {
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
+interface CompanyLike {
+  Nome_da_Empresa?: string;
+  nome_da_empresa?: string;
+  CNPJ_Empresa?: string;
+  cnpj_empresa?: string;
   [key: string]: any;
 }
 
@@ -19,7 +21,7 @@ type ApiDebug = {
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  company: Company | null;
+  company: CompanyLike | null;
   debug: ApiDebug;
 }
 
@@ -53,13 +55,17 @@ export default function PerdcompApiPreviewDialog({ isOpen, onClose, company, deb
 
   const firstPerdcomp = debug?.apiResponse?.data?.[0]?.perdcomp?.[0];
 
+  // Helper for loose company object
+  const nomeEmpresa = company?.Nome_da_Empresa || company?.nome_da_empresa;
+  const cnpjEmpresa = company?.CNPJ_Empresa || company?.cnpj_empresa;
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose}>
       <div className="absolute right-0 top-0 h-full w-full max-w-4xl bg-white dark:bg-gray-900 shadow-xl p-4 overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-semibold">Retorno da API – {company?.Nome_da_Empresa}</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">{company?.CNPJ_Empresa}</p>
+            <h2 className="text-lg font-semibold">Retorno da API – {nomeEmpresa}</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{cnpjEmpresa}</p>
           </div>
           <button ref={closeRef} onClick={onClose} className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100">Fechar</button>
         </div>
@@ -141,4 +147,3 @@ export default function PerdcompApiPreviewDialog({ isOpen, onClose, company, deb
     </div>
   );
 }
-

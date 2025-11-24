@@ -8,13 +8,8 @@ export const runtime = 'nodejs';
 // --- Type Definitions ---
 interface PerdecompSnapshotRequest {
   cnpj: string;
-  clienteId?: string;
-  Cliente_ID?: string;
-  nomeEmpresa?: string;
-  Nome_da_Empresa?: string;
-  forceRefresh?: boolean;
-  startDate?: string;
-  endDate?: string;
+  cliente_id?: string;
+  nome_da_empresa?: string;
 }
 
 interface PerdcompResumo {
@@ -33,7 +28,7 @@ interface PerdcompResumo {
 
 interface PerdecompSnapshotResponse {
   ok: boolean;
-  fonte: 'perdecomp_snapshot' | 'planilha_fallback' | 'empty';
+  fonte: 'perdecomp_snapshot' | 'planilha_fallback' | 'empty' | 'api:infosimples';
   mappedCount: number;
   total_perdcomp: number;
   perdcompResumo: PerdcompResumo | null;
@@ -46,7 +41,7 @@ interface PerdecompSnapshotResponse {
     nomeEmpresa?: string;
     clienteId?: string;
   };
-  [key: string]: any; // Allow extra fields from snapshot
+  [key: string]: any;
 }
 
 // Helper to get fallback data from the old PERDECOMP sheet if snapshot is missing
@@ -71,15 +66,16 @@ async function getLastPerdcompFromSheet({
   const rows = resp.data.values || [];
   const safeRows = Array.isArray(rows) ? rows : [];
 
-  const idxCliente = col('Cliente_ID');
-  const idxCnpj = col('CNPJ');
-  const idxQtd = col('Quantidade_PERDCOMP');
-  const idxHtml = col('URL_Comprovante_HTML');
-  const idxData = col('Data_Consulta');
-  const idxQtdDcomp = col('Qtd_PERDCOMP_DCOMP');
-  const idxQtdRest = col('Qtd_PERDCOMP_REST');
-  const idxQtdRessarc = col('Qtd_PERDCOMP_RESSARC');
-  const idxQtdCancel = col('Qtd_PERDCOMP_CANCEL');
+  // snake_case fallback
+  const idxCliente = col('cliente_id');
+  const idxCnpj = col('cnpj');
+  const idxQtd = col('quantidade_perdcomp');
+  const idxHtml = col('url_comprovante_html');
+  const idxData = col('data_consulta');
+  const idxQtdDcomp = col('qtd_perdcomp_dcomp');
+  const idxQtdRest = col('qtd_perdcomp_rest');
+  const idxQtdRessarc = col('qtd_perdcomp_ressarc');
+  const idxQtdCancel = col('qtd_perdcomp_cancel');
 
   const match = safeRows.find(
     r =>
@@ -108,78 +104,53 @@ async function getLastPerdcompFromSheet({
 export async function POST(request: Request) {
   try {
     const rawBody = await request.json().catch(() => ({}));
-    const body = rawBody as PerdecompSnapshotRequest;
+    // Use snake_case for internal type, but handle variations from client if needed
+    // Note: Client has been updated to send snake_case primarily.
+    const body = rawBody;
 
-    const rawCnpj = body.cnpj;
-    const forceRefresh = body.forceRefresh === true;
-    // We receive startDate/endDate but currently don't use them for filtering.
-    // This ensures the backend receives them for future logic implementation.
-    const { startDate, endDate } = body;
+    const rawCnpj = body.cnpj || body.CNPJ_Empresa;
+    const nomeEmpresa = body.nome_da_empresa || body.nomeEmpresa || body.Nome_da_Empresa;
+    let clienteId = body.cliente_id || body.clienteId || body.Cliente_ID;
 
-    // Derived values
-    const nomeEmpresa = body.nomeEmpresa || body.Nome_da_Empresa;
-    let clienteId = body.clienteId || body.Cliente_ID;
-
-    // Strict CNPJ validation logic can be relaxed slightly, but we need digits.
-    // If no CNPJ provided at all, that's a bad request.
     if (!rawCnpj) {
        return NextResponse.json({ error: 'CNPJ is required' }, { status: 400 });
     }
 
-    // Force 14-digit padding
     const cnpj = onlyDigits(rawCnpj).padStart(14, '0');
 
     // --- FALLBACK LOGIC FOR MISSING CLIENTE_ID ---
-    // If clienteId is missing, try to find it by CNPJ in the snapshot index
     if (!clienteId) {
       try {
         const foundId = await findClienteIdByCnpj(cnpj);
         if (foundId) {
           clienteId = foundId;
         } else {
-          console.warn('[perdecomp/snapshot] Missing clienteId and could not resolve via CNPJ', { cnpj });
-          // If still not found, we will proceed to fallback sheet logic which uses CNPJ
+          console.warn('[perdecomp/snapshot] Missing cliente_id and could not resolve via CNPJ', { cnpj });
         }
       } catch (e) {
         console.error('[perdecomp/snapshot] Error resolving clienteId from CNPJ', e);
       }
     }
 
-    // 1. Try to load from Snapshot (if we have a clienteId and NO forceRefresh)
-    // If forceRefresh is true, we skip this block to try fallback or trigger refresh logic
-    // (Currently we only skip snapshot, effectively falling back to sheet or empty,
-    // but this structure allows inserting a fresh API call here later).
-    if (forceRefresh) {
-      console.info('[perdecomp/snapshot] Force refresh requested. Bypassing snapshot cache.', {
-        clienteId,
-        cnpj,
-        startDate,
-        endDate
-      });
-    }
-
-    if (clienteId && !forceRefresh) {
+    // 1. Try to load from Snapshot
+    if (clienteId) {
       try {
         let snapshotCard = await loadSnapshotCard({ clienteId });
 
-        // Double check: if not found by ID, maybe ID was wrong but CNPJ is right?
-        // This handles cases where frontend sends an outdated ID.
         if (!snapshotCard) {
           const resolvedId = await findClienteIdByCnpj(cnpj);
           if (resolvedId && resolvedId !== clienteId) {
-             console.warn('[perdecomp/snapshot] clienteId mismatch/fallback triggered', {
+             console.warn('[perdecomp/snapshot] cliente_id mismatch/fallback triggered', {
                provided: clienteId,
                resolved: resolvedId,
                cnpj
              });
              snapshotCard = await loadSnapshotCard({ clienteId: resolvedId });
-             // Use the correct ID for consistency
              clienteId = resolvedId;
           }
         }
 
         if (snapshotCard) {
-          // Extract data safely
           const resumo = snapshotCard?.resumo ?? snapshotCard?.perdcompResumo ?? {};
           const mappedCount = snapshotCard?.mappedCount ?? (Array.isArray(snapshotCard?.perdcomp) ? snapshotCard.perdcomp.length : 0);
           const totalPerdcomp = snapshotCard?.total_perdcomp ?? resumo?.total ?? mappedCount;
@@ -216,8 +187,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Fallback to old Sheet logic (read-only)
-    // Uses CNPJ primarily if clienteId lookup failed or snapshot missing or forceRefresh requested
+    // 2. Fallback to old Sheet logic
     const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
     if (fallback) {
       const { quantidade, dcomp, rest, ressarc, canc, site_receipt, requested_at } = fallback;
