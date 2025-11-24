@@ -159,25 +159,42 @@ export async function POST(request: Request) {
         }
 
         if (snapshotCard) {
-          // Extract data safely with strict typing where possible
-          const resumo = snapshotCard?.resumo ?? snapshotCard?.perdcompResumo ?? {};
-          const mappedCount = snapshotCard?.mappedCount ?? (Array.isArray(snapshotCard?.perdcomp) ? snapshotCard.perdcomp.length : 0);
-          const totalPerdcomp = snapshotCard?.total_perdcomp ?? resumo?.total ?? mappedCount;
-          const siteReceipt = snapshotCard?.site_receipt ?? snapshotCard?.header?.site_receipt ?? null;
-          const lastConsultation = snapshotCard?.header?.requested_at ?? snapshotCard?.requestedAt ?? null;
-          const primeiro = snapshotCard?.primeiro ?? (Array.isArray(snapshotCard?.perdcomp) && snapshotCard.perdcomp[0]) ?? null;
+          // Extract data safely
+          const resumo =
+            snapshotCard?.resumo ?? snapshotCard?.perdcompResumo ?? {};
 
-          // Reconstruct perdcompCodigos if missing, using the array of items
-          const firstPerdcompArray = Array.isArray(snapshotCard?.perdcomp)
+          const perdcompArray = Array.isArray(snapshotCard?.perdcomp)
             ? snapshotCard.perdcomp
             : [];
-          let perdcompCodigos = snapshotCard?.perdcompCodigos ?? [];
 
-          if (
-            (!perdcompCodigos || perdcompCodigos.length === 0) &&
-            Array.isArray(firstPerdcompArray)
-          ) {
-            perdcompCodigos = firstPerdcompArray
+          const mappedCount =
+            snapshotCard?.mappedCount ?? perdcompArray.length;
+
+          const totalPerdcomp =
+            snapshotCard?.total_perdcomp ?? (resumo as any)?.total ?? mappedCount;
+
+          const siteReceipt =
+            snapshotCard?.site_receipt ??
+            snapshotCard?.header?.site_receipt ??
+            null;
+
+          const lastConsultation =
+            snapshotCard?.header?.requested_at ??
+            (snapshotCard as any)?.requestedAt ??
+            null;
+
+          const primeiro =
+            snapshotCard?.primeiro ??
+            (Array.isArray(perdcompArray) && perdcompArray[0]) ??
+            null;
+
+          let perdcompCodigos: string[] =
+            snapshotCard?.perdcompCodigos ?? [];
+
+          // Fallback: se o snapshot não tiver a lista de códigos explícita,
+          // reconstruímos a partir do array de perdcomp salvo no snapshot.
+          if ((!perdcompCodigos || perdcompCodigos.length === 0) && perdcompArray.length > 0) {
+            perdcompCodigos = perdcompArray
               .map((item: any) =>
                 item?.perdcomp ??
                 item?.Perdcomp_Numero ??
@@ -195,7 +212,7 @@ export async function POST(request: Request) {
             fonte: 'perdecomp_snapshot',
             mappedCount,
             total_perdcomp: totalPerdcomp,
-            perdcompResumo: resumo,
+            perdcompResumo: resumo as any,
             perdcompCodigos,
             site_receipt: siteReceipt,
             primeiro,
