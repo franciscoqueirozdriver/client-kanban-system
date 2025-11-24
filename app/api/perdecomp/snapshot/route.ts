@@ -12,6 +12,9 @@ interface PerdecompSnapshotRequest {
   Cliente_ID?: string;
   nomeEmpresa?: string;
   Nome_da_Empresa?: string;
+  forceRefresh?: boolean;
+  startDate?: string;
+  endDate?: string;
 }
 
 interface PerdcompResumo {
@@ -108,6 +111,10 @@ export async function POST(request: Request) {
     const body = rawBody as PerdecompSnapshotRequest;
 
     const rawCnpj = body.cnpj;
+    const forceRefresh = body.forceRefresh === true;
+    // We receive startDate/endDate but currently don't use them for filtering.
+    // This ensures the backend receives them for future logic implementation.
+    const { startDate, endDate } = body;
 
     // Derived values
     const nomeEmpresa = body.nomeEmpresa || body.Nome_da_Empresa;
@@ -138,8 +145,20 @@ export async function POST(request: Request) {
       }
     }
 
-    // 1. Try to load from Snapshot (if we have a clienteId)
-    if (clienteId) {
+    // 1. Try to load from Snapshot (if we have a clienteId and NO forceRefresh)
+    // If forceRefresh is true, we skip this block to try fallback or trigger refresh logic
+    // (Currently we only skip snapshot, effectively falling back to sheet or empty,
+    // but this structure allows inserting a fresh API call here later).
+    if (forceRefresh) {
+      console.info('[perdecomp/snapshot] Force refresh requested. Bypassing snapshot cache.', {
+        clienteId,
+        cnpj,
+        startDate,
+        endDate
+      });
+    }
+
+    if (clienteId && !forceRefresh) {
       try {
         let snapshotCard = await loadSnapshotCard({ clienteId });
 
@@ -198,7 +217,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Fallback to old Sheet logic (read-only)
-    // Uses CNPJ primarily if clienteId lookup failed or snapshot missing
+    // Uses CNPJ primarily if clienteId lookup failed or snapshot missing or forceRefresh requested
     const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
     if (fallback) {
       const { quantidade, dcomp, rest, ressarc, canc, site_receipt, requested_at } = fallback;

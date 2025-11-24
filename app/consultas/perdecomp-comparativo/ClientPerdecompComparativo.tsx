@@ -350,6 +350,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
           cnpj: finalCNPJ,
           clienteId: normalizedCompany.Cliente_ID,
           nomeEmpresa: normalizedCompany.Nome_da_Empresa,
+          forceRefresh: selection.forceRefresh,
+          startDate,
+          endDate,
         }),
       });
       const data = await res.json();
@@ -994,7 +997,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                   setCancelCount(count);
                   setOpenCancel(true);
                 }}
-                onDebugClick={(company, debug) => {
+                onDebugClick={(_c, debug) => {
                   setPreviewPayload({ company, debug });
                   setPreviewOpen(true);
                 }}
