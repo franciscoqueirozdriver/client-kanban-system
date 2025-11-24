@@ -4,11 +4,65 @@ import { useState, useEffect } from 'react';
 import { padCNPJ14, isValidCNPJ, onlyDigits } from '@/utils/cnpj';
 
 // --- Helper Types ---
-interface Company {
-  Cliente_ID: string;
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
-  [key: string]: any;
+// Canonical snake_case NormalizedCompany
+interface NormalizedCompany {
+  cliente_id: string;
+  nome_da_empresa: string;
+  cnpj_empresa: string;
+  empresa_id?: string;
+  [key: string]: unknown;
+}
+
+// We use NormalizedCompany for internal state and props
+type Company = NormalizedCompany;
+
+// --- Normalization Logic ---
+function normalizeAutocompleteResult(raw: unknown): NormalizedCompany {
+  if (!raw || typeof raw !== 'object') {
+     return { cliente_id: '', nome_da_empresa: '', cnpj_empresa: '' };
+  }
+  const r = raw as any;
+
+  // Helper to safely extract string
+  const str = (val: unknown) => (typeof val === 'string' || typeof val === 'number') ? String(val) : undefined;
+
+  // ID
+  const cliente_id =
+    str(r.cliente_id) ??
+    str(r.Cliente_ID) ??
+    str(r.clienteId) ??
+    (typeof r.id === 'string' ? r.id : undefined) ??
+    '';
+
+  // Nome
+  const nome =
+     str(r.nome_da_empresa) ??
+     str(r.Nome_da_Empresa) ??
+     str(r.nomeEmpresa) ??
+     str(r.nome) ??
+     '';
+
+  // CNPJ
+  const rawCnpj =
+     str(r.cnpj_empresa) ??
+     str(r.CNPJ_Empresa) ??
+     str(r.cnpjEmpresa) ??
+     str(r.CNPJ) ??
+     str(r.cnpj) ??
+     '';
+
+  // Normalize CNPJ: keep digits only, pad to 14 chars
+  const cnpj = onlyDigits(String(rawCnpj)).padStart(14, '0');
+
+  const empresa_id = str(r.empresa_id) ?? str(r.empresaId) ?? str(r.Empresa_ID);
+
+  return {
+    ...r, // Preserve other keys
+    cliente_id,
+    nome_da_empresa: nome,
+    cnpj_empresa: cnpj,
+    empresa_id,
+  };
 }
 
 // --- Autocomplete Component ---
@@ -50,10 +104,17 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
       try {
         const response = await fetch(`/api/clientes/buscar?q=${query}`);
         if (response.ok) {
-          const data = await response.json();
-          setResults(data);
+          const rawData = await response.json();
+          // Safe array handling
+          const list = Array.isArray(rawData) ? rawData : [];
+
+          // Normalize results before setting state
+          const normalizedData = list.map(normalizeAutocompleteResult);
+
+          setResults(normalizedData);
+
           // Check for invalid CNPJ only if the query looks like a full CNPJ but returns no results
-          if (data.length === 0 && /^\d{14}$/.test(onlyDigits(query)) && !isValidCNPJ(query)) {
+          if (normalizedData.length === 0 && /^\d{14}$/.test(onlyDigits(query)) && !isValidCNPJ(query)) {
               setError("CNPJ inválido.");
           }
         } else {
@@ -79,20 +140,26 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
     setQuery('');
     setResults([]);
     setShowSuggestions(false);
-    onSelect({ ...company, CNPJ_Empresa: padCNPJ14(company.CNPJ_Empresa) });
+    // Ensure the company passed up is normalized
+    const finalCompany = normalizeAutocompleteResult(company);
+    onSelect(finalCompany);
   };
 
   if (selectedCompany) {
+    // Access properties using snake_case keys
+    const displayNome = selectedCompany.nome_da_empresa;
+    const displayCnpj = padCNPJ14(selectedCompany.cnpj_empresa);
+
     return (
       <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded relative">
         <div className="flex items-center justify-between">
           <div className="flex-grow truncate">
-            <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{padCNPJ14(selectedCompany.CNPJ_Empresa) || 'CNPJ não informado'}</p>
+            <p className="font-semibold text-sm truncate" title={displayNome}>{displayNome}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{displayCnpj || 'CNPJ não informado'}</p>
           </div>
           <button type="button" onClick={onClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
         </div>
-        {onEnrichSelected && !isValidCNPJ(selectedCompany.CNPJ_Empresa) && (
+        {onEnrichSelected && !isValidCNPJ(selectedCompany.cnpj_empresa) && (
           <div className="mt-2">
             <button
               type="button"
@@ -132,8 +199,8 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
 
           {!isLoading && results.map((company) => (
-            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
-              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{padCNPJ14(company.CNPJ_Empresa)}</span>
+            <li key={company.cliente_id} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
+              {company.nome_da_empresa} <span className="text-sm text-gray-500">{padCNPJ14(company.cnpj_empresa)}</span>
             </li>
           ))}
         </ul>

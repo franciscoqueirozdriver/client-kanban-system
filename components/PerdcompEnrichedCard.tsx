@@ -5,11 +5,13 @@ import { FaSpinner, FaExclamationTriangle, FaInfoCircle, FaLightbulb } from 'rea
 import { enriquecerPerdcomp, analisarPortfolioPerdcomp } from '@/lib/perdcomp';
 import { formatCnpj } from '@/utils/cnpj';
 
-interface Company {
-  Cliente_ID: string;
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
-  [key: string]: any;
+// --- Type Definitions ---
+interface CompanyLike {
+  Nome_da_Empresa?: string;
+  nome_da_empresa?: string;
+  CNPJ_Empresa?: string;
+  cnpj_empresa?: string;
+  [key: string]: unknown;
 }
 
 interface CardData {
@@ -27,18 +29,43 @@ interface CardData {
   perdcompCodigos?: string[]; // Array de códigos PER/DCOMP de 24 dígitos
 }
 
-interface PerdcompEnrichedCardProps {
-  company: Company;
-  data: CardData | null;
-  status: 'idle' | 'loading' | 'loaded' | 'error';
-  error?: any;
-  debug?: any;
-  showDebug?: boolean;
-  onCancelClick?: (count: number) => void;
-  onDebugClick?: (company: Company, debug: any) => void;
+interface ApiError {
+  httpStatus?: number;
+  httpStatusText?: string;
+  message?: string;
+  [key: string]: unknown;
 }
 
-function buildApiErrorLabel(e: any) {
+interface PerdcompEnrichedCardProps {
+  company: CompanyLike;
+  data: CardData | null;
+  status: 'idle' | 'loading' | 'loaded' | 'error';
+  error?: unknown;
+  debug?: unknown;
+  showDebug?: boolean;
+  onCancelClick?: (count: number) => void;
+  onDebugClick?: (company: CompanyLike, debug: unknown) => void;
+}
+
+// --- Helper Functions ---
+function getCompanyDisplayInfo(company: CompanyLike) {
+  const str = (val: unknown) => (typeof val === 'string' ? val : undefined);
+
+  const nome =
+    str(company.Nome_da_Empresa) ??
+    str(company.nome_da_empresa) ??
+    'Empresa Desconhecida';
+
+  const cnpj =
+    str(company.CNPJ_Empresa) ??
+    str(company.cnpj_empresa) ??
+    '';
+
+  return { nome, cnpj };
+}
+
+function buildApiErrorLabel(error: unknown) {
+  const e = error as ApiError;
   const parts: string[] = [];
   if (e?.httpStatus) {
     parts.push(
@@ -49,6 +76,8 @@ function buildApiErrorLabel(e: any) {
   }
   if (e?.message) {
     parts.push(e.message);
+  } else if (typeof error === 'string') {
+    parts.push(error);
   }
   return parts.join(' ');
 }
@@ -93,6 +122,7 @@ export default function PerdcompEnrichedCard({
   const temRegistros = (resumo?.totalSemCancelamento ?? 0) > 0;
   const cancelamentos = resumo?.canc ?? resumo?.porFamilia?.CANC ?? 0;
   const ultimaConsulta = data?.lastConsultation || null;
+  const display = getCompanyDisplayInfo(company);
 
   // Análise enriquecida dos códigos PER/DCOMP
   const analiseEnriquecida = useMemo(() => {
@@ -159,10 +189,10 @@ export default function PerdcompEnrichedCard({
   return (
     <article className="group relative mx-auto flex h-full w-full max-w-[420px] flex-col rounded-3xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg">
       <header className="mb-2">
-        <h3 className="text-lg font-semibold text-foreground" title={company.Nome_da_Empresa}>
-          {company.Nome_da_Empresa}
+        <h3 className="text-lg font-semibold text-foreground" title={display.nome}>
+          {display.nome}
         </h3>
-        <p className="text-xs text-muted-foreground">{formatCnpj(company.CNPJ_Empresa)}</p>
+        <p className="text-xs text-muted-foreground">{formatCnpj(display.cnpj)}</p>
         {ultimaConsulta && (
           <p className="mt-1 text-xs text-muted-foreground">
             Última consulta: {new Date(ultimaConsulta).toLocaleDateString()}
@@ -358,7 +388,7 @@ export default function PerdcompEnrichedCard({
         )}
       </div>
 
-      {showDebug && status === 'loaded' && debug && (
+      {showDebug && status === 'loaded' && !!debug && (
         <button
           type="button"
           onClick={() => onDebugClick?.(company, debug)}
