@@ -25,7 +25,7 @@ export interface NormalizedCompany {
   [key: string]: unknown;
 }
 
-// Replaces the old Company interface locally or we can alias it
+// Replaces the old Company interface locally
 type Company = NormalizedCompany;
 
 // --- Normalization Logic ---
@@ -33,21 +33,22 @@ function normalizeCompany(raw: unknown): NormalizedCompany {
   if (!raw || typeof raw !== 'object') {
      return { cliente_id: '', nome_da_empresa: '', cnpj_empresa: '' };
   }
-  // Use Record<string, unknown> to avoid 'any', but we need to inspect properties freely
+
+  // Use Record<string, unknown> to avoid 'any', inspecting properties safely
   const r = raw as Record<string, unknown>;
 
   // Helper to safely extract string
   const str = (val: unknown) => (typeof val === 'string' || typeof val === 'number') ? String(val) : undefined;
 
-  // ID
+  // ID - Priority: cliente_id (snake) -> Cliente_ID (pascal) -> clienteId (camel) -> id
   const cliente_id =
     str(r.cliente_id) ??
     str(r.Cliente_ID) ??
     str(r.clienteId) ??
-    str(r.id) ??
+    (typeof r.id === 'string' ? r.id : undefined) ??
     '';
 
-  // Nome
+  // Nome - Priority: nome_da_empresa (snake) -> Nome_da_Empresa (pascal) -> nomeEmpresa (camel) -> nome
   const nome =
      str(r.nome_da_empresa) ??
      str(r.Nome_da_Empresa) ??
@@ -55,7 +56,7 @@ function normalizeCompany(raw: unknown): NormalizedCompany {
      str(r.nome) ??
      '';
 
-  // CNPJ
+  // CNPJ - Priority: cnpj_empresa (snake) -> CNPJ_Empresa (pascal) -> cnpjEmpresa (camel) -> CNPJ -> cnpj
   const rawCnpj =
      str(r.cnpj_empresa) ??
      str(r.CNPJ_Empresa) ??
@@ -70,7 +71,7 @@ function normalizeCompany(raw: unknown): NormalizedCompany {
   const empresa_id = str(r.empresa_id) ?? str(r.empresaId) ?? str(r.Empresa_ID);
 
   return {
-    ...r, // Preserve other keys
+    ...r, // Preserve other keys for compatibility
     cliente_id,
     nome_da_empresa: nome,
     cnpj_empresa: cnpj,
@@ -283,7 +284,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     let normalizedCnpj: string;
     try {
       normalizedCnpj = ensureValidCnpj(normalizedCompany.cnpj_empresa);
-    } catch (error: any) {
+    } catch (error) {
       const msg = error instanceof Error ? error.message : 'CNPJ inválido. Verifique e tente novamente.';
       updateResult(normalizedCompany.cnpj_empresa, { status: 'error', error: { message: msg } });
       return;
@@ -355,15 +356,20 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     }
 
     try {
+      // Robust payload for snapshot: providing multiple casing for maximum compatibility
       const res = await fetch('/api/perdecomp/snapshot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cnpj: finalCNPJ,
+          // Sending snake_case and PascalCase to ensure backend finds it
           clienteId: normalizedCompany.cliente_id,
           cliente_id: normalizedCompany.cliente_id,
+          Cliente_ID: normalizedCompany.cliente_id,
+
           nomeEmpresa: normalizedCompany.nome_da_empresa,
           nome_da_empresa: normalizedCompany.nome_da_empresa,
+          Nome_da_Empresa: normalizedCompany.nome_da_empresa,
         }),
       });
       const data = await res.json();
@@ -452,8 +458,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         setPreviewOpen(true);
       }
 
-    } catch (e: any) {
-      updateResult(finalCNPJ, { status: 'error', error: { message: e.message } });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido ao consultar';
+      updateResult(finalCNPJ, { status: 'error', error: { message: msg } });
     }
   };
 
@@ -542,11 +549,13 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
         const seenNames = new Set<string>();
         const cleaned: Array<{ nome: string; cnpj: string }> = [];
 
-        items.forEach((raw: any) => {
-          const nomeLimpo = String(raw?.nome || '').trim();
+        items.forEach((raw: unknown) => {
+          if (!raw || typeof raw !== 'object') return;
+          const r = raw as any;
+          const nomeLimpo = String(r?.nome || '').trim();
           if (nomeLimpo.length <= 1) return;
 
-          const cnpj = digits(String(raw?.cnpj || ''));
+          const cnpj = digits(String(r?.cnpj || ''));
           if (cnpj && blocked.has(cnpj)) return;
 
           if (cnpj) {
@@ -1009,7 +1018,7 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
                   setOpenCancel(true);
                 }}
                 onDebugClick={(_c, debug) => {
-                  setPreviewPayload({ company, debug });
+                  setPreviewPayload({ company, debug: debug as ApiDebug });
                   setPreviewOpen(true);
                 }}
               />

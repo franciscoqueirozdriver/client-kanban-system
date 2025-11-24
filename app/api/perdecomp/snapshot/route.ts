@@ -8,7 +8,11 @@ export const runtime = 'nodejs';
 // --- Type Definitions ---
 interface PerdecompSnapshotRequest {
   cnpj: string;
+  clienteId?: string;
+  Cliente_ID?: string;
   cliente_id?: string;
+  nomeEmpresa?: string;
+  Nome_da_Empresa?: string;
   nome_da_empresa?: string;
 }
 
@@ -28,7 +32,7 @@ interface PerdcompResumo {
 
 interface PerdecompSnapshotResponse {
   ok: boolean;
-  fonte: 'perdecomp_snapshot' | 'planilha_fallback' | 'empty' | 'api:infosimples';
+  fonte: 'perdecomp_snapshot' | 'planilha_fallback' | 'empty';
   mappedCount: number;
   total_perdcomp: number;
   perdcompResumo: PerdcompResumo | null;
@@ -41,7 +45,9 @@ interface PerdecompSnapshotResponse {
     nomeEmpresa?: string;
     clienteId?: string;
   };
-  [key: string]: any;
+  error?: string;
+  // allow other props from snapshot
+  [key: string]: unknown;
 }
 
 // Helper to get fallback data from the old PERDECOMP sheet if snapshot is missing
@@ -104,14 +110,14 @@ async function getLastPerdcompFromSheet({
 export async function POST(request: Request) {
   try {
     const rawBody = await request.json().catch(() => ({}));
-    // Use snake_case for internal type, but handle variations from client if needed
-    // Note: Client has been updated to send snake_case primarily.
-    const body = rawBody;
+    const body = rawBody as PerdecompSnapshotRequest;
 
-    const rawCnpj = body.cnpj || body.CNPJ_Empresa;
+    // Normalize inputs
+    const rawCnpj = body.cnpj || '';
     const nomeEmpresa = body.nome_da_empresa || body.nomeEmpresa || body.Nome_da_Empresa;
     let clienteId = body.cliente_id || body.clienteId || body.Cliente_ID;
 
+    // Strict check for CNPJ presence
     if (!rawCnpj) {
        return NextResponse.json({ error: 'CNPJ is required' }, { status: 400 });
     }
@@ -126,6 +132,7 @@ export async function POST(request: Request) {
           clienteId = foundId;
         } else {
           console.warn('[perdecomp/snapshot] Missing cliente_id and could not resolve via CNPJ', { cnpj });
+          // Proceed without clienteId (will fall back to sheet logic if possible, or empty)
         }
       } catch (e) {
         console.error('[perdecomp/snapshot] Error resolving clienteId from CNPJ', e);
@@ -138,6 +145,7 @@ export async function POST(request: Request) {
         let snapshotCard = await loadSnapshotCard({ clienteId });
 
         if (!snapshotCard) {
+          // Double check if we might have a different ID for this CNPJ
           const resolvedId = await findClienteIdByCnpj(cnpj);
           if (resolvedId && resolvedId !== clienteId) {
              console.warn('[perdecomp/snapshot] cliente_id mismatch/fallback triggered', {
@@ -151,13 +159,36 @@ export async function POST(request: Request) {
         }
 
         if (snapshotCard) {
+          // Extract data safely with strict typing where possible
           const resumo = snapshotCard?.resumo ?? snapshotCard?.perdcompResumo ?? {};
           const mappedCount = snapshotCard?.mappedCount ?? (Array.isArray(snapshotCard?.perdcomp) ? snapshotCard.perdcomp.length : 0);
           const totalPerdcomp = snapshotCard?.total_perdcomp ?? resumo?.total ?? mappedCount;
           const siteReceipt = snapshotCard?.site_receipt ?? snapshotCard?.header?.site_receipt ?? null;
           const lastConsultation = snapshotCard?.header?.requested_at ?? snapshotCard?.requestedAt ?? null;
           const primeiro = snapshotCard?.primeiro ?? (Array.isArray(snapshotCard?.perdcomp) && snapshotCard.perdcomp[0]) ?? null;
-          const perdcompCodigos = snapshotCard?.perdcompCodigos ?? [];
+
+          // Reconstruct perdcompCodigos if missing, using the array of items
+          const firstPerdcompArray = Array.isArray(snapshotCard?.perdcomp)
+            ? snapshotCard.perdcomp
+            : [];
+          let perdcompCodigos = snapshotCard?.perdcompCodigos ?? [];
+
+          if (
+            (!perdcompCodigos || perdcompCodigos.length === 0) &&
+            Array.isArray(firstPerdcompArray)
+          ) {
+            perdcompCodigos = firstPerdcompArray
+              .map((item: any) =>
+                item?.perdcomp ??
+                item?.Perdcomp_Numero ??
+                item?.numero ??
+                null,
+              )
+              .filter(
+                (x: any): x is string =>
+                  typeof x === 'string' && x.trim().length > 0,
+              );
+          }
 
           const response: PerdecompSnapshotResponse = {
             ok: true,
@@ -180,9 +211,10 @@ export async function POST(request: Request) {
           return NextResponse.json(response);
         }
       } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
         console.warn('SNAPSHOT_READ_FAIL', {
           clienteId,
-          error: error instanceof Error ? error.message : String(error)
+          error: msg
         });
       }
     }
@@ -224,7 +256,7 @@ export async function POST(request: Request) {
       return NextResponse.json(response);
     }
 
-    // 3. No data found (Empty)
+    // 3. No data found (Empty) - Return 200 OK with empty status instead of 404/500
     const emptyResponse: PerdecompSnapshotResponse = {
         ok: true,
         fonte: 'empty',
@@ -238,12 +270,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json(emptyResponse);
 
-  } catch (error: any) {
-    console.error('[API /perdecomp/snapshot]', error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error('[API /perdecomp/snapshot]', err);
     return NextResponse.json(
       {
         error: true,
-        message: error?.message || 'Internal Server Error',
+        message: err.message || 'Internal Server Error',
       },
       { status: 500 }
     );

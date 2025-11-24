@@ -29,15 +29,22 @@ interface CardData {
   perdcompCodigos?: string[]; // Array de códigos PER/DCOMP de 24 dígitos
 }
 
+interface ApiError {
+  httpStatus?: number;
+  httpStatusText?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
 interface PerdcompEnrichedCardProps {
   company: CompanyLike;
   data: CardData | null;
   status: 'idle' | 'loading' | 'loaded' | 'error';
-  error?: any;
-  debug?: any;
+  error?: unknown;
+  debug?: unknown;
   showDebug?: boolean;
   onCancelClick?: (count: number) => void;
-  onDebugClick?: (company: CompanyLike, debug: any) => void;
+  onDebugClick?: (company: CompanyLike, debug: unknown) => void;
 }
 
 // --- Helper Functions ---
@@ -57,7 +64,8 @@ function getCompanyDisplayInfo(company: CompanyLike) {
   return { nome, cnpj };
 }
 
-function buildApiErrorLabel(e: any) {
+function buildApiErrorLabel(error: unknown) {
+  const e = error as ApiError;
   const parts: string[] = [];
   if (e?.httpStatus) {
     parts.push(
@@ -68,6 +76,8 @@ function buildApiErrorLabel(e: any) {
   }
   if (e?.message) {
     parts.push(e.message);
+  } else if (typeof error === 'string') {
+    parts.push(error);
   }
   return parts.join(' ');
 }
@@ -378,7 +388,7 @@ export default function PerdcompEnrichedCard({
         )}
       </div>
 
-      {showDebug && status === 'loaded' && debug && (
+      {showDebug && status === 'loaded' && !!debug && (
         <button
           type="button"
           onClick={() => onDebugClick?.(company, debug)}
