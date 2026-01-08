@@ -322,19 +322,39 @@ export function derivePorCreditoFromFacts(
   return Array.from(aggregates.values());
 }
 
-async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<string | null> {
+export async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<string | null> {
   const normalized = onlyDigits(cnpj);
   if (!normalized) return null;
   const { rows } = await getSheetData(SHEET_SNAPSHOT);
+
+  const matches: string[] = [];
+
+  // Try to find all matches to detect duplicates
   for (const row of rows) {
-    const rowCnpj = onlyDigits(toStringValue(row.CNPJ));
+    // Robust header check for CNPJ
+    const rawCnpj = coalesceString(row.CNPJ, row.cnpj, row.CNPJ_Empresa, row['CNPJ Empresa']);
+    const rowCnpj = onlyDigits(rawCnpj);
+
     if (rowCnpj !== normalized) continue;
-    const candidate = toStringValue(row.cliente_id);
+
+    // Robust header check for Cliente_ID
+    const candidate = toStringValue(
+      coalesceString(row.cliente_id, row.Cliente_ID, row['Cliente ID'])
+    );
+
     if (CLT_ID_RE.test(candidate)) {
-      return candidate;
+      matches.push(candidate);
     }
   }
-  return null;
+
+  if (matches.length > 1) {
+    console.warn('PERSIST_DUPLICATE_CNPJ_FOUND', {
+      cnpj: normalized,
+      foundIds: matches
+    });
+  }
+
+  return matches.length > 0 ? matches[0] : null;
 }
 
 function syncNextSequenceFromId(id: string) {
@@ -970,7 +990,10 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
 export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | null> {
   if (!clienteId) return null;
   const { rows } = await getSheetData(SHEET_SNAPSHOT);
-  const row = rows.find((item) => toStringValue(item.cliente_id) === clienteId);
+  const row = rows.find((item) => {
+    const id = item.cliente_id || item.Cliente_ID || item['Cliente ID'] || '';
+    return toStringValue(id) === clienteId;
+  });
   if (!row) return null;
   const p1 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P1 ?? '');
   const p2 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P2 ?? '');

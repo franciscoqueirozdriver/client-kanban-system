@@ -1,41 +1,92 @@
 import { NextResponse } from 'next/server';
-import { getSheetData } from '../../../../lib/googleSheets.js';
-import { padCNPJ14 } from '@/utils/cnpj';
+import { getSheetData } from '@/lib/googleSheets';
+import { onlyDigits } from '@/utils/cnpj';
 
+const SHEET_SNAPSHOT = 'perdecomp_snapshot';
 const PERDECOMP_SHEET_NAME = 'PERDECOMP';
+
+export const runtime = 'nodejs';
+
+function getClienteIdFromRow(row: any): string {
+  return String(row.cliente_id ?? row.Cliente_ID ?? row['Cliente ID'] ?? '').trim();
+}
+
+function getCnpjFromRow(row: any): string {
+  const raw = row.cnpj ?? row.CNPJ ?? row['CNPJ Empresa'] ?? row.cnpj_normalizado ?? '';
+  // We want strict 14-digit comparison if possible, but sheet might have 12
+  return onlyDigits(String(raw));
+}
+
+function getDataConsultaFromRow(row: any): string | null {
+  return (
+    (row.Data_Consulta as string | undefined) ??
+    (row.data_consulta as string | undefined) ??
+    (row['Data Consulta'] as string | undefined) ??
+    null
+  );
+}
+
+function findLatestDate(rows: any[], clienteId: string | null, cleanCnpj: string | null): string | null {
+  const candidates = rows.filter(row => {
+    const rowClienteId = getClienteIdFromRow(row);
+    const rowCnpjRaw = getCnpjFromRow(row);
+
+    if (clienteId && rowClienteId === clienteId) {
+      return true;
+    }
+
+    if (cleanCnpj) {
+      // Strict match (padded)
+      const rowCnpjPadded = rowCnpjRaw.padStart(14, '0');
+      if (rowCnpjPadded === cleanCnpj) return true;
+
+      // Partial match (Sheet has 12 digits - root+branch)
+      // Input: 10490181000135, Sheet: 104901810001
+      if (rowCnpjRaw.length === 12 && cleanCnpj.startsWith(rowCnpjRaw)) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  return candidates.reduce<string | null>((latest, row) => {
+    const dt = getDataConsultaFromRow(row);
+    if (!dt) return latest;
+    // Simple string comparison for ISO/YYYY-MM-DD, but Date parsing is safer
+    const current = new Date(dt);
+    if (isNaN(current.getTime())) return latest;
+
+    if (!latest) return dt;
+    return current > new Date(latest) ? dt : latest;
+  }, null);
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cnpj = searchParams.get('cnpj')?.trim();
+  const rawCnpj = searchParams.get('cnpj')?.trim();
+  const clienteId = searchParams.get('clienteId')?.trim() || null;
 
-  if (!cnpj) {
-    return NextResponse.json({ message: 'Query parameter "cnpj" is required' }, { status: 400 });
+  if (!rawCnpj && !clienteId) {
+    return NextResponse.json({ message: 'Query parameter "cnpj" or "clienteId" is required' }, { status: 400 });
   }
 
-  const cleanCnpj = padCNPJ14(cnpj);
+  const cleanCnpj = rawCnpj ? onlyDigits(rawCnpj).padStart(14, '0') : null;
 
   try {
-    const { rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    // 1. Check the new snapshot sheet first (Primary Source)
+    const snapshotData = await getSheetData(SHEET_SNAPSHOT);
+    const snapshotRows = (snapshotData.rows || []) as any[];
 
-    const dataForCnpj = rows.filter(row => {
-      const rowCnpj = padCNPJ14(row.CNPJ);
-      return rowCnpj === cleanCnpj;
-    });
-
-    if (dataForCnpj.length === 0) {
-      return NextResponse.json({ lastConsultation: null });
+    const latestSnapshot = findLatestDate(snapshotRows, clienteId, cleanCnpj);
+    if (latestSnapshot) {
+      return NextResponse.json({ lastConsultation: latestSnapshot });
     }
 
-    // Find the most recent consultation date
-    const mostRecentConsultation = dataForCnpj.reduce((latest, row) => {
-      const currentDate = new Date(row.Data_Consulta);
-      if (!latest || currentDate > new Date(latest)) {
-        return row.Data_Consulta;
-      }
-      return latest;
-    }, '' as string | null);
+    // 2. Check the legacy PERDECOMP sheet (Fallback)
+    const { rows: legacyRows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    const latestLegacy = findLatestDate(legacyRows, clienteId, cleanCnpj);
 
-    return NextResponse.json({ lastConsultation: mostRecentConsultation });
+    return NextResponse.json({ lastConsultation: latestLegacy });
 
   } catch (error) {
     console.error('[API /perdecomp/verificar]', error);
