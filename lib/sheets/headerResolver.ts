@@ -137,11 +137,11 @@ export function normalizeHeader(s: string): string {
 
 export async function getHeaders(sheetName: string): Promise<string[]> {
   const data = await getSheetData(sheetName, 'A1:ZZ1');
-  if (!data || data.length === 0) {
+  if (!data || !data.headers || data.headers.length === 0) {
       console.warn(`[getHeaders] No data returned for sheet '${sheetName}'. Assuming empty sheet.`);
       return [];
   }
-  return data[0] || [];
+  return data.headers;
 }
 
 export type ColumnResolver = (logical: string) => string;

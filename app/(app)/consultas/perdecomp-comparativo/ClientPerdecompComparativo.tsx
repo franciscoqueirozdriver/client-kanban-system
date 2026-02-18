@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FaSpinner } from 'react-icons/fa';
-import Autocomplete from '../../../components/Perdecomp/Autocomplete';
-import NewCompanyModal from '../../../components/NewCompanyModal';
-import CompetitorSearchDialog from '../../../components/CompetitorSearchDialog';
-import PerdcompApiPreviewDialog from '../../../components/PerdcompApiPreviewDialog';
-import EnrichmentPreviewDialog from '../../../components/EnrichmentPreviewDialog';
-import ConfirmDialog from '../../../components/ConfirmDialog';
-import PerdcompEnrichedCard from '../../../components/PerdcompEnrichedCard';
+import Autocomplete from '@/components/Perdecomp/Autocomplete';
+import NewCompanyModal from '@/components/NewCompanyModal';
+import CompetitorSearchDialog from '@/components/CompetitorSearchDialog';
+import PerdcompApiPreviewDialog from '@/components/PerdcompApiPreviewDialog';
+import EnrichmentPreviewDialog from '@/components/EnrichmentPreviewDialog';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import PerdcompEnrichedCard from '@/components/PerdcompEnrichedCard';
 import { decideCNPJFinalBeforeQuery } from '@/helpers/decideCNPJ';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ensureValidCnpj, formatCnpj, normalizeCnpj, onlyDigits, isCnpj, isEmptyCNPJLike } from '@/utils/cnpj';
