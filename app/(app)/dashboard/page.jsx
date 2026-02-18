@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import SummaryCard from '../components/SummaryCard';
-import Charts from '../components/Charts';
+import SummaryCard from '@/components/SummaryCard';
+import Charts from '@/components/Charts';
 
 export default function Dashboard() {
   const [allClients, setAllClients] = useState([]);

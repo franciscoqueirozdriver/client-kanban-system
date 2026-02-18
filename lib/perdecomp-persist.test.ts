@@ -18,7 +18,7 @@ const normalizeISO = (value?: string) => {
 };
 
 jest.mock('./googleSheets.js', () => ({
-  getSheetData: jest.fn(),
+  getSheetData: jest.fn(() => Promise.resolve({ headers: [], rows: [] })),
   getSheetsClient: jest.fn(),
   withRetry: jest.fn((fn: any) => fn()),
   chunk: jest.fn((rows: any[]) => [rows]),
@@ -41,6 +41,7 @@ describe('perdecomp-persist', () => {
     jest.setSystemTime(new Date('2024-01-01T12:10:00.000Z'));
     __resetClienteIdSequenceForTests();
     getSheetData.mockReset();
+    getSheetData.mockImplementation(() => Promise.resolve({ headers: [], rows: [] }));
     getSheetsClient.mockReset();
     withRetry.mockClear();
     chunk.mockClear();

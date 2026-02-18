@@ -8,6 +8,7 @@ import {
   BuildingIcon,
   DollarCircleIcon,
   GaugeCircleIcon,
+  LogOutIcon,
   MenuIcon,
   MoonIcon,
   PanelsIcon,
@@ -19,7 +20,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import { cn } from '@/lib/cn';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Dashboard', icon: GaugeCircleIcon },
+  { href: '/dashboard', label: 'Dashboard', icon: GaugeCircleIcon },
   { href: '/clientes', label: 'Clientes', icon: UsersIcon },
   { href: '/kanban', label: 'Consultas (Kanban)', icon: PanelsIcon },
   { href: '/consultas/perdecomp-comparativo', label: 'PER/DCOMP Comparativo', icon: DollarCircleIcon },
@@ -111,6 +112,14 @@ export default function Sidebar() {
               </Link>
             );
           })}
+
+          <Link
+            href="/"
+            className="group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive mt-4"
+          >
+            <LogOutIcon className="h-5 w-5" aria-hidden="true" />
+            <span>Sair</span>
+          </Link>
         </nav>
         <div className="mt-auto rounded-2xl border border-dashed border-border/60 bg-muted/40 p-4 text-xs leading-relaxed text-muted-foreground">
           <p className="font-semibold text-foreground">Dica rápida</p>

@@ -1,9 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import ViewToggle from "@/components/view-toggle/ViewToggle";
-import LeadsTable from "@/components/leads-table/LeadsTable";
-import LeadDrawer from "@/components/leads-drawer/LeadDrawer";
+import ViewToggle from '@/components/view-toggle/ViewToggle';
+import LeadsTable from '@/components/leads-table/LeadsTable';
+import LeadDrawer from '@/components/leads-drawer/LeadDrawer';
 import type { Lead } from "@/types/lead"; // se não tiver, troque por o tipo local
 
 // Altura do topo (header + filtros) que ficam acima do conteúdo de cada visão.
