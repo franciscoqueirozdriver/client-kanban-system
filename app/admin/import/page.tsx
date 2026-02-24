@@ -37,7 +37,10 @@ export default function ImportPage() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Importador de Dados (Sheets para Supabase)</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Importador de Dados (Sheets para Supabase)</h1>
+        <a href="/admin/import/logs" className="text-blue-500 hover:underline">Ver Histórico de Logs →</a>
+      </div>
       
       <div className="grid grid-cols-1 gap-4 mb-6">
         <div>

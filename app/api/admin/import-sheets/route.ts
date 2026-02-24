@@ -114,8 +114,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Salvar log da migração no Supabase
+    const status = results.every(r => r.status === 'sucesso') ? 'sucesso' : 
+                  results.some(r => r.status === 'sucesso') ? 'parcial' : 'erro';
+    
+    await supabase.from('migration_logs').insert({
+      spreadsheet_id,
+      results,
+      status
+    });
+
     return NextResponse.json({ results });
   } catch (error: any) {
+    // Tentar salvar log de erro fatal
+    try {
+      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+      await supabase.from('migration_logs').insert({
+        status: 'erro',
+        error_message: error.message
+      });
+    } catch (e) {
+      console.error('Falha ao salvar log de erro fatal:', e);
+    }
+    
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

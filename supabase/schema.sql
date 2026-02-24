@@ -453,3 +453,13 @@ CREATE TABLE IF NOT EXISTS cnae (
     desc_cnae TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Tabela para rastrear logs de migração
+CREATE TABLE IF NOT EXISTS migration_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    spreadsheet_id TEXT,
+    results JSONB, -- Armazena o array de resultados por tabela
+    status TEXT, -- 'sucesso', 'parcial', 'erro'
+    error_message TEXT
+);
