@@ -20,12 +20,11 @@ export async function POST(req: NextRequest) {
     const formattedKey = googlePrivateKey.replace(/\\n/g, '\n');
 
     // Inicializar Google Sheets
-    const auth = new google.auth.JWT(
-      googleClientEmail,
-      undefined,
-      formattedKey,
-      ['https://www.googleapis.com/auth/spreadsheets.readonly']
-    );
+    const auth = new google.auth.JWT({
+      email: googleClientEmail,
+      key: formattedKey,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+    });
     const sheets = google.sheets({ version: 'v4', auth });
 
     // Inicializar Supabase Service Role (para ignorar RLS)
