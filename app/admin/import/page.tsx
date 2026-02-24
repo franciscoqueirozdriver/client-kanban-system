@@ -97,17 +97,21 @@ export default function ImportPage() {
                 <th className="border p-2 text-left">Status</th>
                 <th className="border p-2 text-left">Sucesso</th>
                 <th className="border p-2 text-left">Falhas</th>
+                <th className="border p-2 text-left">Mensagem / Detalhes</th>
               </tr>
             </thead>
             <tbody>
               {results.map((res, i) => (
                 <tr key={i}>
-                  <td className="border p-2 font-medium">{res.table}</td>
-                  <td className={`border p-2 ${res.status === 'sucesso' ? 'text-green-600' : 'text-red-600'}`}>
+                  <td className="border p-2 font-medium text-white">{res.table}</td>
+                  <td className={`border p-2 font-bold ${res.status === 'sucesso' ? 'text-green-400' : 'text-red-400'}`}>
                     {res.status}
                   </td>
-                  <td className="border p-2">{res.success || 0}</td>
-                  <td className="border p-2">{res.errors || 0}</td>
+                  <td className="border p-2 text-white">{res.success || 0}</td>
+                  <td className="border p-2 text-white">{res.errors || 0}</td>
+                  <td className="border p-2 text-xs text-gray-300 max-w-xs overflow-hidden text-ellipsis">
+                    {res.message || (res.status === 'erro' ? 'Erro desconhecido' : '-')}
+                  </td>
                 </tr>
               ))}
             </tbody>

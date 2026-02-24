@@ -80,14 +80,24 @@ export async function POST(req: NextRequest) {
           if (error) {
             console.error(`Erro na tabela ${item.table}:`, error);
             errors += batch.length;
+            results.push({ 
+              table: item.table, 
+              status: 'erro', 
+              success, 
+              errors, 
+              message: `Supabase Error: ${error.message} (${error.code})` 
+            });
+            break; // Para no primeiro erro do lote para não poluir
           } else {
             success += batch.length;
           }
         }
 
-        results.push({ table: item.table, status: 'sucesso', total: data.length, success, errors });
+        if (errors === 0) {
+          results.push({ table: item.table, status: 'sucesso', total: data.length, success, errors: 0 });
+        }
       } catch (err: any) {
-        results.push({ table: item.table, status: 'erro', message: err.message });
+        results.push({ table: item.table, status: 'erro', message: `Google Sheets Error: ${err.message}` });
       }
     }
 
