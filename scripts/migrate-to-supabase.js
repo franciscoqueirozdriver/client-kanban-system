@@ -1,9 +1,10 @@
 /* eslint-disable */
 /**
- * Script de Migração: Google Sheets para Supabase (Versão Completa)
+ * Script de Migração: Google Sheets para Supabase (Versão Melhorada)
  *
  * Este script lê os dados de múltiplas abas do Google Sheets e os insere
  * nas tabelas correspondentes do Supabase, com base nos cabeçalhos fornecidos.
+ * Inclui deduplicação automática para evitar erros de ON CONFLICT.
  */
 
 require("dotenv").config();
@@ -56,24 +57,35 @@ function mapToSnakeCase(data, mapping) {
       // Tratamento básico de tipos para evitar strings vazias em campos numéricos/booleanos
       if (value === "" || value === undefined) {
         newItem[supabaseCol] = null;
-      } else if (supabaseCol.includes("data_") || supabaseCol.includes("criado_em") || supabaseCol.includes("atualizado_em") || supabaseCol.includes("ultimo_login") || supabaseCol.includes("bloqueado_ate") || supabaseCol.includes("expira_reset")) {
+      } else if (supabaseCol.includes("data_") || supabaseCol.includes("criado_em") || supabaseCol.includes("atualizado_em") || supabaseCol.includes("ultimo_login") || supabaseCol.includes("bloqueado_ate") || supabaseCol.includes("expira_reset") || supabaseCol === "data_consulta") {
         // Tentativa de converter para formato de data, se falhar, mantém como null
-        try {
-          newItem[supabaseCol] = new Date(value).toISOString();
-        } catch (e) {
+        if (!value || String(value).trim() === "") {
           newItem[supabaseCol] = null;
+        } else {
+          try {
+            const date = new Date(value);
+            newItem[supabaseCol] = isNaN(date.getTime()) ? null : date.toISOString();
+          } catch (e) {
+            newItem[supabaseCol] = null;
+          }
         }
       } else if (supabaseCol.includes("valor") || supabaseCol.includes("mrr") || supabaseCol.includes("arr") || supabaseCol.includes("probabilidade")) {
-        newItem[supabaseCol] = parseFloat(String(value).replace(",", "."));
+        const parsed = parseFloat(String(value).replace(",", "."));
+        newItem[supabaseCol] = isNaN(parsed) ? null : parsed;
       } else if (supabaseCol.includes("quantidade") || supabaseCol.includes("atividades") || supabaseCol.includes("tentativas")) {
-        newItem[supabaseCol] = parseInt(value, 10);
+        const parsed = parseInt(value, 10);
+        newItem[supabaseCol] = isNaN(parsed) ? null : parsed;
       } else if (supabaseCol.includes("ativo") || supabaseCol.includes("sucesso") || supabaseCol.includes("deleted_flag")) {
         newItem[supabaseCol] = String(value).toLowerCase() === "true" || String(value) === "1";
       } else if (supabaseCol.includes("json")) {
-        try {
-          newItem[supabaseCol] = JSON.parse(value);
-        } catch (e) {
-          newItem[supabaseCol] = value; // Mantém como string se não for JSON válido
+        if (typeof value === "string") {
+          try {
+            newItem[supabaseCol] = JSON.parse(value);
+          } catch (e) {
+            newItem[supabaseCol] = value; // Mantém como string se não for JSON válido
+          }
+        } else {
+          newItem[supabaseCol] = value;
         }
       } else {
         newItem[supabaseCol] = value;
@@ -83,19 +95,43 @@ function mapToSnakeCase(data, mapping) {
   });
 }
 
+function deduplicateData(data, onConflictColumn) {
+  if (!onConflictColumn) return data;
+  const seen = new Set();
+  return data.filter((item) => {
+    const val = item[onConflictColumn];
+    if (val === null || val === undefined) return true;
+    if (seen.has(val)) return false;
+    seen.add(val);
+    return true;
+  });
+}
+
 async function migrateTable(sheets, sheetName, tableName, mapping, onConflictColumn = null) {
   console.log(`\n--- Iniciando migração de: ${sheetName} para: ${tableName} ---`);
+  const stats = { total: 0, mapped: 0, removed: 0, processed: 0, failed: 0, errors: [] };
 
   try {
     const rawData = await getSheetData(sheets, sheetName);
+    stats.total = rawData.length;
     console.log(`Total de registros encontrados no Sheets para ${sheetName}: ${rawData.length}`);
 
     if (rawData.length === 0) {
       console.log(`Nenhum dado encontrado em ${sheetName}. Pulando...`);
-      return;
+      return stats;
     }
 
-    const mappedData = mapToSnakeCase(rawData, mapping);
+    let mappedData = mapToSnakeCase(rawData, mapping);
+    stats.mapped = mappedData.length;
+
+    if (onConflictColumn) {
+      const originalCount = mappedData.length;
+      mappedData = deduplicateData(mappedData, onConflictColumn);
+      stats.removed = originalCount - mappedData.length;
+      if (stats.removed > 0) {
+        console.log(`Removidas ${stats.removed} duplicatas baseadas em ${onConflictColumn}.`);
+      }
+    }
 
     const batchSize = 100;
     for (let i = 0; i < mappedData.length; i += batchSize) {
@@ -112,17 +148,24 @@ async function migrateTable(sheets, sheetName, tableName, mapping, onConflictCol
       const { error } = await query;
 
       if (error) {
-        console.error(`Erro ao processar lote ${i / batchSize + 1} para ${tableName}:`, error.message);
-        // console.error("Dados do lote com erro:", batch);
+        stats.failed += batch.length;
+        stats.errors.push(error.message);
+        console.error(`Erro ao processar lote ${Math.floor(i / batchSize) + 1} para ${tableName}:`, error.message);
+        if (error.message.includes("violates foreign key constraint")) {
+           console.warn("Dica: Este erro geralmente ocorre quando o cliente_id não existe na tabela 'leads'. Certifique-se de migrar 'sheet1' primeiro.");
+        }
       } else {
-        console.log(`Lote ${i / batchSize + 1} processado com sucesso para ${tableName} (${batch.length} registros).`);
+        stats.processed += batch.length;
+        console.log(`Lote ${Math.floor(i / batchSize) + 1} processado com sucesso para ${tableName} (${batch.length} registros).`);
       }
     }
 
-    console.log(`Migração de ${tableName} concluída.`);
+    console.log(`Migração de ${tableName} concluída. Sucesso: ${stats.processed}, Falha: ${stats.failed}`);
   } catch (error) {
     console.error(`Falha crítica na migração de ${tableName}:`, error.message);
+    stats.errors.push(error.message);
   }
+  return stats;
 }
 
 async function main() {
@@ -133,7 +176,7 @@ async function main() {
 
   const sheets = await getSheetsClient();
 
-  // Mapeamentos para todas as 24 abas
+  // Mapeamentos para todas as abas
   const MAPPINGS = {
     sheet1: {
       tableName: "leads",
@@ -323,7 +366,7 @@ async function main() {
         qtd_perdcomp_ressarc: "qtd_perdcomp_ressarc",
       },
     },
-    perdecomp_itens: {
+    perdcomp_itens: {
       tableName: "perdecomp_itens",
       onConflict: null, // PK é BIGSERIAL, usar insert
       mapping: {
@@ -635,11 +678,24 @@ async function main() {
   };
 
   // Executar a migração para cada aba/tabela
+  const results = {};
   for (const sheetKey in MAPPINGS) {
     const { tableName, onConflict, mapping } = MAPPINGS[sheetKey];
-    await migrateTable(sheets, sheetKey, tableName, mapping, onConflict);
+    results[sheetKey] = await migrateTable(sheets, sheetKey, tableName, mapping, onConflict);
   }
 
+  console.log("\n==========================================");
+  console.log("RESUMO FINAL DA MIGRAÇÃO");
+  console.log("==========================================");
+  for (const sheetKey in results) {
+    const s = results[sheetKey];
+    const status = s.failed === 0 && s.errors.length === 0 ? "✅ OK" : "❌ ERRO";
+    console.log(`${status} ${sheetKey.padEnd(25)} | Sucesso: ${String(s.processed).padStart(5)} | Falha: ${String(s.failed).padStart(5)}`);
+    if (s.errors.length > 0) {
+      const uniqueErrors = [...new Set(s.errors)];
+      uniqueErrors.forEach(e => console.log(`   └─ Erro: ${e}`));
+    }
+  }
   console.log("\nProcesso de migração finalizado.");
 }
 
