@@ -4,16 +4,19 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
   try {
-    const { 
-      googleClientEmail, 
-      googlePrivateKey, 
-      spreadsheetId,
-      supabaseUrl,
-      supabaseServiceKey
-    } = await req.json();
+    const bodyParams = await req.json();
+    
+    // Usar credenciais do corpo da requisição ou fallback para variáveis de ambiente da Vercel
+    const googleClientEmail = bodyParams.googleClientEmail || process.env.GOOGLE_CLIENT_EMAIL;
+    const googlePrivateKey = bodyParams.googlePrivateKey || process.env.GOOGLE_PRIVATE_KEY;
+    const spreadsheetId = bodyParams.spreadsheetId || process.env.SPREADSHEET_ID;
+    const supabaseUrl = bodyParams.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = bodyParams.supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!googleClientEmail || !googlePrivateKey || !spreadsheetId || !supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json({ error: 'Credenciais incompletas' }, { status: 400 });
+      return NextResponse.json({ 
+        error: 'Credenciais incompletas. Certifique-se de que as variáveis de ambiente estão configuradas na Vercel ou fornecidas na interface.' 
+      }, { status: 400 });
     }
 
     // Normalização Robusta da Chave Privada
@@ -29,21 +32,23 @@ export async function POST(req: NextRequest) {
     
     // 3. Garantir que a chave tenha o formato PEM correto (cabeçalho, corpo, rodapé)
     if (!formattedKey.includes('-----BEGIN PRIVATE KEY-----')) {
-      // Se a chave veio sem cabeçalho, tenta reconstruir (caso o usuário tenha colado apenas o corpo base64)
       const cleanBody = formattedKey.replace(/\s/g, '');
       formattedKey = `-----BEGIN PRIVATE KEY-----\n${cleanBody}\n-----END PRIVATE KEY-----`;
     } else {
-      // Se tem cabeçalho, garante que as quebras de linha dentro do corpo PEM estejam corretas
       const header = '-----BEGIN PRIVATE KEY-----';
       const footer = '-----END PRIVATE KEY-----';
-      let body = formattedKey.split(header)[1].split(footer)[0].replace(/\s/g, '');
-      
-      // Reconstruir com linhas de 64 caracteres (padrão PEM)
-      const lines = [];
-      for (let i = 0; i < body.length; i += 64) {
-        lines.push(body.slice(i, i + 64));
+      const parts = formattedKey.split(header);
+      if (parts.length > 1) {
+        const bodyParts = parts[1].split(footer);
+        if (bodyParts.length > 0) {
+          const body = bodyParts[0].replace(/\s/g, '');
+          const lines: string[] = []; // Definindo explicitamente como string[] para evitar erro de tipo
+          for (let i = 0; i < body.length; i += 64) {
+            lines.push(body.slice(i, i + 64));
+          }
+          formattedKey = `${header}\n${lines.join('\n')}\n${footer}\n`;
+        }
       }
-      formattedKey = `${header}\n${lines.join('\n')}\n${footer}\n`;
     }
 
     // Inicializar Google Sheets
@@ -116,7 +121,7 @@ export async function POST(req: NextRequest) {
 
         for (let i = 0; i < data.length; i += batchSize) {
           const batch = data.slice(i, i + batchSize);
-          const { error } = await supabase.from(item.table).upsert(batch, { onConflict: item.pk });
+          const { error } = await supabase.from(item.table).upsert(batch, { onConflict: item.pk as any });
           if (error) {
             console.error(`Erro na tabela ${item.table}:`, error);
             errors += batch.length;
@@ -127,7 +132,7 @@ export async function POST(req: NextRequest) {
               errors, 
               message: `Supabase Error: ${error.message} (${error.code})` 
             });
-            break; // Para no primeiro erro do lote para não poluir
+            break; 
           } else {
             success += batch.length;
           }
@@ -153,7 +158,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ results });
   } catch (error: any) {
-    // Tentar salvar log de erro fatal
     try {
       const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
       await supabase.from('migration_logs').insert({
