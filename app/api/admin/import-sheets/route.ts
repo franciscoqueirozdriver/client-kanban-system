@@ -30,17 +30,30 @@ export async function POST(req: NextRequest) {
     // Inicializar Supabase Service Role (para ignorar RLS)
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Mapeamento de abas para tabelas
+    // Mapeamento completo de abas para tabelas
     const tables = [
       { sheet: "sheet1", table: "leads", pk: "cliente_id" },
       { sheet: "layout_importacao_empresas", table: "layout_importacao_empresas", pk: "cliente_id" },
       { sheet: "leads_exact_spotter", table: "leads_exact_spotter", pk: "cliente_id" },
       { sheet: "perdecomp", table: "perdecomp", pk: "perdcomp_id" },
+      { sheet: "perdecomp_itens", table: "perdecomp_itens", pk: undefined },
+      { sheet: "perdecomp_facts", table: "perdecomp_facts", pk: undefined },
+      { sheet: "perdecomp_snapshot", table: "perdecomp_snapshot", pk: undefined },
+      { sheet: "padroes", table: "padroes", pk: undefined },
+      { sheet: "historico_interacoes", table: "historico_interacoes", pk: "message_id" },
+      { sheet: "mensagens", table: "mensagens", pk: undefined },
+      { sheet: "historico_whats_app", table: "historico_whats_app", pk: undefined },
       { sheet: "usuarios", table: "usuarios", pk: "usuario_id" },
       { sheet: "dic_tipos", table: "dic_tipos", pk: "tipo_codigo" },
+      { sheet: "dic_naturezas", table: "dic_naturezas", pk: undefined },
       { sheet: "dic_creditos", table: "dic_creditos", pk: "credito_codigo" },
+      { sheet: "dic_situacoes", table: "dic_situacoes", pk: undefined },
       { sheet: "rotas", table: "rotas", pk: "rota_codigo" },
+      { sheet: "permissoes", table: "permissoes", pk: undefined },
       { sheet: "vocab_permissoes", table: "vocab_permissoes", pk: "chave" },
+      { sheet: "roles_default", table: "roles_default", pk: undefined },
+      { sheet: "auditoria_acesso", table: "auditoria_acesso", pk: "evento_id" },
+      { sheet: "auditoria_acao", table: "auditoria_acao", pk: "evento_id" },
       { sheet: "teses", table: "teses", pk: "tese_id" },
       { sheet: "cnae", table: "cnae", pk: "cnae_id" }
     ];
