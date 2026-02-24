@@ -1,3 +1,4 @@
+/* eslint-disable */
 /**
  * Script de Migração: Google Sheets para Supabase (Versão Completa)
  *
