@@ -19,12 +19,14 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Configurações do Google Sheets
 const spreadsheetId = process.env.SPREADSHEET_ID;
 const googleClientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-const googlePrivateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+const googlePrivateKey = process.env.GOOGLE_PRIVATE_KEY;
 
 async function getSheetsClient() {
+  const formattedKey = googlePrivateKey.replace(/\\n/g, '\n');
+
   const auth = new google.auth.JWT({
     email: googleClientEmail,
-    key: googlePrivateKey,
+    key: formattedKey,
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   } );
   return google.sheets({ version: "v4", auth });
@@ -182,7 +184,7 @@ async function main() {
       tableName: "leads",
       onConflict: "cliente_id",
       mapping: {
-        cliente_id: "cliente_id",
+        cliente_id: "negocio_id", // Fallback para negocio_id se cliente_id não estiver na planilha
         negocio_titulo: "negocio_titulo",
         negocio_valor: "negocio_valor",
         negocio_organizacao: "negocio_organizacao",
@@ -235,10 +237,6 @@ async function main() {
         negocio_utm_content: "negocio_utm_content",
         negocio_utm_medium: "negocio_utm_medium",
         negocio_utm_source: "negocio_utm_source",
-        negocio_utm_term: "negocio_utm_term",
-        negocio_visivel_para: "negocio_visivel_para",
-        negocio_ultima_alteracao_de_etapa: "negocio_ultima_alteracao_de_etapa",
-        negocio_ultimo_e_mail_enviado: "negocio_ultimo_e_mail_enviado",
         negocio_ultimo_e_mail_recebido: "negocio_ultimo_e_mail_recebido",
         pessoa_cargo: "pessoa_cargo",
         pessoa_email_work: "pessoa_email_work",
