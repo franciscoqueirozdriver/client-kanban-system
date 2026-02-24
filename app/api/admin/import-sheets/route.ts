@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
                   results.some(r => r.status === 'sucesso') ? 'parcial' : 'erro';
     
     await supabase.from('migration_logs').insert({
-      spreadsheet_id,
+      spreadsheet_id: spreadsheetId,
       results,
       status
     });
