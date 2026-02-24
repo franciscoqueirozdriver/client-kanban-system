@@ -7,11 +7,11 @@ export async function POST(req: NextRequest) {
     const bodyParams = await req.json();
     
     // Usar credenciais do corpo da requisição ou fallback para variáveis de ambiente da Vercel
-    const googleClientEmail = bodyParams.googleClientEmail || process.env.GOOGLE_CLIENT_EMAIL;
-    const googlePrivateKey = bodyParams.googlePrivateKey || process.env.GOOGLE_PRIVATE_KEY;
-    const spreadsheetId = bodyParams.spreadsheetId || process.env.SPREADSHEET_ID;
-    const supabaseUrl = bodyParams.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = bodyParams.supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const googleClientEmail = (bodyParams.googleClientEmail && bodyParams.googleClientEmail.trim() !== "") ? bodyParams.googleClientEmail : process.env.GOOGLE_CLIENT_EMAIL;
+    const googlePrivateKey = (bodyParams.googlePrivateKey && bodyParams.googlePrivateKey.trim() !== "") ? bodyParams.googlePrivateKey : process.env.GOOGLE_PRIVATE_KEY;
+    const spreadsheetId = (bodyParams.spreadsheetId && bodyParams.spreadsheetId.trim() !== "") ? bodyParams.spreadsheetId : process.env.SPREADSHEET_ID;
+    const supabaseUrl = (bodyParams.supabaseUrl && bodyParams.supabaseUrl.trim() !== "") ? bodyParams.supabaseUrl : process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = (bodyParams.supabaseServiceKey && bodyParams.supabaseServiceKey.trim() !== "") ? bodyParams.supabaseServiceKey : process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!googleClientEmail || !googlePrivateKey || !spreadsheetId || !supabaseUrl || !supabaseServiceKey) {
       return NextResponse.json({ 
