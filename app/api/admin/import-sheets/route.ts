@@ -142,7 +142,11 @@ export async function POST(req: NextRequest) {
           results.push({ table: item.table, status: 'sucesso', total: data.length, success, errors: 0 });
         }
       } catch (err: any) {
-        results.push({ table: item.table, status: 'erro', message: `Google Sheets Error: ${err.message}` });
+        results.push({ 
+          table: item.table, 
+          status: 'erro', 
+          message: `Google Sheets Error: ${err.message} (Usando conta: ${googleClientEmail})` 
+        });
       }
     }
 
