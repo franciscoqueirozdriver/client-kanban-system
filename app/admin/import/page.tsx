@@ -43,7 +43,12 @@ export default function ImportPage() {
       </div>
 
       <div className="bg-blue-900/20 border border-blue-800 p-4 rounded mb-6 text-sm text-blue-200">
-        <strong>Dica:</strong> Se as variáveis de ambiente já estiverem configuradas na Vercel, você pode deixar os campos abaixo vazios e clicar diretamente em "Iniciar Migração".
+        <h3 className="font-bold mb-2">Instruções Importantes:</h3>
+        <ol className="list-decimal ml-4 space-y-1">
+          <li>Certifique-se de que o e-mail <strong>client-kanban-system@client-kanban-system.iam.gserviceaccount.com</strong> foi adicionado como <strong>Editor</strong> na sua Planilha Google (botão Compartilhar).</li>
+          <li>Se as variáveis de ambiente já estiverem configuradas na Vercel, você pode deixar os campos abaixo vazios.</li>
+          <li>O sistema usará automaticamente a <strong>Service Role Key</strong> da Vercel para garantir permissão total no Supabase.</li>
+        </ol>
       </div>
       
       <div className="grid grid-cols-1 gap-4 mb-6">
