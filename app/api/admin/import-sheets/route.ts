@@ -11,11 +11,21 @@ export async function POST(req: NextRequest) {
     const googlePrivateKey = (bodyParams.googlePrivateKey && bodyParams.googlePrivateKey.trim() !== "") ? bodyParams.googlePrivateKey : process.env.GOOGLE_PRIVATE_KEY;
     const spreadsheetId = (bodyParams.spreadsheetId && bodyParams.spreadsheetId.trim() !== "") ? bodyParams.spreadsheetId : process.env.SPREADSHEET_ID;
     const supabaseUrl = (bodyParams.supabaseUrl && bodyParams.supabaseUrl.trim() !== "") ? bodyParams.supabaseUrl : process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = (bodyParams.supabaseServiceKey && bodyParams.supabaseServiceKey.trim() !== "") ? bodyParams.supabaseServiceKey : process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // Usar a Service Role Key (Admin) com múltiplos fallbacks de nomes comuns na Vercel
+    const supabaseServiceKey = (bodyParams.supabaseServiceKey && bodyParams.supabaseServiceKey.trim() !== "") 
+      ? bodyParams.supabaseServiceKey 
+      : (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_ROLE_KEY);
 
     if (!googleClientEmail || !googlePrivateKey || !spreadsheetId || !supabaseUrl || !supabaseServiceKey) {
+      const missing = [];
+      if (!googleClientEmail) missing.push('GOOGLE_CLIENT_EMAIL');
+      if (!googlePrivateKey) missing.push('GOOGLE_PRIVATE_KEY');
+      if (!spreadsheetId) missing.push('SPREADSHEET_ID');
+      if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+      if (!supabaseServiceKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+      
       return NextResponse.json({ 
-        error: 'Credenciais incompletas. Certifique-se de que as variáveis de ambiente estão configuradas na Vercel ou fornecidas na interface.' 
+        error: `Credenciais incompletas na Vercel: Faltando [${missing.join(', ')}]. Por favor, verifique as variáveis de ambiente.` 
       }, { status: 400 });
     }
 
