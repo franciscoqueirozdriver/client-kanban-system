@@ -16,8 +16,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Credenciais incompletas' }, { status: 400 });
     }
 
-    // Corrigir a chave privada
-    const formattedKey = googlePrivateKey.replace(/\\n/g, '\n');
+    // Normalização Robusta da Chave Privada
+    let formattedKey = googlePrivateKey;
+    
+    // 1. Remover aspas se existirem
+    if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
+      formattedKey = formattedKey.slice(1, -1);
+    }
+    
+    // 2. Converter \n literais para quebras de linha reais
+    formattedKey = formattedKey.replace(/\\n/g, '\n');
+    
+    // 3. Garantir que a chave tenha o formato PEM correto (cabeçalho, corpo, rodapé)
+    if (!formattedKey.includes('-----BEGIN PRIVATE KEY-----')) {
+      // Se a chave veio sem cabeçalho, tenta reconstruir (caso o usuário tenha colado apenas o corpo base64)
+      const cleanBody = formattedKey.replace(/\s/g, '');
+      formattedKey = `-----BEGIN PRIVATE KEY-----\n${cleanBody}\n-----END PRIVATE KEY-----`;
+    } else {
+      // Se tem cabeçalho, garante que as quebras de linha dentro do corpo PEM estejam corretas
+      const header = '-----BEGIN PRIVATE KEY-----';
+      const footer = '-----END PRIVATE KEY-----';
+      let body = formattedKey.split(header)[1].split(footer)[0].replace(/\s/g, '');
+      
+      // Reconstruir com linhas de 64 caracteres (padrão PEM)
+      const lines = [];
+      for (let i = 0; i < body.length; i += 64) {
+        lines.push(body.slice(i, i + 64));
+      }
+      formattedKey = `${header}\n${lines.join('\n')}\n${footer}\n`;
+    }
 
     // Inicializar Google Sheets
     const auth = new google.auth.JWT({
