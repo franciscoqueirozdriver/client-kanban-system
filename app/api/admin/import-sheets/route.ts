@@ -11,13 +11,14 @@ export async function POST(req: NextRequest) {
     const googlePrivateKey = (bodyParams.googlePrivateKey && bodyParams.googlePrivateKey.trim() !== "") ? bodyParams.googlePrivateKey : process.env.GOOGLE_PRIVATE_KEY;
     const spreadsheetId = (bodyParams.spreadsheetId && bodyParams.spreadsheetId.trim() !== "") ? bodyParams.spreadsheetId : process.env.SPREADSHEET_ID;
     const supabaseUrl = (bodyParams.supabaseUrl && bodyParams.supabaseUrl.trim() !== "") ? bodyParams.supabaseUrl : process.env.NEXT_PUBLIC_SUPABASE_URL;
+    
     // Usar a Service Role Key (Admin) com múltiplos fallbacks de nomes comuns na Vercel
     const supabaseServiceKey = (bodyParams.supabaseServiceKey && bodyParams.supabaseServiceKey.trim() !== "") 
       ? bodyParams.supabaseServiceKey 
       : (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_ROLE_KEY);
 
     if (!googleClientEmail || !googlePrivateKey || !spreadsheetId || !supabaseUrl || !supabaseServiceKey) {
-      const missing = [];
+      const missing: string[] = []; // Fix TypeScript 'never' error
       if (!googleClientEmail) missing.push('GOOGLE_CLIENT_EMAIL');
       if (!googlePrivateKey) missing.push('GOOGLE_PRIVATE_KEY');
       if (!spreadsheetId) missing.push('SPREADSHEET_ID');
@@ -31,16 +32,11 @@ export async function POST(req: NextRequest) {
 
     // Normalização Robusta da Chave Privada
     let formattedKey = googlePrivateKey;
-    
-    // 1. Remover aspas se existirem
     if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
       formattedKey = formattedKey.slice(1, -1);
     }
-    
-    // 2. Converter \n literais para quebras de linha reais
     formattedKey = formattedKey.replace(/\\n/g, '\n');
     
-    // 3. Garantir que a chave tenha o formato PEM correto (cabeçalho, corpo, rodapé)
     if (!formattedKey.includes('-----BEGIN PRIVATE KEY-----')) {
       const cleanBody = formattedKey.replace(/\s/g, '');
       formattedKey = `-----BEGIN PRIVATE KEY-----\n${cleanBody}\n-----END PRIVATE KEY-----`;
@@ -52,7 +48,7 @@ export async function POST(req: NextRequest) {
         const bodyParts = parts[1].split(footer);
         if (bodyParts.length > 0) {
           const body = bodyParts[0].replace(/\s/g, '');
-          const lines: string[] = []; // Definindo explicitamente como string[] para evitar erro de tipo
+          const lines: string[] = [];
           for (let i = 0; i < body.length; i += 64) {
             lines.push(body.slice(i, i + 64));
           }
@@ -100,13 +96,39 @@ export async function POST(req: NextRequest) {
       { sheet: "cnae", table: "cnae", pk: "cnae_id" }
     ];
 
+    // Buscar metadados da planilha para verificar nomes das abas
+    const spreadsheetMetadata = await sheets.spreadsheets.get({ spreadsheetId });
+    const existingSheets = spreadsheetMetadata.data.sheets?.map(s => s.properties?.title) || [];
+
     const results: any[] = [];
 
     for (const item of tables) {
       try {
+        // Tentar encontrar o nome exato ou variações
+        let actualSheetName = item.sheet;
+        if (!existingSheets.includes(actualSheetName)) {
+          // Tentar variações comuns (ex: perdcomp em vez de perdecomp)
+          const variations = [
+            item.sheet.replace('perdecomp', 'perdcomp'),
+            item.sheet.replace('perdecomp', 'percomp'),
+            item.sheet.replace('perdecomp', 'perdcomp_'),
+          ];
+          const found = variations.find(v => existingSheets.includes(v));
+          if (found) {
+            actualSheetName = found;
+          } else {
+            results.push({ 
+              table: item.table, 
+              status: 'erro', 
+              message: `Aba '${item.sheet}' não encontrada na planilha. Abas disponíveis: ${existingSheets.join(', ')}` 
+            });
+            continue;
+          }
+        }
+
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId,
-          range: `${item.sheet}!A:ZZ`,
+          range: `${actualSheetName}!A:ZZ`,
         });
 
         const rows = response.data.values;
