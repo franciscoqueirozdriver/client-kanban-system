@@ -2,23 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { createClient } from '@supabase/supabase-js';
 
+// Forçar o runtime do Node.js para garantir acesso às variáveis de ambiente
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const bodyParams = await req.json();
     
-    // Captura direta das variáveis de ambiente da Vercel
-    const envGoogleClientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-    const envGooglePrivateKey = process.env.GOOGLE_PRIVATE_KEY;
-    const envSpreadsheetId = process.env.SPREADSHEET_ID;
-    const envSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const envSupabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_ROLE_KEY;
-
-    // Prioridade: Interface > Vercel
-    const googleClientEmail = (bodyParams.googleClientEmail && bodyParams.googleClientEmail.trim() !== "") ? bodyParams.googleClientEmail : envGoogleClientEmail;
-    const googlePrivateKey = (bodyParams.googlePrivateKey && bodyParams.googlePrivateKey.trim() !== "") ? bodyParams.googlePrivateKey : envGooglePrivateKey;
-    const spreadsheetId = (bodyParams.spreadsheetId && bodyParams.spreadsheetId.trim() !== "") ? bodyParams.spreadsheetId : envSpreadsheetId;
-    const supabaseUrl = (bodyParams.supabaseUrl && bodyParams.supabaseUrl.trim() !== "") ? bodyParams.supabaseUrl : envSupabaseUrl;
-    const supabaseServiceKey = (bodyParams.supabaseServiceKey && bodyParams.supabaseServiceKey.trim() !== "") ? bodyParams.supabaseServiceKey : envSupabaseServiceKey;
+    // Captura explícita com fallback
+    const googleClientEmail = bodyParams.googleClientEmail || process.env.GOOGLE_CLIENT_EMAIL;
+    const googlePrivateKey = bodyParams.googlePrivateKey || process.env.GOOGLE_PRIVATE_KEY;
+    const spreadsheetId = bodyParams.spreadsheetId || process.env.SPREADSHEET_ID;
+    const supabaseUrl = bodyParams.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = bodyParams.supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
     if (!googleClientEmail || !googlePrivateKey || !spreadsheetId || !supabaseUrl || !supabaseServiceKey) {
       const missing: string[] = [];
@@ -28,49 +25,18 @@ export async function POST(req: NextRequest) {
       if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL');
       if (!supabaseServiceKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
       
-      // Log detalhado para o console da Vercel (não expõe os valores, apenas se existem)
-      console.log('DIAGNÓSTICO DE AMBIENTE:', {
-        hasEmail: !!googleClientEmail,
-        hasKey: !!googlePrivateKey,
-        hasSheetId: !!spreadsheetId,
-        hasSupaUrl: !!supabaseUrl,
-        hasSupaKey: !!supabaseServiceKey,
-        namesFound: Object.keys(process.env).filter(k => k.includes('SUPABASE') || k.includes('GOOGLE'))
-      });
-
       return NextResponse.json({ 
-        error: `Credenciais incompletas. Faltando: [${missing.join(', ')}].`,
-        debug: {
-          availableEnvVars: Object.keys(process.env).filter(k => k.includes('SUPABASE') || k.includes('GOOGLE') || k.includes('SERVICE'))
-        }
+        error: `Credenciais incompletas na Vercel. Faltando: [${missing.join(', ')}].`,
+        availableKeys: Object.keys(process.env).filter(k => k.includes('SUPABASE') || k.includes('GOOGLE'))
       }, { status: 400 });
     }
 
-    // Normalização Robusta da Chave Privada
+    // Normalização da Chave Privada
     let formattedKey = googlePrivateKey;
-    if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
-      formattedKey = formattedKey.slice(1, -1);
-    }
     formattedKey = formattedKey.replace(/\\n/g, '\n');
-    
     if (!formattedKey.includes('-----BEGIN PRIVATE KEY-----')) {
       const cleanBody = formattedKey.replace(/\s/g, '');
       formattedKey = `-----BEGIN PRIVATE KEY-----\n${cleanBody}\n-----END PRIVATE KEY-----`;
-    } else {
-      const header = '-----BEGIN PRIVATE KEY-----';
-      const footer = '-----END PRIVATE KEY-----';
-      const parts = formattedKey.split(header);
-      if (parts.length > 1) {
-        const bodyParts = parts[1].split(footer);
-        if (bodyParts.length > 0) {
-          const body = bodyParts[0].replace(/\s/g, '');
-          const lines: string[] = [];
-          for (let i = 0; i < body.length; i += 64) {
-            lines.push(body.slice(i, i + 64));
-          }
-          formattedKey = `${header}\n${lines.join('\n')}\n${footer}\n`;
-        }
-      }
     }
 
     // Inicializar Google Sheets
@@ -81,11 +47,10 @@ export async function POST(req: NextRequest) {
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Inicializar Supabase Service Role (para ignorar RLS)
-    // Garantindo que a URL e a Key não sejam undefined
-    const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+    // Inicializar Supabase com Service Role
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Mapeamento completo de abas para tabelas
+    // Mapeamento de abas
     const tables = [
       { sheet: "sheet1", table: "leads", pk: "cliente_id" },
       { sheet: "layout_importacao_empresas", table: "layout_importacao_empresas", pk: "cliente_id" },
@@ -113,7 +78,6 @@ export async function POST(req: NextRequest) {
       { sheet: "cnae", table: "cnae", pk: "cnae_id" }
     ];
 
-    // Buscar metadados da planilha para verificar nomes das abas
     const spreadsheetMetadata = await sheets.spreadsheets.get({ spreadsheetId });
     const existingSheets = spreadsheetMetadata.data.sheets?.map(s => s.properties?.title) || [];
 
@@ -126,17 +90,11 @@ export async function POST(req: NextRequest) {
           const variations = [
             item.sheet.replace('perdecomp', 'perdcomp'),
             item.sheet.replace('perdecomp', 'percomp'),
-            item.sheet.replace('perdecomp', 'perdcomp_'),
           ];
           const found = variations.find(v => existingSheets.includes(v));
-          if (found) {
-            actualSheetName = found;
-          } else {
-            results.push({ 
-              table: item.table, 
-              status: 'erro', 
-              message: `Aba '${item.sheet}' não encontrada. Disponíveis: ${existingSheets.join(', ')}` 
-            });
+          if (found) actualSheetName = found;
+          else {
+            results.push({ table: item.table, status: 'erro', message: `Aba não encontrada.` });
             continue;
           }
         }
@@ -170,13 +128,7 @@ export async function POST(req: NextRequest) {
           const { error } = await supabase.from(item.table).upsert(batch, { onConflict: item.pk as any });
           if (error) {
             errors += batch.length;
-            results.push({ 
-              table: item.table, 
-              status: 'erro', 
-              success, 
-              errors, 
-              message: `Supabase Error: ${error.message} (${error.code})` 
-            });
+            results.push({ table: item.table, status: 'erro', message: error.message });
             break; 
           } else {
             success += batch.length;
@@ -187,22 +139,15 @@ export async function POST(req: NextRequest) {
           results.push({ table: item.table, status: 'sucesso', total: data.length, success, errors: 0 });
         }
       } catch (err: any) {
-        results.push({ 
-          table: item.table, 
-          status: 'erro', 
-          message: `Google Sheets Error: ${err.message}` 
-        });
+        results.push({ table: item.table, status: 'erro', message: err.message });
       }
     }
 
-    // Salvar log da migração no Supabase
-    const status = results.every(r => r.status === 'sucesso') ? 'sucesso' : 
-                  results.some(r => r.status === 'sucesso') ? 'parcial' : 'erro';
-    
+    // Salvar log
     await supabase.from('migration_logs').insert({
       spreadsheet_id: spreadsheetId,
       results,
-      status
+      status: results.every(r => r.status === 'sucesso') ? 'sucesso' : 'parcial'
     });
 
     return NextResponse.json({ results });
