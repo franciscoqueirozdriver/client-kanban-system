@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       // Ignorar se o body não for JSON (pode ser útil se chamarem sem body)
     }
-    
+
     // Captura explícita com fallback (ignora strings 'undefined' ou 'null' enviadas via body)
     const isValidValue = (v: any) => v && v !== 'undefined' && v !== 'null';
 
@@ -31,7 +31,16 @@ export async function POST(req: NextRequest) {
     const googlePrivateKey = isValidValue(bodyParams.googlePrivateKey) ? bodyParams.googlePrivateKey : process.env.GOOGLE_PRIVATE_KEY;
     const spreadsheetId = isValidValue(bodyParams.spreadsheetId) ? bodyParams.spreadsheetId : process.env.SPREADSHEET_ID;
     const supabaseUrl = isValidValue(bodyParams.supabaseUrl) ? bodyParams.supabaseUrl : (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
-    const supabaseServiceKey = isValidValue(bodyParams.supabaseServiceKey) ? bodyParams.supabaseServiceKey : (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SECRET_KEY);
+
+    // Seleção inteligente da chave: Priorizar qualquer valor que pareça um JWT válido
+    const keyCandidates = [
+      bodyParams.supabaseServiceKey,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      process.env.SUPABASE_SERVICE_KEY,
+      process.env.SUPABASE_SECRET_KEY
+    ].filter(isValidValue);
+
+    const supabaseServiceKey = keyCandidates.find(isLikelyJwt) || keyCandidates[0] || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     // Validação de formato da URL
     if (supabaseUrl && !supabaseUrl.startsWith('https://')) {
