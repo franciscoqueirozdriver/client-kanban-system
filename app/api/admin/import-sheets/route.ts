@@ -21,12 +21,14 @@ export async function POST(req: NextRequest) {
       // Ignorar se o body não for JSON (pode ser útil se chamarem sem body)
     }
     
-    // Captura explícita com fallback
-    const googleClientEmail = bodyParams.googleClientEmail || process.env.GOOGLE_CLIENT_EMAIL;
-    const googlePrivateKey = bodyParams.googlePrivateKey || process.env.GOOGLE_PRIVATE_KEY;
-    const spreadsheetId = bodyParams.spreadsheetId || process.env.SPREADSHEET_ID;
-    const supabaseUrl = bodyParams.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = bodyParams.supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+    // Captura explícita com fallback (ignora strings 'undefined' ou 'null' enviadas via body)
+    const isValidValue = (v: any) => v && v !== 'undefined' && v !== 'null';
+
+    const googleClientEmail = isValidValue(bodyParams.googleClientEmail) ? bodyParams.googleClientEmail : process.env.GOOGLE_CLIENT_EMAIL;
+    const googlePrivateKey = isValidValue(bodyParams.googlePrivateKey) ? bodyParams.googlePrivateKey : process.env.GOOGLE_PRIVATE_KEY;
+    const spreadsheetId = isValidValue(bodyParams.spreadsheetId) ? bodyParams.spreadsheetId : process.env.SPREADSHEET_ID;
+    const supabaseUrl = isValidValue(bodyParams.supabaseUrl) ? bodyParams.supabaseUrl : (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL);
+    const supabaseServiceKey = isValidValue(bodyParams.supabaseServiceKey) ? bodyParams.supabaseServiceKey : (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SECRET_KEY);
 
     // Validação de formato da URL
     if (supabaseUrl && !supabaseUrl.startsWith('https://')) {
@@ -38,7 +40,14 @@ export async function POST(req: NextRequest) {
     // Validação de formato da Chave Service Role
     if (supabaseServiceKey && !isLikelyJwt(supabaseServiceKey)) {
       return NextResponse.json({
-        error: "Chave SERVICE_ROLE inválida (formato JWT incorreto). Verifique no Supabase Dashboard > Project Settings > API se está usando a 'service_role' key (não a 'anon' key)."
+        error: "Chave SERVICE_ROLE inválida (formato JWT incorreto).",
+        debug: {
+          receivedLength: supabaseServiceKey.length,
+          receivedParts: supabaseServiceKey.split('.').length,
+          serviceRoleKeyEnvExists: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+          serviceRoleKeyEnvLength: process.env.SUPABASE_SERVICE_ROLE_KEY?.length || 0
+        },
+        message: "Verifique no Supabase Dashboard > Project Settings > API se está usando a 'service_role' key (não a 'anon' key)."
       }, { status: 400 });
     }
 
