@@ -6,19 +6,22 @@ export async function POST(req: NextRequest) {
   try {
     const bodyParams = await req.json();
     
-    // Usar credenciais do corpo da requisição ou fallback para variáveis de ambiente da Vercel
-    const googleClientEmail = (bodyParams.googleClientEmail && bodyParams.googleClientEmail.trim() !== "") ? bodyParams.googleClientEmail : process.env.GOOGLE_CLIENT_EMAIL;
-    const googlePrivateKey = (bodyParams.googlePrivateKey && bodyParams.googlePrivateKey.trim() !== "") ? bodyParams.googlePrivateKey : process.env.GOOGLE_PRIVATE_KEY;
-    const spreadsheetId = (bodyParams.spreadsheetId && bodyParams.spreadsheetId.trim() !== "") ? bodyParams.spreadsheetId : process.env.SPREADSHEET_ID;
-    const supabaseUrl = (bodyParams.supabaseUrl && bodyParams.supabaseUrl.trim() !== "") ? bodyParams.supabaseUrl : process.env.NEXT_PUBLIC_SUPABASE_URL;
-    
-    // Usar a Service Role Key (Admin) com múltiplos fallbacks de nomes comuns na Vercel
-    const supabaseServiceKey = (bodyParams.supabaseServiceKey && bodyParams.supabaseServiceKey.trim() !== "") 
-      ? bodyParams.supabaseServiceKey 
-      : (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_ROLE_KEY);
+    // Captura direta das variáveis de ambiente da Vercel
+    const envGoogleClientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+    const envGooglePrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+    const envSpreadsheetId = process.env.SPREADSHEET_ID;
+    const envSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const envSupabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_ROLE_KEY;
+
+    // Prioridade: Interface > Vercel
+    const googleClientEmail = (bodyParams.googleClientEmail && bodyParams.googleClientEmail.trim() !== "") ? bodyParams.googleClientEmail : envGoogleClientEmail;
+    const googlePrivateKey = (bodyParams.googlePrivateKey && bodyParams.googlePrivateKey.trim() !== "") ? bodyParams.googlePrivateKey : envGooglePrivateKey;
+    const spreadsheetId = (bodyParams.spreadsheetId && bodyParams.spreadsheetId.trim() !== "") ? bodyParams.spreadsheetId : envSpreadsheetId;
+    const supabaseUrl = (bodyParams.supabaseUrl && bodyParams.supabaseUrl.trim() !== "") ? bodyParams.supabaseUrl : envSupabaseUrl;
+    const supabaseServiceKey = (bodyParams.supabaseServiceKey && bodyParams.supabaseServiceKey.trim() !== "") ? bodyParams.supabaseServiceKey : envSupabaseServiceKey;
 
     if (!googleClientEmail || !googlePrivateKey || !spreadsheetId || !supabaseUrl || !supabaseServiceKey) {
-      const missing: string[] = []; // Fix TypeScript 'never' error
+      const missing: string[] = [];
       if (!googleClientEmail) missing.push('GOOGLE_CLIENT_EMAIL');
       if (!googlePrivateKey) missing.push('GOOGLE_PRIVATE_KEY');
       if (!spreadsheetId) missing.push('SPREADSHEET_ID');
@@ -66,7 +69,8 @@ export async function POST(req: NextRequest) {
     const sheets = google.sheets({ version: 'v4', auth });
 
     // Inicializar Supabase Service Role (para ignorar RLS)
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Garantindo que a URL e a Key não sejam undefined
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
     // Mapeamento completo de abas para tabelas
     const tables = [
@@ -104,10 +108,8 @@ export async function POST(req: NextRequest) {
 
     for (const item of tables) {
       try {
-        // Tentar encontrar o nome exato ou variações
         let actualSheetName = item.sheet;
         if (!existingSheets.includes(actualSheetName)) {
-          // Tentar variações comuns (ex: perdcomp em vez de perdecomp)
           const variations = [
             item.sheet.replace('perdecomp', 'perdcomp'),
             item.sheet.replace('perdecomp', 'percomp'),
@@ -120,7 +122,7 @@ export async function POST(req: NextRequest) {
             results.push({ 
               table: item.table, 
               status: 'erro', 
-              message: `Aba '${item.sheet}' não encontrada na planilha. Abas disponíveis: ${existingSheets.join(', ')}` 
+              message: `Aba '${item.sheet}' não encontrada. Disponíveis: ${existingSheets.join(', ')}` 
             });
             continue;
           }
@@ -146,7 +148,6 @@ export async function POST(req: NextRequest) {
           return obj;
         });
 
-        // Upsert em lotes de 100
         const batchSize = 100;
         let success = 0;
         let errors = 0;
@@ -155,7 +156,6 @@ export async function POST(req: NextRequest) {
           const batch = data.slice(i, i + batchSize);
           const { error } = await supabase.from(item.table).upsert(batch, { onConflict: item.pk as any });
           if (error) {
-            console.error(`Erro na tabela ${item.table}:`, error);
             errors += batch.length;
             results.push({ 
               table: item.table, 
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
         results.push({ 
           table: item.table, 
           status: 'erro', 
-          message: `Google Sheets Error: ${err.message} (Usando conta: ${googleClientEmail})` 
+          message: `Google Sheets Error: ${err.message}` 
         });
       }
     }
@@ -194,16 +194,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ results });
   } catch (error: any) {
-    try {
-      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-      await supabase.from('migration_logs').insert({
-        status: 'erro',
-        error_message: error.message
-      });
-    } catch (e) {
-      console.error('Falha ao salvar log de erro fatal:', e);
-    }
-    
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
