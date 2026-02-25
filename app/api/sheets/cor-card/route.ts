@@ -37,9 +37,9 @@ async function appendRow({ cardId, cor }: Payload) {
   const doc = new GoogleSpreadsheetCtor(process.env.GOOGLE_SHEETS_ID as string, jwtClient);
 
   await doc.loadInfo();
-  const sheet = doc.sheetsByTitle['Sheet1'] || doc.sheetsByIndex[0];
+  const sheet = doc.sheetsByTitle['sheet1'] || doc.sheetsByIndex[0];
   if (!sheet) {
-    throw new Error('Sheet1 não encontrada na planilha');
+    throw new Error('sheet1 não encontrada na planilha');
   }
 
   await sheet.loadHeaderRow().catch(() => {});

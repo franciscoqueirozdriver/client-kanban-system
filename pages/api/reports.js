@@ -7,7 +7,7 @@ export default async function handler(req, res) {
       const limitParam = parseInt(req.query.limit ?? req.query.maxLeads, 10);
       const onlyNew = req.query.onlyNew === '1';
 
-      const { headers, rows: dataRows } = await getSheetData('Sheet1');
+      const { headers, rows: dataRows } = await getSheetData('sheet1');
       const rows = [headers, ...dataRows.map(row => headers.map(header => row[header]))]; // Reconstroi o array de arrays para buildReport
 
       const limit = Number.isFinite(limitParam) && limitParam >= 0 ? limitParam : rows.length;

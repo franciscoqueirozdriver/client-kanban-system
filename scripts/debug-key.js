@@ -1,0 +1,12 @@
+const fs = require('fs');
+const dotenv = require('dotenv');
+const env = dotenv.parse(fs.readFileSync('.env'));
+const key = env.GOOGLE_PRIVATE_KEY;
+console.log('--- DEBUG KEY ---');
+console.log('Length:', key.length);
+console.log('First 50 chars:', key.substring(0, 50));
+console.log('Last 50 chars:', key.substring(key.length - 50));
+console.log('Contains \\n:', key.includes('\\n'));
+console.log('Contains \n:', key.includes('\n'));
+console.log('Header match:', key.includes('-----BEGIN PRIVATE KEY-----'));
+console.log('Footer match:', key.includes('-----END PRIVATE KEY-----'));

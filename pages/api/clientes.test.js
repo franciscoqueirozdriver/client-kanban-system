@@ -1,10 +1,14 @@
 /** @jest-environment node */
 import handler from './clientes';
-import { getSheetCached } from '../../lib/googleSheets';
 
 jest.mock('../../lib/googleSheets', () => ({
-  getSheetCached: jest.fn()
+  getSheetCached: jest.fn(),
+  getSheetData: jest.fn(),
+  updateRow: jest.fn(),
+  appendRow: jest.fn(),
 }));
+
+const { getSheetData, getSheetCached } = jest.requireMock('../../lib/googleSheets');
 
 describe('GET /api/clientes', () => {
   const header = [
@@ -43,8 +47,13 @@ describe('GET /api/clientes', () => {
   }
 
   it('returns all clients when limit not provided', async () => {
-    const rows = [header, ...makeRows(1205)];
-    getSheetCached.mockResolvedValue({ data: { values: rows } });
+    const rows = makeRows(1205);
+    const dataRows = rows.map(row => {
+      const obj = { _rowNumber: 0 };
+      header.forEach((h, i) => obj[h] = row[i]);
+      return obj;
+    });
+    getSheetData.mockResolvedValue({ headers: header, rows: dataRows });
 
     const req = { method: 'GET', query: {} };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -56,8 +65,13 @@ describe('GET /api/clientes', () => {
   });
 
   it('respects explicit limit', async () => {
-    const rows = [header, ...makeRows(50)];
-    getSheetCached.mockResolvedValue({ data: { values: rows } });
+    const rows = makeRows(50);
+    const dataRows = rows.map(row => {
+      const obj = { _rowNumber: 0 };
+      header.forEach((h, i) => obj[h] = row[i]);
+      return obj;
+    });
+    getSheetData.mockResolvedValue({ headers: header, rows: dataRows });
 
     const req = { method: 'GET', query: { limit: '10' } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -68,8 +82,13 @@ describe('GET /api/clientes', () => {
   });
 
   it('returns count when countOnly=1', async () => {
-    const rows = [header, ...makeRows(30)];
-    getSheetCached.mockResolvedValue({ data: { values: rows } });
+    const rows = makeRows(30);
+    const dataRows = rows.map(row => {
+      const obj = { _rowNumber: 0 };
+      header.forEach((h, i) => obj[h] = row[i]);
+      return obj;
+    });
+    getSheetData.mockResolvedValue({ headers: header, rows: dataRows });
 
     const req = { method: 'GET', query: { countOnly: '1' } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };

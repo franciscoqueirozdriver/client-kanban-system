@@ -1,9 +1,9 @@
 import { getSheetsClient, getSheetData, withRetry, chunk } from '../../lib/googleSheets';
 
 const SHEET_LAYOUT = 'layout_importacao_empresas';
-const SHEET_SHEET1 = 'Sheet1';
+const SHEET_SHEET1 = 'sheet1';
 const SHEET_PADROES = 'Padroes';
-const SHEET_DEST = 'Leads Exact Spotter';
+const SHEET_DEST = 'leads_exact_spotter';
 const KEY = 'Cliente_ID'; // chave única padronizada
 
 // Utils
@@ -96,7 +96,7 @@ export default async function handler(req, res) {
 
     // 3) Índices por Cliente_ID
     const idOf = (r) => clean(r[KEY]);
-    const mapSheet1 = new Map(sheet1.map(r => [idOf(r), r]).filter(([k]) => !!k));
+    const mapsheet1 = new Map(sheet1.map(r => [idOf(r), r]).filter(([k]) => !!k));
     const mapDest = new Map(destRows.map(r => [idOf(r), r]).filter(([k]) => !!k));
 
     // 4) Header do destino (migrar Client_ID -> Cliente_ID se necessário)
@@ -149,7 +149,7 @@ export default async function handler(req, res) {
       const id = idOf(row);
       if (!id) { ignoradasSemId++; continue; }
 
-      const base = mapSheet1.get(id);
+      const base = mapsheet1.get(id);
       if (!base) { ignoradasSemBase++; continue; }
 
       const atual = mapDest.get(id) || {};
@@ -164,7 +164,7 @@ export default async function handler(req, res) {
       // Nome do Lead
       const nomeLead = produto ? `${nomeEmpresa} - ${produto}` : `${nomeEmpresa}`;
 
-      // Mercado (Sheet1 -> Organização - Segmento)
+      // Mercado (sheet1 -> Organização - Segmento)
       const segmento = clean(base['Organização - Segmento']);
       const mercado = segmento && mercadosValidos.includes(segmento) ? segmento : 'N/A';
 
@@ -184,11 +184,11 @@ export default async function handler(req, res) {
       // País: preferir “País Empresa” (ou “Pais Empresa”); se faltar e houver cidade+estado, usar "Brasil"
       const pais = pick(row, 'País Empresa', 'Pais Empresa') || ((cidade && estado) ? 'Brasil' : '');
 
-      // Telefones (prioridade: Card -> layout -> Sheet1)
+      // Telefones (prioridade: Card -> layout -> sheet1)
       const telsCard = splitPhones(pick(row, 'Telefones Card')); // pode não existir
       const telsLayout = splitPhones(pick(row, 'Telefones Empresa'));
-      const telSheet1 = splitPhones(base['Telefone Normalizado']);
-      const telefones = telsCard.length ? telsCard : (telsLayout.length ? telsLayout : telSheet1);
+      const telsheet1 = splitPhones(base['Telefone Normalizado']);
+      const telefones = telsCard.length ? telsCard : (telsLayout.length ? telsLayout : telsheet1);
       const telefonesStr = joinPhones(telefones);
 
       // DDI apenas se houver algum telefone
