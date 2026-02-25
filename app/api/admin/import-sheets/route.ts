@@ -28,8 +28,21 @@ export async function POST(req: NextRequest) {
       if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL');
       if (!supabaseServiceKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
       
+      // Log detalhado para o console da Vercel (não expõe os valores, apenas se existem)
+      console.log('DIAGNÓSTICO DE AMBIENTE:', {
+        hasEmail: !!googleClientEmail,
+        hasKey: !!googlePrivateKey,
+        hasSheetId: !!spreadsheetId,
+        hasSupaUrl: !!supabaseUrl,
+        hasSupaKey: !!supabaseServiceKey,
+        namesFound: Object.keys(process.env).filter(k => k.includes('SUPABASE') || k.includes('GOOGLE'))
+      });
+
       return NextResponse.json({ 
-        error: `Credenciais incompletas na Vercel: Faltando [${missing.join(', ')}]. Por favor, verifique as variáveis de ambiente.` 
+        error: `Credenciais incompletas. Faltando: [${missing.join(', ')}].`,
+        debug: {
+          availableEnvVars: Object.keys(process.env).filter(k => k.includes('SUPABASE') || k.includes('GOOGLE') || k.includes('SERVICE'))
+        }
       }, { status: 400 });
     }
 
