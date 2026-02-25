@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'node:crypto';
 
 // Forçar o runtime do Node.js para garantir acesso às variáveis de ambiente
 export const runtime = 'nodejs';
@@ -132,14 +133,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Mapeamento de abas
+    // NOTA: 'sheet1' mapeia para 'clientes' (necessário para satisfazer Foreign Keys de outras tabelas)
     const tables = [
-      { sheet: "sheet1", table: "leads", pk: "cliente_id" },
-      { sheet: "layout_importacao_empresas", table: "layout_importacao_empresas", pk: "cliente_id" },
-      { sheet: "leads_exact_spotter", table: "leads_exact_spotter", pk: "cliente_id" },
-      { sheet: "perdecomp", table: "perdecomp", pk: "perdcomp_id" },
+      { sheet: "sheet1", table: "clientes", pk: "cliente_id" },
+      { sheet: "leads", table: "leads", pk: "cliente_id" }, // Mantendo leads se existir
+      { sheet: "perdecomp", table: "perdecomp", pk: undefined }, // Removido ON CONFLICT conforme solicitado
       { sheet: "perdecomp_itens", table: "perdecomp_itens", pk: undefined },
       { sheet: "perdecomp_facts", table: "perdecomp_facts", pk: undefined },
       { sheet: "perdecomp_snapshot", table: "perdecomp_snapshot", pk: undefined },
+      { sheet: "layout_importacao_empresas", table: "layout_importacao_empresas", pk: undefined }, // Sem pk = INSERT (novo registro sempre)
+      { sheet: "leads_exact_spotter", table: "leads_exact_spotter", pk: undefined }, // Sem pk = INSERT (novo registro sempre)
       { sheet: "padroes", table: "padroes", pk: undefined },
       { sheet: "historico_interacoes", table: "historico_interacoes", pk: "message_id" },
       { sheet: "mensagens", table: "mensagens", pk: undefined },
@@ -195,8 +198,24 @@ export async function POST(req: NextRequest) {
         const data = rows.slice(1).map(row => {
           const obj: any = {};
           headers.forEach((header, index) => {
-            obj[header] = row[index] === "" ? null : row[index];
+            const value = row[index];
+            if (value === "" || value === undefined) {
+              obj[header] = null;
+            } else {
+              obj[header] = value;
+            }
           });
+
+          // Ajustes específicos por tabela
+          if (item.table === 'layout_importacao_empresas' || item.table === 'leads_exact_spotter') {
+            // Banco gera oportunidade_id automaticamente via DEFAULT gen_random_uuid()
+            delete obj.oportunidade_id;
+          }
+
+          if (item.table === 'historico_interacoes' && !obj.message_id) {
+            obj.message_id = crypto.randomUUID();
+          }
+
           return obj;
         });
 
@@ -206,7 +225,16 @@ export async function POST(req: NextRequest) {
 
         for (let i = 0; i < data.length; i += batchSize) {
           const batch = data.slice(i, i + batchSize);
-          const { error } = await supabase.from(item.table).upsert(batch, { onConflict: item.pk as any });
+
+          let query: any;
+          if (item.pk) {
+            query = supabase.from(item.table).upsert(batch, { onConflict: item.pk as any });
+          } else {
+            query = supabase.from(item.table).insert(batch);
+          }
+
+          const { error } = await query;
+
           if (error) {
             errors += batch.length;
             results.push({ table: item.table, status: 'erro', message: error.message });
