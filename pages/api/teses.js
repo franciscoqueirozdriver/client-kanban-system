@@ -17,9 +17,9 @@ async function getTeseSheet() {
   await doc.loadInfo();
   
   // Procurar pela aba de teses (pode ter nomes diferentes)
-  let sheet = doc.sheetsByTitle['Teses'] || 
+  let sheet = doc.sheetsByTitle['teses'] ||
+             doc.sheetsByTitle['Teses'] ||
              doc.sheetsByTitle['TESES'] || 
-             doc.sheetsByTitle['teses'] ||
              doc.sheetsByIndex[0]; // fallback para primeira aba
   
   return sheet;
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     
     if (req.method === 'GET') {
       await sheet.loadHeaderRow();
-      const COL = await buildColumnResolver('Teses');
+      const COL = await buildColumnResolver('teses');
       const rows = await sheet.getRows();
       
       const teses = rows.map(row => ({
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
       
       if (action === 'create') {
         await sheet.loadHeaderRow();
-        const COL = await buildColumnResolver('Teses');
+        const COL = await buildColumnResolver('teses');
         const rows = await sheet.getRows();
         
         const existingTeses = rows.map(row => ({
@@ -105,7 +105,7 @@ export default async function handler(req, res) {
       
       if (action === 'updateStatus') {
         await sheet.loadHeaderRow();
-        const COL = await buildColumnResolver('Teses');
+        const COL = await buildColumnResolver('teses');
         const rows = await sheet.getRows();
         
         const targetRow = rows.find(row => row.get(COL('Tese_ID')) === teseId);
@@ -131,7 +131,7 @@ export default async function handler(req, res) {
       const { teseId, teseData } = req.body;
       
       await sheet.loadHeaderRow();
-      const COL = await buildColumnResolver('Teses');
+      const COL = await buildColumnResolver('teses');
       const rows = await sheet.getRows();
       
       const targetRow = rows.find(row => row.get(COL('Tese_ID')) === teseId);

@@ -22,7 +22,7 @@ describe('POST /api/kanban', () => {
     };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     await handler(req, res);
-    expect(findRowIndexById).toHaveBeenCalledWith('Sheet1', 1, 'Cliente_ID', '1');
+    expect(findRowIndexById).toHaveBeenCalledWith('sheet1', 1, 'Cliente_ID', '1');
     expect(updateRowByIndex).toHaveBeenCalled();
     const call = updateRowByIndex.mock.calls[0][0];
     expect(call.updates.Status_Kanban).toBe('Lead Selecionado');
