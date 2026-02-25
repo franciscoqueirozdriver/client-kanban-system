@@ -93,51 +93,10 @@ export async function POST(req: NextRequest) {
       return response.data.values;
     };
 
-    // ETAPA 1: Extração de Clientes em Memória
-    const clientSourceSheets = [
-      { name: "layout_importacao_empresas", id: "cliente_id", nome: "nome_da_empresa", cnpj: "cnpj_empresa" },
-      { name: "leads_exact_spotter", id: "cliente_id", nome: "nome_da_empresa", cnpj: "cpf_cnpj" },
-      { name: "sheet1", id: "negocio_id", nome: "negocio_organizacao", cnpj: null }
-    ];
-
-    const clientsMap = new Map<string, any>();
-
-    for (const source of clientSourceSheets) {
-      const rows = await loadSheetData(source.name);
-      if (!rows || rows.length < 2) continue;
-
-      const headers = rows[0];
-      rows.slice(1).forEach(row => {
-        const obj: any = {};
-        headers.forEach((h, i) => { obj[h] = row[i]; });
-
-        const cid = obj[source.id] || obj.cliente_id || obj.negocio_id;
-        if (cid && !clientsMap.has(cid)) {
-          clientsMap.set(cid, {
-            cliente_id: cid,
-            nome_da_empresa: obj[source.nome] || null,
-            cnpj_empresa: source.cnpj ? obj[source.cnpj] : null,
-          });
-        }
-      });
-    }
-
-    if (clientsMap.size > 0) {
-      const clientsBatch = Array.from(clientsMap.values());
-      // Tentar inserir na tabela 'clientes' (conforme solicitado pelo usuário)
-      const { error } = await supabase.from('clientes').upsert(clientsBatch, { onConflict: 'cliente_id' });
-      if (error) {
-        console.warn('Erro ao inserir em clientes (extração):', error.message);
-        results.push({ table: 'clientes (extração)', status: 'erro', total: clientsBatch.length, message: error.message });
-      } else {
-        results.push({ table: 'clientes (extração)', status: 'sucesso', total: clientsBatch.length });
-      }
-    }
-
-    // ETAPA 2: Importação Principal
+    // Importação Principal
     const tables = [
-      { sheet: "sheet1", table: "negocios", pk: "negocio_id" },
-      { sheet: "perdecomp", table: "perdecomp", pk: "perdcomp_id" }, // Tentando perdcomp_id como PK
+      { sheet: "sheet1", table: "leads", pk: "cliente_id" },
+      { sheet: "perdecomp", table: "perdecomp", pk: "numero_processo" },
       { sheet: "perdecomp_itens", table: "perdecomp_itens", pk: undefined },
       { sheet: "perdecomp_facts", table: "perdecomp_facts", pk: undefined },
       { sheet: "perdecomp_snapshot", table: "perdecomp_snapshot", pk: undefined },
@@ -183,11 +142,6 @@ export async function POST(req: NextRequest) {
           obj.message_id = crypto.randomUUID();
         }
 
-        // Mapeamento negócio_id
-        if (item.table === 'negocios' && !obj.negocio_id && obj.cliente_id) {
-           obj.negocio_id = obj.cliente_id;
-        }
-
         return obj;
       });
 
@@ -208,22 +162,10 @@ export async function POST(req: NextRequest) {
 
         const { error } = await query;
         if (error) {
-          // Se for erro de tabela inexistente e for 'negocios', tentar 'leads' como fallback
-          if (item.table === 'negocios' && error.message.includes('not found')) {
-             const { error: errLeads } = await supabase.from('leads').upsert(batch, { onConflict: 'cliente_id' });
-             if (!errLeads) {
-                success += batch.length;
-             } else {
-                errors += batch.length;
-                lastErrorMessage = errLeads.message;
-                break;
-             }
-          } else {
-             errors += batch.length;
-             lastErrorMessage = error.message;
-             console.error(`Erro na tabela ${item.table}:`, error.message);
-             break;
-          }
+          errors += batch.length;
+          lastErrorMessage = error.message;
+          console.error(`Erro na tabela ${item.table}:`, error.message);
+          break;
         } else {
           success += batch.length;
         }
