@@ -6,9 +6,20 @@ import { createClient } from '@supabase/supabase-js';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function isLikelyJwt(key: string): boolean {
+  if (!key) return false;
+  const parts = key.split('.');
+  return parts.length === 3;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const bodyParams = await req.json();
+    let bodyParams: any = {};
+    try {
+      bodyParams = await req.json();
+    } catch (e) {
+      // Ignorar se o body não for JSON (pode ser útil se chamarem sem body)
+    }
     
     // Captura explícita com fallback
     const googleClientEmail = bodyParams.googleClientEmail || process.env.GOOGLE_CLIENT_EMAIL;
@@ -16,6 +27,20 @@ export async function POST(req: NextRequest) {
     const spreadsheetId = bodyParams.spreadsheetId || process.env.SPREADSHEET_ID;
     const supabaseUrl = bodyParams.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = bodyParams.supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+
+    // Validação de formato da URL
+    if (supabaseUrl && !supabaseUrl.startsWith('https://')) {
+      return NextResponse.json({
+        error: "URL do Supabase inválida. Deve começar com https://"
+      }, { status: 400 });
+    }
+
+    // Validação de formato da Chave Service Role
+    if (supabaseServiceKey && !isLikelyJwt(supabaseServiceKey)) {
+      return NextResponse.json({
+        error: "Chave SERVICE_ROLE inválida (formato JWT incorreto). Verifique no Supabase Dashboard > Project Settings > API se está usando a 'service_role' key (não a 'anon' key)."
+      }, { status: 400 });
+    }
 
     if (!googleClientEmail || !googlePrivateKey || !spreadsheetId || !supabaseUrl || !supabaseServiceKey) {
       const missing: string[] = [];
@@ -49,6 +74,38 @@ export async function POST(req: NextRequest) {
 
     // Inicializar Supabase com Service Role
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Health-check: Testar conexão antes de prosseguir
+    try {
+      // 1. Tentar getSession como primeira opção de health check (mais rápido)
+      const { error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        if (sessionError.message.includes('Invalid API key') || sessionError.status === 401) {
+          return NextResponse.json({
+            error: "Erro de autenticação no Supabase: Chave SERVICE_ROLE inválida. Verifique no Supabase Dashboard se está usando a 'service_role' key (não a 'anon' key)."
+          }, { status: 401 });
+        }
+      }
+
+      // 2. Tentar select simples como fallback/reforço
+      const { error: healthError } = await supabase.from('perdecomp').select('count', { count: 'exact', head: true }).limit(0);
+
+      if (healthError) {
+        if (healthError.message.includes('Invalid API key') || healthError.code === '401' || healthError.message.includes('JWT')) {
+          return NextResponse.json({
+            error: "Erro de autenticação no Supabase: Chave SERVICE_ROLE inválida ou expirada. Verifique no Supabase Dashboard se está usando a 'service_role' key (não a 'anon' key)."
+          }, { status: 401 });
+        }
+        // Outros erros (ex: tabela não existe) ignoramos e tentamos prosseguir
+        console.warn('Supabase health check warning:', healthError.message);
+      }
+    } catch (healthErr: any) {
+      console.error('Supabase connection failed:', healthErr.message);
+      return NextResponse.json({
+        error: `Falha na conexão com Supabase: ${healthErr.message}`
+      }, { status: 500 });
+    }
 
     // Mapeamento de abas
     const tables = [
