@@ -15,6 +15,7 @@ function isLikelyJwt(key: any): boolean {
 }
 
 function convertToIsoDate(val: any): string | null {
+  if (typeof val === 'string' && /^#+$/.test(val.trim())) return null;
   if (!val || typeof val !== 'string') return null;
   const trimmed = val.trim();
   if (!trimmed) return null;
