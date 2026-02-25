@@ -35,6 +35,14 @@ function convertToIsoDate(val: any): string | null {
   return null;
 }
 
+function sanitizeNumeric(val: any): number | null {
+  if (val === null || val === undefined || val === '') return null;
+  let str = String(val).trim();
+  str = str.replace(',', '.');
+  const num = Number(str);
+  return isNaN(num) ? null : num;
+}
+
 export async function POST(req: NextRequest) {
   try {
     let bodyParams: any = {};
@@ -138,6 +146,19 @@ export async function POST(req: NextRequest) {
         // Garantir que não enviamos IDs que o banco deve gerar automaticamente
         if (item.table === 'layout_importacao_empresas' || item.table === 'leads_exact_spotter') {
           delete obj.oportunidade_id;
+        }
+
+        if (item.table === 'leads') {
+          const numericFields = [
+            'negocio_valor', 'negocio_vlr_mensalidade', 'negocio_vlr_implantacao',
+            'negocio_mrr', 'negocio_acv', 'negocio_arr', 'negocio_probabilidade',
+            'negocio_valor_de_produtos', 'negocio_valor_ponderado'
+          ];
+          numericFields.forEach(f => {
+            if (obj[f] !== undefined) {
+              obj[f] = sanitizeNumeric(obj[f]);
+            }
+          });
         }
         if (item.table === 'historico_interacoes' && !obj.message_id) {
           obj.message_id = crypto.randomUUID();
