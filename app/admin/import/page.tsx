@@ -90,6 +90,7 @@ export default function ImportPage() {
             value={creds.supabaseServiceKey}
             onChange={e => setCreds({...creds, supabaseServiceKey: e.target.value})}
             placeholder="Deixe vazio para usar a Vercel"
+            autoComplete="off"
           />
         </div>
       </div>
