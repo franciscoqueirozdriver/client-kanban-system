@@ -94,11 +94,16 @@ export async function POST(req: NextRequest) {
     };
 
     // ETAPA 1: Extração de Clientes em Memória
-    const clientSourceSheets = ["sheet1", "layout_importacao_empresas", "leads_exact_spotter"];
+    const clientSourceSheets = [
+      { name: "layout_importacao_empresas", id: "cliente_id", nome: "nome_da_empresa", cnpj: "cnpj_empresa" },
+      { name: "leads_exact_spotter", id: "cliente_id", nome: "nome_da_empresa", cnpj: "cpf_cnpj" },
+      { name: "sheet1", id: "negocio_id", nome: "negocio_organizacao", cnpj: null }
+    ];
+
     const clientsMap = new Map<string, any>();
 
-    for (const sheetName of clientSourceSheets) {
-      const rows = await loadSheetData(sheetName);
+    for (const source of clientSourceSheets) {
+      const rows = await loadSheetData(source.name);
       if (!rows || rows.length < 2) continue;
 
       const headers = rows[0];
@@ -106,13 +111,12 @@ export async function POST(req: NextRequest) {
         const obj: any = {};
         headers.forEach((h, i) => { obj[h] = row[i]; });
 
-        const cid = obj.cliente_id || obj.negocio_id;
+        const cid = obj[source.id] || obj.cliente_id || obj.negocio_id;
         if (cid && !clientsMap.has(cid)) {
           clientsMap.set(cid, {
             cliente_id: cid,
-            negocio_organizacao: obj.negocio_organizacao || obj.nome_da_empresa || obj.organizacao_nome || null,
-            organizacao_nome: obj.nome_da_empresa || obj.negocio_organizacao || obj.organizacao_nome || null,
-            cnpj_empresa: obj.cnpj_empresa || obj.cpf_cnpj || obj.cnpj || null,
+            nome_da_empresa: obj[source.nome] || null,
+            cnpj_empresa: source.cnpj ? obj[source.cnpj] : null,
           });
         }
       });
@@ -120,15 +124,20 @@ export async function POST(req: NextRequest) {
 
     if (clientsMap.size > 0) {
       const clientsBatch = Array.from(clientsMap.values());
-      // Usamos 'leads' como a tabela de clientes principal
-      const { error } = await supabase.from('leads').upsert(clientsBatch, { onConflict: 'cliente_id' });
-      results.push({ table: 'leads (clientes extraídos)', status: error ? 'erro' : 'sucesso', total: clientsBatch.length, message: error?.message });
+      // Tentar inserir na tabela 'clientes' (conforme solicitado pelo usuário)
+      const { error } = await supabase.from('clientes').upsert(clientsBatch, { onConflict: 'cliente_id' });
+      if (error) {
+        console.warn('Erro ao inserir em clientes (extração):', error.message);
+        results.push({ table: 'clientes (extração)', status: 'erro', total: clientsBatch.length, message: error.message });
+      } else {
+        results.push({ table: 'clientes (extração)', status: 'sucesso', total: clientsBatch.length });
+      }
     }
 
     // ETAPA 2: Importação Principal
     const tables = [
-      { sheet: "sheet1", table: "leads", pk: "cliente_id" },
-      { sheet: "perdecomp", table: "perdecomp", pk: undefined },
+      { sheet: "sheet1", table: "negocios", pk: "negocio_id" },
+      { sheet: "perdecomp", table: "perdecomp", pk: "perdcomp_id" }, // Tentando perdcomp_id como PK
       { sheet: "perdecomp_itens", table: "perdecomp_itens", pk: undefined },
       { sheet: "perdecomp_facts", table: "perdecomp_facts", pk: undefined },
       { sheet: "perdecomp_snapshot", table: "perdecomp_snapshot", pk: undefined },
@@ -157,7 +166,7 @@ export async function POST(req: NextRequest) {
           obj[header] = (value === "" || value === undefined) ? null : value;
         });
 
-        // Conversão de datas para campos conhecidos
+        // Conversão de datas
         const dateFields = ["periodo_inicio", "periodo_fim", "data_protocolo", "ultima_atualizacao", "data_consulta", "perdcomp_data_transmissao", "negocio_data_de_fechamento_esperada", "negocio_data_da_proxima_atividade", "negocio_data_de_criacao_do_negocio", "negocio_ganho_em", "negocio_data_de_perda", "negocio_negocio_fechado_em", "negocio_data_atualizada", "negocio_data_da_ultima_atividade"];
         dateFields.forEach(f => {
           if (obj[f]) {
@@ -166,12 +175,17 @@ export async function POST(req: NextRequest) {
           }
         });
 
-        // Garantir que não enviamos IDs que o banco deve gerar
+        // Garantir que não enviamos IDs que o banco deve gerar automaticamente
         if (item.table === 'layout_importacao_empresas' || item.table === 'leads_exact_spotter') {
           delete obj.oportunidade_id;
         }
         if (item.table === 'historico_interacoes' && !obj.message_id) {
           obj.message_id = crypto.randomUUID();
+        }
+
+        // Mapeamento negócio_id
+        if (item.table === 'negocios' && !obj.negocio_id && obj.cliente_id) {
+           obj.negocio_id = obj.cliente_id;
         }
 
         return obj;
@@ -184,13 +198,32 @@ export async function POST(req: NextRequest) {
 
       for (let i = 0; i < data.length; i += batchSize) {
         const batch = data.slice(i, i + batchSize);
-        const query = item.pk ? supabase.from(item.table).upsert(batch, { onConflict: item.pk }) : supabase.from(item.table).insert(batch);
+
+        let query: any;
+        if (item.pk) {
+          query = supabase.from(item.table).upsert(batch, { onConflict: item.pk });
+        } else {
+          query = supabase.from(item.table).insert(batch);
+        }
+
         const { error } = await query;
         if (error) {
-          errors += batch.length;
-          lastErrorMessage = error.message;
-          console.error(`Erro na tabela ${item.table}:`, error.message);
-          break;
+          // Se for erro de tabela inexistente e for 'negocios', tentar 'leads' como fallback
+          if (item.table === 'negocios' && error.message.includes('not found')) {
+             const { error: errLeads } = await supabase.from('leads').upsert(batch, { onConflict: 'cliente_id' });
+             if (!errLeads) {
+                success += batch.length;
+             } else {
+                errors += batch.length;
+                lastErrorMessage = errLeads.message;
+                break;
+             }
+          } else {
+             errors += batch.length;
+             lastErrorMessage = error.message;
+             console.error(`Erro na tabela ${item.table}:`, error.message);
+             break;
+          }
         } else {
           success += batch.length;
         }
