@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     const tables = [
       { sheet: "sheet1", table: "leads", pk: undefined },
       { sheet: "perdecomp", table: "perdecomp", pk: "url_comprovante_html" },
-      { sheet: "perdecomp_itens", table: "perdecomp_itens", pk: undefined },
+      { sheet: "perdcomp_itens", table: "perdecomp_itens", pk: undefined },
       { sheet: "perdecomp_facts", table: "perdecomp_facts", pk: undefined },
       { sheet: "perdecomp_snapshot", table: "perdecomp_snapshot", pk: undefined },
       { sheet: "layout_importacao_empresas", table: "layout_importacao_empresas", pk: undefined },
@@ -116,7 +116,20 @@ export async function POST(req: NextRequest) {
       { sheet: "mensagens", table: "mensagens", pk: undefined },
       { sheet: "usuarios", table: "usuarios", pk: "usuario_id" },
       { sheet: "teses", table: "teses", pk: "tese_id" },
-      { sheet: "cnae", table: "cnae", pk: "cnae_id" }
+      { sheet: "cnae", table: "cnae", pk: "cnae_id" },
+      { sheet: "dic_tipos", table: "dic_tipos", pk: "tipo_codigo" },
+      { sheet: "dic_naturezas", table: "dic_naturezas", pk: undefined },
+      { sheet: "dic_creditos", table: "dic_creditos", pk: "credito_codigo" },
+      { sheet: "dic_situacoes", table: "dic_situacoes", pk: undefined },
+      { sheet: "rotas", table: "rotas", pk: "rota_codigo" },
+      { sheet: "permissoes", table: "permissoes", pk: undefined },
+      { sheet: "vocab_permissoes", table: "vocab_permissoes", pk: undefined },
+      { sheet: "roles_default", table: "roles_default", pk: undefined },
+      { sheet: "auditoria_acao", table: "auditoria_acao", pk: "evento_id" },
+      { sheet: "auditoria_acesso", table: "auditoria_acesso", pk: "evento_id" },
+      { sheet: "historico_whats_app", table: "historico_whats_app", pk: undefined },
+      { sheet: "dic_risco", table: "dic_risco", pk: "id_risco" },
+      { sheet: "dic_categoria", table: "dic_categoria", pk: "id_categoria" },
     ];
 
     for (const item of tables) {
