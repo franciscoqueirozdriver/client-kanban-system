@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
 
     // Importação Principal
     const tables = [
-      { sheet: "sheet1", table: "leads", pk: "cliente_id" },
+      { sheet: "sheet1", table: "leads", pk: undefined },
       { sheet: "perdecomp", table: "perdecomp", pk: "url_comprovante_html" },
       { sheet: "perdecomp_itens", table: "perdecomp_itens", pk: undefined },
       { sheet: "perdecomp_facts", table: "perdecomp_facts", pk: undefined },
