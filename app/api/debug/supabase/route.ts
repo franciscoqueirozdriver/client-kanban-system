@@ -9,6 +9,9 @@ export async function GET(req: NextRequest) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   const debugInfo = {
+    version: "V3",
+    runtime: process.env.NEXT_RUNTIME || "unknown",
+    nodeVersion: process.version,
     url: {
       exists: !!url,
       startsWithHttps: url?.startsWith('https://'),

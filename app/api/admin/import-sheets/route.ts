@@ -6,10 +6,13 @@ import { createClient } from '@supabase/supabase-js';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function isLikelyJwt(key: string): boolean {
-  if (!key) return false;
-  const parts = key.split('.');
-  return parts.length === 3;
+function isLikelyJwt(key: any): boolean {
+  if (typeof key !== 'string') return false;
+  const trimmed = key.trim();
+  if (!trimmed) return false;
+  const parts = trimmed.split('.');
+  // Um JWT deve ter exatamente 3 partes (header, payload, signature)
+  return parts.length === 3 && parts.every(part => part.length > 0);
 }
 
 export async function POST(req: NextRequest) {
@@ -39,11 +42,14 @@ export async function POST(req: NextRequest) {
 
     // Validação de formato da Chave Service Role
     if (supabaseServiceKey && !isLikelyJwt(supabaseServiceKey)) {
+      const parts = String(supabaseServiceKey).split('.');
       return NextResponse.json({
-        error: "Chave SERVICE_ROLE inválida (formato JWT incorreto).",
+        error: "ERRO_V3: Chave SERVICE_ROLE inválida (formato JWT incorreto).",
         debug: {
-          receivedLength: supabaseServiceKey.length,
-          receivedParts: supabaseServiceKey.split('.').length,
+          receivedType: typeof supabaseServiceKey,
+          receivedLength: String(supabaseServiceKey).length,
+          receivedPartsCount: parts.length,
+          partsLengths: parts.map(p => p.length),
           serviceRoleKeyEnvExists: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
           serviceRoleKeyEnvLength: process.env.SUPABASE_SERVICE_ROLE_KEY?.length || 0
         },
