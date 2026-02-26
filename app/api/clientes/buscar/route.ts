@@ -30,8 +30,8 @@ export async function GET(request: Request) {
     const { rows } = await getSheetData(SHEET_NAME);
 
     const scoredResults = rows.map(row => {
-      const nomeRaw = row['Nome da Empresa'] || row['Nome do Lead'] || '';
-      const cnpjRaw = row['CPF/CNPJ'] || '';
+      const nomeRaw = row['nome_da_empresa'] || row['nome_do_lead'] || row['Nome da Empresa'] || row['Nome do Lead'] || '';
+      const cnpjRaw = row['cpf_cnpj'] || row['CPF/CNPJ'] || '';
 
       const nome = norm(nomeRaw);
       const cnpj = onlyDigits(cnpjRaw);
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
       }
 
       return {
-        Cliente_ID: row['Cliente_ID'],
+        Cliente_ID: row['cliente_id'] || row['Cliente_ID'],
         Nome_da_Empresa: nomeRaw,
         CNPJ_Empresa: padCNPJ14(cnpjRaw),
         score,
