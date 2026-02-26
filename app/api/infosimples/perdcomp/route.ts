@@ -11,7 +11,22 @@ import {
 
 export const runtime = 'nodejs';
 
+const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 const CARD_SCHEMA_VERSION = 'perdecomp-card-v1';
+
+const REQUIRED_HEADERS = [
+  'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
+  'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Quantidade_PERDCOMP',
+  'Qtd_PERDCOMP_DCOMP', 'Qtd_PERDCOMP_REST', 'Qtd_PERDCOMP_RESSARC', 'Qtd_PERDCOMP_CANCEL',
+  'Numero_Processo', 'Data_Protocolo', 'Ultima_Atualizacao',
+  'Quantidade_Receitas', 'Quantidade_Origens', 'Quantidade_DARFs',
+  'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta',
+  'Tipo_Empresa', 'Concorrentes',
+  'Code', 'Code_Message', 'MappedCount', 'Perdcomp_Principal_ID',
+  'Perdcomp_Solicitante', 'Perdcomp_Tipo_Documento',
+  'Perdcomp_Tipo_Credito', 'Perdcomp_Data_Transmissao',
+  'Perdcomp_Situacao', 'Perdcomp_Situacao_Detalhamento'
+];
 
 function columnNumberToLetter(columnNumber: number) {
   let temp;
@@ -105,6 +120,55 @@ function normalizePerdcompFacts(
   });
 }
 
+async function getLastPerdcompFromSheet({
+  cnpj,
+  clienteId,
+}: {
+  cnpj?: string;
+  clienteId?: string;
+}) {
+  const sheets = await getSheetsClient();
+  const head = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SPREADSHEET_ID,
+    range: 'PERDECOMP!1:1',
+  });
+  const headers = head.data.values?.[0] || [];
+  const col = (name: string) => headers.indexOf(name);
+  const resp = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.SPREADSHEET_ID,
+    range: 'PERDECOMP!A2:Z',
+  });
+  const rows = resp.data.values || [];
+  const idxCliente = col('Cliente_ID');
+  const idxCnpj = col('CNPJ');
+  const idxQtd = col('Quantidade_PERDCOMP');
+  const idxHtml = col('URL_Comprovante_HTML');
+  const idxData = col('Data_Consulta');
+  const idxQtdDcomp = col('Qtd_PERDCOMP_DCOMP');
+  const idxQtdRest = col('Qtd_PERDCOMP_REST');
+  const idxQtdRessarc = col('Qtd_PERDCOMP_RESSARC');
+  const idxQtdCancel = col('Qtd_PERDCOMP_CANCEL');
+  const match = rows.find(
+    r =>
+      (clienteId && r[idxCliente] === clienteId) ||
+      (cnpj && (r[idxCnpj] || '').replace(/\D/g, '') === cnpj)
+  );
+  if (!match) return null;
+  const qtd = Number(match[idxQtd] ?? 0);
+  const dcomp = Number(match[idxQtdDcomp] ?? 0);
+  const rest = Number(match[idxQtdRest] ?? 0);
+  const ressarc = Number(match[idxQtdRessarc] ?? 0);
+  const canc = Number(match[idxQtdCancel] ?? 0);
+  return {
+    quantidade: qtd || 0,
+    dcomp,
+    rest,
+    ressarc,
+    canc,
+    site_receipt: match[idxHtml] || null,
+    requested_at: match[idxData] || null,
+  };
+}
 
 export async function POST(request: Request) {
   try {
@@ -222,18 +286,8 @@ export async function POST(request: Request) {
         // Fall through to API call if snapshot read fails
       }
       
-      // Fallback: check snapshot from library
-      const snapshotCard = await loadSnapshotCard({ clienteId }).catch(() => null);
-      const fallback = snapshotCard ? {
-        quantidade: snapshotCard.perdcompResumo?.totalSemCancelamento ?? 0,
-        dcomp: snapshotCard.perdcompResumo?.porFamilia?.DCOMP ?? 0,
-        rest: snapshotCard.perdcompResumo?.porFamilia?.REST ?? 0,
-        ressarc: snapshotCard.perdcompResumo?.porFamilia?.RESSARC ?? 0,
-        canc: snapshotCard.perdcompResumo?.porFamilia?.CANC ?? 0,
-        site_receipt: snapshotCard.site_receipt ?? null,
-        requested_at: snapshotCard.header?.requested_at ?? null,
-      } : null;
-
+      // Fallback: check old PERDECOMP sheet for backward compatibility
+      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
       if (fallback) {
         const { quantidade, dcomp, rest, ressarc, canc, site_receipt, requested_at } = fallback;
         const porFamilia = { DCOMP: dcomp, REST: rest, RESSARC: ressarc, CANC: canc, DESCONHECIDO: 0 };
@@ -258,7 +312,6 @@ export async function POST(request: Request) {
           perdcompCodigos: [],
           site_receipt,
           header: { requested_at },
-          ...snapshotCard,
         };
         if (debugMode) {
           resp.debug = {
@@ -322,17 +375,7 @@ export async function POST(request: Request) {
     try {
       apiResponse = await withRetry(doCall, 3, [1500, 3000, 5000]);
     } catch (err: any) {
-      const snapshotCard = await loadSnapshotCard({ clienteId }).catch(() => null);
-      const fallback = snapshotCard ? {
-        quantidade: snapshotCard.perdcompResumo?.totalSemCancelamento ?? 0,
-        dcomp: snapshotCard.perdcompResumo?.porFamilia?.DCOMP ?? 0,
-        rest: snapshotCard.perdcompResumo?.porFamilia?.REST ?? 0,
-        ressarc: snapshotCard.perdcompResumo?.porFamilia?.RESSARC ?? 0,
-        canc: snapshotCard.perdcompResumo?.porFamilia?.CANC ?? 0,
-        site_receipt: snapshotCard.site_receipt ?? null,
-        requested_at: snapshotCard.header?.requested_at ?? null,
-      } : null;
-
+      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
       return NextResponse.json(
         {
           error: true,
@@ -360,6 +403,90 @@ export async function POST(request: Request) {
     const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
     const siteReceipt = apiResponse?.site_receipts?.[0] || '';
 
+    const writes: Record<string, any> = {
+      Code: apiResponse.code,
+      Code_Message: apiResponse.code_message || '',
+      MappedCount: mappedCount,
+      Quantidade_PERDCOMP: resumo.totalSemCancelamento,
+      Qtd_PERDCOMP_DCOMP: resumo.porFamilia.DCOMP,
+      Qtd_PERDCOMP_REST: resumo.porFamilia.REST,
+      Qtd_PERDCOMP_RESSARC: resumo.porFamilia.RESSARC,
+      Qtd_PERDCOMP_CANCEL: resumo.porFamilia.CANC,
+      URL_Comprovante_HTML: siteReceipt,
+      Data_Consulta: headerRequestedAt,
+      Perdcomp_Principal_ID: first?.perdcomp || '',
+      Perdcomp_Solicitante: first?.solicitante || '',
+      Perdcomp_Tipo_Documento: first?.tipo_documento || '',
+      Perdcomp_Tipo_Credito: first?.tipo_credito || '',
+      Perdcomp_Data_Transmissao: first?.data_transmissao || '',
+      Perdcomp_Situacao: first?.situacao || '',
+      Perdcomp_Situacao_Detalhamento: first?.situacao_detalhamento || '',
+    };
+
+    const sheets = await getSheetsClient();
+    // Call getSheetData ONCE and get both headers and rows
+    const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+    const finalHeaders = [...headers];
+    let headerUpdated = false;
+    for (const h of REQUIRED_HEADERS) {
+      if (!finalHeaders.includes(h)) {
+        finalHeaders.push(h);
+        headerUpdated = true;
+      }
+    }
+    if (headerUpdated) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.SPREADSHEET_ID!,
+        range: `${PERDECOMP_SHEET_NAME}!1:1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [finalHeaders] },
+      });
+    }
+
+    // Use the 'rows' we already fetched instead of calling getSheetData again
+    let rowNumber = -1;
+    for (const r of rows) {
+      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
+        rowNumber = r._rowNumber;
+        break;
+      }
+    }
+
+    if (rowNumber !== -1) {
+      const data = [] as any[];
+      for (const [key, value] of Object.entries(writes)) {
+        if (value === undefined || value === '') continue;
+        const colIndex = finalHeaders.indexOf(key);
+        if (colIndex === -1) continue;
+        const colLetter = columnNumberToLetter(colIndex + 1);
+        data.push({
+          range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
+          values: [[value]],
+        });
+      }
+      if (data.length) {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: process.env.SPREADSHEET_ID!,
+          requestBody: { valueInputOption: 'RAW', data },
+        });
+      }
+    } else {
+      const row: Record<string, any> = {};
+      finalHeaders.forEach(h => (row[h] = ''));
+      row['Cliente_ID'] = clienteId;
+      row['Nome da Empresa'] = nomeEmpresa;
+      row['CNPJ'] = `'${cnpj}`;
+      for (const [k, v] of Object.entries(writes)) {
+        if (v !== undefined) row[k] = v;
+      }
+      const values = finalHeaders.map(h => row[h]);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: process.env.SPREADSHEET_ID!,
+        range: PERDECOMP_SHEET_NAME,
+        valueInputOption: 'RAW',
+        requestBody: { values: [values] },
+      });
+    }
 
     const resp: any = {
       ok: true,

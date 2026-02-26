@@ -1,12 +1,6 @@
 import { getSheetCached, appendRow, updateRow, getSheetData } from '../../lib/googleSheets';
 import { buildColumnResolver, normalizeHeader } from '../../lib/sheets/headerResolver';
 import { normalizePhones } from '../../lib/report';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
 function protectPhoneValue(value) {
@@ -187,27 +181,8 @@ export default async function handler(req, res) {
 
       if (row) {
         await updateRow(row, values);
-
-        // ✅ Espelha no Supabase
-        try {
-          await supabase
-            .from('leads')
-            .update(values)
-            .eq('cliente_id', values.cliente_id || values.Cliente_ID);
-        } catch (supabaseErr) {
-          console.error('Erro ao espelhar update no Supabase:', supabaseErr);
-        }
       } else {
         await appendRow(values);
-
-        // ✅ Espelha no Supabase
-        try {
-          await supabase
-            .from('leads')
-            .insert(values);
-        } catch (supabaseErr) {
-          console.error('Erro ao espelhar insert no Supabase:', supabaseErr);
-        }
       }
       return res.status(200).json({ ok: true });
     } catch (err) {

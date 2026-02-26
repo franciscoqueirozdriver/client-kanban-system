@@ -327,9 +327,9 @@ async function findClienteIdByCnpj(cnpj: string | null | undefined): Promise<str
   if (!normalized) return null;
   const { rows } = await getSheetData(SHEET_SNAPSHOT);
   for (const row of rows) {
-    const rowCnpj = onlyDigits(toStringValue(row.cnpj || row.CNPJ));
+    const rowCnpj = onlyDigits(toStringValue(row.CNPJ));
     if (rowCnpj !== normalized) continue;
-    const candidate = toStringValue(row.cliente_id || row.Cliente_ID);
+    const candidate = toStringValue(row.cliente_id);
     if (CLT_ID_RE.test(candidate)) {
       return candidate;
     }
@@ -351,7 +351,7 @@ export async function nextClienteId(): Promise<string> {
     const { rows } = await getSheetData(SHEET_SNAPSHOT);
     let max = 0;
     for (const row of rows) {
-      const id = toStringValue(row.cliente_id || row.Cliente_ID);
+      const id = toStringValue(row.cliente_id);
       const match = id.match(/^CLT-(\d{4,})$/);
       if (!match) continue;
       const value = Number(match[1]);
@@ -462,11 +462,8 @@ function mapFact(raw: any, ctx: PersistContext & { card?: any }): FactsRow {
     ctx.nomeEmpresa ||
     toStringValue(
       coalesceString(
-        raw.nome_da_empresa,
         raw['Nome da Empresa'],
         raw.Nome_da_Empresa,
-        raw.nome_do_lead,
-        raw['Nome do Lead'],
         raw.nomeEmpresa,
         raw.empresa,
       ),
@@ -682,10 +679,9 @@ async function filterNewFacts(clienteId: string, rows: FactsRow[]): Promise<Filt
   try {
     const { rows: existingRows } = await getSheetData(SHEET_FACTS);
     for (const row of existingRows) {
-      const rowCliId = toStringValue(row.cliente_id || row.Cliente_ID);
-      if (rowCliId !== clienteId) continue;
-      const numero = toStringValue(row.perdcomp_numero || row.Perdcomp_Numero || row.protocolo || row.Protocolo || '');
-      const hash = toStringValue(row.row_hash || row.Row_Hash || '');
+      if (toStringValue(row.cliente_id) !== clienteId) continue;
+      const numero = toStringValue(row.Perdcomp_Numero ?? row.Protocolo ?? '');
+      const hash = toStringValue(row.Row_Hash ?? '');
       const key = `${clienteId}|${numero}|${hash}`;
       existingKeys.add(key);
     }
@@ -718,7 +714,7 @@ async function readFactsByClienteId(clienteId: string): Promise<SheetRow[]> {
   try {
     const { rows } = await getSheetData(SHEET_FACTS);
     for (const row of rows) {
-      if (toStringValue(row.cliente_id || row.Cliente_ID) !== clienteId) continue;
+      if (toStringValue(row.cliente_id) !== clienteId) continue;
       all.push(normalizeSheetRow(row));
     }
   } catch (error) {
@@ -791,7 +787,7 @@ async function updateSnapshotFields(
   }
   const { headers, rows } = await getSheetData(SHEET_SNAPSHOT);
   if (!headers.length) return false;
-  const existing = rows.find((row) => toStringValue(row.cliente_id || row.Cliente_ID) === clienteId);
+  const existing = rows.find((row) => toStringValue(row.cliente_id) === clienteId);
   if (!existing) return false;
 
   const data: Array<{ range: string; values: string[][] }> = [];
@@ -973,7 +969,7 @@ export async function savePerdecompResults(args: SaveArgs): Promise<void> {
 export async function loadSnapshotCard({ clienteId }: LoadArgs): Promise<any | null> {
   if (!clienteId) return null;
   const { rows } = await getSheetData(SHEET_SNAPSHOT);
-  const row = rows.find((item) => toStringValue(item.cliente_id || item.Cliente_ID) === clienteId);
+  const row = rows.find((item) => toStringValue(item.cliente_id) === clienteId);
   if (!row) return null;
   const p1 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P1 ?? '');
   const p2 = toStringValue(row.Resumo_Ultima_Consulta_JSON_P2 ?? '');
