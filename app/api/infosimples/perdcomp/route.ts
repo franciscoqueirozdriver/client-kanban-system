@@ -158,24 +158,26 @@ async function getLastPerdcompFromSheet({
   const idxQtdRessarc = col('Qtd_PERDCOMP_RESSARC');
   const idxQtdCancel = col('Qtd_PERDCOMP_CANCEL');
   const match = rows.find(
-    r =>
-      (clienteId && r[idxCliente] === clienteId) ||
-      (cnpj && (r[idxCnpj] || '').replace(/\D/g, '') === cnpj)
+    r => {
+      const rCliId = r.cliente_id || r.Cliente_ID || r[idxCliente];
+      const rCnpj = String(r.cnpj || r.CNPJ || r[idxCnpj] || '').replace(/\D/g, '');
+      return (clienteId && rCliId === clienteId) || (cnpj && rCnpj === cnpj);
+    }
   );
   if (!match) return null;
   const qtd = Number(match[idxQtd] ?? 0);
-  const dcomp = Number(match[idxQtdDcomp] ?? 0);
-  const rest = Number(match[idxQtdRest] ?? 0);
-  const ressarc = Number(match[idxQtdRessarc] ?? 0);
-  const canc = Number(match[idxQtdCancel] ?? 0);
+  const dcomp = Number(match.qtd_perdcomp_dcomp || match.Qtd_PERDCOMP_DCOMP || match[idxQtdDcomp] || 0);
+  const rest = Number(match.qtd_perdcomp_rest || match.Qtd_PERDCOMP_REST || match[idxQtdRest] || 0);
+  const ressarc = Number(match.qtd_perdcomp_ressarc || match.Qtd_PERDCOMP_RESSARC || match[idxQtdRessarc] || 0);
+  const canc = Number(match.qtd_perdcomp_cancel || match.Qtd_PERDCOMP_CANCEL || match[idxQtdCancel] || 0);
   return {
     quantidade: qtd || 0,
     dcomp,
     rest,
     ressarc,
     canc,
-    site_receipt: match[idxHtml] || null,
-    requested_at: match[idxData] || null,
+    site_receipt: match.url_comprovante_html || match.URL_Comprovante_HTML || match[idxHtml] || null,
+    requested_at: match.data_consulta || match.Data_Consulta || match[idxData] || null,
   };
 }
 
@@ -432,84 +434,90 @@ export async function POST(request: Request) {
       Perdcomp_Situacao_Detalhamento: first?.situacao_detalhamento || '',
     };
 
-    const sheets = await getSheetsClient();
-    // Call getSheetData ONCE and get both headers and rows
-    const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
-    const finalHeaders = [...headers];
-    let headerUpdated = false;
-    for (const h of REQUIRED_HEADERS) {
-      if (!finalHeaders.includes(h)) {
-        finalHeaders.push(h);
-        headerUpdated = true;
-      }
-    }
-    if (headerUpdated) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.SPREADSHEET_ID!,
-        range: `${PERDECOMP_SHEET_NAME}!1:1`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [finalHeaders] },
-      });
-    }
-
-    // Use the 'rows' we already fetched instead of calling getSheetData again
-    let rowNumber = -1;
-    for (const r of rows) {
-      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
-        rowNumber = r._rowNumber;
-        break;
-      }
-    }
-
-    if (rowNumber !== -1) {
-      const data = [] as any[];
-      for (const [key, value] of Object.entries(writes)) {
-        if (value === undefined || value === '') continue;
-        let colIndex = finalHeaders.indexOf(key);
-        if (colIndex === -1) {
-          const snake = key.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
-          colIndex = finalHeaders.indexOf(snake);
-          if (colIndex === -1 && key === 'CNPJ') colIndex = finalHeaders.indexOf('cnpj');
+    try {
+      const sheets = await getSheetsClient();
+      // Call getSheetData ONCE and get both headers and rows
+      const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+      const finalHeaders = [...headers];
+      let headerUpdated = false;
+      for (const h of REQUIRED_HEADERS) {
+        if (!finalHeaders.includes(h)) {
+          finalHeaders.push(h);
+          headerUpdated = true;
         }
-        if (colIndex === -1) continue;
-        const colLetter = columnNumberToLetter(colIndex + 1);
-        data.push({
-          range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
-          values: [[value]],
-        });
       }
-      if (data.length) {
-        await sheets.spreadsheets.values.batchUpdate({
+      if (headerUpdated) {
+        await sheets.spreadsheets.values.update({
           spreadsheetId: process.env.SPREADSHEET_ID!,
-          requestBody: { valueInputOption: 'RAW', data },
+          range: `${PERDECOMP_SHEET_NAME}!1:1`,
+          valueInputOption: 'RAW',
+          requestBody: { values: [finalHeaders] },
         });
       }
-    } else {
-      const row: Record<string, any> = {};
-      finalHeaders.forEach(h => (row[h] = ''));
-      const setCol = (name: string, val: any) => {
-        let h = finalHeaders.find(x => x === name);
-        if (!h) {
-          const snake = name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
-          h = finalHeaders.find(x => x === snake);
-          if (!h && name === 'CNPJ') h = finalHeaders.find(x => x === 'cnpj');
-          if (!h && name === 'Cliente_ID') h = finalHeaders.find(x => x === 'cliente_id');
+
+      // Use the 'rows' we already fetched instead of calling getSheetData again
+      let rowNumber = -1;
+      for (const r of rows) {
+        const rCliId = r.cliente_id || r.Cliente_ID;
+        const rCnpj = String(r.cnpj || r.CNPJ || '').replace(/\D/g, '');
+        if (rCliId === clienteId || (cnpj && rCnpj === cnpj)) {
+          rowNumber = r._rowNumber;
+          break;
         }
-        if (h) row[h] = val;
-      };
-      setCol('Cliente_ID', clienteId);
-      setCol('Nome da Empresa', nomeEmpresa);
-      setCol('CNPJ', `'${cnpj}`);
-      for (const [k, v] of Object.entries(writes)) {
-        if (v !== undefined) setCol(k, v);
       }
-      const values = finalHeaders.map(h => row[h]);
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.SPREADSHEET_ID!,
-        range: PERDECOMP_SHEET_NAME,
-        valueInputOption: 'RAW',
-        requestBody: { values: [values] },
-      });
+
+      if (rowNumber !== -1) {
+        const data = [] as any[];
+        for (const [key, value] of Object.entries(writes)) {
+          if (value === undefined || value === '') continue;
+          let colIndex = finalHeaders.indexOf(key);
+          if (colIndex === -1) {
+            const snake = key.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
+            colIndex = finalHeaders.indexOf(snake);
+            if (colIndex === -1 && key === 'CNPJ') colIndex = finalHeaders.indexOf('cnpj');
+          }
+          if (colIndex === -1) continue;
+          const colLetter = columnNumberToLetter(colIndex + 1);
+          data.push({
+            range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
+            values: [[value]],
+          });
+        }
+        if (data.length) {
+          await sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId: process.env.SPREADSHEET_ID!,
+            requestBody: { valueInputOption: 'RAW', data },
+          });
+        }
+      } else {
+        const row: Record<string, any> = {};
+        finalHeaders.forEach(h => (row[h] = ''));
+        const setCol = (name: string, val: any) => {
+          let h = finalHeaders.find(x => x === name);
+          if (!h) {
+            const snake = name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
+            h = finalHeaders.find(x => x === snake);
+            if (!h && name === 'CNPJ') h = finalHeaders.find(x => x === 'cnpj');
+            if (!h && name === 'Cliente_ID') h = finalHeaders.find(x => x === 'cliente_id');
+          }
+          if (h) row[h] = val;
+        };
+        setCol('Cliente_ID', clienteId);
+        setCol('Nome da Empresa', nomeEmpresa);
+        setCol('CNPJ', `'${cnpj}`);
+        for (const [k, v] of Object.entries(writes)) {
+          if (v !== undefined) setCol(k, v);
+        }
+        const values = finalHeaders.map(h => row[h]);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: process.env.SPREADSHEET_ID!,
+          range: PERDECOMP_SHEET_NAME,
+          valueInputOption: 'RAW',
+          requestBody: { values: [values] },
+        });
+      }
+    } catch (sheetError) {
+      console.warn('[perdcomp] Falha ao gravar na planilha (ignorado):', sheetError);
     }
 
     const resp: any = {
