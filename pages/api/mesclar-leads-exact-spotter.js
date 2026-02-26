@@ -91,11 +91,11 @@ export default async function handler(req, res) {
     const { headers: destHeadersRaw, rows: destRows } = destRaw;
 
     // 2) Listas válidas de Produtos e Mercados
-    const produtosValidos = padroes.map(r => clean(r['Produtos'])).filter(Boolean);
-    const mercadosValidos = padroes.map(r => clean(r['Mercados'])).filter(Boolean);
+    const produtosValidos = padroes.map(r => clean(r['prudutos'] || r['Produtos'])).filter(Boolean);
+    const mercadosValidos = padroes.map(r => clean(r['mercados'] || r['Mercados'])).filter(Boolean);
 
     // 3) Índices por Cliente_ID
-    const idOf = (r) => clean(r[KEY]);
+    const idOf = (r) => clean(r['cliente_id'] || r[KEY]);
     const mapsheet1 = new Map(sheet1.map(r => [idOf(r), r]).filter(([k]) => !!k));
     const mapDest = new Map(destRows.map(r => [idOf(r), r]).filter(([k]) => !!k));
 
@@ -155,57 +155,57 @@ export default async function handler(req, res) {
       const atual = mapDest.get(id) || {};
 
       // Nome da Empresa
-      const nomeEmpresa = pick(row, 'Nome da Empresa') || clean(atual['Nome da Empresa']);
+      const nomeEmpresa = pick(row, 'nome_da_empresa', 'Nome da Empresa') || clean(atual['nome_da_empresa'] || atual['Nome da Empresa']);
 
       // Produto (pode não existir na layout; só aceita se ∈ Padroes/Produtos)
-      const produtoInput = pick(row, 'Produto'); // se não existir, virá vazio
-      const produto = produtosValidos.includes(produtoInput) ? produtoInput : clean(atual['Produto']);
+      const produtoInput = pick(row, 'produto', 'Produto'); // se não existir, virá vazio
+      const produto = produtosValidos.includes(produtoInput) ? produtoInput : clean(atual['produto'] || atual['Produto']);
 
       // Nome do Lead
       const nomeLead = produto ? `${nomeEmpresa} - ${produto}` : `${nomeEmpresa}`;
 
       // Mercado (sheet1 -> Organização - Segmento)
-      const segmento = clean(base['Organização - Segmento']);
+      const segmento = clean(base['organizacao_segmento'] || base['Organização - Segmento']);
       const mercado = segmento && mercadosValidos.includes(segmento) ? segmento : 'N/A';
 
       // Site (remover barras finais)
-      const rawSite = pick(row, 'Site Empresa');
+      const rawSite = pick(row, 'site_empresa', 'Site Empresa');
       const site = rawSite.replace(/\/+$/, '');
 
       // Endereço vindo da layout
-      const estado = normalizeUF(pick(row, 'Estado Empresa'));
-      const cidade = pick(row, 'Cidade Empresa');
-      const logradouro = pick(row, 'Logradouro Empresa');
-      const numero = pick(row, 'Numero Empresa', 'Número Empresa');
-      const bairro = pick(row, 'Bairro Empresa');
-      const complemento = pick(row, 'Complemento Empresa');
-      const cep = pick(row, 'CEP Empresa');
+      const estado = normalizeUF(pick(row, 'estado_empresa', 'Estado Empresa'));
+      const cidade = pick(row, 'cidade_empresa', 'Cidade Empresa');
+      const logradouro = pick(row, 'logradouro_empresa', 'Logradouro Empresa');
+      const numero = pick(row, 'numero_empresa', 'Numero Empresa', 'Número Empresa');
+      const bairro = pick(row, 'bairro_empresa', 'Bairro Empresa');
+      const complemento = pick(row, 'complemento_empresa', 'Complemento Empresa');
+      const cep = pick(row, 'cep_empresa', 'CEP Empresa');
 
       // País: preferir “País Empresa” (ou “Pais Empresa”); se faltar e houver cidade+estado, usar "Brasil"
-      const pais = pick(row, 'País Empresa', 'Pais Empresa') || ((cidade && estado) ? 'Brasil' : '');
+      const pais = pick(row, 'pais_empresa', 'País Empresa', 'Pais Empresa') || ((cidade && estado) ? 'Brasil' : '');
 
       // Telefones (prioridade: Card -> layout -> sheet1)
-      const telsCard = splitPhones(pick(row, 'Telefones Card')); // pode não existir
-      const telsLayout = splitPhones(pick(row, 'Telefones Empresa'));
-      const telsheet1 = splitPhones(base['Telefone Normalizado']);
+      const telsCard = splitPhones(pick(row, 'telefones_card', 'Telefones Card')); // pode não existir
+      const telsLayout = splitPhones(pick(row, 'telefones_empresa', 'Telefones Empresa'));
+      const telsheet1 = splitPhones(base['telefone_normalizado'] || base['Telefone Normalizado']);
       const telefones = telsCard.length ? telsCard : (telsLayout.length ? telsLayout : telsheet1);
       const telefonesStr = joinPhones(telefones);
 
       // DDI apenas se houver algum telefone
-      const ddi = telefones.length ? pick(row, 'DDI Empresa', 'DDI') : '';
+      const ddi = telefones.length ? pick(row, 'ddi_empresa', 'DDI Empresa', 'DDI') : '';
 
       // Observação (não herdar se vazio)
-      const observacao = pick(row, 'Observação Empresa', 'Observação');
+      const observacao = pick(row, 'observacao_empresa', 'Observação Empresa', 'Observação');
 
       // CPF/CNPJ
-      const cnpj = pick(row, 'CNPJ Empresa');
+      const cnpj = pick(row, 'cnpj_empresa', 'CNPJ Empresa');
 
       // Contatos (Card) — podem não existir na layout
-      const nomeContato = pick(row, 'Nome Contato');
-      const emailContato = pick(row, 'E-mail Contato', 'Email Contato');
-      const cargoContato = pick(row, 'Cargo Contato');
-      const telsContato = splitPhones(pick(row, 'Telefones Contato'));
-      const ddiContato = telsContato.length ? pick(row, 'DDI Contato') : '';
+      const nomeContato = pick(row, 'nome_contato', 'Nome Contato');
+      const emailContato = pick(row, 'e_mail_contato', 'E-mail Contato', 'Email Contato');
+      const cargoContato = pick(row, 'cargo_contato', 'Cargo Contato');
+      const telsContato = splitPhones(pick(row, 'telefones_contato', 'Telefones Contato'));
+      const ddiContato = telsContato.length ? pick(row, 'ddi_contato', 'DDI Contato') : '';
       const algumContatoPreenchido = !!(nomeContato || emailContato || cargoContato || telsContato.length);
       if (algumContatoPreenchido && !nomeContato) {
         errosObrigatorios.push({ [KEY]: id, erro: 'Nome Contato obrigatório quando houver outros campos de contato' });
@@ -215,42 +215,42 @@ export default async function handler(req, res) {
       const novo = {
         [KEY]: id,
 
-        'Nome do Lead': preferNonEmpty(atual['Nome do Lead'], nomeLead),
+        'Nome do Lead': preferNonEmpty(atual['nome_do_lead'] || atual['Nome do Lead'], nomeLead),
         'Origem': 'Carteira de Clientes',
         'Sub-Origem': '',
 
-        'Mercado': preferNonEmpty(atual['Mercado'], mercado),
-        'Produto': preferNonEmpty(atual['Produto'], produto),
+        'Mercado': preferNonEmpty(atual['mercado'] || atual['Mercado'], mercado),
+        'Produto': preferNonEmpty(atual['produto'] || atual['Produto'], produto),
 
-        'Site': preferNonEmpty(atual['Site'], site),
+        'Site': preferNonEmpty(atual['site'] || atual['Site'], site),
 
-        'País': preferNonEmpty(atual['País'], pais),
-        'Estado': preferNonEmpty(atual['Estado'], estado),
-        'Cidade': preferNonEmpty(atual['Cidade'], cidade),
-        'Logradouro': preferNonEmpty(atual['Logradouro'], logradouro),
-        'Número': preferNonEmpty(atual['Número'], numero),
-        'Bairro': preferNonEmpty(atual['Bairro'], bairro),
-        'Complemento': preferNonEmpty(atual['Complemento'], complemento),
-        'CEP': preferNonEmpty(atual['CEP'], cep),
+        'País': preferNonEmpty(atual['pais'] || atual['País'], pais),
+        'Estado': preferNonEmpty(atual['estado'] || atual['Estado'], estado),
+        'Cidade': preferNonEmpty(atual['cidade'] || atual['Cidade'], cidade),
+        'Logradouro': preferNonEmpty(atual['logradouro'] || atual['Logradouro'], logradouro),
+        'Número': preferNonEmpty(atual['numero'] || atual['Número'], numero),
+        'Bairro': preferNonEmpty(atual['bairro'] || atual['Bairro'], bairro),
+        'Complemento': preferNonEmpty(atual['complemento'] || atual['Complemento'], complemento),
+        'CEP': preferNonEmpty(atual['cep'] || atual['CEP'], cep),
 
-        'DDI': preferNonEmpty(atual['DDI'], ddi),
-        'Telefones': preferNonEmpty(atual['Telefones'], telefonesStr),
+        'DDI': preferNonEmpty(atual['ddi'] || atual['DDI'], ddi),
+        'Telefones': preferNonEmpty(atual['telefones'] || atual['Telefones'], telefonesStr),
 
-        'Observação': observacao || clean(atual['Observação']),
+        'Observação': observacao || clean(atual['observacao'] || atual['Observação']),
 
-        'CPF/CNPJ': preferNonEmpty(atual['CPF/CNPJ'], cnpj),
+        'CPF/CNPJ': preferNonEmpty(atual['cpf_cnpj'] || atual['CPF/CNPJ'], cnpj),
 
-        'Nome Contato': preferNonEmpty(atual['Nome Contato'], nomeContato),
-        'E-mail Contato': preferNonEmpty(atual['E-mail Contato'], emailContato),
-        'Cargo Contato': preferNonEmpty(atual['Cargo Contato'], cargoContato),
-        'DDI Contato': preferNonEmpty(atual['DDI Contato'], ddiContato),
-        'Telefones Contato': preferNonEmpty(atual['Telefones Contato'], joinPhones(telsContato)),
+        'Nome Contato': preferNonEmpty(atual['nome_contato'] || atual['Nome Contato'], nomeContato),
+        'E-mail Contato': preferNonEmpty(atual['e_mail_contato'] || atual['E-mail Contato'], emailContato),
+        'Cargo Contato': preferNonEmpty(atual['cargo_contato'] || atual['Cargo Contato'], cargoContato),
+        'DDI Contato': preferNonEmpty(atual['ddi_contato'] || atual['DDI Contato'], ddiContato),
+        'Telefones Contato': preferNonEmpty(atual['telefones_contato'] || atual['Telefones Contato'], joinPhones(telsContato)),
 
         'Tipo do Serv. Comunicação': '',
         'ID do Serv. Comunicação': '',
         'Área': '',
 
-        'Nome da Empresa': preferNonEmpty(atual['Nome da Empresa'], nomeEmpresa),
+        'Nome da Empresa': preferNonEmpty(atual['nome_da_empresa'] || atual['Nome da Empresa'], nomeEmpresa),
         'Etapa': 'Agendados',
         'Funil': 'Padrão',
       };

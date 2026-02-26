@@ -133,7 +133,16 @@ async function getLastPerdcompFromSheet({
     range: 'PERDECOMP!1:1',
   });
   const headers = head.data.values?.[0] || [];
-  const col = (name: string) => headers.indexOf(name);
+  const col = (name: string) => {
+    let idx = headers.indexOf(name);
+    if (idx === -1) {
+      const snake = name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
+      idx = headers.indexOf(snake);
+      if (idx === -1 && name === 'Cliente_ID') idx = headers.indexOf('cliente_id');
+      if (idx === -1 && name === 'CNPJ') idx = headers.indexOf('cnpj');
+    }
+    return idx;
+  };
   const resp = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.SPREADSHEET_ID,
     range: 'PERDECOMP!A2:Z',
@@ -456,7 +465,12 @@ export async function POST(request: Request) {
       const data = [] as any[];
       for (const [key, value] of Object.entries(writes)) {
         if (value === undefined || value === '') continue;
-        const colIndex = finalHeaders.indexOf(key);
+        let colIndex = finalHeaders.indexOf(key);
+        if (colIndex === -1) {
+          const snake = key.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
+          colIndex = finalHeaders.indexOf(snake);
+          if (colIndex === -1 && key === 'CNPJ') colIndex = finalHeaders.indexOf('cnpj');
+        }
         if (colIndex === -1) continue;
         const colLetter = columnNumberToLetter(colIndex + 1);
         data.push({
@@ -473,11 +487,21 @@ export async function POST(request: Request) {
     } else {
       const row: Record<string, any> = {};
       finalHeaders.forEach(h => (row[h] = ''));
-      row['Cliente_ID'] = clienteId;
-      row['Nome da Empresa'] = nomeEmpresa;
-      row['CNPJ'] = `'${cnpj}`;
+      const setCol = (name: string, val: any) => {
+        let h = finalHeaders.find(x => x === name);
+        if (!h) {
+          const snake = name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
+          h = finalHeaders.find(x => x === snake);
+          if (!h && name === 'CNPJ') h = finalHeaders.find(x => x === 'cnpj');
+          if (!h && name === 'Cliente_ID') h = finalHeaders.find(x => x === 'cliente_id');
+        }
+        if (h) row[h] = val;
+      };
+      setCol('Cliente_ID', clienteId);
+      setCol('Nome da Empresa', nomeEmpresa);
+      setCol('CNPJ', `'${cnpj}`);
       for (const [k, v] of Object.entries(writes)) {
-        if (v !== undefined) row[k] = v;
+        if (v !== undefined) setCol(k, v);
       }
       const values = finalHeaders.map(h => row[h]);
       await sheets.spreadsheets.values.append({

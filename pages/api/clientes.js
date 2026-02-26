@@ -193,7 +193,7 @@ export default async function handler(req, res) {
           await supabase
             .from('leads')
             .update(values)
-            .eq('cliente_id', values.cliente_id);
+            .eq('cliente_id', values.cliente_id || values.Cliente_ID);
         } catch (supabaseErr) {
           console.error('Erro ao espelhar update no Supabase:', supabaseErr);
         }

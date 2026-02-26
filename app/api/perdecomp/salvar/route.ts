@@ -22,7 +22,14 @@ export async function POST(request: Request) {
     const rowsToAppend = linhas.map((linha: any) => {
       // Ensure the object has keys for all headers, even if they are empty
       const fullLinha = PERDECOMP_HEADERS.reduce((acc, header) => {
-        acc[header] = linha[header] ?? '';
+        let val = linha[header];
+        if (val === undefined || val === null) {
+          const snake = header.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
+          val = linha[snake];
+          if (val === undefined && header === 'CNPJ') val = linha['cnpj'];
+          if (val === undefined && header === 'Cliente_ID') val = linha['cliente_id'];
+        }
+        acc[header] = val ?? '';
         return acc;
       }, {} as { [key: string]: any });
 

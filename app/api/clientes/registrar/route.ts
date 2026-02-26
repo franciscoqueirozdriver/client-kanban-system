@@ -23,13 +23,24 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     // Basic validation
-    if (!body['Nome da Empresa'] || !body['CNPJ Empresa']) {
+    const nomeEmpresa = body['nome_da_empresa'] || body['Nome da Empresa'];
+    const cnpjEmpresa = body['cnpj_empresa'] || body['CNPJ Empresa'];
+
+    if (!nomeEmpresa || !cnpjEmpresa) {
       return NextResponse.json({ ok: false, message: 'Nome da Empresa e CNPJ são obrigatórios.' }, { status: 400 });
     }
 
     // Generate a new Cliente_ID
     const newId = generateClienteId();
-    const newRowObject = { ...body, Cliente_ID: newId };
+    const newRowObject = {
+      ...body,
+      'nome_da_empresa': nomeEmpresa,
+      'Nome da Empresa': nomeEmpresa,
+      'cnpj_empresa': cnpjEmpresa,
+      'CNPJ Empresa': cnpjEmpresa,
+      'cliente_id': newId,
+      'Cliente_ID': newId
+    };
 
     // Ensure the row has all headers in the correct order
     const rowToAppend = HEADERS.map(header => newRowObject[header] ?? '');

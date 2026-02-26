@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     }
 
     const existingByName = await findByName(Empresa.Nome_da_Empresa);
-    if (existingByName && !normalizeCnpj(existingByName['CNPJ Empresa'])) {
+    if (existingByName && !normalizeCnpj(existingByName['cnpj_empresa'] || existingByName['CNPJ Empresa'])) {
        return NextResponse.json(
         {
             message: 'Encontramos uma empresa com este nome mas sem CNPJ. Deseja enriquecer o cadastro existente?',

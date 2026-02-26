@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
     const scoredResults = rows.map(row => {
       const nomeRaw = row['nome_da_empresa'] || row['nome_do_lead'] || row['Nome da Empresa'] || row['Nome do Lead'] || '';
-      const cnpjRaw = row['cpf_cnpj'] || row['CPF/CNPJ'] || '';
+      const cnpjRaw = row['cpf_cnpj'] || row['cnpj_empresa'] || row['CPF/CNPJ'] || '';
 
       const nome = norm(nomeRaw);
       const cnpj = onlyDigits(cnpjRaw);

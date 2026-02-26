@@ -45,15 +45,24 @@ export default async function handler(req, res) {
       const rows = sheet.data.values || [];
       if (rows.length === 0) return res.status(200).json([]);
       const [header, ...data] = rows;
+      const getIdx = (name) => {
+        let i = header.indexOf(name);
+        if (i === -1) {
+          const snake = name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
+          i = header.indexOf(snake);
+        }
+        return i;
+      };
+
       const idx = {
-        cliente: header.indexOf('Cliente_ID'),
-        dataHora: header.indexOf('Data_Hora'),
-        tipo: header.indexOf('Tipo'),
-        deFase: header.indexOf('De_Fase'),
-        paraFase: header.indexOf('Para_Fase'),
-        canal: header.indexOf('Canal'),
-        obs: header.indexOf('Observacao'),
-        msg: header.indexOf('Mensagem_Usada'),
+        cliente: getIdx('Cliente_ID'),
+        dataHora: getIdx('Data_Hora'),
+        tipo: getIdx('Tipo'),
+        deFase: getIdx('De_Fase'),
+        paraFase: getIdx('Para_Fase'),
+        canal: getIdx('Canal'),
+        obs: getIdx('Observacao'),
+        msg: getIdx('Mensagem_Usada'),
       };
 
       const itensRaw = data
