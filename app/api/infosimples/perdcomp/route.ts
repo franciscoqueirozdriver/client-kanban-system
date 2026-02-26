@@ -11,22 +11,7 @@ import {
 
 export const runtime = 'nodejs';
 
-const PERDECOMP_SHEET_NAME = 'PERDECOMP';
 const CARD_SCHEMA_VERSION = 'perdecomp-card-v1';
-
-const REQUIRED_HEADERS = [
-  'Cliente_ID', 'Nome da Empresa', 'Perdcomp_ID', 'CNPJ', 'Tipo_Pedido',
-  'Situacao', 'Periodo_Inicio', 'Periodo_Fim', 'Quantidade_PERDCOMP',
-  'Qtd_PERDCOMP_DCOMP', 'Qtd_PERDCOMP_REST', 'Qtd_PERDCOMP_RESSARC', 'Qtd_PERDCOMP_CANCEL',
-  'Numero_Processo', 'Data_Protocolo', 'Ultima_Atualizacao',
-  'Quantidade_Receitas', 'Quantidade_Origens', 'Quantidade_DARFs',
-  'URL_Comprovante_HTML', 'URL_Comprovante_PDF', 'Data_Consulta',
-  'Tipo_Empresa', 'Concorrentes',
-  'Code', 'Code_Message', 'MappedCount', 'Perdcomp_Principal_ID',
-  'Perdcomp_Solicitante', 'Perdcomp_Tipo_Documento',
-  'Perdcomp_Tipo_Credito', 'Perdcomp_Data_Transmissao',
-  'Perdcomp_Situacao', 'Perdcomp_Situacao_Detalhamento'
-];
 
 function columnNumberToLetter(columnNumber: number) {
   let temp;
@@ -120,66 +105,6 @@ function normalizePerdcompFacts(
   });
 }
 
-async function getLastPerdcompFromSheet({
-  cnpj,
-  clienteId,
-}: {
-  cnpj?: string;
-  clienteId?: string;
-}) {
-  const sheets = await getSheetsClient();
-  const head = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.SPREADSHEET_ID,
-    range: 'PERDECOMP!1:1',
-  });
-  const headers = head.data.values?.[0] || [];
-  const col = (name: string) => {
-    let idx = headers.indexOf(name);
-    if (idx === -1) {
-      const snake = name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
-      idx = headers.indexOf(snake);
-      if (idx === -1 && name === 'Cliente_ID') idx = headers.indexOf('cliente_id');
-      if (idx === -1 && name === 'CNPJ') idx = headers.indexOf('cnpj');
-    }
-    return idx;
-  };
-  const resp = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.SPREADSHEET_ID,
-    range: 'PERDECOMP!A2:Z',
-  });
-  const rows = resp.data.values || [];
-  const idxCliente = col('Cliente_ID');
-  const idxCnpj = col('CNPJ');
-  const idxQtd = col('Quantidade_PERDCOMP');
-  const idxHtml = col('URL_Comprovante_HTML');
-  const idxData = col('Data_Consulta');
-  const idxQtdDcomp = col('Qtd_PERDCOMP_DCOMP');
-  const idxQtdRest = col('Qtd_PERDCOMP_REST');
-  const idxQtdRessarc = col('Qtd_PERDCOMP_RESSARC');
-  const idxQtdCancel = col('Qtd_PERDCOMP_CANCEL');
-  const match = rows.find(
-    r => {
-      const rCliId = r.cliente_id || r.Cliente_ID || r[idxCliente];
-      const rCnpj = String(r.cnpj || r.CNPJ || r[idxCnpj] || '').replace(/\D/g, '');
-      return (clienteId && rCliId === clienteId) || (cnpj && rCnpj === cnpj);
-    }
-  );
-  if (!match) return null;
-  const qtd = Number(match[idxQtd] ?? 0);
-  const dcomp = Number(match.qtd_perdcomp_dcomp || match.Qtd_PERDCOMP_DCOMP || match[idxQtdDcomp] || 0);
-  const rest = Number(match.qtd_perdcomp_rest || match.Qtd_PERDCOMP_REST || match[idxQtdRest] || 0);
-  const ressarc = Number(match.qtd_perdcomp_ressarc || match.Qtd_PERDCOMP_RESSARC || match[idxQtdRessarc] || 0);
-  const canc = Number(match.qtd_perdcomp_cancel || match.Qtd_PERDCOMP_CANCEL || match[idxQtdCancel] || 0);
-  return {
-    quantidade: qtd || 0,
-    dcomp,
-    rest,
-    ressarc,
-    canc,
-    site_receipt: match.url_comprovante_html || match.URL_Comprovante_HTML || match[idxHtml] || null,
-    requested_at: match.data_consulta || match.Data_Consulta || match[idxData] || null,
-  };
-}
 
 export async function POST(request: Request) {
   try {
@@ -297,8 +222,18 @@ export async function POST(request: Request) {
         // Fall through to API call if snapshot read fails
       }
       
-      // Fallback: check old PERDECOMP sheet for backward compatibility
-      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
+      // Fallback: check snapshot from library
+      const snapshotCard = await loadSnapshotCard({ clienteId }).catch(() => null);
+      const fallback = snapshotCard ? {
+        quantidade: snapshotCard.perdcompResumo?.totalSemCancelamento ?? 0,
+        dcomp: snapshotCard.perdcompResumo?.porFamilia?.DCOMP ?? 0,
+        rest: snapshotCard.perdcompResumo?.porFamilia?.REST ?? 0,
+        ressarc: snapshotCard.perdcompResumo?.porFamilia?.RESSARC ?? 0,
+        canc: snapshotCard.perdcompResumo?.porFamilia?.CANC ?? 0,
+        site_receipt: snapshotCard.site_receipt ?? null,
+        requested_at: snapshotCard.header?.requested_at ?? null,
+      } : null;
+
       if (fallback) {
         const { quantidade, dcomp, rest, ressarc, canc, site_receipt, requested_at } = fallback;
         const porFamilia = { DCOMP: dcomp, REST: rest, RESSARC: ressarc, CANC: canc, DESCONHECIDO: 0 };
@@ -323,6 +258,7 @@ export async function POST(request: Request) {
           perdcompCodigos: [],
           site_receipt,
           header: { requested_at },
+          ...snapshotCard,
         };
         if (debugMode) {
           resp.debug = {
@@ -386,7 +322,17 @@ export async function POST(request: Request) {
     try {
       apiResponse = await withRetry(doCall, 3, [1500, 3000, 5000]);
     } catch (err: any) {
-      const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
+      const snapshotCard = await loadSnapshotCard({ clienteId }).catch(() => null);
+      const fallback = snapshotCard ? {
+        quantidade: snapshotCard.perdcompResumo?.totalSemCancelamento ?? 0,
+        dcomp: snapshotCard.perdcompResumo?.porFamilia?.DCOMP ?? 0,
+        rest: snapshotCard.perdcompResumo?.porFamilia?.REST ?? 0,
+        ressarc: snapshotCard.perdcompResumo?.porFamilia?.RESSARC ?? 0,
+        canc: snapshotCard.perdcompResumo?.porFamilia?.CANC ?? 0,
+        site_receipt: snapshotCard.site_receipt ?? null,
+        requested_at: snapshotCard.header?.requested_at ?? null,
+      } : null;
+
       return NextResponse.json(
         {
           error: true,
@@ -414,111 +360,6 @@ export async function POST(request: Request) {
     const mappedCount = apiResponse?.mapped_count || totalPerdcomp;
     const siteReceipt = apiResponse?.site_receipts?.[0] || '';
 
-    const writes: Record<string, any> = {
-      Code: apiResponse.code,
-      Code_Message: apiResponse.code_message || '',
-      MappedCount: mappedCount,
-      Quantidade_PERDCOMP: resumo.totalSemCancelamento,
-      Qtd_PERDCOMP_DCOMP: resumo.porFamilia.DCOMP,
-      Qtd_PERDCOMP_REST: resumo.porFamilia.REST,
-      Qtd_PERDCOMP_RESSARC: resumo.porFamilia.RESSARC,
-      Qtd_PERDCOMP_CANCEL: resumo.porFamilia.CANC,
-      URL_Comprovante_HTML: siteReceipt,
-      Data_Consulta: headerRequestedAt,
-      Perdcomp_Principal_ID: first?.perdcomp || '',
-      Perdcomp_Solicitante: first?.solicitante || '',
-      Perdcomp_Tipo_Documento: first?.tipo_documento || '',
-      Perdcomp_Tipo_Credito: first?.tipo_credito || '',
-      Perdcomp_Data_Transmissao: first?.data_transmissao || '',
-      Perdcomp_Situacao: first?.situacao || '',
-      Perdcomp_Situacao_Detalhamento: first?.situacao_detalhamento || '',
-    };
-
-    try {
-      const sheets = await getSheetsClient();
-      // Call getSheetData ONCE and get both headers and rows
-      const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
-      const finalHeaders = [...headers];
-      let headerUpdated = false;
-      for (const h of REQUIRED_HEADERS) {
-        if (!finalHeaders.includes(h)) {
-          finalHeaders.push(h);
-          headerUpdated = true;
-        }
-      }
-      if (headerUpdated) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: process.env.SPREADSHEET_ID!,
-          range: `${PERDECOMP_SHEET_NAME}!1:1`,
-          valueInputOption: 'RAW',
-          requestBody: { values: [finalHeaders] },
-        });
-      }
-
-      // Use the 'rows' we already fetched instead of calling getSheetData again
-      let rowNumber = -1;
-      for (const r of rows) {
-        const rCliId = r.cliente_id || r.Cliente_ID;
-        const rCnpj = String(r.cnpj || r.CNPJ || '').replace(/\D/g, '');
-        if (rCliId === clienteId || (cnpj && rCnpj === cnpj)) {
-          rowNumber = r._rowNumber;
-          break;
-        }
-      }
-
-      if (rowNumber !== -1) {
-        const data = [] as any[];
-        for (const [key, value] of Object.entries(writes)) {
-          if (value === undefined || value === '') continue;
-          let colIndex = finalHeaders.indexOf(key);
-          if (colIndex === -1) {
-            const snake = key.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
-            colIndex = finalHeaders.indexOf(snake);
-            if (colIndex === -1 && key === 'CNPJ') colIndex = finalHeaders.indexOf('cnpj');
-          }
-          if (colIndex === -1) continue;
-          const colLetter = columnNumberToLetter(colIndex + 1);
-          data.push({
-            range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
-            values: [[value]],
-          });
-        }
-        if (data.length) {
-          await sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId: process.env.SPREADSHEET_ID!,
-            requestBody: { valueInputOption: 'RAW', data },
-          });
-        }
-      } else {
-        const row: Record<string, any> = {};
-        finalHeaders.forEach(h => (row[h] = ''));
-        const setCol = (name: string, val: any) => {
-          let h = finalHeaders.find(x => x === name);
-          if (!h) {
-            const snake = name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '');
-            h = finalHeaders.find(x => x === snake);
-            if (!h && name === 'CNPJ') h = finalHeaders.find(x => x === 'cnpj');
-            if (!h && name === 'Cliente_ID') h = finalHeaders.find(x => x === 'cliente_id');
-          }
-          if (h) row[h] = val;
-        };
-        setCol('Cliente_ID', clienteId);
-        setCol('Nome da Empresa', nomeEmpresa);
-        setCol('CNPJ', `'${cnpj}`);
-        for (const [k, v] of Object.entries(writes)) {
-          if (v !== undefined) setCol(k, v);
-        }
-        const values = finalHeaders.map(h => row[h]);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: process.env.SPREADSHEET_ID!,
-          range: PERDECOMP_SHEET_NAME,
-          valueInputOption: 'RAW',
-          requestBody: { values: [values] },
-        });
-      }
-    } catch (sheetError) {
-      console.warn('[perdcomp] Falha ao gravar na planilha (ignorado):', sheetError);
-    }
 
     const resp: any = {
       ok: true,
