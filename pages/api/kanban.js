@@ -1,6 +1,12 @@
 import { getSheet, getSheetCached, findRowIndexById, updateRowByIndex, getSheetData } from '../../lib/googleSheets';
 import { buildColumnResolver } from '../../lib/sheets/headerResolver';
 import { normalizePhones } from '../../lib/report';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 // ✅ Protege números de telefone para salvar como texto no Sheets
 function protectPhoneValue(value) {
@@ -192,6 +198,20 @@ export default async function handler(req, res) {
       updates['Data_Ultima_Movimentacao'] = new Date().toISOString().split('T')[0];
 
       await updateRowByIndex({ sheetName, rowIndex, updates });
+
+      // ✅ Espelha no Supabase
+      try {
+        await supabase
+          .from('leads')
+          .update({
+            status_kanban: newStatus,
+            cor_card: newColor,
+            data_ultima_movimentacao: new Date().toISOString().split('T')[0],
+          })
+          .eq('cliente_id', id);
+      } catch (supabaseErr) {
+        console.error('Erro ao espelhar kanban no Supabase:', supabaseErr);
+      }
 
       return res.status(200).json({ status: newStatus, color: newColor });
     } catch (err) {
