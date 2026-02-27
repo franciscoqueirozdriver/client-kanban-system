@@ -30,9 +30,9 @@ export async function GET(request: Request) {
     const { rows } = await getSheetData(SHEET_NAME);
 
     const scoredResults = rows.map(row => {
-      const nomeRaw = String(row.nome_da_empresa || row['Nome da Empresa'] || row.nome_do_lead || row['Nome do Lead'] || '');
-      const cnpjRaw = String(row.cpf_cnpj || row['CPF/CNPJ'] || row.cnpj_empresa || row['CNPJ Empresa'] || '');
-      const clienteId = row.cliente_id || row['Cliente_ID'] || '';
+      const nomeRaw = String(row['Nome da Empresa'] || row['Nome do Lead'] || row.nome_da_empresa || row.nome_do_lead || '');
+      const cnpjRaw = String(row['CPF/CNPJ'] || row['CNPJ Empresa'] || row.cpf_cnpj || row.cnpj_empresa || '');
+      const clienteId = String(row['Cliente_ID'] || row.cliente_id || '');
 
       const nome = norm(nomeRaw);
       const cnpj = onlyDigits(cnpjRaw);
