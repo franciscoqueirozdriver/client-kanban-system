@@ -283,9 +283,8 @@ export async function POST(request: Request) {
           clienteId, 
           error: error instanceof Error ? error.message : String(error) 
         });
-        // Fall through to API call if snapshot read fails
       }
-      
+
       // Fallback: check old PERDECOMP sheet for backward compatibility
       const fallback = await getLastPerdcompFromSheet({ cnpj, clienteId });
       if (fallback) {
@@ -423,69 +422,73 @@ export async function POST(request: Request) {
       Perdcomp_Situacao_Detalhamento: first?.situacao_detalhamento || '',
     };
 
-    const sheets = await getSheetsClient();
-    // Call getSheetData ONCE and get both headers and rows
-    const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
-    const finalHeaders = [...headers];
-    let headerUpdated = false;
-    for (const h of REQUIRED_HEADERS) {
-      if (!finalHeaders.includes(h)) {
-        finalHeaders.push(h);
-        headerUpdated = true;
+    try {
+      const sheets = await getSheetsClient();
+      // Call getSheetData ONCE and get both headers and rows
+      const { headers, rows } = await getSheetData(PERDECOMP_SHEET_NAME);
+      const finalHeaders = [...headers];
+      let headerUpdated = false;
+      for (const h of REQUIRED_HEADERS) {
+        if (!finalHeaders.includes(h)) {
+          finalHeaders.push(h);
+          headerUpdated = true;
+        }
       }
-    }
-    if (headerUpdated) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.SPREADSHEET_ID!,
-        range: `${PERDECOMP_SHEET_NAME}!1:1`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [finalHeaders] },
-      });
-    }
-
-    // Use the 'rows' we already fetched instead of calling getSheetData again
-    let rowNumber = -1;
-    for (const r of rows) {
-      if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
-        rowNumber = r._rowNumber;
-        break;
-      }
-    }
-
-    if (rowNumber !== -1) {
-      const data = [] as any[];
-      for (const [key, value] of Object.entries(writes)) {
-        if (value === undefined || value === '') continue;
-        const colIndex = finalHeaders.indexOf(key);
-        if (colIndex === -1) continue;
-        const colLetter = columnNumberToLetter(colIndex + 1);
-        data.push({
-          range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
-          values: [[value]],
-        });
-      }
-      if (data.length) {
-        await sheets.spreadsheets.values.batchUpdate({
+      if (headerUpdated) {
+        await sheets.spreadsheets.values.update({
           spreadsheetId: process.env.SPREADSHEET_ID!,
-          requestBody: { valueInputOption: 'RAW', data },
+          range: `${PERDECOMP_SHEET_NAME}!1:1`,
+          valueInputOption: 'RAW',
+          requestBody: { values: [finalHeaders] },
         });
       }
-    } else {
-      const row: Record<string, any> = {};
-      finalHeaders.forEach(h => (row[h] = ''));
-      row['Cliente_ID'] = clienteId;
-      row['Nome da Empresa'] = nomeEmpresa;
-      row['CNPJ'] = `'${cnpj}`;
-      for (const [k, v] of Object.entries(writes)) {
-        if (v !== undefined) row[k] = v;
+
+      // Use the 'rows' we already fetched instead of calling getSheetData again
+      let rowNumber = -1;
+      for (const r of rows) {
+        if (r.Cliente_ID === clienteId || String(r.CNPJ || '').replace(/\D/g, '') === cnpj) {
+          rowNumber = r._rowNumber;
+          break;
+        }
       }
-      const values = finalHeaders.map(h => row[h]);
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.SPREADSHEET_ID!,
-        range: PERDECOMP_SHEET_NAME,
-        valueInputOption: 'RAW',
-        requestBody: { values: [values] },
-      });
+
+      if (rowNumber !== -1) {
+        const data = [] as any[];
+        for (const [key, value] of Object.entries(writes)) {
+          if (value === undefined || value === '') continue;
+          const colIndex = finalHeaders.indexOf(key);
+          if (colIndex === -1) continue;
+          const colLetter = columnNumberToLetter(colIndex + 1);
+          data.push({
+            range: `${PERDECOMP_SHEET_NAME}!${colLetter}${rowNumber}`,
+            values: [[value]],
+          });
+        }
+        if (data.length) {
+          await sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId: process.env.SPREADSHEET_ID!,
+            requestBody: { valueInputOption: 'RAW', data },
+          });
+        }
+      } else {
+        const row: Record<string, any> = {};
+        finalHeaders.forEach(h => (row[h] = ''));
+        row['Cliente_ID'] = clienteId;
+        row['Nome da Empresa'] = nomeEmpresa;
+        row['CNPJ'] = `'${cnpj}`;
+        for (const [k, v] of Object.entries(writes)) {
+          if (v !== undefined) row[k] = v;
+        }
+        const values = finalHeaders.map(h => row[h]);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: process.env.SPREADSHEET_ID!,
+          range: PERDECOMP_SHEET_NAME,
+          valueInputOption: 'RAW',
+          requestBody: { values: [values] },
+        });
+      }
+    } catch (sheetError) {
+      console.warn('[perdcomp] sheet write skipped (permission denied):', sheetError instanceof Error ? sheetError.message : sheetError);
     }
 
     const resp: any = {
