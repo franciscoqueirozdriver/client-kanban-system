@@ -5,19 +5,19 @@ import { padCNPJ14, isValidCNPJ, onlyDigits } from '@/utils/cnpj';
 
 // --- Helper Types ---
 interface Company {
-  Cliente_ID: string;
-  Nome_da_Empresa: string;
-  CNPJ_Empresa: string;
+  cliente_id: string;
+  nome_da_empresa: string;
+  cnpj_empresa: string;
   [key: string]: any;
 }
 
 // --- Autocomplete Component ---
 interface AutocompleteProps {
-  selectedCompany: Company | null;
-  onSelect: (company: Company) => void;
+  selectedCompany: any | null;
+  onSelect: (company: any) => void;
   onClear: () => void;
   onNoResults?: (query: string) => void;
-  onEnrichSelected?: (company: Company) => void;
+  onEnrichSelected?: (company: any) => void;
   onEnrichQuery?: (query: string) => void;
   isEnriching?: boolean;
   placeholder?: string;
@@ -79,20 +79,31 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
     setQuery('');
     setResults([]);
     setShowSuggestions(false);
-    onSelect({ ...company, CNPJ_Empresa: padCNPJ14(company.CNPJ_Empresa) });
+    // Map snake_case from API to PascalCase expected by parent components if necessary, 
+    // but here we just pass it along and ensure CNPJ is padded.
+    const mappedCompany = {
+      ...company,
+      Cliente_ID: company.cliente_id,
+      Nome_da_Empresa: company.nome_da_empresa,
+      CNPJ_Empresa: padCNPJ14(company.cnpj_empresa)
+    };
+    onSelect(mappedCompany);
   };
+
+  const displayNome = selectedCompany?.Nome_da_Empresa || selectedCompany?.nome_da_empresa || '';
+  const displayCnpj = selectedCompany?.CNPJ_Empresa || selectedCompany?.cnpj_empresa || '';
 
   if (selectedCompany) {
     return (
       <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded relative">
         <div className="flex items-center justify-between">
           <div className="flex-grow truncate">
-            <p className="font-semibold text-sm truncate" title={selectedCompany.Nome_da_Empresa}>{selectedCompany.Nome_da_Empresa}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{padCNPJ14(selectedCompany.CNPJ_Empresa) || 'CNPJ não informado'}</p>
+            <p className="font-semibold text-sm truncate text-gray-900 dark:text-white" title={displayNome}>{displayNome}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{padCNPJ14(displayCnpj) || 'CNPJ não informado'}</p>
           </div>
           <button type="button" onClick={onClear} className="ml-2 text-red-500 hover:text-red-700 font-bold p-1">X</button>
         </div>
-        {onEnrichSelected && !isValidCNPJ(selectedCompany.CNPJ_Empresa) && (
+        {onEnrichSelected && !isValidCNPJ(displayCnpj) && (
           <div className="mt-2">
             <button
               type="button"
@@ -124,7 +135,7 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
         onFocus={() => setShowSuggestions(true)}
         onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
         placeholder={placeholder}
-        className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+        className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
       />
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
       {showSuggestions && !error && (query.length >= 3 || isValidCNPJ(query)) && (
@@ -132,8 +143,9 @@ const Autocomplete = ({ selectedCompany, onSelect, onClear, onNoResults, onEnric
           {isLoading && <li className="p-2 text-gray-500">Buscando...</li>}
 
           {!isLoading && results.map((company) => (
-            <li key={company.Cliente_ID} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
-              {company.Nome_da_Empresa} <span className="text-sm text-gray-500">{padCNPJ14(company.CNPJ_Empresa)}</span>
+            <li key={company.cliente_id} onMouseDown={() => handleSelect(company)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer flex flex-col">
+              <span className="font-medium text-gray-900 dark:text-white">{company.nome_da_empresa}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">{padCNPJ14(company.cnpj_empresa)}</span>
             </li>
           ))}
         </ul>
