@@ -626,10 +626,18 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
     setCompDialogOpen(false);
   }
 
-  const checkLastConsultation = async (cnpj: string): Promise<string | null> => {
+  const normalizeCompanyData = (company: any) => {
+    return {
+      clienteId: company.cliente_id || company.Cliente_ID || '',
+      nome: company.nome_da_empresa || company.Nome_da_Empresa || '',
+      cnpj: normalizeCnpj(company.cnpj_empresa || company.CNPJ_Empresa || ''),
+    };
+  };
+
+  const checkLastConsultation = async (cnpj: string, clienteId: string): Promise<string | null> => {
     try {
       const c = ensureValidCnpj(cnpj);
-      const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}`);
+      const res = await fetch(`/api/perdecomp/verificar?cnpj=${c}&clienteId=${clienteId}`);
       if (res.ok) {
         const { lastConsultation } = await res.json();
         return lastConsultation;
@@ -721,9 +729,9 @@ export default function ClientPerdecompComparativo({ initialQ = '' }: { initialQ
   }
 
   const handleSelectCompany = async (type: 'client' | 'competitor', company: Company, index?: number) => {
-    const cnpj = normalizeCnpj(company.CNPJ_Empresa);
+    const { clienteId, cnpj } = normalizeCompanyData(company);
     const normalized = { ...company, CNPJ_Empresa: cnpj };
-    const lastConsultation = isCnpj(cnpj) ? await checkLastConsultation(cnpj) : null;
+    const lastConsultation = isCnpj(cnpj) ? await checkLastConsultation(cnpj, clienteId) : null;
     const selection: CompanySelection = { company: normalized, lastConsultation, forceRefresh: false };
     if (type === 'client') {
       setClient(selection);
